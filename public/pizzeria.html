@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html>
 <head>
@@ -35,21 +36,30 @@
 
     <script>
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const ws = new WebSocket(`${protocol}//${window.location.hostname}/ws`);
+        const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
         const countdowns = new Map();
 
         ws.onmessage = (event) => {
-            const data = JSON.parse(event.data);
-            if (data.action === 'startCountdown') {
-                startCountdown(data.tableNumber, data.timeRemaining);
+            try {
+                const data = JSON.parse(event.data);
+                if (data.action === 'startCountdown') {
+                    startCountdown(data.tableNumber, data.timeRemaining);
+                }
+            } catch (error) {
+                console.error('Errore nel parsing del messaggio:', error);
             }
         };
 
         function startCountdown(tableNumber, timeRemaining) {
-            const countdownContainer = document.getElementById('tavoli');
+            // Rimuovi il vecchio countdown se esiste
+            const oldInterval = countdowns.get(tableNumber);
+            if (oldInterval) {
+                clearInterval(oldInterval);
+            }
 
-            // Crea o aggiorna l'elemento countdown
+            const countdownContainer = document.getElementById('tavoli');
             let countdownElement = document.getElementById(`countdown-${tableNumber}`);
+            
             if (!countdownElement) {
                 countdownElement = document.createElement('div');
                 countdownElement.id = `countdown-${tableNumber}`;
@@ -57,9 +67,9 @@
                 countdownContainer.appendChild(countdownElement);
             }
 
-            // Aggiorna il countdown
+            let remainingTime = parseInt(timeRemaining);
             const interval = setInterval(() => {
-                if (timeRemaining <= 0) {
+                if (remainingTime <= 0) {
                     clearInterval(interval);
                     countdownElement.style.backgroundColor = '#ff4444';
                     countdownElement.innerHTML = `
@@ -69,22 +79,23 @@
                     setTimeout(() => {
                         if (countdownElement.parentNode) {
                             countdownElement.parentNode.removeChild(countdownElement);
+                            countdowns.delete(tableNumber);
                         }
                     }, 45000);
                     return;
                 }
 
-                // Cambia colore e riproduci suono quando manca 1 minuto
-                if (timeRemaining === 60) {
+                if (remainingTime === 60) {
                     countdownElement.style.backgroundColor = '#ffeb3b';
-                    document.getElementById('alertSound').play();
+                    const audio = document.getElementById('alertSound');
+                    if (audio) audio.play().catch(e => console.log('Errore audio:', e));
                 }
 
                 countdownElement.innerHTML = `
                     <h3>Tavolo ${tableNumber}</h3>
-                    <p>Tempo rimanente: ${formatTime(timeRemaining)}</p>
+                    <p>Tempo rimanente: ${formatTime(remainingTime)}</p>
                 `;
-                timeRemaining--;
+                remainingTime--;
             }, 1000);
 
             countdowns.set(tableNumber, interval);
