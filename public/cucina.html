@@ -236,7 +236,27 @@
                 countdown.timeRemaining--;
                 if (countdown.timeRemaining <= 0) {
                     clearInterval(interval);
+                    countdown.element.style.backgroundColor = '#ff4444';
                     countdown.element.querySelector('p').textContent = 'Tempo scaduto!';
+                    
+                    // Aggiungi pulsante di eliminazione
+                    const deleteButton = document.createElement('button');
+                    deleteButton.textContent = 'Elimina';
+                    deleteButton.onclick = () => {
+                        countdownList.removeChild(countdown.element);
+                        const index = countdowns.indexOf(countdown);
+                        if (index > -1) countdowns.splice(index, 1);
+                    };
+                    countdown.element.appendChild(deleteButton);
+
+                    // Eliminazione automatica dopo 45 secondi
+                    setTimeout(() => {
+                        if (countdownList.contains(countdown.element)) {
+                            countdownList.removeChild(countdown.element);
+                            const index = countdowns.indexOf(countdown);
+                            if (index > -1) countdowns.splice(index, 1);
+                        }
+                    }, 45000);
                 } else {
                     if (countdown.timeRemaining === 60) {
                         countdown.element.style.backgroundColor = '#ffeb3b';

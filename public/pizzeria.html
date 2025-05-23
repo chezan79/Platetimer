@@ -61,10 +61,16 @@
             const interval = setInterval(() => {
                 if (timeRemaining <= 0) {
                     clearInterval(interval);
+                    countdownElement.style.backgroundColor = '#ff4444';
                     countdownElement.innerHTML = `
                         <h3>Tavolo ${tableNumber}</h3>
                         <p>Tempo scaduto!</p>
                     `;
+                    setTimeout(() => {
+                        if (countdownElement.parentNode) {
+                            countdownElement.parentNode.removeChild(countdownElement);
+                        }
+                    }, 45000);
                     return;
                 }
 
