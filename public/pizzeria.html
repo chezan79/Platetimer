@@ -33,7 +33,7 @@
     </div>
 
     <script>
-        const ws = new WebSocket('wss://' + window.location.hostname);
+        const ws = new WebSocket(`wss://${window.location.hostname}/ws`);
         const countdowns = new Map();
 
         ws.onmessage = (event) => {
