@@ -199,7 +199,8 @@
             let timeRemaining = minutes * 60; // Converti minuti in secondi
 
             // Invia il countdown tramite WebSocket
-            const ws = new WebSocket(`wss://${window.location.hostname}/ws`);
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const ws = new WebSocket(`${protocol}//${window.location.hostname}/ws`);
             ws.onopen = () => {
                 ws.send(JSON.stringify({
                     action: 'startCountdown',
