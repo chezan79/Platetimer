@@ -37,7 +37,16 @@
     <script>
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
-        const countdowns = new Map();
+        const countdowns = [];
+
+        function sortCountdowns() {
+            countdowns.sort((a, b) => a.timeRemaining - b.timeRemaining);
+            const container = document.getElementById('tavoli');
+            container.innerHTML = '';
+            countdowns.forEach(countdown => {
+                container.appendChild(countdown.element);
+            });
+        }
 
         ws.onmessage = (event) => {
             try {
@@ -52,38 +61,43 @@
 
         function startCountdown(tableNumber, timeRemaining) {
             // Rimuovi il vecchio countdown se esiste
-            const oldInterval = countdowns.get(tableNumber);
-            if (oldInterval) {
-                clearInterval(oldInterval);
+            const existingIndex = countdowns.findIndex(c => c.tableNumber === tableNumber);
+            if (existingIndex !== -1) {
+                clearInterval(countdowns[existingIndex].interval);
+                countdowns.splice(existingIndex, 1);
             }
 
-            const countdownContainer = document.getElementById('tavoli');
-            let countdownElement = document.getElementById(`countdown-${tableNumber}`);
-            
-            if (!countdownElement) {
-                countdownElement = document.createElement('div');
-                countdownElement.id = `countdown-${tableNumber}`;
-                countdownElement.classList.add('countdown-item');
-                countdownContainer.appendChild(countdownElement);
-            }
+            const countdownElement = document.createElement('div');
+            countdownElement.id = `countdown-${tableNumber}`;
+            countdownElement.classList.add('countdown-item');
 
             let remainingTime = parseInt(timeRemaining);
-            const interval = setInterval(() => {
+            
+            const countdown = {
+                tableNumber: tableNumber,
+                timeRemaining: remainingTime,
+                element: countdownElement,
+                interval: null
+            };
+            countdown.interval = setInterval(() => {
+                countdown.timeRemaining = remainingTime;
                 if (remainingTime <= 0) {
-                    clearInterval(interval);
+                    clearInterval(countdown.interval);
                     countdownElement.style.backgroundColor = '#ff4444';
                     countdownElement.innerHTML = `
                         <h3>Tavolo ${tableNumber}</h3>
                         <p>Tempo scaduto!</p>
                     `;
                     setTimeout(() => {
-                        if (countdownElement.parentNode) {
-                            countdownElement.parentNode.removeChild(countdownElement);
-                            countdowns.delete(tableNumber);
+                        const index = countdowns.indexOf(countdown);
+                        if (index > -1) {
+                            countdowns.splice(index, 1);
+                            sortCountdowns();
                         }
                     }, 45000);
                     return;
                 }
+                sortCountdowns();
 
                 if (remainingTime === 60) {
                     countdownElement.style.backgroundColor = '#ffeb3b';
@@ -98,7 +112,8 @@
                 remainingTime--;
             }, 1000);
 
-            countdowns.set(tableNumber, interval);
+            countdowns.push(countdown);
+            sortCountdowns();
         }
 
         function formatTime(seconds) {
