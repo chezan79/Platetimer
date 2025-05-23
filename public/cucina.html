@@ -202,11 +202,13 @@
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             const ws = new WebSocket(`${protocol}//${window.location.hostname}/ws`);
             ws.onopen = () => {
-                ws.send(JSON.stringify({
+                const message = {
                     action: 'startCountdown',
                     tableNumber: tableNumber,
                     timeRemaining: timeRemaining
-                }));
+                };
+                ws.send(JSON.stringify(message));
+                ws.close();
             };
 
             // Crea un oggetto countdown
