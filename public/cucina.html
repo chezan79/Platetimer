@@ -7,11 +7,6 @@
             font-family: Arial, sans-serif;
             margin: 0;
             padding: 0;
-
-    <button onclick="startVoiceRecognition()" style="padding: 10px; margin: 10px; background-color: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer;">
-        🎤 Comando Vocale
-    </button>
-
             display: flex;
             flex-direction: row;
             height: 100vh;
@@ -123,6 +118,9 @@
     <!-- Contenitore sinistro: Tastiera e input -->
     <div id="leftContainer">
         <h1>Interfaccia Cucina</h1>
+        <button onclick="startVoiceRecognition()" style="padding: 10px; margin: 10px; background-color: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer;">
+            🎤 Comando Vocale
+        </button>
         <h2>Inserisci Numero Tavolo</h2>
         <input type="text" id="numeroTavolo" pattern="[0-9]*" inputmode="numeric" placeholder="Numero Tavolo" readonly>
         <div id="keyboard">
