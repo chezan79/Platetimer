@@ -148,6 +148,7 @@
         <h2>Countdown Attivi</h2>
         <div id="countdownList"></div>
     </div>
+    <audio id="alertSound" src="alert.mp3" preload="auto"></audio>
 
     <script>
         // Selezione elementi
@@ -234,6 +235,10 @@
                     clearInterval(interval);
                     countdown.element.querySelector('p').textContent = 'Tempo scaduto!';
                 } else {
+                    if (countdown.timeRemaining === 60) {
+                        countdown.element.style.backgroundColor = '#ffeb3b';
+                        document.getElementById('alertSound').play();
+                    }
                     countdown.element.querySelector('p').textContent = `Tempo rimanente: ${formatTime(countdown.timeRemaining)}`;
                 }
             }, 1000);
