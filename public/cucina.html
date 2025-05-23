@@ -197,6 +197,16 @@
         function startCountdown(minutes, tableNumber) {
             let timeRemaining = minutes * 60; // Converti minuti in secondi
 
+            // Invia il countdown tramite WebSocket
+            const ws = new WebSocket('ws://0.0.0.0:5000');
+            ws.onopen = () => {
+                ws.send(JSON.stringify({
+                    action: 'startCountdown',
+                    tableNumber: tableNumber,
+                    timeRemaining: timeRemaining
+                }));
+            };
+
             // Crea un oggetto countdown
             const countdown = {
                 tableNumber,

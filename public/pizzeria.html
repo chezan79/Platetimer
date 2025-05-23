@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html>
 <head>
@@ -32,50 +33,54 @@
     </div>
 
     <script>
-        // Funzione per caricare i countdown da localStorage
-        function loadCountdownsFromLocalStorage() {
-            const countdownData = JSON.parse(localStorage.getItem('countdowns')) || [];
-            return countdownData;
-        }
+        const ws = new WebSocket('ws://0.0.0.0:5000');
+        const countdowns = new Map();
 
-        // Funzione per aggiornare la visualizzazione dei countdown
-        function updateCountdowns() {
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            if (data.action === 'startCountdown') {
+                startCountdown(data.tableNumber, data.timeRemaining);
+            }
+        };
+
+        function startCountdown(tableNumber, timeRemaining) {
             const countdownContainer = document.getElementById('tavoli');
-            countdownContainer.innerHTML = ''; // Svuota il contenitore
+            
+            // Crea o aggiorna l'elemento countdown
+            let countdownElement = document.getElementById(`countdown-${tableNumber}`);
+            if (!countdownElement) {
+                countdownElement = document.createElement('div');
+                countdownElement.id = `countdown-${tableNumber}`;
+                countdownElement.classList.add('countdown-item');
+                countdownContainer.appendChild(countdownElement);
+            }
 
-            const countdowns = loadCountdownsFromLocalStorage();
+            // Aggiorna il countdown
+            const interval = setInterval(() => {
+                if (timeRemaining <= 0) {
+                    clearInterval(interval);
+                    countdownElement.innerHTML = `
+                        <h3>Tavolo ${tableNumber}</h3>
+                        <p>Tempo scaduto!</p>
+                    `;
+                    return;
+                }
 
-            countdowns.forEach(countdown => {
-                const countdownItem = document.createElement('div');
-                countdownItem.classList.add('countdown-item');
-                countdownItem.innerHTML = `
-                    <h3>Tavolo ${countdown.tableNumber}</h3>
-                    <p>Tempo rimanente: ${formatTime(countdown.timeRemaining)}</p>
+                countdownElement.innerHTML = `
+                    <h3>Tavolo ${tableNumber}</h3>
+                    <p>Tempo rimanente: ${formatTime(timeRemaining)}</p>
                 `;
-                countdownContainer.appendChild(countdownItem);
-            });
+                timeRemaining--;
+            }, 1000);
+
+            countdowns.set(tableNumber, interval);
         }
 
-        // Funzione per formattare il tempo (mm:ss)
         function formatTime(seconds) {
             const minutes = Math.floor(seconds / 60);
             const remainingSeconds = seconds % 60;
             return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
         }
-
-        // Aggiorna i countdown ogni secondo
-        setInterval(() => {
-            const countdowns = loadCountdownsFromLocalStorage();
-            countdowns.forEach(countdown => {
-                countdown.timeRemaining--;
-                if (countdown.timeRemaining < 0) countdown.timeRemaining = 0;
-            });
-            localStorage.setItem('countdowns', JSON.stringify(countdowns)); // Aggiorna localStorage
-            updateCountdowns(); // Aggiorna la visualizzazione
-        }, 1000);
-
-        // Carica i countdown inizialmente
-        updateCountdowns();
     </script>
 
     <button onclick="window.location.href='index.html'">Torna alla Home</button>
