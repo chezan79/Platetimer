@@ -232,6 +232,11 @@
 
         recognition.onerror = (event) => {
             console.error('Errore nel riconoscimento vocale:', event.error);
+            if (event.error === 'not-allowed') {
+                alert('Per favore concedi i permessi per il microfono');
+            } else {
+                alert('Si è verificato un errore con il riconoscimento vocale. Riprova.');
+            }
         };
 
         // Funzione per avviare il countdown
