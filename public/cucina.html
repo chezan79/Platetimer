@@ -2,16 +2,125 @@
 <html>
 <head>
     <title>Interfaccia Cucina</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: row;
+            height: 100vh;
+        }
+
+        /* Colonna della tastiera */
+        #leftContainer {
+            width: 50%;
+            padding: 20px;
+            background-color: #f8f9fa;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border-right: 2px solid #ddd;
+        }
+
+        /* Colonna dei countdown */
+        #rightContainer {
+            width: 50%;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            justify-content: flex-start;
+            overflow-y: auto;
+        }
+
+        h1, h2 {
+            color: #333;
+        }
+
+        #keyboard {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            max-width: 200px;
+            margin: 20px 0;
+        }
+
+        .key {
+            padding: 20px;
+            background-color: #007BFF;
+            color: white;
+            font-size: 18px;
+            text-align: center;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .key:hover {
+            background-color: #0056b3;
+        }
+
+        .duration-button {
+            padding: 10px 20px;
+            margin: 5px;
+            background-color: #28a745;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .duration-button:hover {
+            background-color: #218838;
+        }
+
+        #countdownList {
+            width: 100%;
+        }
+
+        .countdown-item {
+            margin: 10px 0;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #f8f9fa;
+            width: 100%;
+        }
+
+        .countdown-item h3 {
+            margin: 0 0 5px 0;
+            color: #333;
+        }
+
+        .countdown-item p {
+            margin: 0;
+            font-size: 16px;
+            color: #d9534f;
+        }
+
+        button {
+            margin-top: 20px;
+            padding: 10px 20px;
+            background-color: #6c757d;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #5a6268;
+        }
+    </style>
 </head>
 <body>
-    <h1>Interfaccia Cucina</h1>
-
-    <div>
+    <!-- Contenitore sinistro: Tastiera e input -->
+    <div id="leftContainer">
+        <h1>Interfaccia Cucina</h1>
         <h2>Inserisci Numero Tavolo</h2>
-        <input type="text" id="numeroTavolo" pattern="[0-9]*" inputmode="numeric" placeholder="Numero Tavolo">
-        <button id="avviaCountdown">Avvia Countdown</button>
+        <input type="text" id="numeroTavolo" pattern="[0-9]*" inputmode="numeric" placeholder="Numero Tavolo" readonly>
         <div id="keyboard">
-            <div class="key">0</div>
             <div class="key">1</div>
             <div class="key">2</div>
             <div class="key">3</div>
@@ -21,17 +130,121 @@
             <div class="key">7</div>
             <div class="key">8</div>
             <div class="key">9</div>
+            <div class="key">0</div>
+            <div class="key">C</div> <!-- Tasto per cancellare -->
         </div>
+        <div id="durationSelection" style="display: none;">
+            <h2>Seleziona Durata Countdown</h2>
+            <button class="duration-button" data-minutes="4">4 Minuti</button>
+            <button class="duration-button" data-minutes="6">6 Minuti</button>
+            <button class="duration-button" data-minutes="8">8 Minuti</button>
+            <button class="duration-button" data-minutes="10">10 Minuti</button>
+        </div>
+        <button onclick="window.location.href='index.html'">Torna alla Home</button>
     </div>
 
-    <div id="durationSelection" style="display: none;">
-        <h2>Seleziona Durata Countdown</h2>
-        <button class="duration-button" data-minutes="4">4 Minuti</button>
-        <button class="duration-button" data-minutes="6">6 Minuti</button>
-        <button class="duration-button" data-minutes="8">8 Minuti</button>
-        <button class="duration-button" data-minutes="10">10 Minuti</button>
+    <!-- Contenitore destro: Countdown -->
+    <div id="rightContainer">
+        <h2>Countdown Attivi</h2>
+        <div id="countdownList"></div>
     </div>
 
-    <script src="main.js"></script>
+    <script>
+        // Selezione elementi
+        const numeroTavoloInput = document.getElementById('numeroTavolo');
+        const keyboard = document.getElementById('keyboard');
+        const durationSelection = document.getElementById('durationSelection');
+        const countdownList = document.getElementById('countdownList');
+
+        // Array per memorizzare i countdown
+        const countdowns = [];
+
+        // Gestione tastiera virtuale
+        keyboard.addEventListener('click', (event) => {
+            if (event.target.classList.contains('key')) {
+                const key = event.target.textContent;
+                if (key === 'C') {
+                    // Cancella l'input
+                    numeroTavoloInput.value = '';
+                } else {
+                    // Aggiunge il numero al campo input
+                    numeroTavoloInput.value += key;
+                }
+                // Mostra la selezione durata solo se c'è un numero
+                if (numeroTavoloInput.value !== '') {
+                    durationSelection.style.display = 'block';
+                } else {
+                    durationSelection.style.display = 'none';
+                }
+            }
+        });
+
+        // Gestione selezione durata e avvio countdown
+        durationSelection.addEventListener('click', (event) => {
+            if (event.target.classList.contains('duration-button')) {
+                const minutes = parseInt(event.target.getAttribute('data-minutes'));
+                const tableNumber = numeroTavoloInput.value;
+
+                if (tableNumber !== '') {
+                    startCountdown(minutes, tableNumber);
+                    numeroTavoloInput.value = ''; // Svuota il campo numero tavolo
+                    durationSelection.style.display = 'none'; // Nascondi i pulsanti di durata
+                }
+            }
+        });
+
+        // Funzione per avviare il countdown
+        function startCountdown(minutes, tableNumber) {
+            let timeRemaining = minutes * 60; // Converti minuti in secondi
+
+            // Crea un oggetto countdown
+            const countdown = {
+                tableNumber,
+                timeRemaining,
+                element: null
+            };
+
+            // Crea un elemento per il countdown
+            const countdownItem = document.createElement('div');
+            countdownItem.classList.add('countdown-item');
+            countdownItem.innerHTML = `
+                <h3>Tavolo ${tableNumber}</h3>
+                <p>Tempo rimanente: ${formatTime(timeRemaining)}</p>
+            `;
+            countdown.element = countdownItem;
+
+            // Aggiungi il countdown all'array e riordina
+            countdowns.push(countdown);
+            sortCountdowns();
+
+            // Aggiorna il countdown ogni secondo
+            const interval = setInterval(() => {
+                countdown.timeRemaining--;
+                if (countdown.timeRemaining <= 0) {
+                    clearInterval(interval);
+                    countdown.element.querySelector('p').textContent = 'Tempo scaduto!';
+                } else {
+                    countdown.element.querySelector('p').textContent = `Tempo rimanente: ${formatTime(countdown.timeRemaining)}`;
+                }
+            }, 1000);
+        }
+
+        // Funzione per ordinare i countdown
+        function sortCountdowns() {
+            // Cambia l'ordine da decrescente a crescente
+            countdowns.sort((a, b) => a.timeRemaining - b.timeRemaining);
+            countdownList.innerHTML = '';
+            countdowns.forEach(countdown => {
+                countdownList.appendChild(countdown.element);
+            });
+        }
+
+        // Funzione per formattare il tempo (mm:ss)
+        function formatTime(seconds) {
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = seconds % 60;
+            return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+        }
+    </script>
 </body>
 </html>

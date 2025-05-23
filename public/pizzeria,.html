@@ -2,6 +2,27 @@
 <html>
 <head>
     <title>Interfaccia Pizzeria</title>
+    <style>
+        .countdown-item {
+            margin: 10px 0;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #f8f9fa;
+            width: 100%;
+        }
+
+        .countdown-item h3 {
+            margin: 0 0 5px 0;
+            color: #333;
+        }
+
+        .countdown-item p {
+            margin: 0;
+            font-size: 16px;
+            color: #d9534f;
+        }
+    </style>
 </head>
 <body>
     <h1>Interfaccia Pizzeria</h1>
@@ -10,6 +31,53 @@
         <!-- I countdown sincronizzati appariranno qui -->
     </div>
 
-    <script src="main.js"></script>
+    <script>
+        // Funzione per caricare i countdown da localStorage
+        function loadCountdownsFromLocalStorage() {
+            const countdownData = JSON.parse(localStorage.getItem('countdowns')) || [];
+            return countdownData;
+        }
+
+        // Funzione per aggiornare la visualizzazione dei countdown
+        function updateCountdowns() {
+            const countdownContainer = document.getElementById('tavoli');
+            countdownContainer.innerHTML = ''; // Svuota il contenitore
+
+            const countdowns = loadCountdownsFromLocalStorage();
+
+            countdowns.forEach(countdown => {
+                const countdownItem = document.createElement('div');
+                countdownItem.classList.add('countdown-item');
+                countdownItem.innerHTML = `
+                    <h3>Tavolo ${countdown.tableNumber}</h3>
+                    <p>Tempo rimanente: ${formatTime(countdown.timeRemaining)}</p>
+                `;
+                countdownContainer.appendChild(countdownItem);
+            });
+        }
+
+        // Funzione per formattare il tempo (mm:ss)
+        function formatTime(seconds) {
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = seconds % 60;
+            return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+        }
+
+        // Aggiorna i countdown ogni secondo
+        setInterval(() => {
+            const countdowns = loadCountdownsFromLocalStorage();
+            countdowns.forEach(countdown => {
+                countdown.timeRemaining--;
+                if (countdown.timeRemaining < 0) countdown.timeRemaining = 0;
+            });
+            localStorage.setItem('countdowns', JSON.stringify(countdowns)); // Aggiorna localStorage
+            updateCountdowns(); // Aggiorna la visualizzazione
+        }, 1000);
+
+        // Carica i countdown inizialmente
+        updateCountdowns();
+    </script>
+
+    <button onclick="window.location.href='index.html'">Torna alla Home</button>
 </body>
 </html>

@@ -1,0 +1,48 @@
+<!doctype html>
+<html>
+  <head>
+    <title>Gestione Ordini Ristorante</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        text-align: center;
+        background-color: #f9f9f9;
+        padding: 20px;
+      }
+      h1 {
+        color: #333;
+      }
+      button {
+        font-size: 16px;
+        padding: 10px 20px;
+        margin: 10px;
+        color: white;
+        background-color: #007BFF;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+      }
+      button:hover {
+        background-color: #0056b3;
+      }
+      div {
+        margin-top: 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Benvenuto nel Sistema di Gestione Ordini</h1>
+
+    <div>
+      <button onclick="window.location.href='cucina.html'">
+        Accedi come Cucina
+      </button>
+      <button onclick="window.location.href='pizzeria.html'">
+        Accedi come Pizzeria
+      </button>
+      <button onclick="window.location.href='sala.html'">
+        Accedi come Sala
+      </button>
+    </div>
+  </body>
+</html>
