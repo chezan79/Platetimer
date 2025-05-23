@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html>
 <head>
@@ -32,6 +31,8 @@
         <!-- I countdown sincronizzati appariranno qui -->
     </div>
 
+    <audio id="alertSound" src="alert.mp3" preload="auto"></audio>
+
     <script>
         const ws = new WebSocket(`wss://${window.location.hostname}/ws`);
         const countdowns = new Map();
@@ -45,7 +46,7 @@
 
         function startCountdown(tableNumber, timeRemaining) {
             const countdownContainer = document.getElementById('tavoli');
-            
+
             // Crea o aggiorna l'elemento countdown
             let countdownElement = document.getElementById(`countdown-${tableNumber}`);
             if (!countdownElement) {
@@ -64,6 +65,12 @@
                         <p>Tempo scaduto!</p>
                     `;
                     return;
+                }
+
+                // Cambia colore e riproduci suono quando manca 1 minuto
+                if (timeRemaining === 60) {
+                    countdownElement.style.backgroundColor = '#ffeb3b';
+                    document.getElementById('alertSound').play();
                 }
 
                 countdownElement.innerHTML = `
