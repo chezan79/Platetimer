@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Interfaccia Cucina</title>
+</head>
+<body>
+    <h1>Interfaccia Cucina</h1>
+
+    <div>
+        <h2>Inserisci Numero Tavolo</h2>
+        <input type="text" id="numeroTavolo" pattern="[0-9]*" inputmode="numeric" placeholder="Numero Tavolo">
+        <button id="avviaCountdown">Avvia Countdown</button>
+        <div id="keyboard">
+            <div class="key">0</div>
+            <div class="key">1</div>
+            <div class="key">2</div>
+            <div class="key">3</div>
+            <div class="key">4</div>
+            <div class="key">5</div>
+            <div class="key">6</div>
+            <div class="key">7</div>
+            <div class="key">8</div>
+            <div class="key">9</div>
+        </div>
+    </div>
+
+    <div id="durationSelection" style="display: none;">
+        <h2>Seleziona Durata Countdown</h2>
+        <button class="duration-button" data-minutes="4">4 Minuti</button>
+        <button class="duration-button" data-minutes="6">6 Minuti</button>
+        <button class="duration-button" data-minutes="8">8 Minuti</button>
+        <button class="duration-button" data-minutes="10">10 Minuti</button>
+    </div>
+
+    <script src="main.js"></script>
+</body>
+</html>
