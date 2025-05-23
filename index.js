@@ -16,10 +16,11 @@ wss.on('connection', (ws) => {
     console.log('Nouvelle connexion WebSocket');
 
     ws.on('message', (message) => {
-        console.log('Message reçu:', message);
+        const messageStr = message.toString();
+        console.log('Message reçu:', messageStr);
         wss.clients.forEach((client) => {
             if (client.readyState === WebSocket.OPEN) {
-                client.send(message);
+                client.send(messageStr);
             }
         });
     });
