@@ -7,6 +7,11 @@
             font-family: Arial, sans-serif;
             margin: 0;
             padding: 0;
+
+    <button onclick="startVoiceRecognition()" style="padding: 10px; margin: 10px; background-color: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer;">
+        🎤 Comando Vocale
+    </button>
+
             display: flex;
             flex-direction: row;
             height: 100vh;
@@ -151,6 +156,13 @@
     <audio id="alertSound" src="alert.mp3" preload="auto"></audio>
 
     <script>
+        // Inizializzazione riconoscimento vocale
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'it-IT';
+        recognition.continuous = false;
+        recognition.interimResults = false;
+
         // Selezione elementi
         const numeroTavoloInput = document.getElementById('numeroTavolo');
         const keyboard = document.getElementById('keyboard');
@@ -193,6 +205,36 @@
                 }
             }
         });
+
+        // Gestione comandi vocali
+        function startVoiceRecognition() {
+            recognition.start();
+        }
+
+        recognition.onresult = (event) => {
+            const command = event.results[0][0].transcript.toLowerCase();
+            console.log('Comando vocale:', command);
+            
+            // Cerca il numero del tavolo (es. "tavolo 5")
+            const tableMatch = command.match(/tavolo (\d+)/);
+            if (tableMatch) {
+                const tableNumber = tableMatch[1];
+                numeroTavoloInput.value = tableNumber;
+                
+                // Cerca la durata (es. "4 minuti")
+                const timeMatch = command.match(/(\d+) minut[io]/);
+                if (timeMatch) {
+                    const minutes = parseInt(timeMatch[1]);
+                    startCountdown(minutes, tableNumber);
+                    numeroTavoloInput.value = '';
+                    durationSelection.style.display = 'none';
+                }
+            }
+        };
+
+        recognition.onerror = (event) => {
+            console.error('Errore nel riconoscimento vocale:', event.error);
+        };
 
         // Funzione per avviare il countdown
         function startCountdown(minutes, tableNumber) {
