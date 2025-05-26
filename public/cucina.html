@@ -618,7 +618,8 @@
             const countdown = {
                 tableNumber,
                 timeRemaining,
-                element: null
+                element: null,
+                interval: null
             };
 
             // Crea un elemento per il countdown
@@ -638,11 +639,11 @@
             sortCountdowns();
 
             // Aggiorna il countdown ogni secondo con ottimizzazioni
-            const interval = setInterval(() => {
+            countdown.interval = setInterval(() => {
                 countdown.timeRemaining--;
                 
                 if (countdown.timeRemaining <= 0) {
-                    clearInterval(interval);
+                    clearInterval(countdown.interval);
                     countdown.element.style.backgroundColor = '#ff4444';
                     countdown.element.querySelector('p').textContent = 'Tempo scaduto!';
 
