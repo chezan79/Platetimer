@@ -348,48 +348,112 @@
             status.textContent = `Riconosciuto: "${command}"`;
             status.style.color = '#007bff';
 
-            // Pattern più semplici e flessibili
             let tableNumber = null;
             let minutes = null;
 
-            // Pattern 1: "tavolo X Y minuti" (più flessibile)
-            const pattern1 = /tavolo\s*(\w+)[\s,]*(\w+)\s*minut/i;
-            const match1 = command.match(pattern1);
-            
-            if (match1) {
-                const tableWord = match1[1];
-                const minuteWord = match1[2];
-                
-                console.log('Pattern match:', { tableWord, minuteWord });
-                
-                // Converte numeri in parole italiane
-                const numberMap = {
-                    'uno': 1, 'due': 2, 'tre': 3, 'quattro': 4, 'cinque': 5,
-                    'sei': 6, 'sette': 7, 'otto': 8, 'nove': 9, 'dieci': 10,
-                    'undici': 11, 'dodici': 12, 'tredici': 13, 'quattordici': 14,
-                    'quindici': 15, 'sedici': 16, 'diciassette': 17, 'diciotto': 18,
-                    'diciannove': 19, 'venti': 20, 'trenta': 30, 'quaranta': 40,
-                    'cinquanta': 50, 'sessanta': 60, 'settanta': 70, 'ottanta': 80,
-                    'novanta': 90, 'cento': 100
-                };
-                
-                // Prova a convertire il numero del tavolo
-                tableNumber = numberMap[tableWord] || parseInt(tableWord) || null;
-                
-                // Prova a convertire i minuti
-                minutes = numberMap[minuteWord] || parseInt(minuteWord) || null;
-                
-                console.log('Numeri convertiti:', { tableNumber, minutes });
+            // Mappa per convertire numeri in parole italiane (espansa)
+            const numberMap = {
+                'zero': 0, 'uno': 1, 'due': 2, 'tre': 3, 'quattro': 4, 'cinque': 5,
+                'sei': 6, 'sette': 7, 'otto': 8, 'nove': 9, 'dieci': 10,
+                'undici': 11, 'dodici': 12, 'tredici': 13, 'quattordici': 14,
+                'quindici': 15, 'sedici': 16, 'diciassette': 17, 'diciotto': 18,
+                'diciannove': 19, 'venti': 20, 'ventuno': 21, 'ventidue': 22,
+                'ventitré': 23, 'ventiquattro': 24, 'venticinque': 25,
+                'trenta': 30, 'quaranta': 40, 'cinquanta': 50, 'sessanta': 60,
+                'settanta': 70, 'ottanta': 80, 'novanta': 90, 'cento': 100
+            };
+
+            console.log('Analisi comando:', command);
+
+            // Pattern multipli per maggiore flessibilità
+            const patterns = [
+                // "tavolo 5 4 minuti", "tavolo cinque quattro minuti"
+                /tavolo\s+(\w+)\s+(\w+)\s+minut/i,
+                // "tavolo 5, 4 minuti"
+                /tavolo\s+(\w+)[,\s]+(\w+)\s+minut/i,
+                // "tavolo numero 5 4 minuti"
+                /tavolo\s+(?:numero\s+)?(\w+)\s+(\w+)\s+minut/i,
+                // "5 tavolo 4 minuti" (ordine diverso)
+                /(\w+)\s+tavolo\s+(\w+)\s+minut/i,
+                // Pattern più generale con qualsiasi separatore
+                /tavolo\s*[:]?\s*(\w+)\s*[,\s]\s*(\w+)\s*minut/i
+            ];
+
+            // Prova ogni pattern
+            for (let i = 0; i < patterns.length; i++) {
+                const match = command.match(patterns[i]);
+                if (match) {
+                    const word1 = match[1].trim();
+                    const word2 = match[2].trim();
+                    
+                    console.log(`Pattern ${i+1} match:`, { word1, word2 });
+                    
+                    // Prova entrambe le combinazioni (tavolo-minuti e minuti-tavolo)
+                    const num1 = numberMap[word1] || parseInt(word1) || null;
+                    const num2 = numberMap[word2] || parseInt(word2) || null;
+                    
+                    if (num1 && num2) {
+                        // Determina quale è il tavolo e quali sono i minuti
+                        const validDurations = [4, 6, 8, 10, 12];
+                        
+                        if (validDurations.includes(num1) && num2 >= 1 && num2 <= 999) {
+                            // num1 = minuti, num2 = tavolo
+                            minutes = num1;
+                            tableNumber = num2;
+                        } else if (validDurations.includes(num2) && num1 >= 1 && num1 <= 999) {
+                            // num1 = tavolo, num2 = minuti
+                            tableNumber = num1;
+                            minutes = num2;
+                        }
+                        
+                        if (tableNumber && minutes) {
+                            console.log(`✓ Pattern ${i+1} successo:`, { tableNumber, minutes });
+                            break;
+                        }
+                    }
+                }
             }
             
-            // Se non trova match, prova pattern più semplici
+            // Se non trova match con i pattern, prova a estrarre solo numeri
             if (!tableNumber || !minutes) {
-                // Cerca solo numeri nel comando
+                console.log('Fallback: estrazione numeri diretta');
                 const numbers = command.match(/\d+/g);
                 if (numbers && numbers.length >= 2) {
-                    tableNumber = parseInt(numbers[0]);
-                    minutes = parseInt(numbers[1]);
-                    console.log('Numeri estratti:', { tableNumber, minutes });
+                    const num1 = parseInt(numbers[0]);
+                    const num2 = parseInt(numbers[1]);
+                    const validDurations = [4, 6, 8, 10, 12];
+                    
+                    // Prova entrambe le combinazioni
+                    if (validDurations.includes(num1) && num2 >= 1 && num2 <= 999) {
+                        minutes = num1;
+                        tableNumber = num2;
+                    } else if (validDurations.includes(num2) && num1 >= 1 && num1 <= 999) {
+                        tableNumber = num1;
+                        minutes = num2;
+                    }
+                    
+                    console.log('Numeri estratti:', { tableNumber, minutes, numbers });
+                }
+            }
+
+            // Ultimo tentativo: cerca parole chiave specifiche
+            if (!tableNumber || !minutes) {
+                console.log('Ultimo tentativo: ricerca parole chiave');
+                
+                // Cerca specificamente "quattro", "sei", "otto", "dieci", "dodici"
+                const minuteWords = ['quattro', 'sei', 'otto', 'dieci', 'dodici'];
+                const foundMinuteWord = minuteWords.find(word => command.includes(word));
+                
+                if (foundMinuteWord) {
+                    minutes = numberMap[foundMinuteWord];
+                    
+                    // Cerca un numero per il tavolo
+                    const tableMatch = command.match(/(\d+)/);
+                    if (tableMatch) {
+                        tableNumber = parseInt(tableMatch[1]);
+                    }
+                    
+                    console.log('Ricerca parole chiave:', { foundMinuteWord, minutes, tableNumber });
                 }
             }
 
