@@ -600,6 +600,20 @@
             console.log(`Connesso alla room: ${companyName}`);
         };
 
+        // Listener per i messaggi WebSocket in arrivo
+        ws.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                if (data.action === 'startCountdown') {
+                    console.log('📥 Countdown ricevuto via WebSocket:', data);
+                    // Non avviare un nuovo countdown se proviene da questo stesso client
+                    // (evita duplicati quando si avvia dalla cucina stessa)
+                }
+            } catch (error) {
+                console.error('Errore nel parsing del messaggio WebSocket:', error);
+            }
+        };
+
         // Funzione per avviare il countdown
         function startCountdown(minutes, tableNumber) {
             let timeRemaining = minutes * 60; // Converti minuti in secondi
