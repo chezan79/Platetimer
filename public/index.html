@@ -38,6 +38,8 @@
                 </form>
                 <div class="toggle-link">
                     <span>Non hai un account? <a href="#" id="go-to-register">Registrati</a></span>
+                    <br>
+                    <span><a href="#" id="forgot-password">Password dimenticata?</a></span>
                 </div>
             </div>
         </div>
@@ -46,7 +48,7 @@
     <!-- Importa Firebase SDK -->
     <script type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-        import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+        import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile, sendPasswordResetEmail } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
         import { getFirestore, doc, setDoc, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
         // Configurazione Firebase
@@ -72,6 +74,7 @@
         const formLogin = document.getElementById('form-login');
         const goToLogin = document.getElementById('go-to-login');
         const goToRegister = document.getElementById('go-to-register');
+        const forgotPassword = document.getElementById('forgot-password');
 
         // Funzioni per mostrare messaggi
         function showMessage(elementId, message, isError = false) {
@@ -97,6 +100,38 @@
                 e.preventDefault();
                 loginFormEl.style.display = 'none';
                 registerFormEl.style.display = 'block';
+            });
+        }
+
+        // Gestione reset password
+        if (forgotPassword) {
+            forgotPassword.addEventListener('click', async (e) => {
+                e.preventDefault();
+                const email = document.getElementById('login-email').value;
+                
+                if (!email) {
+                    showMessage('login-message', 'Inserisci la tua email prima di richiedere il reset password', true);
+                    return;
+                }
+
+                try {
+                    await sendPasswordResetEmail(auth, email);
+                    showMessage('login-message', 'Email di reset password inviata! Controlla la tua casella di posta.', false);
+                } catch (error) {
+                    console.error('Errore durante il reset password:', error);
+                    let errorMessage = 'Errore durante l\'invio dell\'email di reset';
+                    
+                    switch (error.code) {
+                        case 'auth/user-not-found':
+                            errorMessage = 'Email non trovata nel sistema';
+                            break;
+                        case 'auth/invalid-email':
+                            errorMessage = 'Email non valida';
+                            break;
+                    }
+                    
+                    showMessage('login-message', errorMessage, true);
+                }
             });
         }
 
@@ -225,6 +260,12 @@
                             break;
                         case 'auth/too-many-requests':
                             errorMessage = 'Troppi tentativi falliti. Riprova più tardi.';
+                            break;
+                        case 'unavailable':
+                            errorMessage = 'Servizio temporaneamente non disponibile. Riprova tra qualche minuto.';
+                            break;
+                        case 'auth/network-request-failed':
+                            errorMessage = 'Errore di connessione. Verifica la tua connessione internet.';
                             break;
                     }
 
