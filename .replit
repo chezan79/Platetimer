@@ -23,7 +23,7 @@ mode = "sequential"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "node beckend/index.js"
+args = "node server.js"
 
 [[ports]]
 localPort = 5000
