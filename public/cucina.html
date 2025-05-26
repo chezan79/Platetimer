@@ -9,6 +9,7 @@
             min-height: 100vh;
             margin: 0;
             padding: 20px;
+            padding-top: 80px;
             display: flex;
             flex-direction: row;
             gap: 20px;
@@ -164,12 +165,12 @@
     </style>
 </head>
 <body>
-    <!-- Tasto Home e Nome Azienda - Fuori dai container -->
-    <div style="position: absolute; top: 20px; left: 20px; z-index: 1000;">
-        <button onclick="window.location.href='home.html'" style="padding: 8px 16px; margin: 0 0 10px 0; background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%); color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 14px; font-weight: 600; transition: transform 0.2s, box-shadow 0.2s;">🏠 Home</button>
-    </div>
-    <div id="company-header" style="position: absolute; top: 20px; right: 20px; z-index: 1000; padding: 10px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; border-left: 4px solid #28a745;">
+    <!-- Nome Azienda e Tasto Home - Fuori dai container -->
+    <div id="company-header" style="position: absolute; top: 20px; left: 20px; z-index: 1000; padding: 10px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; border-left: 4px solid #28a745;">
         <h4 id="company-name" style="margin: 0; color: #333; font-weight: 600;">Nome Azienda</h4>
+    </div>
+    <div style="position: absolute; top: 20px; right: 20px; z-index: 1000;">
+        <button onclick="window.location.href='home.html'" style="padding: 8px 16px; margin: 0 0 10px 0; background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%); color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 14px; font-weight: 600; transition: transform 0.2s, box-shadow 0.2s;">🏠 Home</button>
     </div>
 
     <!-- Contenitore sinistro: Tastiera e input -->
