@@ -109,6 +109,17 @@
         const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
         const countdowns = [];
 
+        ws.onopen = () => {
+            // Unisciti alla room dell'azienda
+            const companyName = localStorage.getItem('userCompany') || 'Nome Azienda';
+            const joinMessage = {
+                action: 'joinRoom',
+                companyName: companyName
+            };
+            ws.send(JSON.stringify(joinMessage));
+            console.log(`Pizzeria connessa alla room: ${companyName}`);
+        };
+
         function sortCountdowns() {
             countdowns.sort((a, b) => a.timeRemaining - b.timeRemaining);
             const container = document.getElementById('tavoli');

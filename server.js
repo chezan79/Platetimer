@@ -1,88 +1,83 @@
-
 const express = require('express');
 const http = require('http');
 const WebSocket = require('ws');
-const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
-const wss = new WebSocket.Server({ server, path: '/ws' });
 
-// Memorizza i countdown attivi
-const activeCountdowns = new Map();
+// Configura il WebSocket Server
+const wss = new WebSocket.Server({ 
+    server,
+    path: '/ws' // Percorso per le connessioni WebSocket
+});
 
-// Servire i file statici
-app.use(express.static(path.join(__dirname, 'public')));
+// Serve i file statici dalla directory "public"
+app.use(express.static('public'));
 
-// Gestire le connessioni WebSocket
+// Mappa per tenere traccia delle connessioni per azienda
+const companyRooms = new Map();
+
+// Gestisci le connessioni WebSocket
 wss.on('connection', (ws) => {
     console.log('Nuova connessione WebSocket');
 
-    // Invia tutti i countdown attivi al nuovo client
-    activeCountdowns.forEach((countdown, tableNumber) => {
-        const now = Date.now();
-        const timeRemaining = Math.max(0, Math.floor((countdown.endTime - now) / 1000));
-        
-        if (timeRemaining > 0) {
-            ws.send(JSON.stringify({
-                action: 'startCountdown',
-                tableNumber: tableNumber,
-                timeRemaining: timeRemaining
-            }));
-        } else {
-            // Rimuovi countdown scaduti
-            activeCountdowns.delete(tableNumber);
-        }
-    });
-
+    // Quando un messaggio viene ricevuto
     ws.on('message', (message) => {
+        const messageStr = message.toString();
+        console.log('Messaggio ricevuto:', messageStr);
+
         try {
-            const data = JSON.parse(message);
-            console.log('Messaggio ricevuto:', data);
+            const data = JSON.parse(messageStr);
 
-            if (data.action === 'startCountdown') {
-                // Calcola il tempo di fine
-                const endTime = Date.now() + (data.timeRemaining * 1000);
-                
-                // Memorizza il countdown
-                activeCountdowns.set(data.tableNumber, {
-                    endTime: endTime,
-                    originalDuration: data.timeRemaining
-                });
+            // Se è un messaggio di registrazione alla room
+            if (data.action === 'joinRoom') {
+                const companyName = data.companyName;
+                ws.companyName = companyName;
 
-                // Invia a tutti i client connessi
-                wss.clients.forEach((client) => {
-                    if (client.readyState === WebSocket.OPEN) {
-                        client.send(JSON.stringify({
-                            action: 'startCountdown',
-                            tableNumber: data.tableNumber,
-                            timeRemaining: data.timeRemaining
-                        }));
-                    }
-                });
+                // Aggiungi il client alla room dell'azienda
+                if (!companyRooms.has(companyName)) {
+                    companyRooms.set(companyName, new Set());
+                }
+                companyRooms.get(companyName).add(ws);
+
+                console.log(`Client unito alla room: ${companyName}`);
+                return;
+            }
+
+            // Se è un countdown, invia solo ai client della stessa azienda
+            if (data.action === 'startCountdown' && ws.companyName) {
+                const companyClients = companyRooms.get(ws.companyName);
+                if (companyClients) {
+                    companyClients.forEach((client) => {
+                        if (client.readyState === WebSocket.OPEN) {
+                            client.send(messageStr);
+                        }
+                    });
+                }
+                console.log(`Countdown inviato alla room: ${ws.companyName}`);
             }
         } catch (error) {
             console.error('Errore nel parsing del messaggio:', error);
         }
     });
 
+    // Rimuovi il client quando si disconnette
     ws.on('close', () => {
-        console.log('Connessione WebSocket chiusa');
+        if (ws.companyName) {
+            const companyClients = companyRooms.get(ws.companyName);
+            if (companyClients) {
+                companyClients.delete(ws);
+                if (companyClients.size === 0) {
+                    companyRooms.delete(ws.companyName);
+                }
+            }
+            console.log(`Client rimosso dalla room: ${ws.companyName}`);
+        }
     });
 });
 
-// Pulizia periodica dei countdown scaduti
-setInterval(() => {
-    const now = Date.now();
-    for (const [tableNumber, countdown] of activeCountdowns.entries()) {
-        if (countdown.endTime <= now) {
-            activeCountdowns.delete(tableNumber);
-        }
-    }
-}, 60000); // Controlla ogni minuto
-
-// Avviare il server
-const PORT = process.env.PORT || 5000;
+// Avvia il server
+const PORT = 5000;
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`Server avviato su http://0.0.0.0:${PORT}`);
 });
