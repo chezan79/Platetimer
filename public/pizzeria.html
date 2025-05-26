@@ -98,6 +98,7 @@
         </div>
 
     <audio id="alertSound" src="alert.mp3" preload="auto"></audio>
+    <audio id="zeroSound" src="countdown-zero.mp3" preload="auto"></audio>
     
     <!-- Tasto Home in alto a destra -->
     <div style="position: absolute; top: 20px; right: 20px; z-index: 1000;">
@@ -173,6 +174,13 @@
                         <h3>Tavolo ${tableNumber}</h3>
                         <p>Tempo scaduto!</p>
                     `;
+                    
+                    // Riproduce il suono personalizzato per countdown a zero
+                    const zeroAudio = document.getElementById('zeroSound');
+                    if (zeroAudio) {
+                        zeroAudio.play().catch(e => console.log('Errore audio countdown zero:', e));
+                    }
+                    
                     setTimeout(() => {
                         const index = countdowns.indexOf(countdown);
                         if (index > -1) {

@@ -207,16 +207,26 @@
         <div id="countdownList"></div>
     </div>
     <audio id="alertSound" src="alert.mp3" preload="auto"></audio>
+    <audio id="zeroSound" src="countdown-zero.mp3" preload="auto"></audio>
     
     <script>
         // Verifica disponibilità audio all'avvio
         document.addEventListener('DOMContentLoaded', () => {
-            const audio = document.getElementById('alertSound');
-            audio.addEventListener('error', () => {
+            const alertAudio = document.getElementById('alertSound');
+            const zeroAudio = document.getElementById('zeroSound');
+            
+            alertAudio.addEventListener('error', () => {
                 console.log('⚠️ File alert.mp3 non trovato. Verrà usato solo feedback visivo.');
             });
-            audio.addEventListener('canplaythrough', () => {
+            alertAudio.addEventListener('canplaythrough', () => {
                 console.log('✅ Audio alert.mp3 caricato correttamente');
+            });
+            
+            zeroAudio.addEventListener('error', () => {
+                console.log('⚠️ File countdown-zero.mp3 non trovato. Verrà usato solo feedback visivo.');
+            });
+            zeroAudio.addEventListener('canplaythrough', () => {
+                console.log('✅ Audio countdown-zero.mp3 caricato correttamente');
             });
         });
     </script>
@@ -692,6 +702,20 @@
                     clearInterval(countdown.interval);
                     countdown.element.style.backgroundColor = '#ff4444';
                     countdown.element.querySelector('p').textContent = 'Tempo scaduto!';
+
+                    // Riproduce il suono personalizzato per countdown a zero
+                    const zeroAudio = document.getElementById('zeroSound');
+                    if (zeroAudio) {
+                        zeroAudio.play().catch(e => {
+                            console.log('⚠️ Errore audio countdown zero:', e);
+                            // Fallback: notifica visiva
+                            countdown.element.style.border = '5px solid #ff0000';
+                            countdown.element.style.animation = 'blink 0.5s infinite';
+                        });
+                    } else {
+                        console.log('⚠️ Audio countdown zero non trovato');
+                        alert(`🚨 TEMPO SCADUTO: Tavolo ${countdown.tableNumber}!`);
+                    }
 
                     // Aggiungi pulsante di eliminazione
                     const deleteButton = document.createElement('button');
