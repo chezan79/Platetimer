@@ -1,18 +1,17 @@
-
 // Import Firebase modules
-import { initializeApp } from "https://www.gstatic.com/firebasejs/9.16.0/firebase-app.js";
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/9.16.0/firebase-auth.js";
-import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/9.16.0/firebase-firestore.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-// Configurazione Firebase
+// Configurazione Firebase corretta
 const firebaseConfig = {
-    // Inserisci qui la tua configurazione Firebase
-    apiKey: "your-api-key",
-    authDomain: "your-project.firebaseapp.com",
-    projectId: "your-project-id",
-    storageBucket: "your-project.appspot.com",
-    messagingSenderId: "123456789",
-    appId: "your-app-id"
+    apiKey: "AIzaSyDZ0FdjenO-ngblcuXKdwWwvRV5liiR18I",
+    authDomain: "app-dati-tavoli.firebaseapp.com",
+    projectId: "app-dati-tavoli",
+    storageBucket: "app-dati-tavoli.appspot.com",
+    messagingSenderId: "267339065819",
+    appId: "1:267339065819:web:1e74647f740bdf1d725ffe",
+    measurementId: "G-F79QERTN6C"
 };
 
 // Inizializza Firebase
@@ -98,3 +97,6 @@ form.addEventListener('submit', async (event) => {
         alert(`Errore durante la registrazione: ${error.message}`);
     }
 });
+
+// Aggiungi qui altre funzionalità se necessarie
+console.log('Firebase configurato correttamente in script.js');

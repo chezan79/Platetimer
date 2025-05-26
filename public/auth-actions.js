@@ -1,17 +1,31 @@
+
 // Includi Firebase Authentication
-import { getAuth, applyActionCode } from "https://www.gstatic.com/firebasejs/9.16.0/firebase-auth.js";
+import { getAuth, applyActionCode, confirmPasswordReset } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+
+// Configurazione Firebase
+const firebaseConfig = {
+    apiKey: "AIzaSyDZ0FdjenO-ngblcuXKdwWwvRV5liiR18I",
+    authDomain: "app-dati-tavoli.firebaseapp.com",
+    projectId: "app-dati-tavoli",
+    storageBucket: "app-dati-tavoli.appspot.com",
+    messagingSenderId: "267339065819",
+    appId: "1:267339065819:web:1e74647f740bdf1d725ffe",
+    measurementId: "G-F79QERTN6C"
+};
+
+// Inizializza Firebase
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
 
 // Ottieni i parametri dal link
 const urlParams = new URLSearchParams(window.location.search);
 const mode = urlParams.get('mode');
 const oobCode = urlParams.get('oobCode');
 
-// Inizializza Firebase Authentication
-const auth = getAuth();
-
 if (mode === 'verifyEmail') {
     // Gestisci la verifica dell'email
-    auth.applyActionCode(oobCode)
+    applyActionCode(auth, oobCode)
         .then(() => {
             alert("Email verificata con successo!");
         })
@@ -21,7 +35,7 @@ if (mode === 'verifyEmail') {
 } else if (mode === 'resetPassword') {
     // Gestisci il reset della password
     const newPassword = prompt("Inserisci la nuova password:");
-    auth.confirmPasswordReset(oobCode, newPassword)
+    confirmPasswordReset(auth, oobCode, newPassword)
         .then(() => {
             alert("Password reimpostata con successo!");
         })
