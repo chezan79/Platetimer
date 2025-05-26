@@ -1,17 +1,128 @@
-<!<!DOCTYPE html>
+
+<!DOCTYPE html>
 <html>
 <head>
-    <title>Interfaccia sala</title>
+    <title>Interfaccia Sala</title>
+    <style>
+        .countdown-item {
+            margin: 10px 0;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #f8f9fa;
+            width: 100%;
+        }
+
+        .countdown-item h3 {
+            margin: 0 0 5px 0;
+            color: #333;
+        }
+
+        .countdown-item p {
+            margin: 0;
+            font-size: 16px;
+            color: #d9534f;
+        }
+    </style>
 </head>
 <body>
-    <h1>Interfaccia sala</h1>
+    <h1>Interfaccia Pizzeria</h1>
 
     <div id="tavoli" class="countdown-container">
         <!-- I countdown sincronizzati appariranno qui -->
     </div>
 
-    <script src="main.js"></script>
-    
-    <button onclick="window.location.href='index.html'">Torna alla Home</button>
+    <audio id="alertSound" src="alert.mp3" preload="auto"></audio>
+
+    <script>
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+        const countdowns = [];
+
+        function sortCountdowns() {
+            countdowns.sort((a, b) => a.timeRemaining - b.timeRemaining);
+            const container = document.getElementById('tavoli');
+            container.innerHTML = '';
+            countdowns.forEach(countdown => {
+                container.appendChild(countdown.element);
+            });
+        }
+
+        ws.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                if (data.action === 'startCountdown') {
+                    startCountdown(data.tableNumber, data.timeRemaining);
+                }
+            } catch (error) {
+                console.error('Errore nel parsing del messaggio:', error);
+            }
+        };
+
+        function startCountdown(tableNumber, timeRemaining) {
+            // Rimuovi il vecchio countdown se esiste
+            const existingIndex = countdowns.findIndex(c => c.tableNumber === tableNumber);
+            if (existingIndex !== -1) {
+                clearInterval(countdowns[existingIndex].interval);
+                countdowns.splice(existingIndex, 1);
+            }
+
+            const countdownElement = document.createElement('div');
+            countdownElement.id = `countdown-${tableNumber}`;
+            countdownElement.classList.add('countdown-item');
+
+            let remainingTime = parseInt(timeRemaining);
+
+            const countdown = {
+                tableNumber: tableNumber,
+                timeRemaining: remainingTime,
+                element: countdownElement,
+                interval: null
+            };
+            countdown.interval = setInterval(() => {
+                countdown.timeRemaining = remainingTime;
+                if (remainingTime <= 0) {
+                    clearInterval(countdown.interval);
+                    countdownElement.style.backgroundColor = '#ff4444';
+                    countdownElement.innerHTML = `
+                        <h3>Tavolo ${tableNumber}</h3>
+                        <p>Tempo scaduto!</p>
+                    `;
+                    setTimeout(() => {
+                        const index = countdowns.indexOf(countdown);
+                        if (index > -1) {
+                            countdowns.splice(index, 1);
+                            sortCountdowns();
+                        }
+                    }, 45000);
+                    return;
+                }
+                sortCountdowns();
+
+                if (remainingTime === 60) {
+                    countdownElement.style.backgroundColor = '#ffeb3b';
+                    const audio = document.getElementById('alertSound');
+                    if (audio) audio.play().catch(e => console.log('Errore audio:', e));
+                }
+
+                countdownElement.innerHTML = `
+                    <h3>Tavolo ${tableNumber}</h3>
+                    <p>Tempo rimanente: ${formatTime(remainingTime)}</p>
+                `;
+                remainingTime--;
+            }, 1000);
+
+            countdowns.push(countdown);
+            sortCountdowns();
+        }
+
+        function formatTime(seconds) {
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = seconds % 60;
+            return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+        }
+    </script>
+
+    <button onclick="window.location.href='home.html'">Torna alla Home</button>
 </body>
 </html>
