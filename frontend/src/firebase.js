@@ -1,6 +1,8 @@
 // Importa i moduli necessari da Firebase
 import { initializeApp } from "firebase/app";
 import { getAuth, signInWithPopup, GoogleAuthProvider } from "firebase/auth";
+// Importa il modulo di Cloud Firestore
+import { getFirestore } from "firebase/firestore"; // <-- Aggiungiamo questo!
 
 // Configurazione Firebase (usa le credenziali del tuo progetto)
 const firebaseConfig = {
@@ -20,6 +22,10 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const provider = new GoogleAuthProvider();
 
+// Inizializza Cloud Firestore e ottieni un riferimento <-- Aggiungiamo questo!
+const db = getFirestore(app);
+
+
 // Funzione per il login con Google
 export const signInWithGoogle = async () => {
   try {
@@ -29,8 +35,9 @@ export const signInWithGoogle = async () => {
     return user; // Puoi restituire l'utente per utilizzarlo nell'app
   } catch (error) {
     console.error("Errore durante l'autenticazione:", error.message);
+    // Potrebbe essere utile gestire errori specifici qui, ad es. auth/popup-closed-by-user
   }
 };
 
 // Esporta auth per usarlo in altre parti dell'app
-export { auth };
+export { auth, db }; // <-- Esportiamo anche 'db' per accedere a Firestore altrove!
