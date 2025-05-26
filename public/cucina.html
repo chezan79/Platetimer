@@ -265,13 +265,13 @@
         recognition.onresult = (event) => {
             const command = event.results[0][0].transcript.toLowerCase();
             console.log('Comando vocale:', command);
-            
+
             // Cerca il numero del tavolo (es. "tavolo 5")
             const tableMatch = command.match(/tavolo (\d+)/);
             if (tableMatch) {
                 const tableNumber = tableMatch[1];
                 numeroTavoloInput.value = tableNumber;
-                
+
                 // Cerca la durata (es. "4 minuti")
                 const timeMatch = command.match(/(\d+) minut[io]/);
                 if (timeMatch) {
@@ -336,7 +336,7 @@
                     clearInterval(interval);
                     countdown.element.style.backgroundColor = '#ff4444';
                     countdown.element.querySelector('p').textContent = 'Tempo scaduto!';
-                    
+
                     // Aggiungi pulsante di eliminazione
                     const deleteButton = document.createElement('button');
                     deleteButton.textContent = 'Elimina';
@@ -383,9 +383,9 @@
         }
     </script>
     <script src="company-header.js"></script>
-    
+
     <!-- Tasto Home in alto a destra -->
-    <div style="position: fixed; top: 20px; right: 20px; z-index: 9999;">
+    <div style="position: absolute; top: 20px; right: 80px; z-index: 1000;">
         <button onclick="window.location.href='home.html'" style="padding: 6px 12px; background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500; transition: transform 0.2s, box-shadow 0.2s;">🏠 Home</button>
     </div>
 </body>
