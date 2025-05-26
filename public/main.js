@@ -1,4 +1,5 @@
-const ws = new WebSocket('ws://localhost:3000');
+const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
 
 // Funzione per avviare un countdown
 function avviaCountdown(tavolo, durataMinuti) {
@@ -24,19 +25,28 @@ function avviaCountdown(tavolo, durataMinuti) {
 
 // Gestione dei messaggi WebSocket
 ws.onmessage = (event) => {
-    const data = JSON.parse(event.data);
-    if (data.action === 'startCountdown') {
-        avviaCountdown(data.tavolo, data.durata);
+    try {
+        const data = JSON.parse(event.data);
+        if (data.action === 'startCountdown') {
+            avviaCountdown(data.tableNumber, data.timeRemaining / 60); // Converti secondi in minuti
+        }
+    } catch (error) {
+        console.error('Errore nel parsing del messaggio:', error);
     }
 };
 
 // Invio del messaggio per avviare un countdown
 document.getElementById('avviaCountdown')?.addEventListener('click', () => {
-    const tavolo = document.getElementById('numeroTavolo').value;
-    const durataButton = document.querySelector('.duration-button[data-minutes]');
+    const tableNumber = document.getElementById('numeroTavolo').value;
+    const durataButton = document.querySelector('.duration-button.selected');
     const durata = parseInt(durataButton?.dataset.minutes);
 
-    if (tavolo && durata) {
-        ws.send(JSON.stringify({ action: 'startCountdown', tavolo, durata }));
+    if (tableNumber && durata) {
+        const timeRemaining = durata * 60; // Converti minuti in secondi
+        ws.send(JSON.stringify({ 
+            action: 'startCountdown', 
+            tableNumber: tableNumber, 
+            timeRemaining: timeRemaining 
+        }));
     }
 });
