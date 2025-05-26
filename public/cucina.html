@@ -643,11 +643,15 @@
             const countdownItem = document.createElement('div');
             countdownItem.classList.add('countdown-item');
             countdownItem.innerHTML = `
-                <h3>Tavolo ${tableNumber}</h3>
-                <p>Tempo rimanente: ${formatTime(timeRemaining)}</p>
-                <button onclick="eliminaCountdown(${tableNumber})" style="background-color: #dc3545; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; margin-top: 10px; font-size: 14px;">
-                    🗑️ Elimina
-                </button>
+                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                    <div>
+                        <h3>Tavolo ${tableNumber}</h3>
+                        <p>Tempo rimanente: ${formatTime(timeRemaining)}</p>
+                    </div>
+                    <button onclick="eliminaCountdown(${tableNumber})" style="background-color: #dc3545; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 14px; margin-left: 10px; flex-shrink: 0;">
+                        🗑️ Elimina
+                    </button>
+                </div>
             `;
             countdown.element = countdownItem;
 
