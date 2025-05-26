@@ -33,27 +33,42 @@
         }
         
         .countdown-item {
-            margin: 15px 0;
-            padding: 20px;
+            margin: 8px 0;
+            padding: 12px 15px;
             border: 1px solid #ddd;
             border-radius: 8px;
             background-color: #f8f9fa;
             transition: background-color 0.3s, transform 0.2s, box-shadow 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            min-height: 50px;
         }
 
         .countdown-item:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
 
-        .countdown-item h3 {
-            margin: 0 0 8px 0;
+        .countdown-table {
+            flex: 0 0 auto;
+            margin-right: 15px;
+        }
+
+        .countdown-table h3 {
+            margin: 0;
             color: #333;
-            font-size: 20px;
+            font-size: 18px;
             font-weight: 600;
+            white-space: nowrap;
         }
 
-        .countdown-item p {
+        .countdown-time {
+            flex: 1;
+            text-align: center;
+        }
+
+        .countdown-time p {
             margin: 0;
             font-size: 18px;
             color: #d9534f;
@@ -169,8 +184,12 @@
                     clearInterval(countdown.interval);
                     countdownElement.style.backgroundColor = '#ff4444';
                     countdownElement.innerHTML = `
-                        <h3>Tavolo ${tableNumber}</h3>
-                        <p>Tempo scaduto!</p>
+                        <div class="countdown-table">
+                            <h3>Tavolo ${tableNumber}</h3>
+                        </div>
+                        <div class="countdown-time">
+                            <p>Tempo scaduto!</p>
+                        </div>
                     `;
                     
                     // Riproduce il suono personalizzato per countdown a zero
@@ -197,8 +216,12 @@
                 }
 
                 countdownElement.innerHTML = `
-                    <h3>Tavolo ${tableNumber}</h3>
-                    <p>Tempo rimanente: ${formatTime(remainingTime)}</p>
+                    <div class="countdown-table">
+                        <h3>Tavolo ${tableNumber}</h3>
+                    </div>
+                    <div class="countdown-time">
+                        <p>${formatTime(remainingTime)}</p>
+                    </div>
                 `;
                 remainingTime--;
             }, 1000);

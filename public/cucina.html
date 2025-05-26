@@ -118,11 +118,32 @@
             border-radius: 8px;
             background-color: #f8f9fa;
             transition: background-color 0.3s, transform 0.2s;
+            display: flex; /* Use flexbox for horizontal alignment */
+            align-items: center; /* Align items vertically */
+            justify-content: space-between; /* Distribute space evenly */
         }
 
         .countdown-item:hover {
             transform: translateY(-1px);
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .countdown-table {
+            flex: 1;
+            text-align: left;
+        }
+
+        .countdown-time {
+            flex: 2;
+            text-align: center;
+            font-size: 16px;
+            color: #d9534f;
+            font-weight: bold;
+        }
+
+        .countdown-delete {
+            flex: 1;
+            text-align: right;
         }
 
         .countdown-item h3 {
@@ -158,6 +179,18 @@
 
         button[style*="background-color: #4CAF50"] {
             background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%) !important;
+        }
+
+         /* Stile per il pulsante di eliminazione */
+        .delete-btn {
+            background-color: #dc3545;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            flex-shrink: 0;
         }
     </style>
 </head>
@@ -449,7 +482,7 @@
                     const num2 = parseInt(numbers[1]);
                     const validDurations = [4, 6, 8, 10, 12];
 
-                    // Mantieni sempre l'ordine: primo numero = tavolo, secondo numero = minuti
+                    // Mantieni sempre l'ordine: primo numero = tavolo, secondo numero sempre minuti
                     if (num1 >= 1 && num1 <= 999 && validDurations.includes(num2)) {
                         tableNumber = num1;
                         minutes = num2;
@@ -676,13 +709,15 @@
             // Crea un elemento per il countdown
             const countdownItem = document.createElement('div');
             countdownItem.classList.add('countdown-item');
-            countdownItem.innerHTML = 
-                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                    <div>
-                        <h3>Tavolo ${tableNumber}</h3>
-                        <p>Tempo rimanente: ${formatTime(timeRemaining)}</p>
-                    </div>
-                    <button onclick="eliminaCountdown(${tableNumber})" style="background-color: #dc3545; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 14px; margin-left: 10px; flex-shrink: 0;">
+            countdownItem.innerHTML = `
+                <div class="countdown-table">
+                    <h3>Tavolo ${tableNumber}</h3>
+                </div>
+                <div class="countdown-time">
+                    <p>${formatTime(timeRemaining)}</p>
+                </div>
+                <div class="countdown-delete">
+                    <button onclick="eliminaCountdown(${tableNumber})" class="delete-btn">
                         🗑️ Elimina
                     </button>
                 </div>
@@ -736,7 +771,7 @@
                     if (audio) {
                         audio.play().catch(e => {
                             console.log('⚠️ Errore audio:', e);
-                            // Fallback: notifica visiva più evidente
+                            // Fallback: alert visivo più evidente
                             countdown.element.style.border = '3px solid #ff0000';
                             countdown.element.style.animation = 'blink 1s infinite';
 
