@@ -272,10 +272,19 @@
             }
         });
 
-        // Gestione comandi vocali con controlli per mobile
+        // Flag per evitare conflitti durante il riconoscimento vocale
+        let isRecognizing = false;
+        
+        // Gestione comandi vocali ottimizzata
         function startVoiceRecognition() {
             if (!recognition) {
                 alert('Riconoscimento vocale non supportato su questo dispositivo');
+                return;
+            }
+
+            // Evita sovrapposizioni
+            if (isRecognizing) {
+                console.log('Riconoscimento già in corso');
                 return;
             }
 
@@ -291,6 +300,7 @@
             // Richiedi esplicitamente i permessi del microfono
             navigator.mediaDevices.getUserMedia({ audio: true })
                 .then(() => {
+                    isRecognizing = true;
                     button.style.backgroundColor = '#ff6b6b';
                     button.innerHTML = '🎤 Ascoltando...';
                     button.disabled = true;
@@ -302,6 +312,7 @@
                         recognition.start();
                     } catch (error) {
                         console.error('Errore avvio riconoscimento:', error);
+                        isRecognizing = false;
                         resetVoiceButton();
                         alert('Errore nell\'avvio del riconoscimento vocale. Riprova.');
                     }
@@ -318,6 +329,7 @@
             const button = document.getElementById('voice-button');
             const status = document.getElementById('voice-status');
             
+            isRecognizing = false;
             button.style.backgroundColor = '#4CAF50';
             button.innerHTML = '🎤 Comando Vocale';
             button.disabled = false;
@@ -622,9 +634,10 @@
             countdowns.push(countdown);
             sortCountdowns();
 
-            // Aggiorna il countdown ogni secondo
+            // Aggiorna il countdown ogni secondo con ottimizzazioni
             const interval = setInterval(() => {
                 countdown.timeRemaining--;
+                
                 if (countdown.timeRemaining <= 0) {
                     clearInterval(interval);
                     countdown.element.style.backgroundColor = '#ff4444';
@@ -648,24 +661,48 @@
                             if (index > -1) countdowns.splice(index, 1);
                         }
                     }, 45000);
-                } else {
-                    if (countdown.timeRemaining === 60) {
-                        countdown.element.style.backgroundColor = '#ffeb3b';
-                        document.getElementById('alertSound').play();
-                    }
-                    countdown.element.querySelector('p').textContent = `Tempo rimanente: ${formatTime(countdown.timeRemaining)}`;
+                    return;
+                }
+                
+                // Aggiornamenti visuali ottimizzati
+                if (countdown.timeRemaining === 60) {
+                    countdown.element.style.backgroundColor = '#ffeb3b';
+                    document.getElementById('alertSound').play().catch(e => console.log('Audio error:', e));
+                }
+                
+                // Aggiorna solo il testo del tempo, non tutto l'elemento
+                const timeElement = countdown.element.querySelector('p');
+                if (timeElement) {
+                    timeElement.textContent = `Tempo rimanente: ${formatTime(countdown.timeRemaining)}`;
+                }
+                
+                // Riordina solo ogni 5 secondi invece che ogni secondo
+                if (countdown.timeRemaining % 5 === 0) {
+                    sortCountdowns();
                 }
             }, 1000);
         }
 
-        // Funzione per ordinare i countdown
+        // Funzione ottimizzata per ordinare i countdown
         function sortCountdowns() {
-            // Cambia l'ordine da decrescente a crescente
-            countdowns.sort((a, b) => a.timeRemaining - b.timeRemaining);
-            countdownList.innerHTML = '';
-            countdowns.forEach(countdown => {
-                countdownList.appendChild(countdown.element);
+            // Ordina solo se necessario
+            const needsSorting = countdowns.some((countdown, index) => {
+                return index > 0 && countdown.timeRemaining > countdowns[index - 1].timeRemaining;
             });
+            
+            if (!needsSorting) return;
+            
+            // Riordina con un approccio più efficiente
+            countdowns.sort((a, b) => a.timeRemaining - b.timeRemaining);
+            
+            // Usa DocumentFragment per operazioni DOM più efficienti
+            const fragment = document.createDocumentFragment();
+            countdowns.forEach(countdown => {
+                fragment.appendChild(countdown.element);
+            });
+            
+            countdownList.innerHTML = '';
+            countdownList.appendChild(fragment);
         }
 
         // Funzione per formattare il tempo (mm:ss)
