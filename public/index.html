@@ -16,6 +16,7 @@
                 <form id="form-register">
                     <input type="text" id="register-firstname" placeholder="Nome" required>
                     <input type="text" id="register-lastname" placeholder="Cognome" required>
+                    <input type="text" id="register-company" placeholder="Azienda (facoltativo)">
                     <input type="email" id="register-email" placeholder="Email" required>
                     <input type="password" id="register-password" placeholder="Password" required>
                     <input type="password" id="register-confirm-password" placeholder="Conferma Password" required>
@@ -104,6 +105,7 @@
 
                 const firstName = document.getElementById('register-firstname').value.trim();
                 const lastName = document.getElementById('register-lastname').value.trim();
+                const company = document.getElementById('register-company').value.trim();
                 const email = document.getElementById('register-email').value;
                 const password = document.getElementById('register-password').value;
                 const confirmPassword = document.getElementById('register-confirm-password').value;
