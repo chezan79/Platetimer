@@ -388,26 +388,18 @@
                     
                     console.log(`Pattern ${i+1} match:`, { word1, word2 });
                     
-                    // Prova entrambe le combinazioni (tavolo-minuti e minuti-tavolo)
+                    // Mantieni sempre l'ordine: primo numero = tavolo, secondo numero = minuti
                     const num1 = numberMap[word1] || parseInt(word1) || null;
                     const num2 = numberMap[word2] || parseInt(word2) || null;
                     
                     if (num1 && num2) {
-                        // Determina quale è il tavolo e quali sono i minuti
                         const validDurations = [4, 6, 8, 10, 12];
                         
-                        if (validDurations.includes(num1) && num2 >= 1 && num2 <= 999) {
-                            // num1 = minuti, num2 = tavolo
-                            minutes = num1;
-                            tableNumber = num2;
-                        } else if (validDurations.includes(num2) && num1 >= 1 && num1 <= 999) {
-                            // num1 = tavolo, num2 = minuti
+                        // Primo numero sempre tavolo, secondo numero sempre minuti
+                        if (num1 >= 1 && num1 <= 999 && validDurations.includes(num2)) {
                             tableNumber = num1;
                             minutes = num2;
-                        }
-                        
-                        if (tableNumber && minutes) {
-                            console.log(`✓ Pattern ${i+1} successo:`, { tableNumber, minutes });
+                            console.log(`✓ Pattern ${i+1} successo (ordine fisso):`, { tableNumber, minutes });
                             break;
                         }
                     }
@@ -423,16 +415,13 @@
                     const num2 = parseInt(numbers[1]);
                     const validDurations = [4, 6, 8, 10, 12];
                     
-                    // Prova entrambe le combinazioni
-                    if (validDurations.includes(num1) && num2 >= 1 && num2 <= 999) {
-                        minutes = num1;
-                        tableNumber = num2;
-                    } else if (validDurations.includes(num2) && num1 >= 1 && num1 <= 999) {
+                    // Mantieni sempre l'ordine: primo numero = tavolo, secondo numero = minuti
+                    if (num1 >= 1 && num1 <= 999 && validDurations.includes(num2)) {
                         tableNumber = num1;
                         minutes = num2;
                     }
                     
-                    console.log('Numeri estratti:', { tableNumber, minutes, numbers });
+                    console.log('Numeri estratti (ordine fisso):', { tableNumber, minutes, numbers });
                 }
             }
 
