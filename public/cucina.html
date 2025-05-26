@@ -340,99 +340,113 @@
         }
 
         recognition.onresult = (event) => {
-            const command = event.results[0][0].transcript.toLowerCase();
+            const command = event.results[0][0].transcript.toLowerCase().trim();
             console.log('Comando vocale ricevuto:', command);
+            
+            // Mostra il comando riconosciuto all'utente
+            const status = document.getElementById('voice-status');
+            status.textContent = `Riconosciuto: "${command}"`;
+            status.style.color = '#007bff';
 
-            // Pattern aggiornati per riconoscere numeri da 1 a 999 e minuti specifici
-            const patterns = [
-                // Formato principale: "tavolo [numero], [X] minuti"
-                /tavolo\s+(\d{1,3})[,\s]+(quattro|sei|otto|dieci|dodici|\d+)\s*minut[io]/,
-                // Formato alternativo: "tavolo [numero] [X] minuti" (senza virgola)
-                /tavolo\s+(\d{1,3})\s+(quattro|sei|otto|dieci|dodici|\d+)\s*minut[io]/,
-                // Formato con numeri di tavolo scritti in lettere (fino a 999)
-                /tavolo\s+(uno|due|tre|quattro|cinque|sei|sette|otto|nove|dieci|undici|dodici|tredici|quattordici|quindici|sedici|diciassette|diciotto|diciannove|venti|ventuno|ventidue|ventitre|ventiquattro|venticinque|ventisei|ventisette|ventotto|ventinove|trenta|quaranta|cinquanta|sessanta|settanta|ottanta|novanta|cento|duecento|trecento|quattrocento|cinquecento|seicento|settecento|ottocento|novecento)[,\s]+(quattro|sei|otto|dieci|dodici|\d+)\s*minut[io]/
-            ];
-
-            // Mapping esteso dei numeri in lettere (1-999)
-            const numberWords = {
-                // Unità
-                'uno': '1', 'due': '2', 'tre': '3', 'quattro': '4', 'cinque': '5',
-                'sei': '6', 'sette': '7', 'otto': '8', 'nove': '9', 'dieci': '10',
-                // Da 11 a 19
-                'undici': '11', 'dodici': '12', 'tredici': '13', 'quattordici': '14',
-                'quindici': '15', 'sedici': '16', 'diciassette': '17', 'diciotto': '18',
-                'diciannove': '19',
-                // Decine
-                'venti': '20', 'ventuno': '21', 'ventidue': '22', 'ventitre': '23', 
-                'ventiquattro': '24', 'venticinque': '25', 'ventisei': '26', 'ventisette': '27',
-                'ventotto': '28', 'ventinove': '29', 'trenta': '30', 'quaranta': '40',
-                'cinquanta': '50', 'sessanta': '60', 'settanta': '70', 'ottanta': '80',
-                'novanta': '90',
-                // Centinaia
-                'cento': '100', 'duecento': '200', 'trecento': '300', 'quattrocento': '400',
-                'cinquecento': '500', 'seicento': '600', 'settecento': '700', 
-                'ottocento': '800', 'novecento': '900'
-            };
-
-            // Mapping per i minuti in parole
-            const minuteWords = {
-                'quattro': '4', 'sei': '6', 'otto': '8', 'dieci': '10', 'dodici': '12'
-            };
-
+            // Pattern più semplici e flessibili
             let tableNumber = null;
             let minutes = null;
 
-            // Prova tutti i pattern
-            for (let pattern of patterns) {
-                const match = command.match(pattern);
-                if (match) {
-                    // Gestisce il numero del tavolo
-                    tableNumber = numberWords[match[1]] || match[1];
-                    
-                    // Gestisce i minuti (converte parole in numeri se necessario)
-                    const minuteInput = match[2];
-                    minutes = minuteWords[minuteInput] || minuteInput;
-                    minutes = parseInt(minutes);
-                    break;
+            // Pattern 1: "tavolo X Y minuti" (più flessibile)
+            const pattern1 = /tavolo\s*(\w+)[\s,]*(\w+)\s*minut/i;
+            const match1 = command.match(pattern1);
+            
+            if (match1) {
+                const tableWord = match1[1];
+                const minuteWord = match1[2];
+                
+                console.log('Pattern match:', { tableWord, minuteWord });
+                
+                // Converte numeri in parole italiane
+                const numberMap = {
+                    'uno': 1, 'due': 2, 'tre': 3, 'quattro': 4, 'cinque': 5,
+                    'sei': 6, 'sette': 7, 'otto': 8, 'nove': 9, 'dieci': 10,
+                    'undici': 11, 'dodici': 12, 'tredici': 13, 'quattordici': 14,
+                    'quindici': 15, 'sedici': 16, 'diciassette': 17, 'diciotto': 18,
+                    'diciannove': 19, 'venti': 20, 'trenta': 30, 'quaranta': 40,
+                    'cinquanta': 50, 'sessanta': 60, 'settanta': 70, 'ottanta': 80,
+                    'novanta': 90, 'cento': 100
+                };
+                
+                // Prova a convertire il numero del tavolo
+                tableNumber = numberMap[tableWord] || parseInt(tableWord) || null;
+                
+                // Prova a convertire i minuti
+                minutes = numberMap[minuteWord] || parseInt(minuteWord) || null;
+                
+                console.log('Numeri convertiti:', { tableNumber, minutes });
+            }
+            
+            // Se non trova match, prova pattern più semplici
+            if (!tableNumber || !minutes) {
+                // Cerca solo numeri nel comando
+                const numbers = command.match(/\d+/g);
+                if (numbers && numbers.length >= 2) {
+                    tableNumber = parseInt(numbers[0]);
+                    minutes = parseInt(numbers[1]);
+                    console.log('Numeri estratti:', { tableNumber, minutes });
                 }
             }
 
-            // Validazione del numero del tavolo (1-999)
-            const tableNum = parseInt(tableNumber);
-            if (tableNumber && minutes && tableNum >= 1 && tableNum <= 999) {
-                console.log(`Comando riconosciuto: Tavolo ${tableNumber}, ${minutes} minuti`);
-                
-                // Verifica che la durata sia valida (solo 4, 6, 8, 10, 12 minuti)
+            // Validazione
+            if (tableNumber && minutes) {
                 const validDurations = [4, 6, 8, 10, 12];
-                if (validDurations.includes(minutes)) {
-                    // Mostra il numero del tavolo nell'input
-                    numeroTavoloInput.value = tableNumber;
+                
+                if (tableNumber >= 1 && tableNumber <= 999 && validDurations.includes(minutes)) {
+                    console.log(`✓ Comando valido: Tavolo ${tableNumber}, ${minutes} minuti`);
                     
-                    // Avvia immediatamente il countdown
+                    // Feedback immediato
+                    status.textContent = `✓ Avvio countdown: Tavolo ${tableNumber}, ${minutes} minuti`;
+                    status.style.color = '#28a745';
+                    
+                    // Avvia il countdown
                     startCountdown(minutes, tableNumber);
                     
-                    // Pulisci l'interfaccia
-                    numeroTavoloInput.value = '';
-                    durationSelection.style.display = 'none';
-                    
-                    // Feedback vocale di conferma (se supportato)
+                    // Feedback audio
                     if ('speechSynthesis' in window) {
-                        const utterance = new SpeechSynthesisUtterance(`Countdown avviato per tavolo ${tableNumber}, ${minutes} minuti`);
+                        const utterance = new SpeechSynthesisUtterance(`Countdown avviato per tavolo ${tableNumber}`);
                         utterance.lang = 'it-IT';
+                        utterance.rate = 1.2;
                         speechSynthesis.speak(utterance);
                     }
+                    
+                    // Reset status dopo 3 secondi
+                    setTimeout(() => {
+                        status.textContent = 'Pronto per comando vocale';
+                        status.style.color = '#666';
+                    }, 3000);
+                    
                 } else {
-                    console.log(`Durata non valida: ${minutes} minuti. Durate disponibili: 4, 6, 8, 10, 12 minuti`);
-                    alert(`Durata non valida: ${minutes} minuti. Durate disponibili: 4, 6, 8, 10, 12 minuti`);
+                    let errorMsg = '';
+                    if (tableNumber < 1 || tableNumber > 999) {
+                        errorMsg = `Tavolo ${tableNumber} non valido (1-999)`;
+                    } else if (!validDurations.includes(minutes)) {
+                        errorMsg = `${minutes} minuti non valido (solo 4, 6, 8, 10, 12)`;
+                    }
+                    
+                    console.log('✗ Errore validazione:', errorMsg);
+                    status.textContent = `✗ ${errorMsg}`;
+                    status.style.color = '#dc3545';
+                    
+                    setTimeout(() => {
+                        status.textContent = 'Pronto per comando vocale';
+                        status.style.color = '#666';
+                    }, 4000);
                 }
             } else {
-                if (tableNum < 1 || tableNum > 999) {
-                    console.log(`Numero tavolo non valido: ${tableNumber}. Deve essere tra 1 e 999`);
-                    alert(`Numero tavolo non valido: ${tableNumber}. Deve essere tra 1 e 999`);
-                } else {
-                    console.log('Comando non riconosciuto. Formato atteso: "Tavolo [1-999], [4/6/8/10/12] minuti"');
-                    alert('Comando non riconosciuto. Prova con: "Tavolo 5, 4 minuti" o "Tavolo 123, sei minuti"');
-                }
+                console.log('✗ Comando non riconosciuto');
+                status.textContent = '✗ Comando non riconosciuto. Prova: "Tavolo 5, 4 minuti"';
+                status.style.color = '#dc3545';
+                
+                setTimeout(() => {
+                    status.textContent = 'Pronto per comando vocale';
+                    status.style.color = '#666';
+                }, 4000);
             }
         };
 
