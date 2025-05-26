@@ -40,6 +40,24 @@
                     <span>Non hai un account? <a href="#" id="go-to-register">Registrati</a></span>
                     <br>
                     <span><a href="#" id="forgot-password">Password dimenticata?</a></span>
+                    <br>
+                    <span><a href="#" id="change-password">Cambia Password</a></span>
+                </div>
+            </div>
+
+            <!-- Modulo per cambio password -->
+            <div id="change-password-form" style="display: none;">
+                <h2>Cambia Password</h2>
+                <div id="change-password-message" class="message"></div>
+                <form id="form-change-password">
+                    <input type="email" id="change-email" placeholder="Email" required>
+                    <input type="password" id="current-password" placeholder="Password Attuale" required>
+                    <input type="password" id="new-password" placeholder="Nuova Password" required>
+                    <input type="password" id="confirm-new-password" placeholder="Conferma Nuova Password" required>
+                    <button type="submit">Cambia Password</button>
+                </form>
+                <div class="toggle-link">
+                    <span><a href="#" id="back-to-login">Torna al Login</a></span>
                 </div>
             </div>
         </div>
@@ -70,11 +88,15 @@
         // Elementi DOM
         const registerFormEl = document.getElementById('register-form');
         const loginFormEl = document.getElementById('login-form');
+        const changePasswordFormEl = document.getElementById('change-password-form');
         const formRegister = document.getElementById('form-register');
         const formLogin = document.getElementById('form-login');
+        const formChangePassword = document.getElementById('form-change-password');
         const goToLogin = document.getElementById('go-to-login');
         const goToRegister = document.getElementById('go-to-register');
         const forgotPassword = document.getElementById('forgot-password');
+        const changePassword = document.getElementById('change-password');
+        const backToLogin = document.getElementById('back-to-login');
 
         // Funzioni per mostrare messaggi
         function showMessage(elementId, message, isError = false) {
@@ -91,6 +113,7 @@
             goToLogin.addEventListener('click', (e) => {
                 e.preventDefault();
                 registerFormEl.style.display = 'none';
+                changePasswordFormEl.style.display = 'none';
                 loginFormEl.style.display = 'block';
             });
         }
@@ -99,7 +122,26 @@
             goToRegister.addEventListener('click', (e) => {
                 e.preventDefault();
                 loginFormEl.style.display = 'none';
+                changePasswordFormEl.style.display = 'none';
                 registerFormEl.style.display = 'block';
+            });
+        }
+
+        if (changePassword) {
+            changePassword.addEventListener('click', (e) => {
+                e.preventDefault();
+                loginFormEl.style.display = 'none';
+                registerFormEl.style.display = 'none';
+                changePasswordFormEl.style.display = 'block';
+            });
+        }
+
+        if (backToLogin) {
+            backToLogin.addEventListener('click', (e) => {
+                e.preventDefault();
+                changePasswordFormEl.style.display = 'none';
+                registerFormEl.style.display = 'none';
+                loginFormEl.style.display = 'block';
             });
         }
 
@@ -270,6 +312,75 @@
                     }
 
                     showMessage('login-message', errorMessage, true);
+                }
+            });
+        }
+
+        // Gestione cambio password
+        if (formChangePassword) {
+            formChangePassword.addEventListener('submit', async (e) => {
+                e.preventDefault();
+
+                const email = document.getElementById('change-email').value;
+                const currentPassword = document.getElementById('current-password').value;
+                const newPassword = document.getElementById('new-password').value;
+                const confirmNewPassword = document.getElementById('confirm-new-password').value;
+
+                // Validazione
+                if (newPassword !== confirmNewPassword) {
+                    showMessage('change-password-message', 'Le nuove password non coincidono', true);
+                    return;
+                }
+
+                if (newPassword.length < 6) {
+                    showMessage('change-password-message', 'La nuova password deve essere di almeno 6 caratteri', true);
+                    return;
+                }
+
+                try {
+                    // Prima autentica l'utente con le credenziali attuali
+                    const userCredential = await signInWithEmailAndPassword(auth, email, currentPassword);
+                    const user = userCredential.user;
+
+                    // Importa updatePassword dinamicamente
+                    const { updatePassword } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js');
+                    
+                    // Aggiorna la password
+                    await updatePassword(user, newPassword);
+
+                    showMessage('change-password-message', 'Password cambiata con successo!', false);
+
+                    // Pulisci il form e torna al login dopo 2 secondi
+                    setTimeout(() => {
+                        document.getElementById('form-change-password').reset();
+                        changePasswordFormEl.style.display = 'none';
+                        loginFormEl.style.display = 'block';
+                    }, 2000);
+
+                } catch (error) {
+                    console.error('Errore durante il cambio password:', error);
+                    let errorMessage = 'Si è verificato un errore durante il cambio password';
+
+                    switch (error.code) {
+                        case 'auth/wrong-password':
+                        case 'auth/invalid-credential':
+                            errorMessage = 'Password attuale non corretta';
+                            break;
+                        case 'auth/user-not-found':
+                            errorMessage = 'Utente non trovato';
+                            break;
+                        case 'auth/weak-password':
+                            errorMessage = 'La nuova password è troppo debole';
+                            break;
+                        case 'auth/requires-recent-login':
+                            errorMessage = 'È necessario effettuare nuovamente il login per cambiare la password';
+                            break;
+                        case 'unavailable':
+                            errorMessage = 'Servizio temporaneamente non disponibile. Riprova tra qualche minuto.';
+                            break;
+                    }
+
+                    showMessage('change-password-message', errorMessage, true);
                 }
             });
         }
