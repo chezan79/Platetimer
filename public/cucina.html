@@ -666,11 +666,12 @@
             `;
             countdown.element = countdownItem;
 
-            // Aggiungi il countdown all'array e riordina
+            // Aggiungi immediatamente il countdown alla lista prima di avviare l'intervallo
             countdowns.push(countdown);
+            countdownList.appendChild(countdownItem);
             sortCountdowns();
 
-            // Aggiorna il countdown ogni secondo con ottimizzazioni
+            // Aggiorna il countdown ogni 500ms per maggiore reattività
             countdown.interval = setInterval(() => {
                 countdown.timeRemaining--;
                 
@@ -712,11 +713,11 @@
                     timeElement.textContent = `Tempo rimanente: ${formatTime(countdown.timeRemaining)}`;
                 }
                 
-                // Riordina solo ogni 5 secondi invece che ogni secondo
-                if (countdown.timeRemaining % 5 === 0) {
+                // Riordina ogni 2 secondi per maggiore reattività
+                if (countdown.timeRemaining % 2 === 0) {
                     sortCountdowns();
                 }
-            }, 1000);
+            }, 500);
         }
 
         // Funzione ottimizzata per ordinare i countdown
