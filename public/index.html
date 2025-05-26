@@ -108,6 +108,94 @@
         </div>
     </div>
 
-    <script type="module" src="script.js"></script>
+    <script type="module">
+        // Import Firebase modules
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.16.0/firebase-app.js";
+        import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/9.16.0/firebase-auth.js";
+        import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/9.16.0/firebase-firestore.js";
+
+        // Configurazione Firebase (sostituisci con i tuoi dati)
+        const firebaseConfig = {
+            apiKey: "your-api-key",
+            authDomain: "your-project.firebaseapp.com",
+            projectId: "your-project-id",
+            storageBucket: "your-project.appspot.com",
+            messagingSenderId: "123456789",
+            appId: "your-app-id"
+        };
+
+        // Inizializza Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // Gestione alternanza tra login e registrazione
+        const registerForm = document.getElementById('register-form');
+        const loginForm = document.getElementById('login-form');
+        const goToLogin = document.getElementById('go-to-login');
+        const goToRegister = document.getElementById('go-to-register');
+
+        goToLogin.addEventListener('click', () => {
+            registerForm.style.display = 'none';
+            loginForm.style.display = 'block';
+        });
+
+        goToRegister.addEventListener('click', () => {
+            loginForm.style.display = 'none';
+            registerForm.style.display = 'block';
+        });
+
+        // Gestione registrazione
+        document.getElementById("form-register").addEventListener("submit", async function(event) {
+            event.preventDefault();
+
+            const firstname = document.getElementById("register-firstname").value;
+            const lastname = document.getElementById("register-lastname").value;
+            const company = document.getElementById("register-company").value;
+            const email = document.getElementById("register-email").value;
+            const password = document.getElementById("register-password").value;
+            const confirmPassword = document.getElementById("confirm-password").value;
+
+            if (password !== confirmPassword) {
+                alert("Le password non corrispondono!");
+                return;
+            }
+
+            try {
+                const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+                const user = userCredential.user;
+
+                await setDoc(doc(db, "users", user.uid), {
+                    firstName: firstname,
+                    lastName: lastname,
+                    company: company,
+                    email: email,
+                    createdAt: new Date()
+                });
+
+                alert("Registrazione completata con successo!");
+                document.getElementById("form-register").reset();
+                window.location.href = '/home.html';
+            } catch (error) {
+                alert("Errore durante la registrazione: " + error.message);
+            }
+        });
+
+        // Gestione login
+        document.getElementById("form-login").addEventListener("submit", async function(event) {
+            event.preventDefault();
+
+            const email = document.getElementById("login-email").value;
+            const password = document.getElementById("login-password").value;
+
+            try {
+                await signInWithEmailAndPassword(auth, email, password);
+                alert("Login effettuato con successo!");
+                window.location.href = '/home.html';
+            } catch (error) {
+                alert("Errore durante il login: " + error.message);
+            }
+        });
+    </script>
 </body>
 </html>
