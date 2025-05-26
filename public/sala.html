@@ -91,10 +91,14 @@
         <div id="tavoli">
             <!-- I countdown sincronizzati appariranno qui -->
         </div>
-        <button onclick="window.location.href='home.html'">Torna alla Home</button>
-    </div>
+        </div>
 
     <audio id="alertSound" src="alert.mp3" preload="auto"></audio>
+    
+    <!-- Tasto Home in basso -->
+    <div style="position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 1000;">
+        <button onclick="window.location.href='home.html'" style="padding: 6px 12px; background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500; transition: transform 0.2s, box-shadow 0.2s;">🏠 Home</button>
+    </div>
 
     <script>
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
