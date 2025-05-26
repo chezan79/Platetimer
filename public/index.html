@@ -47,6 +47,7 @@
     <script type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
         import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+        import { getFirestore, doc, setDoc, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
         // Configurazione Firebase
         const firebaseConfig = {
@@ -62,6 +63,7 @@
         // Inizializza Firebase
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
+        const db = getFirestore(app);
 
         // Elementi DOM
         const registerFormEl = document.getElementById('register-form');
@@ -137,6 +139,15 @@
                         displayName: fullName
                     });
 
+                    // Salva i dati dell'utente in Firestore
+                    await setDoc(doc(db, "users", user.uid), {
+                        firstName: firstName,
+                        lastName: lastName,
+                        company: company || '',
+                        email: email,
+                        createdAt: new Date()
+                    });
+
                     // Salva il nome dell'azienda nel localStorage per l'intestazione
                     if (company && company.trim() !== '') {
                         localStorage.setItem('userCompany', company);
@@ -181,6 +192,16 @@
                 try {
                     const userCredential = await signInWithEmailAndPassword(auth, email, password);
                     const user = userCredential.user;
+
+                    // Recupera i dati dell'utente da Firestore
+                    const userDoc = await getDoc(doc(db, "users", user.uid));
+                    if (userDoc.exists()) {
+                        const userData = userDoc.data();
+                        // Salva il nome dell'azienda nel localStorage
+                        if (userData.company && userData.company.trim() !== '') {
+                            localStorage.setItem('userCompany', userData.company);
+                        }
+                    }
 
                     showMessage('login-message', 'Accesso effettuato con successo!', false);
 
