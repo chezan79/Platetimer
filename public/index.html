@@ -108,58 +108,6 @@
         </div>
     </div>
 
-    <script>
-        // URL della tua Web App Apps Script
-        const scriptURL = "https://script.google.com/macros/s/AKfycbzUVEgdjcXirF0yfRgVr-ga2D2IW31M0_u-6WexsgFccvPHYYgKVu5rw3EGrD2RYBkZgw/exec";
-
-        // Gestione del modulo di registrazione
-        document.getElementById("form-register").addEventListener("submit", async function(event) {
-            event.preventDefault(); // Evita il refresh della pagina
-
-            // Raccogli i dati dal modulo
-            const firstname = document.getElementById("register-firstname").value;
-            const lastname = document.getElementById("register-lastname").value;
-            const company = document.getElementById("register-company").value;
-            const email = document.getElementById("register-email").value;
-            const password = document.getElementById("register-password").value;
-            const confirmPassword = document.getElementById("confirm-password").value;
-
-            // Controlla che le password corrispondano
-            if (password !== confirmPassword) {
-                alert("Le password non corrispondono!");
-                return;
-            }
-
-            // Prepara i dati per l'invio
-            const data = {
-                firstname,
-                lastname,
-                company,
-                email,
-                password
-            };
-
-            try {
-                // Invia i dati alla Web App
-                const response = await fetch(scriptURL, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(data)
-                });
-
-                const result = await response.json();
-
-                // Mostra un messaggio di successo o errore
-                if (result.status === "success") {
-                    alert("Registrazione completata con successo!");
-                    document.getElementById("form-register").reset(); // Resetta il modulo
-                } else {
-                    alert("Errore durante la registrazione: " + result.message);
-                }
-            } catch (error) {
-                alert("Errore durante l'invio dei dati: " + error.message);
-            }
-        });
-    </script>
+    <script type="module" src="script.js"></script>
 </body>
 </html>
