@@ -1,201 +1,201 @@
+
 <!DOCTYPE html>
-<html lang="en">
+<html lang="it">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login e Registrazione</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            background-color: #f4f4f9;
-        }
-        .form-container {
-            background: #fff;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-            width: 300px;
-        }
-        .form-container h2 {
-            text-align: center;
-            margin-bottom: 20px;
-        }
-        .form-container form {
-            display: flex;
-            flex-direction: column;
-        }
-        .form-container input {
-            margin-bottom: 15px;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-        }
-        .form-container button {
-            padding: 10px;
-            background-color: #007bff;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-        }
-        .form-container button:hover {
-            background-color: #0056b3;
-        }
-        .toggle-link {
-            text-align: center;
-            margin-top: 10px;
-        }
-        .toggle-link a {
-            color: #007bff;
-            text-decoration: none;
-        }
-        .toggle-link a:hover {
-            text-decoration: underline;
-        }
-    </style>
+    <title>Sistema Gestione Ordini - Login/Registrazione</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="form-container">
-        <!-- Modulo di registrazione -->
-        <div id="register-form">
-            <h2>Registrati</h2>
-            <form id="form-register">
-                <!-- Campo Nome -->
-                <input type="text" id="register-firstname" placeholder="Nome" required>
-
-                <!-- Campo Cognome -->
-                <input type="text" id="register-lastname" placeholder="Cognome" required>
-
-                <!-- Campo Nome Azienda -->
-                <input type="text" id="register-company" placeholder="Nome Azienda" required>
-
-                <!-- Campo Email -->
-                <input type="email" id="register-email" placeholder="Email" required>
-
-                <!-- Campo Password -->
-                <input type="password" id="register-password" placeholder="Password" required>
-                <small id="password-error" style="color: red; display: none;"></small> <!-- Messaggio di errore per la password -->
-
-                <!-- Campo Verifica Password -->
-                <input type="password" id="confirm-password" placeholder="Conferma Password" required>
-                <small id="confirm-password-error" style="color: red; display: none;"></small> <!-- Messaggio di errore per la conferma -->
-
-                <!-- Bottone di Registrazione -->
-                <button type="submit">Registrati</button>
-            </form>
-
-            <div class="toggle-link">
-                <span>Hai già un account? <a href="#" id="go-to-login">Accedi</a></span>
+    <div class="container">
+        <div class="form-container">
+            <!-- Modulo di registrazione -->
+            <div id="register-form">
+                <h2>Registrati</h2>
+                <div id="register-message" class="message"></div>
+                <form id="form-register">
+                    <input type="text" id="register-name" placeholder="Nome completo" required>
+                    <input type="email" id="register-email" placeholder="Email" required>
+                    <input type="password" id="register-password" placeholder="Password" required>
+                    <input type="password" id="register-confirm-password" placeholder="Conferma Password" required>
+                    <button type="submit">Registrati</button>
+                </form>
+                <div class="toggle-link">
+                    <span>Hai già un account? <a href="#" id="go-to-login">Accedi</a></span>
+                </div>
             </div>
-        </div>
 
-        <!-- Modulo di login -->
-        <div id="login-form" style="display: none;">
-            <h2>Accedi</h2>
-            <form id="form-login">
-                <input type="email" id="login-email" placeholder="Email" required>
-                <input type="password" id="login-password" placeholder="Password" required>
-                <button type="submit">Accedi</button>
-            </form>
-            <div class="toggle-link">
-                <span>Non hai un account? <a href="#" id="go-to-register">Registrati</a></span>
+            <!-- Modulo di login -->
+            <div id="login-form" style="display: none;">
+                <h2>Accedi</h2>
+                <div id="login-message" class="message"></div>
+                <form id="form-login">
+                    <input type="email" id="login-email" placeholder="Email" required>
+                    <input type="password" id="login-password" placeholder="Password" required>
+                    <button type="submit">Accedi</button>
+                </form>
+                <div class="toggle-link">
+                    <span>Non hai un account? <a href="#" id="go-to-register">Registrati</a></span>
+                </div>
             </div>
         </div>
     </div>
 
+    <!-- Importa Firebase SDK -->
     <script type="module">
-        // Import Firebase modules
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.16.0/firebase-app.js";
-        import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/9.16.0/firebase-auth.js";
-        import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/9.16.0/firebase-firestore.js";
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
 
-        // Configurazione Firebase (sostituisci con i tuoi dati)
+        // Configurazione Firebase
         const firebaseConfig = {
-            apiKey: "your-api-key",
-            authDomain: "your-project.firebaseapp.com",
-            projectId: "your-project-id",
-            storageBucket: "your-project.appspot.com",
-            messagingSenderId: "123456789",
-            appId: "your-app-id"
+            apiKey: "AIzaSyDZ0FdjenO-ngblcuXKdwWwvRV5liiR18I",
+            authDomain: "app-dati-tavoli.firebaseapp.com",
+            projectId: "app-dati-tavoli",
+            storageBucket: "app-dati-tavoli.appspot.com",
+            messagingSenderId: "267339065819",
+            appId: "1:267339065819:web:1e74647f740bdf1d725ffe",
+            measurementId: "G-F79QERTN6C"
         };
 
         // Inizializza Firebase
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
-        const db = getFirestore(app);
 
-        // Gestione alternanza tra login e registrazione
-        const registerForm = document.getElementById('register-form');
-        const loginForm = document.getElementById('login-form');
+        // Elementi DOM
+        const registerFormEl = document.getElementById('register-form');
+        const loginFormEl = document.getElementById('login-form');
+        const formRegister = document.getElementById('form-register');
+        const formLogin = document.getElementById('form-login');
         const goToLogin = document.getElementById('go-to-login');
         const goToRegister = document.getElementById('go-to-register');
 
-        goToLogin.addEventListener('click', () => {
-            registerForm.style.display = 'none';
-            loginForm.style.display = 'block';
-        });
+        // Funzioni per mostrare messaggi
+        function showMessage(elementId, message, isError = false) {
+            const messageEl = document.getElementById(elementId);
+            if (messageEl) {
+                messageEl.textContent = message;
+                messageEl.className = isError ? 'message error' : 'message success';
+                messageEl.style.display = 'block';
+            }
+        }
 
-        goToRegister.addEventListener('click', () => {
-            loginForm.style.display = 'none';
-            registerForm.style.display = 'block';
-        });
+        // Gestione toggle tra form
+        if (goToLogin) {
+            goToLogin.addEventListener('click', (e) => {
+                e.preventDefault();
+                registerFormEl.style.display = 'none';
+                loginFormEl.style.display = 'block';
+            });
+        }
+
+        if (goToRegister) {
+            goToRegister.addEventListener('click', (e) => {
+                e.preventDefault();
+                loginFormEl.style.display = 'none';
+                registerFormEl.style.display = 'block';
+            });
+        }
 
         // Gestione registrazione
-        document.getElementById("form-register").addEventListener("submit", async function(event) {
-            event.preventDefault();
+        if (formRegister) {
+            formRegister.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                
+                const name = document.getElementById('register-name').value;
+                const email = document.getElementById('register-email').value;
+                const password = document.getElementById('register-password').value;
+                const confirmPassword = document.getElementById('register-confirm-password').value;
 
-            const firstname = document.getElementById("register-firstname").value;
-            const lastname = document.getElementById("register-lastname").value;
-            const company = document.getElementById("register-company").value;
-            const email = document.getElementById("register-email").value;
-            const password = document.getElementById("register-password").value;
-            const confirmPassword = document.getElementById("confirm-password").value;
+                // Validazione password
+                if (password !== confirmPassword) {
+                    showMessage('register-message', 'Le password non coincidono', true);
+                    return;
+                }
 
-            if (password !== confirmPassword) {
-                alert("Le password non corrispondono!");
-                return;
-            }
+                if (password.length < 6) {
+                    showMessage('register-message', 'La password deve essere di almeno 6 caratteri', true);
+                    return;
+                }
 
-            try {
-                const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-                const user = userCredential.user;
+                try {
+                    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+                    const user = userCredential.user;
+                    
+                    // Aggiorna il profilo con il nome
+                    await updateProfile(user, {
+                        displayName: name
+                    });
 
-                await setDoc(doc(db, "users", user.uid), {
-                    firstName: firstname,
-                    lastName: lastname,
-                    company: company,
-                    email: email,
-                    createdAt: new Date()
-                });
+                    showMessage('register-message', 'Registrazione completata con successo!', false);
+                    
+                    // Reindirizza alla home dopo 2 secondi
+                    setTimeout(() => {
+                        window.location.href = 'home.html';
+                    }, 2000);
 
-                alert("Registrazione completata con successo!");
-                document.getElementById("form-register").reset();
-                window.location.href = '/home.html';
-            } catch (error) {
-                alert("Errore durante la registrazione: " + error.message);
-            }
-        });
+                } catch (error) {
+                    console.error('Errore durante la registrazione:', error);
+                    let errorMessage = 'Si è verificato un errore durante la registrazione';
+                    
+                    switch (error.code) {
+                        case 'auth/email-already-in-use':
+                            errorMessage = 'Questa email è già registrata. Prova ad accedere.';
+                            break;
+                        case 'auth/weak-password':
+                            errorMessage = 'La password è troppo debole';
+                            break;
+                        case 'auth/invalid-email':
+                            errorMessage = 'Email non valida';
+                            break;
+                    }
+                    
+                    showMessage('register-message', errorMessage, true);
+                }
+            });
+        }
 
         // Gestione login
-        document.getElementById("form-login").addEventListener("submit", async function(event) {
-            event.preventDefault();
+        if (formLogin) {
+            formLogin.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                
+                const email = document.getElementById('login-email').value;
+                const password = document.getElementById('login-password').value;
 
-            const email = document.getElementById("login-email").value;
-            const password = document.getElementById("login-password").value;
+                try {
+                    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+                    const user = userCredential.user;
+                    
+                    showMessage('login-message', 'Accesso effettuato con successo!', false);
+                    
+                    // Reindirizza alla home dopo 1 secondo
+                    setTimeout(() => {
+                        window.location.href = 'home.html';
+                    }, 1000);
 
-            try {
-                await signInWithEmailAndPassword(auth, email, password);
-                alert("Login effettuato con successo!");
-                window.location.href = '/home.html';
-            } catch (error) {
-                alert("Errore durante il login: " + error.message);
-            }
-        });
+                } catch (error) {
+                    console.error('Errore durante il login:', error);
+                    let errorMessage = 'Si è verificato un errore durante l\'accesso';
+                    
+                    switch (error.code) {
+                        case 'auth/user-not-found':
+                        case 'auth/wrong-password':
+                        case 'auth/invalid-credential':
+                            errorMessage = 'Email o password non corretti';
+                            break;
+                        case 'auth/invalid-email':
+                            errorMessage = 'Email non valida';
+                            break;
+                        case 'auth/too-many-requests':
+                            errorMessage = 'Troppi tentativi falliti. Riprova più tardi.';
+                            break;
+                    }
+                    
+                    showMessage('login-message', errorMessage, true);
+                }
+            });
+        }
     </script>
 </body>
 </html>
