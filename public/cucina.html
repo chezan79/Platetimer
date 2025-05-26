@@ -676,7 +676,7 @@
             // Crea un elemento per il countdown
             const countdownItem = document.createElement('div');
             countdownItem.classList.add('countdown-item');
-            countdownItem.innerHTML = `
+            countdownItem.innerHTML = 
                 <div style="display: flex; justify-content: space-between; align-items: flex-start;">
                     <div>
                         <h3>Tavolo ${tableNumber}</h3>
@@ -715,16 +715,6 @@
                         console.log('⚠️ Elemento audio per zero non trovato');
                         alert(`🚨 TEMPO SCADUTO - Tavolo ${countdown.tableNumber}!`);
                     }
-
-                    // Aggiungi pulsante di eliminazione
-                    const deleteButton = document.createElement('button');
-                    deleteButton.textContent = 'Elimina';
-                    deleteButton.onclick = () => {
-                        countdownList.removeChild(countdown.element);
-                        const index = countdowns.indexOf(countdown);
-                        if (index > -1) countdowns.splice(index, 1);
-                    };
-                    countdown.element.appendChild(deleteButton);
 
                     // Eliminazione automatica dopo 45 secondi
                     setTimeout(() => {
