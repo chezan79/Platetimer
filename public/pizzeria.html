@@ -85,10 +85,12 @@
     </style>
 </head>
 <body>
+    <!-- Nome Azienda fuori dal container in alto a destra -->
+    <div id="company-header" style="position: absolute; top: 20px; right: 20px; z-index: 1000; padding: 10px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; border-left: 4px solid #dc3545;">
+        <h4 id="company-name" style="margin: 0; color: #333; font-weight: 600;">Nome Azienda</h4>
+    </div>
+    
     <div class="countdown-container">
-        <div id="company-header" style="text-align: center; margin-bottom: 20px; padding: 15px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; border-left: 4px solid #dc3545;">
-            <h3 id="company-name" style="margin: 0; color: #333; font-weight: 600;">Nome Azienda</h3>
-        </div>
         <h1>🍕 Interfaccia Pizzeria</h1>
         <div id="tavoli">
             <!-- I countdown sincronizzati appariranno qui -->
