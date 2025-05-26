@@ -14,7 +14,8 @@
                 <h2>Registrati</h2>
                 <div id="register-message" class="message"></div>
                 <form id="form-register">
-                    <input type="text" id="register-name" placeholder="Nome completo" required>
+                    <input type="text" id="register-firstname" placeholder="Nome" required>
+                    <input type="text" id="register-lastname" placeholder="Cognome" required>
                     <input type="email" id="register-email" placeholder="Email" required>
                     <input type="password" id="register-password" placeholder="Password" required>
                     <input type="password" id="register-confirm-password" placeholder="Conferma Password" required>
@@ -101,10 +102,17 @@
             formRegister.addEventListener('submit', async (e) => {
                 e.preventDefault();
 
-                const name = document.getElementById('register-name').value;
+                const firstName = document.getElementById('register-firstname').value.trim();
+                const lastName = document.getElementById('register-lastname').value.trim();
                 const email = document.getElementById('register-email').value;
                 const password = document.getElementById('register-password').value;
                 const confirmPassword = document.getElementById('register-confirm-password').value;
+
+                // Validazione campi
+                if (!firstName || !lastName) {
+                    showMessage('register-message', 'Per favore inserisci nome e cognome', true);
+                    return;
+                }
 
                 // Validazione password
                 if (password !== confirmPassword) {
@@ -121,9 +129,10 @@
                     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
                     const user = userCredential.user;
 
-                    // Aggiorna il profilo con il nome
+                    // Aggiorna il profilo con nome e cognome completi
+                    const fullName = `${firstName} ${lastName}`;
                     await updateProfile(user, {
-                        displayName: name
+                        displayName: fullName
                     });
 
                     showMessage('register-message', 'Registrazione completata con successo!', false);
