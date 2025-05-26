@@ -627,6 +627,9 @@
             countdownItem.innerHTML = `
                 <h3>Tavolo ${tableNumber}</h3>
                 <p>Tempo rimanente: ${formatTime(timeRemaining)}</p>
+                <button onclick="eliminaCountdown(${tableNumber})" style="background-color: #dc3545; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; margin-top: 10px; font-size: 14px;">
+                    🗑️ Elimina
+                </button>
             `;
             countdown.element = countdownItem;
 
@@ -703,6 +706,27 @@
             
             countdownList.innerHTML = '';
             countdownList.appendChild(fragment);
+        }
+
+        // Funzione per eliminare manualmente un countdown
+        function eliminaCountdown(tableNumber) {
+            const countdownIndex = countdowns.findIndex(c => c.tableNumber == tableNumber);
+            if (countdownIndex !== -1) {
+                const countdown = countdowns[countdownIndex];
+                
+                // Ferma l'intervallo
+                clearInterval(countdown.interval);
+                
+                // Rimuovi l'elemento dal DOM
+                if (countdown.element && countdown.element.parentNode) {
+                    countdown.element.parentNode.removeChild(countdown.element);
+                }
+                
+                // Rimuovi dall'array
+                countdowns.splice(countdownIndex, 1);
+                
+                console.log(`Countdown tavolo ${tableNumber} eliminato manualmente`);
+            }
         }
 
         // Funzione per formattare il tempo (mm:ss)
