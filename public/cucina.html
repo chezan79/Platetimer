@@ -112,8 +112,8 @@
         }
 
         .countdown-item {
-            margin: 10px 0;
-            padding: 15px;
+            margin: 5px 0;
+            padding: 8px 12px;
             border: 1px solid #ddd;
             border-radius: 8px;
             background-color: #f8f9fa;
@@ -121,6 +121,8 @@
             display: flex; /* Use flexbox for horizontal alignment */
             align-items: center; /* Align items vertically */
             justify-content: space-between; /* Distribute space evenly */
+            min-height: 50px;
+            max-height: 65px;
         }
 
         .countdown-item:hover {
@@ -147,14 +149,14 @@
         }
 
         .countdown-item h3 {
-            margin: 0 0 5px 0;
+            margin: 0;
             color: #333;
-            font-size: 18px;
+            font-size: 16px;
         }
 
         .countdown-item p {
             margin: 0;
-            font-size: 16px;
+            font-size: 14px;
             color: #d9534f;
             font-weight: bold;
         }
@@ -186,11 +188,12 @@
             background-color: #dc3545;
             color: white;
             border: none;
-            padding: 8px 16px;
+            padding: 6px 12px;
             border-radius: 4px;
             cursor: pointer;
-            font-size: 14px;
+            font-size: 12px;
             flex-shrink: 0;
+            height: fit-content;
         }
     </style>
 </head>
