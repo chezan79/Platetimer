@@ -86,6 +86,9 @@
 </head>
 <body>
     <div class="countdown-container">
+        <div id="company-header" style="text-align: center; margin-bottom: 20px; padding: 15px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; border-left: 4px solid #dc3545;">
+            <h3 id="company-name" style="margin: 0; color: #333; font-weight: 600;">Nome Azienda</h3>
+        </div>
         <h1>🍕 Interfaccia Pizzeria</h1>
         <div id="tavoli">
             <!-- I countdown sincronizzati appariranno qui -->
@@ -183,5 +186,6 @@
             return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
         }
     </script>
+    <script src="company-header.js"></script>
 </body>
 </html>

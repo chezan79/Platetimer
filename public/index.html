@@ -137,6 +137,11 @@
                         displayName: fullName
                     });
 
+                    // Salva il nome dell'azienda nel localStorage per l'intestazione
+                    if (company && company.trim() !== '') {
+                        localStorage.setItem('userCompany', company);
+                    }
+
                     showMessage('register-message', 'Registrazione completata con successo!', false);
 
                     // Reindirizza alla home dopo 2 secondi
