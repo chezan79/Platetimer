@@ -142,10 +142,14 @@
 
         function startCountdown(tableNumber, timeRemaining) {
             // Rimuovi il vecchio countdown se esiste
-            const existingIndex = countdowns.findIndex(c => c.tableNumber === tableNumber);
+            const existingIndex = countdowns.findIndex(c => c.tableNumber == tableNumber);
             if (existingIndex !== -1) {
                 clearInterval(countdowns[existingIndex].interval);
+                if (countdowns[existingIndex].element && countdowns[existingIndex].element.parentNode) {
+                    countdowns[existingIndex].element.parentNode.removeChild(countdowns[existingIndex].element);
+                }
                 countdowns.splice(existingIndex, 1);
+                console.log(`🔄 Countdown esistente per tavolo ${tableNumber} sostituito in pizzeria`);
             }
 
             const countdownElement = document.createElement('div');

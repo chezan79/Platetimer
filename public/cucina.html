@@ -632,6 +632,19 @@
 
         // Funzione separata per la parte visuale del countdown
         function startCountdownVisual(tableNumber, timeRemaining) {
+            // Controlla se esiste già un countdown per questo tavolo
+            const existingCountdownIndex = countdowns.findIndex(c => c.tableNumber == tableNumber);
+            if (existingCountdownIndex !== -1) {
+                // Se esiste già, fermalo e rimuovilo
+                const existingCountdown = countdowns[existingCountdownIndex];
+                clearInterval(existingCountdown.interval);
+                if (existingCountdown.element && existingCountdown.element.parentNode) {
+                    existingCountdown.element.parentNode.removeChild(existingCountdown.element);
+                }
+                countdowns.splice(existingCountdownIndex, 1);
+                console.log(`🔄 Countdown esistente per tavolo ${tableNumber} sostituito`);
+            }
+
             // Crea un oggetto countdown
             const countdown = {
                 tableNumber,
