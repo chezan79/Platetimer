@@ -2,41 +2,67 @@
 <html>
 <head>
     <title>Interfaccia Cucina</title>
+    <link rel="stylesheet" href="style.css">
     <style>
         body {
-            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
             margin: 0;
-            padding: 0;
+            padding: 20px;
             display: flex;
             flex-direction: row;
-            height: 100vh;
+            gap: 20px;
         }
 
         /* Colonna della tastiera */
         #leftContainer {
             width: 50%;
-            padding: 20px;
-            background-color: #f8f9fa;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            border-right: 2px solid #ddd;
         }
 
         /* Colonna dei countdown */
         #rightContainer {
             width: 50%;
-            padding: 20px;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
             display: flex;
             flex-direction: column;
-            align-items: flex-start;
-            justify-content: flex-start;
             overflow-y: auto;
         }
 
         h1, h2 {
             color: #333;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            font-size: 28px;
+            font-weight: 300;
+        }
+
+        h2 {
+            font-size: 20px;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+            margin: 10px 0;
+            box-sizing: border-box;
+            text-align: center;
         }
 
         #keyboard {
@@ -48,69 +74,92 @@
         }
 
         .key {
-            padding: 20px;
-            background-color: #007BFF;
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             font-size: 18px;
             text-align: center;
             border-radius: 5px;
             cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            border: none;
         }
 
         .key:hover {
-            background-color: #0056b3;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
         }
 
         .duration-button {
-            padding: 10px 20px;
+            padding: 12px 20px;
             margin: 5px;
             background-color: #28a745;
             color: white;
             border: none;
             border-radius: 5px;
             cursor: pointer;
+            transition: transform 0.2s, background-color 0.3s;
+            font-weight: 600;
         }
 
         .duration-button:hover {
             background-color: #218838;
+            transform: translateY(-2px);
         }
 
         #countdownList {
             width: 100%;
+            max-height: 60vh;
+            overflow-y: auto;
         }
 
         .countdown-item {
             margin: 10px 0;
-            padding: 10px;
+            padding: 15px;
             border: 1px solid #ddd;
-            border-radius: 5px;
+            border-radius: 8px;
             background-color: #f8f9fa;
-            width: 100%;
+            transition: background-color 0.3s, transform 0.2s;
+        }
+
+        .countdown-item:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
 
         .countdown-item h3 {
             margin: 0 0 5px 0;
             color: #333;
+            font-size: 18px;
         }
 
         .countdown-item p {
             margin: 0;
             font-size: 16px;
             color: #d9534f;
+            font-weight: bold;
         }
 
         button {
-            margin-top: 20px;
-            padding: 10px 20px;
-            background-color: #6c757d;
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%);
             color: white;
             border: none;
             border-radius: 5px;
             cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin: 10px 5px;
         }
 
         button:hover {
-            background-color: #5a6268;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(108, 117, 125, 0.3);
+        }
+
+        button[style*="background-color: #4CAF50"] {
+            background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%) !important;
         }
     </style>
 </head>

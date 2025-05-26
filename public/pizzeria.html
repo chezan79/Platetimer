@@ -5,60 +5,82 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Interfaccia Pizzeria</title>
+    <link rel="stylesheet" href="style.css">
     <style>
         body {
-            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
             margin: 0;
             padding: 20px;
-            background-color: #f5f5f5;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
+        
         .countdown-container {
             max-width: 800px;
-            margin: 0 auto;
+            width: 100%;
             background: white;
-            padding: 30px;
+            padding: 40px;
             border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
         }
+        
         h1 {
             text-align: center;
             color: #333;
             margin-bottom: 30px;
+            font-size: 28px;
+            font-weight: 300;
         }
+        
         .countdown-item {
-            margin: 10px 0;
-            padding: 15px;
+            margin: 15px 0;
+            padding: 20px;
             border: 1px solid #ddd;
             border-radius: 8px;
             background-color: #f8f9fa;
-            width: 100%;
-            transition: background-color 0.3s;
+            transition: background-color 0.3s, transform 0.2s, box-shadow 0.2s;
+        }
+
+        .countdown-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
         }
 
         .countdown-item h3 {
-            margin: 0 0 5px 0;
+            margin: 0 0 8px 0;
             color: #333;
-            font-size: 18px;
+            font-size: 20px;
+            font-weight: 600;
         }
 
         .countdown-item p {
             margin: 0;
-            font-size: 16px;
+            font-size: 18px;
             color: #d9534f;
             font-weight: bold;
         }
+        
         button {
-            margin-top: 20px;
-            padding: 10px 20px;
-            background-color: #6c757d;
+            padding: 15px 30px;
+            background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%);
             color: white;
             border: none;
             border-radius: 5px;
             cursor: pointer;
             font-size: 16px;
+            font-weight: 600;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin-top: 20px;
+            display: block;
+            margin-left: auto;
+            margin-right: auto;
         }
+        
         button:hover {
-            background-color: #5a6268;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(108, 117, 125, 0.3);
         }
     </style>
 </head>
