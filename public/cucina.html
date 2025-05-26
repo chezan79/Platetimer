@@ -207,26 +207,26 @@
         <div id="countdownList"></div>
     </div>
     <audio id="alertSound" src="alert.mp3" preload="auto"></audio>
-    <audio id="zeroSound" src="countdown-zero.mp3" preload="auto"></audio>
-    
+    <audio id="zeroSound" src="costa-rica-eas-alarm-346194.mp3" preload="auto"></audio>
+
     <script>
         // Verifica disponibilità audio all'avvio
         document.addEventListener('DOMContentLoaded', () => {
-            const alertAudio = document.getElementById('alertSound');
+            const audio = document.getElementById('alertSound');
             const zeroAudio = document.getElementById('zeroSound');
-            
-            alertAudio.addEventListener('error', () => {
+
+            audio.addEventListener('error', () => {
                 console.log('⚠️ File alert.mp3 non trovato. Verrà usato solo feedback visivo.');
             });
-            alertAudio.addEventListener('canplaythrough', () => {
+            audio.addEventListener('canplaythrough', () => {
                 console.log('✅ Audio alert.mp3 caricato correttamente');
             });
-            
+
             zeroAudio.addEventListener('error', () => {
-                console.log('⚠️ File countdown-zero.mp3 non trovato. Verrà usato solo feedback visivo.');
+                console.log('⚠️ File costa-rica-eas-alarm-346194.mp3 non trovato.');
             });
             zeroAudio.addEventListener('canplaythrough', () => {
-                console.log('✅ Audio countdown-zero.mp3 caricato correttamente');
+                console.log('✅ Audio costa-rica-eas-alarm-346194.mp3 caricato correttamente');
             });
         });
     </script>
@@ -235,7 +235,7 @@
         // Inizializzazione riconoscimento vocale con controlli per mobile
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         let recognition = null;
-        
+
         // Controlla se il riconoscimento vocale è supportato
         if (!SpeechRecognition) {
             console.log('Riconoscimento vocale non supportato su questo dispositivo');
@@ -289,7 +289,7 @@
 
         // Flag per evitare conflitti durante il riconoscimento vocale
         let isRecognizing = false;
-        
+
         // Gestione comandi vocali ottimizzata
         function startVoiceRecognition() {
             if (!recognition) {
@@ -305,13 +305,13 @@
 
             const button = document.getElementById('voice-button');
             const status = document.getElementById('voice-status');
-            
+
             // Controlla se il protocollo è HTTPS (richiesto per mobile)
             if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
                 alert('Il riconoscimento vocale richiede una connessione sicura (HTTPS). Usa il link di deployment per testare su mobile.');
                 return;
             }
-            
+
             // Richiedi esplicitamente i permessi del microfono
             navigator.mediaDevices.getUserMedia({ audio: true })
                 .then(() => {
@@ -321,7 +321,7 @@
                     button.disabled = true;
                     status.textContent = '🔊 Ascoltando... Parla ora!';
                     status.style.color = '#ff6b6b';
-                    
+
                     // Avvia il riconoscimento dopo aver ottenuto i permessi
                     try {
                         recognition.start();
@@ -338,12 +338,12 @@
                     alert('Per usare il riconoscimento vocale, concedi i permessi per il microfono nelle impostazioni del browser.');
                 });
         }
-        
+
         // Funzione per resettare il pulsante vocale
         function resetVoiceButton() {
             const button = document.getElementById('voice-button');
             const status = document.getElementById('voice-status');
-            
+
             isRecognizing = false;
             button.style.backgroundColor = '#4CAF50';
             button.innerHTML = '🎤 Comando Vocale';
@@ -369,7 +369,7 @@
         recognition.onresult = (event) => {
             const command = event.results[0][0].transcript.toLowerCase().trim();
             console.log('Comando vocale ricevuto:', command);
-            
+
             // Mostra il comando riconosciuto all'utente
             const status = document.getElementById('voice-status');
             status.textContent = `Riconosciuto: "${command}"`;
@@ -419,16 +419,16 @@
                 if (match) {
                     const word1 = match[1].trim();
                     const word2 = match[2].trim();
-                    
+
                     console.log(`Pattern ${i+1} match:`, { word1, word2 });
-                    
+
                     // Mantieni sempre l'ordine: primo numero = tavolo, secondo numero = minuti
                     const num1 = numberMap[word1] || parseInt(word1) || null;
                     const num2 = numberMap[word2] || parseInt(word2) || null;
-                    
+
                     if (num1 && num2) {
                         const validDurations = [4, 6, 8, 10, 12];
-                        
+
                         // Primo numero sempre tavolo, secondo numero sempre minuti
                         if (num1 >= 1 && num1 <= 999 && validDurations.includes(num2)) {
                             tableNumber = num1;
@@ -439,7 +439,7 @@
                     }
                 }
             }
-            
+
             // Se non trova match con i pattern, prova a estrarre solo numeri
             if (!tableNumber || !minutes) {
                 console.log('Fallback: estrazione numeri diretta');
@@ -448,13 +448,13 @@
                     const num1 = parseInt(numbers[0]);
                     const num2 = parseInt(numbers[1]);
                     const validDurations = [4, 6, 8, 10, 12];
-                    
+
                     // Mantieni sempre l'ordine: primo numero = tavolo, secondo numero = minuti
                     if (num1 >= 1 && num1 <= 999 && validDurations.includes(num2)) {
                         tableNumber = num1;
                         minutes = num2;
                     }
-                    
+
                     console.log('Numeri estratti (ordine fisso):', { tableNumber, minutes, numbers });
                 }
             }
@@ -462,20 +462,20 @@
             // Ultimo tentativo: cerca parole chiave specifiche
             if (!tableNumber || !minutes) {
                 console.log('Ultimo tentativo: ricerca parole chiave');
-                
+
                 // Cerca specificamente "quattro", "sei", "otto", "dieci", "dodici"
                 const minuteWords = ['quattro', 'sei', 'otto', 'dieci', 'dodici'];
                 const foundMinuteWord = minuteWords.find(word => command.includes(word));
-                
+
                 if (foundMinuteWord) {
                     minutes = numberMap[foundMinuteWord];
-                    
+
                     // Cerca un numero per il tavolo
                     const tableMatch = command.match(/(\d+)/);
                     if (tableMatch) {
                         tableNumber = parseInt(tableMatch[1]);
                     }
-                    
+
                     console.log('Ricerca parole chiave:', { foundMinuteWord, minutes, tableNumber });
                 }
             }
@@ -483,16 +483,16 @@
             // Validazione
             if (tableNumber && minutes) {
                 const validDurations = [4, 6, 8, 10, 12];
-                
+
                 if (tableNumber >= 1 && tableNumber <= 999 && validDurations.includes(minutes)) {
                     console.log(`✓ Comando valido: Tavolo ${tableNumber}, ${minutes} minuti`);
-                    
+
                     // Feedback immediato con conferma
                     status.textContent = `✓ CONFERMA: Tavolo ${tableNumber}, ${minutes} minuti`;
                     status.style.color = '#28a745';
                     status.style.fontSize = '16px';
                     status.style.fontWeight = 'bold';
-                    
+
                     // Feedback audio di conferma PRIMA di avviare
                     if ('speechSynthesis' in window) {
                         const confirmText = `Confermo: tavolo ${tableNumber}, ${minutes} minuti. Avvio countdown.`;
@@ -500,24 +500,24 @@
                         utterance.lang = 'it-IT';
                         utterance.rate = 0.9; // Più lento per chiarezza
                         utterance.volume = 0.8;
-                        
+
                         utterance.onend = () => {
                             // Avvia il countdown solo DOPO la conferma audio
                             startCountdown(minutes, tableNumber);
                         };
-                        
+
                         speechSynthesis.speak(utterance);
                     } else {
                         // Fallback se non c'è sintesi vocale
                         startCountdown(minutes, tableNumber);
                     }
-                    
+
                     // Reset status dopo 3 secondi
                     setTimeout(() => {
                         status.textContent = 'Pronto per comando vocale';
                         status.style.color = '#666';
                     }, 3000);
-                    
+
                 } else {
                     let errorMsg = '';
                     if (tableNumber < 1 || tableNumber > 999) {
@@ -525,11 +525,11 @@
                     } else if (!validDurations.includes(minutes)) {
                         errorMsg = `${minutes} minuti non valido (solo 4, 6, 8, 10, 12)`;
                     }
-                    
+
                     console.log('✗ Errore validazione:', errorMsg);
                     status.textContent = `✗ ${errorMsg}`;
                     status.style.color = '#dc3545';
-                    
+
                     setTimeout(() => {
                         status.textContent = 'Pronto per comando vocale';
                         status.style.color = '#666';
@@ -539,7 +539,7 @@
                 console.log('✗ Comando non riconosciuto');
                 status.textContent = '✗ Comando non riconosciuto. Prova: "Tavolo 5, 4 minuti"';
                 status.style.color = '#dc3545';
-                
+
                 setTimeout(() => {
                     status.textContent = 'Pronto per comando vocale';
                     status.style.color = '#666';
@@ -551,10 +551,10 @@
             recognition.onerror = (event) => {
                 console.error('Errore nel riconoscimento vocale:', event.error);
                 resetVoiceButton();
-                
+
                 let errorMessage = 'Si è verificato un errore con il riconoscimento vocale.';
                 let statusMessage = '❌ Errore riconoscimento vocale';
-                
+
                 switch(event.error) {
                     case 'not-allowed':
                         errorMessage = 'IMPORTANTE: Per usare il riconoscimento vocale su mobile:\n1. Vai nelle impostazioni del browser\n2. Concedi i permessi per il microfono\n3. Assicurati che il sito usi HTTPS';
@@ -582,17 +582,17 @@
                         console.log('Riconoscimento interrotto (normale su mobile)');
                         return;
                 }
-                
+
                 const status = document.getElementById('voice-status');
                 status.textContent = statusMessage;
                 status.style.color = '#dc3545';
-                
+
                 // Ripristina lo status dopo 5 secondi
                 setTimeout(() => {
                     status.textContent = 'Pronto per comando vocale';
                     status.style.color = '#666';
                 }, 5000);
-                
+
                 // Mostra l'alert solo per errori importanti
                 if (event.error !== 'aborted') {
                     alert(errorMessage);
@@ -603,7 +603,7 @@
         // Connessione WebSocket persistente
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
-        
+
         ws.onopen = () => {
             // Unisciti alla room dell'azienda
             const companyName = localStorage.getItem('userCompany') || 'Nome Azienda';
@@ -697,24 +697,23 @@
             // Aggiorna il countdown ogni secondo
             countdown.interval = setInterval(() => {
                 countdown.timeRemaining--;
-                
+
                 if (countdown.timeRemaining <= 0) {
                     clearInterval(countdown.interval);
                     countdown.element.style.backgroundColor = '#ff4444';
                     countdown.element.querySelector('p').textContent = 'Tempo scaduto!';
 
-                    // Riproduce il suono personalizzato per countdown a zero
+                    // Riproduce il suono quando il countdown arriva a zero
                     const zeroAudio = document.getElementById('zeroSound');
                     if (zeroAudio) {
                         zeroAudio.play().catch(e => {
-                            console.log('⚠️ Errore audio countdown zero:', e);
-                            // Fallback: notifica visiva
-                            countdown.element.style.border = '5px solid #ff0000';
-                            countdown.element.style.animation = 'blink 0.5s infinite';
+                            console.log('⚠️ Errore riproduzione audio a zero:', e);
+                            // Fallback: alert visivo
+                            alert(`🚨 TEMPO SCADUTO - Tavolo ${countdown.tableNumber}!`);
                         });
                     } else {
-                        console.log('⚠️ Audio countdown zero non trovato');
-                        alert(`🚨 TEMPO SCADUTO: Tavolo ${countdown.tableNumber}!`);
+                        console.log('⚠️ Elemento audio per zero non trovato');
+                        alert(`🚨 TEMPO SCADUTO - Tavolo ${countdown.tableNumber}!`);
                     }
 
                     // Aggiungi pulsante di eliminazione
@@ -737,11 +736,11 @@
                     }, 45000);
                     return;
                 }
-                
+
                 // Aggiornamenti visuali e audio
                 if (countdown.timeRemaining === 60) {
                     countdown.element.style.backgroundColor = '#ffeb3b';
-                    
+
                     // Tentativo di riproduzione audio con fallback
                     const audio = document.getElementById('alertSound');
                     if (audio) {
@@ -750,7 +749,7 @@
                             // Fallback: notifica visiva più evidente
                             countdown.element.style.border = '3px solid #ff0000';
                             countdown.element.style.animation = 'blink 1s infinite';
-                            
+
                             // Aggiungi stile di animazione se non esiste
                             if (!document.getElementById('blinkStyle')) {
                                 const style = document.createElement('style');
@@ -771,13 +770,13 @@
                         alert(`⏰ ATTENZIONE: Tavolo ${countdown.tableNumber} - 1 MINUTO RIMANENTE!`);
                     }
                 }
-                
+
                 // Aggiorna solo il testo del tempo, non tutto l'elemento
                 const timeElement = countdown.element.querySelector('p');
                 if (timeElement) {
                     timeElement.textContent = `Tempo rimanente: ${formatTime(countdown.timeRemaining)}`;
                 }
-                
+
                 // Riordina ogni 5 secondi
                 if (countdown.timeRemaining % 5 === 0) {
                     sortCountdowns();
@@ -800,18 +799,18 @@
             const countdownIndex = countdowns.findIndex(c => c.tableNumber == tableNumber);
             if (countdownIndex !== -1) {
                 const countdown = countdowns[countdownIndex];
-                
+
                 // Ferma l'intervallo
                 clearInterval(countdown.interval);
-                
+
                 // Rimuovi l'elemento dal DOM
                 if (countdown.element && countdown.element.parentNode) {
                     countdown.element.parentNode.removeChild(countdown.element);
                 }
-                
+
                 // Rimuovi dall'array
                 countdowns.splice(countdownIndex, 1);
-                
+
                 console.log(`Countdown tavolo ${tableNumber} eliminato manualmente`);
             }
         }
@@ -824,7 +823,7 @@
         }
     </script>
     <script src="company-header.js"></script>
-    
+
     <!-- Funzione temporanea per impostare il nome azienda -->
     <script>
         // Funzione per impostare manualmente il nome dell'azienda (per test)
@@ -833,7 +832,7 @@
             document.getElementById('company-name').textContent = name;
             console.log('Nome azienda impostato:', name);
         }
-        
+
         // Se vuoi testare, apri la console e digita: setCompanyName("Nome della tua pizzeria")
     </script>
 
