@@ -671,7 +671,7 @@
             countdownList.appendChild(countdownItem);
             sortCountdowns();
 
-            // Aggiorna il countdown ogni 500ms per maggiore reattività
+            // Aggiorna il countdown ogni secondo
             countdown.interval = setInterval(() => {
                 countdown.timeRemaining--;
                 
@@ -701,7 +701,7 @@
                     return;
                 }
                 
-                // Aggiornamenti visuali ottimizzati
+                // Aggiornamenti visuali
                 if (countdown.timeRemaining === 60) {
                     countdown.element.style.backgroundColor = '#ffeb3b';
                     document.getElementById('alertSound').play().catch(e => console.log('Audio error:', e));
@@ -713,33 +713,21 @@
                     timeElement.textContent = `Tempo rimanente: ${formatTime(countdown.timeRemaining)}`;
                 }
                 
-                // Riordina ogni 2 secondi per maggiore reattività
-                if (countdown.timeRemaining % 2 === 0) {
+                // Riordina ogni 5 secondi
+                if (countdown.timeRemaining % 5 === 0) {
                     sortCountdowns();
                 }
-            }, 500);
+            }, 1000);
         }
 
-        // Funzione ottimizzata per ordinare i countdown
+        // Funzione per ordinare i countdown in ordine crescente (dal più urgente)
         function sortCountdowns() {
-            // Ordina solo se necessario
-            const needsSorting = countdowns.some((countdown, index) => {
-                return index > 0 && countdown.timeRemaining > countdowns[index - 1].timeRemaining;
-            });
-            
-            if (!needsSorting) return;
-            
-            // Riordina con un approccio più efficiente
             countdowns.sort((a, b) => a.timeRemaining - b.timeRemaining);
-            
-            // Usa DocumentFragment per operazioni DOM più efficienti
-            const fragment = document.createDocumentFragment();
+            const container = document.getElementById('countdownList');
+            container.innerHTML = '';
             countdowns.forEach(countdown => {
-                fragment.appendChild(countdown.element);
+                container.appendChild(countdown.element);
             });
-            
-            countdownList.innerHTML = '';
-            countdownList.appendChild(fragment);
         }
 
         // Funzione per eliminare manualmente un countdown
