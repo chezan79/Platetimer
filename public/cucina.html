@@ -207,6 +207,19 @@
         <div id="countdownList"></div>
     </div>
     <audio id="alertSound" src="alert.mp3" preload="auto"></audio>
+    
+    <script>
+        // Verifica disponibilità audio all'avvio
+        document.addEventListener('DOMContentLoaded', () => {
+            const audio = document.getElementById('alertSound');
+            audio.addEventListener('error', () => {
+                console.log('⚠️ File alert.mp3 non trovato. Verrà usato solo feedback visivo.');
+            });
+            audio.addEventListener('canplaythrough', () => {
+                console.log('✅ Audio alert.mp3 caricato correttamente');
+            });
+        });
+    </script>
 
     <script>
         // Inizializzazione riconoscimento vocale con controlli per mobile
@@ -701,10 +714,38 @@
                     return;
                 }
                 
-                // Aggiornamenti visuali
+                // Aggiornamenti visuali e audio
                 if (countdown.timeRemaining === 60) {
                     countdown.element.style.backgroundColor = '#ffeb3b';
-                    document.getElementById('alertSound').play().catch(e => console.log('Audio error:', e));
+                    
+                    // Tentativo di riproduzione audio con fallback
+                    const audio = document.getElementById('alertSound');
+                    if (audio) {
+                        audio.play().catch(e => {
+                            console.log('⚠️ Errore audio:', e);
+                            // Fallback: notifica visiva più evidente
+                            countdown.element.style.border = '3px solid #ff0000';
+                            countdown.element.style.animation = 'blink 1s infinite';
+                            
+                            // Aggiungi stile di animazione se non esiste
+                            if (!document.getElementById('blinkStyle')) {
+                                const style = document.createElement('style');
+                                style.id = 'blinkStyle';
+                                style.textContent = `
+                                    @keyframes blink {
+                                        0%, 50% { opacity: 1; }
+                                        51%, 100% { opacity: 0.5; }
+                                    }
+                                `;
+                                document.head.appendChild(style);
+                            }
+                        });
+                    } else {
+                        console.log('⚠️ Elemento audio non trovato');
+                        // Fallback se l'elemento audio non esiste
+                        countdown.element.style.border = '3px solid #ff0000';
+                        alert(`⏰ ATTENZIONE: Tavolo ${countdown.tableNumber} - 1 MINUTO RIMANENTE!`);
+                    }
                 }
                 
                 // Aggiorna solo il testo del tempo, non tutto l'elemento
