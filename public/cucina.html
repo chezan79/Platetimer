@@ -87,16 +87,22 @@
         }
 
         .duration-button {
-            padding: 10px 16px;
-            margin: 4px;
-            background-color: #28a745;
+            padding: 12px 20px;
+            margin: 5px;
+            background: linear-gradient(135deg, #28a745 0%, #218838 100%);
             color: white;
             border: none;
             border-radius: 5px;
             cursor: pointer;
-            transition: transform 0.2s, background-color 0.3s;
+            transition: transform 0.2s, background-color 0.3s, box-shadow 0.2s;
             font-weight: 600;
-            font-size: 14px;
+            font-size: 16px;
+            min-width: 80px;
+        }
+
+        .duration-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(40, 167, 69, 0.3);
         }
 
         #countdownList {
@@ -181,14 +187,14 @@
             <div class="key">0</div>
             <div class="key">C</div> <!-- Tasto per cancellare -->
         </div>
-        <div id="durationSelection" style="display: none;">
+        <div id="durationSelection" style="display: none; margin-top: 20px;">
             <h2>Seleziona Durata Countdown</h2>
-            <div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 8px;">
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; max-width: 300px; margin: 0 auto;">
                 <button class="duration-button" data-minutes="4">4 Minuti</button>
                 <button class="duration-button" data-minutes="6">6 Minuti</button>
                 <button class="duration-button" data-minutes="8">8 Minuti</button>
                 <button class="duration-button" data-minutes="10">10 Minuti</button>
-                <button class="duration-button" data-minutes="12">12 Minuti</button>
+                <button class="duration-button" data-minutes="12" style="grid-column: span 2;">12 Minuti</button>
             </div>
         </div>
     </div>
