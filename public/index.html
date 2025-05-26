@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="it">
 <head>
@@ -101,7 +100,7 @@
         if (formRegister) {
             formRegister.addEventListener('submit', async (e) => {
                 e.preventDefault();
-                
+
                 const name = document.getElementById('register-name').value;
                 const email = document.getElementById('register-email').value;
                 const password = document.getElementById('register-password').value;
@@ -121,14 +120,14 @@
                 try {
                     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
                     const user = userCredential.user;
-                    
+
                     // Aggiorna il profilo con il nome
                     await updateProfile(user, {
                         displayName: name
                     });
 
                     showMessage('register-message', 'Registrazione completata con successo!', false);
-                    
+
                     // Reindirizza alla home dopo 2 secondi
                     setTimeout(() => {
                         window.location.href = 'home.html';
@@ -137,7 +136,7 @@
                 } catch (error) {
                     console.error('Errore durante la registrazione:', error);
                     let errorMessage = 'Si è verificato un errore durante la registrazione';
-                    
+
                     switch (error.code) {
                         case 'auth/email-already-in-use':
                             errorMessage = 'Questa email è già registrata. Prova ad accedere.';
@@ -149,7 +148,7 @@
                             errorMessage = 'Email non valida';
                             break;
                     }
-                    
+
                     showMessage('register-message', errorMessage, true);
                 }
             });
@@ -159,16 +158,16 @@
         if (formLogin) {
             formLogin.addEventListener('submit', async (e) => {
                 e.preventDefault();
-                
+
                 const email = document.getElementById('login-email').value;
                 const password = document.getElementById('login-password').value;
 
                 try {
                     const userCredential = await signInWithEmailAndPassword(auth, email, password);
                     const user = userCredential.user;
-                    
+
                     showMessage('login-message', 'Accesso effettuato con successo!', false);
-                    
+
                     // Reindirizza alla home dopo 1 secondo
                     setTimeout(() => {
                         window.location.href = 'home.html';
@@ -177,7 +176,7 @@
                 } catch (error) {
                     console.error('Errore durante il login:', error);
                     let errorMessage = 'Si è verificato un errore durante l\'accesso';
-                    
+
                     switch (error.code) {
                         case 'auth/user-not-found':
                         case 'auth/wrong-password':
@@ -191,7 +190,7 @@
                             errorMessage = 'Troppi tentativi falliti. Riprova più tardi.';
                             break;
                     }
-                    
+
                     showMessage('login-message', errorMessage, true);
                 }
             });
