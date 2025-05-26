@@ -192,7 +192,7 @@
             <div class="key">9</div>
             <div class="key">0</div>
         </div>
-        <div id="durationSelection" style="display: none; margin-top: 20px;">
+        <div id="durationSelection" style="margin-top: 20px;">
             <h2>Seleziona Durata Countdown</h2>
             <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; max-width: 300px; margin: 0 auto;">
                 <button class="duration-button" data-minutes="4">4 Minuti</button>
@@ -249,12 +249,6 @@
                     // Aggiunge il numero al campo input
                     numeroTavoloInput.value += key;
                 }
-                // Mostra la selezione durata solo se c'è un numero
-                if (numeroTavoloInput.value !== '') {
-                    durationSelection.style.display = 'block';
-                } else {
-                    durationSelection.style.display = 'none';
-                }
             }
         });
 
@@ -267,7 +261,8 @@
                 if (tableNumber !== '') {
                     startCountdown(minutes, tableNumber);
                     numeroTavoloInput.value = ''; // Svuota il campo numero tavolo
-                    durationSelection.style.display = 'none'; // Nascondi i pulsanti di durata
+                } else {
+                    alert('Inserisci prima il numero del tavolo');
                 }
             }
         });
@@ -606,15 +601,15 @@
                 const data = JSON.parse(event.data);
                 if (data.action === 'startCountdown') {
                     console.log('📥 Countdown ricevuto via WebSocket:', data);
-                    // Non avviare un nuovo countdown se proviene da questo stesso client
-                    // (evita duplicati quando si avvia dalla cucina stessa)
+                    // Avvia il countdown anche quando ricevuto via WebSocket
+                    startCountdownVisual(data.tableNumber, data.timeRemaining);
                 }
             } catch (error) {
                 console.error('Errore nel parsing del messaggio WebSocket:', error);
             }
         };
 
-        // Funzione per avviare il countdown
+        // Funzione per avviare il countdown (invia WebSocket E crea visual)
         function startCountdown(minutes, tableNumber) {
             let timeRemaining = minutes * 60; // Converti minuti in secondi
 
@@ -631,6 +626,12 @@
                 console.error('❌ WebSocket non connesso, stato:', ws.readyState);
             }
 
+            // Crea immediatamente il countdown visuale
+            startCountdownVisual(tableNumber, timeRemaining);
+        }
+
+        // Funzione separata per la parte visuale del countdown
+        function startCountdownVisual(tableNumber, timeRemaining) {
             // Crea un oggetto countdown
             const countdown = {
                 tableNumber,
