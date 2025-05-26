@@ -1,0 +1,28 @@
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Regole per i documenti degli utenti - solo l'utente autenticato può accedere ai propri dati
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Regole per i countdown - solo utenti autenticati della stessa azienda
+    match /countdowns/{companyId}/{document=**} {
+      allow read, write: if request.auth != null && 
+                           resource.data.company == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.company;
+    }
+    
+    // Regole generali per documenti pubblici (se necessari)
+    match /public/{document=**} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    
+    // Nega tutto il resto
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
