@@ -611,7 +611,10 @@
                     tableNumber: tableNumber,
                     timeRemaining: timeRemaining
                 };
+                console.log('📤 Invio countdown via WebSocket:', message);
                 ws.send(JSON.stringify(message));
+            } else {
+                console.error('❌ WebSocket non connesso, stato:', ws.readyState);
             }
 
             // Crea un oggetto countdown

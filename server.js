@@ -15,7 +15,7 @@ const wss = new WebSocket.Server({
 // Serve i file statici dalla directory "public"
 app.use(express.static('public'));
 
-// Mappa per tenere traccia delle connessioni per azienda
+// Store per le room delle aziende
 const companyRooms = new Map();
 
 // Mappa per sessioni autenticate
@@ -48,196 +48,149 @@ function isValidTime(timeRemaining) {
 function checkRateLimit(clientId) {
     const now = Date.now();
     const limit = rateLimiter.get(clientId) || { count: 0, resetTime: now + 60000 };
-    
+
     if (now > limit.resetTime) {
         limit.count = 1;
         limit.resetTime = now + 60000;
     } else {
         limit.count++;
     }
-    
+
     rateLimiter.set(clientId, limit);
     return limit.count <= 10; // Max 10 richieste per minuto
 }
 
 // Gestisci le connessioni WebSocket
-wss.on('connection', (ws, req) => {
-    console.log('Nuova connessione WebSocket');
-    
-    // Genera un ID unico per questa connessione
-    ws.clientId = crypto.randomUUID();
-    ws.isAuthenticated = false;
-    ws.connectionTime = Date.now();
-    
-    // Timeout per l'autenticazione (30 secondi)
-    const authTimeout = setTimeout(() => {
-        if (!ws.isAuthenticated) {
-            console.log('Timeout autenticazione per client:', ws.clientId);
-            ws.close(1008, 'Authentication timeout');
-        }
-    }, 30000);
+wss.on('connection', (ws) => {
+    console.log('🔗 Nuova connessione WebSocket');
+    ws.companyRoom = null; // Inizialmente non assegnato a nessuna room
 
-    // Quando un messaggio viene ricevuto
+    // Rate limiting per prevenire spam
+    ws.messageCount = 0;
+    ws.lastMessageTime = Date.now();
+
     ws.on('message', (message) => {
         try {
-            // Check rate limiting
-            if (!checkRateLimit(ws.clientId)) {
-                ws.send(JSON.stringify({
-                    error: 'Rate limit exceeded',
-                    code: 'RATE_LIMIT'
-                }));
+            // Rate limiting: max 10 messaggi al secondo
+            const now = Date.now();
+            if (now - ws.lastMessageTime < 100) { // 100ms tra messaggi
+                ws.messageCount++;
+                if (ws.messageCount > 10) {
+                    console.log('⚠️ Rate limit superato, connessione ignorata');
+                    return;
+                }
+            } else {
+                ws.messageCount = 0;
+                ws.lastMessageTime = now;
+            }
+
+            const data = JSON.parse(message);
+            console.log('📨 Messaggio ricevuto:', data);
+
+            // Validazione dati rigorosa
+            if (!data.action) {
+                console.log('⚠️ Messaggio senza action ignorato');
                 return;
             }
 
-            const messageStr = message.toString();
-            console.log('Messaggio ricevuto da:', ws.clientId, messageStr);
-
-            // Limita la dimensione del messaggio
-            if (messageStr.length > 1000) {
-                ws.send(JSON.stringify({
-                    error: 'Message too large',
-                    code: 'MESSAGE_TOO_LARGE'
-                }));
-                return;
-            }
-
-            const data = JSON.parse(messageStr);
-
-            // Valida la struttura del messaggio
-            if (!data.action || typeof data.action !== 'string') {
-                ws.send(JSON.stringify({
-                    error: 'Invalid message format',
-                    code: 'INVALID_FORMAT'
-                }));
-                return;
-            }
-
-            // Se è un messaggio di registrazione alla room
             if (data.action === 'joinRoom') {
-                clearTimeout(authTimeout);
-                
-                const companyName = data.companyName;
-                
-                // Valida il nome dell'azienda
-                if (!isValidCompanyName(companyName)) {
-                    ws.send(JSON.stringify({
-                        error: 'Invalid company name',
-                        code: 'INVALID_COMPANY'
-                    }));
+                // Validazione nome azienda
+                if (!data.companyName || typeof data.companyName !== 'string' || data.companyName.trim().length === 0) {
+                    console.log('⚠️ Nome azienda non valido');
                     return;
                 }
 
-                ws.companyName = companyName.trim();
-                ws.isAuthenticated = true;
+                const companyName = data.companyName.trim();
 
-                // Aggiungi il client alla room dell'azienda
-                if (!companyRooms.has(ws.companyName)) {
-                    companyRooms.set(ws.companyName, new Set());
+                // Rimuovi il client dalla room precedente se esistente
+                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                    const oldRoom = companyRooms.get(ws.companyRoom);
+                    oldRoom.delete(ws);
+                    if (oldRoom.size === 0) {
+                        companyRooms.delete(ws.companyRoom);
+                    }
                 }
-                companyRooms.get(ws.companyName).add(ws);
 
-                // Conferma l'autenticazione
-                ws.send(JSON.stringify({
-                    action: 'authenticated',
-                    companyName: ws.companyName,
-                    clientId: ws.clientId
-                }));
+                // Aggiungi il client alla nuova room
+                ws.companyRoom = companyName;
+                if (!companyRooms.has(companyName)) {
+                    companyRooms.set(companyName, new Set());
+                }
+                companyRooms.get(companyName).add(ws);
 
-                console.log(`Client ${ws.clientId} unito alla room: ${ws.companyName}`);
-                return;
-            }
+                console.log(`✅ Client aggiunto alla room: ${companyName} (${companyRooms.get(companyName).size} client)`);
 
-            // Verifica che il client sia autenticato per altre azioni
-            if (!ws.isAuthenticated) {
-                ws.send(JSON.stringify({
-                    error: 'Not authenticated',
-                    code: 'NOT_AUTHENTICATED'
-                }));
-                return;
-            }
-
-            // Se è un countdown, valida e invia solo ai client della stessa azienda
-            if (data.action === 'startCountdown') {
-                // Valida i dati del countdown
-                if (!isValidTableNumber(data.tableNumber)) {
-                    ws.send(JSON.stringify({
-                        error: 'Invalid table number',
-                        code: 'INVALID_TABLE'
-                    }));
+            } else if (data.action === 'startCountdown') {
+                // Validazione dati countdown
+                if (!data.tableNumber || !data.timeRemaining) {
+                    console.log('⚠️ Dati countdown non validi');
                     return;
                 }
 
-                if (!isValidTime(data.timeRemaining)) {
-                    ws.send(JSON.stringify({
-                        error: 'Invalid time value',
-                        code: 'INVALID_TIME'
-                    }));
+                if (typeof data.tableNumber !== 'string' && typeof data.tableNumber !== 'number') {
+                    console.log('⚠️ Numero tavolo non valido');
                     return;
                 }
 
-                // Crea un messaggio sicuro
-                const safeMessage = {
-                    action: 'startCountdown',
-                    tableNumber: parseInt(data.tableNumber),
-                    timeRemaining: parseInt(data.timeRemaining),
-                    timestamp: Date.now()
-                };
+                if (typeof data.timeRemaining !== 'number' || data.timeRemaining <= 0) {
+                    console.log('⚠️ Tempo rimanente non valido');
+                    return;
+                }
 
-                const companyClients = companyRooms.get(ws.companyName);
-                if (companyClients) {
-                    const messageStr = JSON.stringify(safeMessage);
-                    companyClients.forEach((client) => {
+                // Invia solo ai client della stessa room/azienda
+                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    const messageToSend = JSON.stringify(data);
+
+                    let sentCount = 0;
+                    roomClients.forEach((client) => {
                         if (client.readyState === WebSocket.OPEN) {
-                            client.send(messageStr);
+                            client.send(messageToSend);
+                            sentCount++;
                         }
                     });
-                }
-                console.log(`Countdown sicuro inviato alla room: ${ws.companyName}`);
-            }
 
+                    console.log(`📡 Countdown inviato alla room "${ws.companyRoom}" (${sentCount}/${roomClients.size} client): Tavolo ${data.tableNumber}, ${Math.floor(data.timeRemaining/60)}:${(data.timeRemaining%60).toString().padStart(2, '0')}`);
+                } else {
+                    console.log('⚠️ Client non assegnato a nessuna room');
+                }
+            }
         } catch (error) {
-            console.error('Errore nel parsing del messaggio:', error);
-            ws.send(JSON.stringify({
-                error: 'Invalid JSON',
-                code: 'INVALID_JSON'
-            }));
+            console.error('❌ Errore nel parsing del messaggio:', error);
         }
     });
 
-    // Rimuovi il client quando si disconnette
     ws.on('close', () => {
-        if (ws.companyName && companyRooms.has(ws.companyName)) {
-            const companyClients = companyRooms.get(ws.companyName);
-            if (companyClients) {
-                companyClients.delete(ws);
-                if (companyClients.size === 0) {
-                    companyRooms.delete(ws.companyName);
-                }
+        // Rimuovi il client dalla room quando si disconnette
+        if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+            const room = companyRooms.get(ws.companyRoom);
+            room.delete(ws);
+            if (room.size === 0) {
+                companyRooms.delete(ws.companyRoom);
+                console.log(`🗑️ Room "${ws.companyRoom}" eliminata (vuota)`);
+            } else {
+                console.log(`👋 Client disconnesso dalla room "${ws.companyRoom}" (${room.size} client rimanenti)`);
             }
-            console.log(`Client ${ws.clientId} rimosso dalla room: ${ws.companyName}`);
         }
-        
-        // Pulisci i dati del rate limiting
-        rateLimiter.delete(ws.clientId);
+        console.log('🔌 Connessione WebSocket chiusa');
     });
 
-    // Gestisci errori WebSocket
     ws.on('error', (error) => {
-        console.error('Errore WebSocket per client', ws.clientId, ':', error);
+        console.error('❌ Errore WebSocket:', error);
     });
 });
 
 // Pulizia periodica delle risorse
 setInterval(() => {
     const now = Date.now();
-    
+
     // Pulisci rate limiter scaduti
     for (const [clientId, limit] of rateLimiter.entries()) {
         if (now > limit.resetTime + 300000) { // 5 minuti di grazia
             rateLimiter.delete(clientId);
         }
     }
-    
+
     console.log(`Risorse pulite - Rate limiter: ${rateLimiter.size}, Rooms: ${companyRooms.size}`);
 }, 300000); // Ogni 5 minuti
 
