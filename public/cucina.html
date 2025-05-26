@@ -169,9 +169,14 @@
     <!-- Contenitore sinistro: Tastiera e input -->
     <div id="leftContainer">
         <h1>Cucina</h1>
-        <button onclick="startVoiceRecognition()" style="padding: 10px; margin: 10px; background-color: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer;">
-            🎤 Comando Vocale
-        </button>
+        <div style="text-align: center; margin: 10px;">
+            <button onclick="startVoiceRecognition()" id="voice-button" style="padding: 10px; margin: 10px; background-color: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; transition: all 0.3s ease;">
+                🎤 Comando Vocale
+            </button>
+            <div id="voice-status" style="margin-top: 10px; font-size: 14px; color: #666; min-height: 20px;">
+                Pronto per comando vocale
+            </div>
+        </div>
         <h2>Inserisci Numero Tavolo</h2>
         <input type="text" id="numeroTavolo" pattern="[0-9]*" inputmode="numeric" placeholder="Numero Tavolo" readonly>
         <div id="keyboard">
@@ -259,23 +264,34 @@
 
         // Gestione comandi vocali
         function startVoiceRecognition() {
-            const button = event.target;
+            const button = document.getElementById('voice-button');
+            const status = document.getElementById('voice-status');
+            
             button.style.backgroundColor = '#ff6b6b';
             button.innerHTML = '🎤 Ascoltando...';
             button.disabled = true;
+            status.textContent = '🔊 Ascoltando... Parla ora!';
+            status.style.color = '#ff6b6b';
             
             recognition.start();
         }
 
         recognition.onstart = () => {
             console.log('Riconoscimento vocale avviato. Parla ora!');
+            const status = document.getElementById('voice-status');
+            status.textContent = '🎯 Riconoscimento attivo - Pronuncia il comando';
+            status.style.color = '#ff6b6b';
         };
 
         recognition.onend = () => {
-            const button = document.querySelector('button[onclick="startVoiceRecognition()"]');
+            const button = document.getElementById('voice-button');
+            const status = document.getElementById('voice-status');
+            
             button.style.backgroundColor = '#4CAF50';
             button.innerHTML = '🎤 Comando Vocale';
             button.disabled = false;
+            status.textContent = 'Pronto per comando vocale';
+            status.style.color = '#666';
             console.log('Riconoscimento vocale terminato');
         };
 
@@ -350,11 +366,49 @@
 
         recognition.onerror = (event) => {
             console.error('Errore nel riconoscimento vocale:', event.error);
-            if (event.error === 'not-allowed') {
-                alert('Per favore concedi i permessi per il microfono');
-            } else {
-                alert('Si è verificato un errore con il riconoscimento vocale. Riprova.');
+            const button = document.getElementById('voice-button');
+            const status = document.getElementById('voice-status');
+            
+            button.style.backgroundColor = '#4CAF50';
+            button.innerHTML = '🎤 Comando Vocale';
+            button.disabled = false;
+            
+            let errorMessage = 'Si è verificato un errore con il riconoscimento vocale.';
+            let statusMessage = '❌ Errore riconoscimento vocale';
+            
+            switch(event.error) {
+                case 'not-allowed':
+                    errorMessage = 'Per favore concedi i permessi per il microfono nelle impostazioni del browser';
+                    statusMessage = '🚫 Permessi microfono negati';
+                    break;
+                case 'no-speech':
+                    errorMessage = 'Nessun comando vocale rilevato. Riprova parlando più chiaramente.';
+                    statusMessage = '🔇 Nessun comando rilevato';
+                    break;
+                case 'audio-capture':
+                    errorMessage = 'Microfono non disponibile. Controlla le impostazioni audio.';
+                    statusMessage = '🎤 Microfono non disponibile';
+                    break;
+                case 'network':
+                    errorMessage = 'Problema di connessione. Controlla la connessione internet.';
+                    statusMessage = '🌐 Errore di connessione';
+                    break;
+                case 'aborted':
+                    errorMessage = 'Riconoscimento vocale interrotto. Riprova.';
+                    statusMessage = '⏹️ Riconoscimento interrotto';
+                    break;
             }
+            
+            status.textContent = statusMessage;
+            status.style.color = '#dc3545';
+            
+            // Ripristina lo status dopo 3 secondi
+            setTimeout(() => {
+                status.textContent = 'Pronto per comando vocale';
+                status.style.color = '#666';
+            }, 3000);
+            
+            alert(errorMessage);
         };
 
         // Connessione WebSocket persistente
