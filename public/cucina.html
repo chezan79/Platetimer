@@ -69,16 +69,16 @@
         #keyboard {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
-            gap: 10px;
-            max-width: 200px;
-            margin: 20px 0;
+            gap: 8px;
+            max-width: 180px;
+            margin: 15px 0;
         }
 
         .key {
-            padding: 15px;
+            padding: 12px;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
-            font-size: 18px;
+            font-size: 16px;
             text-align: center;
             border-radius: 5px;
             cursor: pointer;
@@ -86,14 +86,9 @@
             border: none;
         }
 
-        .key:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
-        }
-
         .duration-button {
-            padding: 12px 20px;
-            margin: 5px;
+            padding: 10px 16px;
+            margin: 4px;
             background-color: #28a745;
             color: white;
             border: none;
@@ -101,11 +96,7 @@
             cursor: pointer;
             transition: transform 0.2s, background-color 0.3s;
             font-weight: 600;
-        }
-
-        .duration-button:hover {
-            background-color: #218838;
-            transform: translateY(-2px);
+            font-size: 14px;
         }
 
         #countdownList {
