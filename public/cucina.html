@@ -383,6 +383,18 @@
         }
     </script>
     <script src="company-header.js"></script>
+    
+    <!-- Funzione temporanea per impostare il nome azienda -->
+    <script>
+        // Funzione per impostare manualmente il nome dell'azienda (per test)
+        function setCompanyName(name) {
+            localStorage.setItem('userCompany', name);
+            document.getElementById('company-name').textContent = name;
+            console.log('Nome azienda impostato:', name);
+        }
+        
+        // Se vuoi testare, apri la console e digita: setCompanyName("Nome della tua pizzeria")
+    </script>
 
     <!-- Tasto Home in alto a destra -->
     <div style="position: absolute; top: 20px; right: 80px; z-index: 1000;">

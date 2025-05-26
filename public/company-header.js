@@ -5,13 +5,21 @@ document.addEventListener('DOMContentLoaded', function() {
     const companyName = localStorage.getItem('userCompany');
     const companyElement = document.getElementById('company-name');
     
-    if (companyName && companyName.trim() !== '' && companyElement) {
-        companyElement.textContent = companyName;
-    } else if (companyElement) {
-        // Se non c'è un nome azienda, nascondi l'intestazione
+    if (companyElement) {
+        if (companyName && companyName.trim() !== '') {
+            companyElement.textContent = companyName;
+        } else {
+            // Fallback: mostra un nome predefinito invece di nascondere
+            companyElement.textContent = 'La Mia Pizzeria';
+        }
+        
+        // Assicurati che l'header sia sempre visibile
         const companyHeader = document.getElementById('company-header');
         if (companyHeader) {
-            companyHeader.style.display = 'none';
+            companyHeader.style.display = 'block';
         }
     }
+    
+    // Debug: mostra il valore nel localStorage
+    console.log('Nome azienda dal localStorage:', companyName);
 });
