@@ -351,7 +351,7 @@
             let tableNumber = null;
             let minutes = null;
 
-            // Mappa per convertire numeri in parole italiane (espansa)
+            // Mappa espansa per numeri con varianti fonetiche
             const numberMap = {
                 'zero': 0, 'uno': 1, 'due': 2, 'tre': 3, 'quattro': 4, 'cinque': 5,
                 'sei': 6, 'sette': 7, 'otto': 8, 'nove': 9, 'dieci': 10,
@@ -359,24 +359,31 @@
                 'quindici': 15, 'sedici': 16, 'diciassette': 17, 'diciotto': 18,
                 'diciannove': 19, 'venti': 20, 'ventuno': 21, 'ventidue': 22,
                 'ventitré': 23, 'ventiquattro': 24, 'venticinque': 25,
-                'trenta': 30, 'quaranta': 40, 'cinquanta': 50, 'sessanta': 60,
-                'settanta': 70, 'ottanta': 80, 'novanta': 90, 'cento': 100
+                'trenta': 30, 'trentuno': 31, 'trentadue': 32, 'trentatré': 33,
+                'trentaquattro': 34, 'trentacinque': 35, 'trentasei': 36,
+                'trentasette': 37, 'trentotto': 38, 'trentanove': 39,
+                'quaranta': 40, 'cinquanta': 50, 'sessanta': 60,
+                'settanta': 70, 'ottanta': 80, 'novanta': 90, 'cento': 100,
+                // Varianti fonetiche per numeri problematici
+                'trent': 30, 'trenta4': 34, 'trenta8': 38,
+                'trentatre': 33, 'trentasè': 36
             };
 
             console.log('Analisi comando:', command);
 
-            // Pattern multipli per maggiore flessibilità
+            // Pattern multipli con attenzione ai numeri simili
             const patterns = [
-                // "tavolo 5 4 minuti", "tavolo cinque quattro minuti"
+                // Pattern standard
                 /tavolo\s+(\w+)\s+(\w+)\s+minut/i,
-                // "tavolo 5, 4 minuti"
                 /tavolo\s+(\w+)[,\s]+(\w+)\s+minut/i,
-                // "tavolo numero 5 4 minuti"
                 /tavolo\s+(?:numero\s+)?(\w+)\s+(\w+)\s+minut/i,
-                // "5 tavolo 4 minuti" (ordine diverso)
-                /(\w+)\s+tavolo\s+(\w+)\s+minut/i,
-                // Pattern più generale con qualsiasi separatore
-                /tavolo\s*[:]?\s*(\w+)\s*[,\s]\s*(\w+)\s*minut/i
+                // Pattern specifici per numeri problematici
+                /tavolo\s+(trentaquattro|trentotto|trenta)\s+(\w+)\s+minut/i,
+                /tavolo\s+(\d+)\s+(quattro|sei|otto|dieci|dodici)\s+minut/i,
+                // Pattern con separatori multipli
+                /tavolo\s*[:]?\s*(\w+)\s*[,\s-]\s*(\w+)\s*minut/i,
+                // Pattern per catturare numeri composti
+                /tavolo\s+(trent[ao]?\w*)\s+(\w+)\s+minut/i
             ];
 
             // Prova ogni pattern
@@ -453,19 +460,29 @@
                 if (tableNumber >= 1 && tableNumber <= 999 && validDurations.includes(minutes)) {
                     console.log(`✓ Comando valido: Tavolo ${tableNumber}, ${minutes} minuti`);
                     
-                    // Feedback immediato
-                    status.textContent = `✓ Avvio countdown: Tavolo ${tableNumber}, ${minutes} minuti`;
+                    // Feedback immediato con conferma
+                    status.textContent = `✓ CONFERMA: Tavolo ${tableNumber}, ${minutes} minuti`;
                     status.style.color = '#28a745';
+                    status.style.fontSize = '16px';
+                    status.style.fontWeight = 'bold';
                     
-                    // Avvia il countdown
-                    startCountdown(minutes, tableNumber);
-                    
-                    // Feedback audio
+                    // Feedback audio di conferma PRIMA di avviare
                     if ('speechSynthesis' in window) {
-                        const utterance = new SpeechSynthesisUtterance(`Countdown avviato per tavolo ${tableNumber}`);
+                        const confirmText = `Confermo: tavolo ${tableNumber}, ${minutes} minuti. Avvio countdown.`;
+                        const utterance = new SpeechSynthesisUtterance(confirmText);
                         utterance.lang = 'it-IT';
-                        utterance.rate = 1.2;
+                        utterance.rate = 0.9; // Più lento per chiarezza
+                        utterance.volume = 0.8;
+                        
+                        utterance.onend = () => {
+                            // Avvia il countdown solo DOPO la conferma audio
+                            startCountdown(minutes, tableNumber);
+                        };
+                        
                         speechSynthesis.speak(utterance);
+                    } else {
+                        // Fallback se non c'è sintesi vocale
+                        startCountdown(minutes, tableNumber);
                     }
                     
                     // Reset status dopo 3 secondi
