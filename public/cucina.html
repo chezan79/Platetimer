@@ -245,7 +245,7 @@
 
             // Invia il countdown tramite WebSocket
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const ws = new WebSocket(`${protocol}//${window.location.hostname}/ws`);
+            const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
             ws.onopen = () => {
                 const message = {
                     action: 'startCountdown',
