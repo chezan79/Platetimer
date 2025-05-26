@@ -112,5 +112,12 @@
         </div>
     </div>
     <script src="company-header.js"></script>
+    <script type="module">
+        // Importa e inizializza le utilità di autenticazione
+        import { initializeUserData } from './auth-utils.js';
+        
+        // Inizializza i dati utente al caricamento della pagina
+        initializeUserData();
+    </script>
 </body>
 </html>
