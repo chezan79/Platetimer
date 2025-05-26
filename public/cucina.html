@@ -259,27 +259,92 @@
 
         // Gestione comandi vocali
         function startVoiceRecognition() {
+            const button = event.target;
+            button.style.backgroundColor = '#ff6b6b';
+            button.innerHTML = '🎤 Ascoltando...';
+            button.disabled = true;
+            
             recognition.start();
         }
 
+        recognition.onstart = () => {
+            console.log('Riconoscimento vocale avviato. Parla ora!');
+        };
+
+        recognition.onend = () => {
+            const button = document.querySelector('button[onclick="startVoiceRecognition()"]');
+            button.style.backgroundColor = '#4CAF50';
+            button.innerHTML = '🎤 Comando Vocale';
+            button.disabled = false;
+            console.log('Riconoscimento vocale terminato');
+        };
+
         recognition.onresult = (event) => {
             const command = event.results[0][0].transcript.toLowerCase();
-            console.log('Comando vocale:', command);
+            console.log('Comando vocale ricevuto:', command);
 
-            // Cerca il numero del tavolo (es. "tavolo 5")
-            const tableMatch = command.match(/tavolo (\d+)/);
-            if (tableMatch) {
-                const tableNumber = tableMatch[1];
-                numeroTavoloInput.value = tableNumber;
+            // Pattern migliorato per "tavolo [numero], [X] minuti"
+            // Esempi: "tavolo 5, 4 minuti", "tavolo dieci 6 minuti", "tavolo 3 8 minuti"
+            const patterns = [
+                // Formato principale: "tavolo [numero], [X] minuti"
+                /tavolo\s+(\d+)[,\s]+(\d+)\s*minut[io]/,
+                // Formato alternativo: "tavolo [numero] [X] minuti" (senza virgola)
+                /tavolo\s+(\d+)\s+(\d+)\s*minut[io]/,
+                // Formato con numeri scritti in lettere
+                /tavolo\s+(uno|due|tre|quattro|cinque|sei|sette|otto|nove|dieci|undici|dodici|tredici|quattordici|quindici|sedici|diciassette|diciotto|diciannove|venti)[,\s]+(\d+)\s*minut[io]/
+            ];
 
-                // Cerca la durata (es. "4 minuti")
-                const timeMatch = command.match(/(\d+) minut[io]/);
-                if (timeMatch) {
-                    const minutes = parseInt(timeMatch[1]);
+            // Mapping dei numeri in lettere
+            const numberWords = {
+                'uno': '1', 'due': '2', 'tre': '3', 'quattro': '4', 'cinque': '5',
+                'sei': '6', 'sette': '7', 'otto': '8', 'nove': '9', 'dieci': '10',
+                'undici': '11', 'dodici': '12', 'tredici': '13', 'quattordici': '14',
+                'quindici': '15', 'sedici': '16', 'diciassette': '17', 'diciotto': '18',
+                'diciannove': '19', 'venti': '20'
+            };
+
+            let tableNumber = null;
+            let minutes = null;
+
+            // Prova tutti i pattern
+            for (let pattern of patterns) {
+                const match = command.match(pattern);
+                if (match) {
+                    tableNumber = numberWords[match[1]] || match[1]; // Converte parole in numeri se necessario
+                    minutes = parseInt(match[2]);
+                    break;
+                }
+            }
+
+            if (tableNumber && minutes) {
+                console.log(`Comando riconosciuto: Tavolo ${tableNumber}, ${minutes} minuti`);
+                
+                // Verifica che la durata sia valida (4, 6, 8, 10, 12 minuti)
+                const validDurations = [4, 6, 8, 10, 12];
+                if (validDurations.includes(minutes)) {
+                    // Mostra il numero del tavolo nell'input
+                    numeroTavoloInput.value = tableNumber;
+                    
+                    // Avvia immediatamente il countdown
                     startCountdown(minutes, tableNumber);
+                    
+                    // Pulisci l'interfaccia
                     numeroTavoloInput.value = '';
                     durationSelection.style.display = 'none';
+                    
+                    // Feedback vocale di conferma (se supportato)
+                    if ('speechSynthesis' in window) {
+                        const utterance = new SpeechSynthesisUtterance(`Countdown avviato per tavolo ${tableNumber}, ${minutes} minuti`);
+                        utterance.lang = 'it-IT';
+                        speechSynthesis.speak(utterance);
+                    }
+                } else {
+                    console.log(`Durata non valida: ${minutes} minuti. Durate disponibili: 4, 6, 8, 10, 12 minuti`);
+                    alert(`Durata non valida: ${minutes} minuti. Durate disponibili: 4, 6, 8, 10, 12 minuti`);
                 }
+            } else {
+                console.log('Comando non riconosciuto. Formato atteso: "Tavolo [numero], [durata] minuti"');
+                alert('Comando non riconosciuto. Prova con: "Tavolo 5, 4 minuti"');
             }
         };
 
