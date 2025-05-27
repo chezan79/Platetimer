@@ -617,6 +617,12 @@
             const voiceButton = document.getElementById('voice-button');
             const statusDiv = document.getElementById('voice-status');
             
+            // Non resettare il pulsante se è in cooldown
+            if (voiceButton.disabled) {
+                console.log('⏱️ Pulsante in cooldown - reset impedito');
+                return;
+            }
+            
             voiceButton.style.backgroundColor = '#4CAF50';
             voiceButton.textContent = '🎤 Comando Vocale';
             statusDiv.textContent = 'Clicca per attivare il riconoscimento vocale';
@@ -715,8 +721,10 @@
                 statusDiv.textContent = `✅ Countdown avviato: Tavolo ${tableNumber} - ${minutes} minuti`;
                 statusDiv.style.color = '#28a745';
                 
-                // Avvia il cooldown di 5 secondi per il pulsante vocale
-                startVoiceButtonCooldown();
+                // Avvia immediatamente il cooldown di 5 secondi per il pulsante vocale
+                setTimeout(() => {
+                    startVoiceButtonCooldown();
+                }, 100);
                 
                 console.log(`Countdown avviato per tavolo ${tableNumber} - ${minutes} minuti`);
             } else {
