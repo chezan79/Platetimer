@@ -205,7 +205,7 @@
     <!-- Contenitore sinistro: Tastiera e input -->
     <div id="leftContainer">
         <h1>🍳 Cucina</h1>
-        
+
         <!-- Comando vocale in alto -->
         <div style="text-align: center; margin: 15px 0;">
             <button onclick="startVoiceRecognition()" id="voice-button" style="padding: 10px 20px; background-color: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; transition: all 0.3s ease; font-size: 16px; font-weight: 600;">
@@ -218,7 +218,7 @@
 
         <!-- Input numero tavolo -->
         <input type="text" id="numeroTavolo" pattern="[0-9]*" inputmode="numeric" placeholder="Numero Tavolo" readonly>
-        
+
         <!-- Tastiera numerica -->
         <div id="keyboard">
             <div class="key">1</div>
@@ -233,7 +233,7 @@
             <div class="key">9</div>
             <div class="key">0</div>
         </div>
-        
+
         <!-- Selezione durata -->
         <div id="durationSelection" style="margin-top: 15px;">
             <h2 style="font-size: 18px; margin-bottom: 10px;">Seleziona Durata</h2>
@@ -565,7 +565,7 @@
             }
 
             const voiceButton = document.getElementById('voice-button');
-            
+
             // Controlla se il pulsante è in cooldown
             if (voiceButton.disabled) {
                 return;
@@ -573,7 +573,7 @@
 
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             recognition = new SpeechRecognition();
-            
+
             recognition.lang = 'it-IT';
             recognition.continuous = false;
             recognition.interimResults = false;
@@ -594,33 +594,13 @@
             recognition.onresult = function(event) {
                 const command = event.results[0][0].transcript.toLowerCase();
                 console.log('Comando riconosciuto:', command);
-                
+
                 parseVoiceCommand(command);
             };
 
             recognition.onerror = function(event) {
                 console.error('Errore riconoscimento vocale:', event.error);
-                
-                let errorMessage = 'Errore nel riconoscimento vocale. ';
-                
-                switch(event.error) {
-                    case 'not-allowed':
-                        errorMessage = '🚫 Permesso microfono negato. Autorizza l\'accesso al microfono nelle impostazioni del browser.';
-                        break;
-                    case 'no-speech':
-                        errorMessage = '🔇 Nessun parlato rilevato. Riprova parlando più chiaramente.';
-                        break;
-                    case 'network':
-                        errorMessage = '🌐 Errore di rete. Controlla la connessione.';
-                        break;
-                    case 'audio-capture':
-                        errorMessage = '🎤 Errore accesso microfono. Verifica che sia collegato.';
-                        break;
-                    default:
-                        errorMessage += `Codice errore: ${event.error}. Riprova.`;
-                }
-                
-                statusDiv.textContent = errorMessage;
+                statusDiv.textContent = 'Errore nel riconoscimento vocale. Riprova.';
                 statusDiv.style.color = '#dc3545';
                 resetVoiceButton();
             };
@@ -636,13 +616,13 @@
             isListening = false;
             const voiceButton = document.getElementById('voice-button');
             const statusDiv = document.getElementById('voice-status');
-            
+
             // Non resettare il pulsante se è in cooldown
             if (voiceButton.disabled) {
                 console.log('⏱️ Pulsante in cooldown - reset impedito');
                 return;
             }
-            
+
             voiceButton.style.backgroundColor = '#4CAF50';
             voiceButton.textContent = '🎤 Comando Vocale';
             statusDiv.textContent = 'Clicca per attivare il riconoscimento vocale';
@@ -653,22 +633,22 @@
         function startVoiceButtonCooldown() {
             const voiceButton = document.getElementById('voice-button');
             const statusDiv = document.getElementById('voice-status');
-            
+
             // Disabilita il pulsante
             voiceButton.disabled = true;
             voiceButton.style.backgroundColor = '#6c757d';
             voiceButton.style.cursor = 'not-allowed';
             voiceButton.style.opacity = '0.6';
-            
+
             let remainingSeconds = 5;
-            
+
             // Aggiorna il testo del pulsante con il countdown
             const updateButtonText = () => {
                 voiceButton.textContent = `🎤 Attendi (${remainingSeconds}s)`;
                 statusDiv.textContent = `Pulsante disponibile tra ${remainingSeconds} secondi`;
                 statusDiv.style.color = '#6c757d';
                 remainingSeconds--;
-                
+
                 if (remainingSeconds < 0) {
                     // Riabilita il pulsante
                     voiceButton.disabled = false;
@@ -678,22 +658,22 @@
                     voiceButton.style.opacity = '1';
                     statusDiv.textContent = 'Clicca per attivare il riconoscimento vocale';
                     statusDiv.style.color = '#666';
-                    
+
                     console.log('✅ Pulsante comando vocale riabilitato dopo cooldown');
                 } else {
                     setTimeout(updateButtonText, 1000);
                 }
             };
-            
+
             updateButtonText();
             console.log('⏱️ Cooldown avviato per pulsante comando vocale - 5 secondi');
         }
 
         function parseVoiceCommand(command) {
             const statusDiv = document.getElementById('voice-status');
-            
+
             console.log('🎤 Comando da analizzare:', command);
-            
+
             // Pattern più flessibili per riconoscere diversi formati
             const patterns = [
                 /tavolo\s*(\d+)\s*(\d+)\s*minut[oi]/i,
@@ -720,9 +700,9 @@
             }
 
             if (tableNumber && minutes) {
-                // Valida il numero del tavolo (20-606 come richiesto)
-                if (tableNumber < 20 || tableNumber > 606) {
-                    statusDiv.textContent = `❌ Numero tavolo ${tableNumber} non valido (20-606)`;
+                // Valida il numero del tavolo (1-999 per maggiore flessibilità)
+                if (tableNumber < 1 || tableNumber > 999) {
+                    statusDiv.textContent = `❌ Numero tavolo ${tableNumber} non valido (1-999)`;
                     statusDiv.style.color = '#dc3545';
                     return;
                 }
@@ -737,15 +717,15 @@
                 // Imposta il numero del tavolo e avvia il countdown
                 document.getElementById('numeroTavolo').value = tableNumber;
                 startCountdown(minutes, tableNumber);
-                
+
                 statusDiv.textContent = `✅ Countdown avviato: Tavolo ${tableNumber} - ${minutes} minuti`;
                 statusDiv.style.color = '#28a745';
-                
+
                 // Avvia immediatamente il cooldown di 5 secondi per il pulsante vocale
                 setTimeout(() => {
                     startVoiceButtonCooldown();
                 }, 100);
-                
+
                 console.log(`Countdown avviato per tavolo ${tableNumber} - ${minutes} minuti`);
             } else {
                 console.log('❌ Nessun pattern riconosciuto per:', command);
