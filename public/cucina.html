@@ -617,16 +617,13 @@
             const voiceButton = document.getElementById('voice-button');
             const statusDiv = document.getElementById('voice-status');
 
-            // Non resettare il pulsante se è in cooldown
-            if (voiceButton.disabled) {
-                console.log('⏱️ Pulsante in cooldown - reset impedito');
-                return;
+            // Resetta solo se il pulsante NON è in cooldown
+            if (!voiceButton.disabled) {
+                voiceButton.style.backgroundColor = '#4CAF50';
+                voiceButton.textContent = '🎤 Comando Vocale';
+                statusDiv.textContent = 'Clicca per attivare il riconoscimento vocale';
+                statusDiv.style.color = '#666';
             }
-
-            voiceButton.style.backgroundColor = '#4CAF50';
-            voiceButton.textContent = '🎤 Comando Vocale';
-            statusDiv.textContent = 'Clicca per attivare il riconoscimento vocale';
-            statusDiv.style.color = '#666';
         }
 
         // Funzione per gestire il cooldown del pulsante comando vocale
@@ -644,13 +641,14 @@
 
             // Aggiorna il testo del pulsante con il countdown
             const updateButtonText = () => {
-                voiceButton.textContent = `🎤 Attendi (${remainingSeconds}s)`;
-                statusDiv.textContent = `Pulsante disponibile tra ${remainingSeconds} secondi`;
-                statusDiv.style.color = '#6c757d';
-                remainingSeconds--;
-
-                if (remainingSeconds < 0) {
-                    // Riabilita il pulsante
+                if (remainingSeconds >= 0) {
+                    voiceButton.textContent = `🎤 Attendi (${remainingSeconds}s)`;
+                    statusDiv.textContent = `Pulsante disponibile tra ${remainingSeconds} secondi`;
+                    statusDiv.style.color = '#6c757d';
+                    remainingSeconds--;
+                    setTimeout(updateButtonText, 1000);
+                } else {
+                    // Riabilita completamente il pulsante
                     voiceButton.disabled = false;
                     voiceButton.textContent = '🎤 Comando Vocale';
                     voiceButton.style.backgroundColor = '#4CAF50';
@@ -660,8 +658,6 @@
                     statusDiv.style.color = '#666';
 
                     console.log('✅ Pulsante comando vocale riabilitato dopo cooldown');
-                } else {
-                    setTimeout(updateButtonText, 1000);
                 }
             };
 
