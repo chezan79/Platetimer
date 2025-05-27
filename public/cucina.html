@@ -564,6 +564,13 @@
                 return;
             }
 
+            const voiceButton = document.getElementById('voice-button');
+            
+            // Controlla se il pulsante è in cooldown
+            if (voiceButton.disabled) {
+                return;
+            }
+
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             recognition = new SpeechRecognition();
             
@@ -572,7 +579,6 @@
             recognition.interimResults = false;
 
             const statusDiv = document.getElementById('voice-status');
-            const voiceButton = document.getElementById('voice-button');
 
             if (isListening) {
                 recognition.stop();
@@ -615,6 +621,46 @@
             voiceButton.textContent = '🎤 Comando Vocale';
             statusDiv.textContent = 'Clicca per attivare il riconoscimento vocale';
             statusDiv.style.color = '#666';
+        }
+
+        // Funzione per gestire il cooldown del pulsante comando vocale
+        function startVoiceButtonCooldown() {
+            const voiceButton = document.getElementById('voice-button');
+            const statusDiv = document.getElementById('voice-status');
+            
+            // Disabilita il pulsante
+            voiceButton.disabled = true;
+            voiceButton.style.backgroundColor = '#6c757d';
+            voiceButton.style.cursor = 'not-allowed';
+            voiceButton.style.opacity = '0.6';
+            
+            let remainingSeconds = 5;
+            
+            // Aggiorna il testo del pulsante con il countdown
+            const updateButtonText = () => {
+                voiceButton.textContent = `🎤 Attendi (${remainingSeconds}s)`;
+                statusDiv.textContent = `Pulsante disponibile tra ${remainingSeconds} secondi`;
+                statusDiv.style.color = '#6c757d';
+                remainingSeconds--;
+                
+                if (remainingSeconds < 0) {
+                    // Riabilita il pulsante
+                    voiceButton.disabled = false;
+                    voiceButton.textContent = '🎤 Comando Vocale';
+                    voiceButton.style.backgroundColor = '#4CAF50';
+                    voiceButton.style.cursor = 'pointer';
+                    voiceButton.style.opacity = '1';
+                    statusDiv.textContent = 'Clicca per attivare il riconoscimento vocale';
+                    statusDiv.style.color = '#666';
+                    
+                    console.log('✅ Pulsante comando vocale riabilitato dopo cooldown');
+                } else {
+                    setTimeout(updateButtonText, 1000);
+                }
+            };
+            
+            updateButtonText();
+            console.log('⏱️ Cooldown avviato per pulsante comando vocale - 5 secondi');
         }
 
         function parseVoiceCommand(command) {
@@ -668,6 +714,9 @@
                 
                 statusDiv.textContent = `✅ Countdown avviato: Tavolo ${tableNumber} - ${minutes} minuti`;
                 statusDiv.style.color = '#28a745';
+                
+                // Avvia il cooldown di 5 secondi per il pulsante vocale
+                startVoiceButtonCooldown();
                 
                 console.log(`Countdown avviato per tavolo ${tableNumber} - ${minutes} minuti`);
             } else {
