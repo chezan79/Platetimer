@@ -558,16 +558,40 @@
         let recognition;
         let isListening = false;
 
-        function startVoiceRecognition() {
+        async function startVoiceRecognition() {
             if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-                alert('Il riconoscimento vocale non è supportato in questo browser');
+                alert('Il riconoscimento vocale non è supportato in questo browser. Usa Chrome o Edge.');
                 return;
             }
 
             const voiceButton = document.getElementById('voice-button');
+            const statusDiv = document.getElementById('voice-status');
 
             // Controlla se il pulsante è in cooldown
             if (voiceButton.disabled) {
+                return;
+            }
+
+            // Controlla i permessi del microfono
+            try {
+                const permission = await navigator.permissions.query({ name: 'microphone' });
+                if (permission.state === 'denied') {
+                    statusDiv.textContent = '❌ Permessi microfono negati. Clicca sull\'icona del microfono nella barra degli indirizzi e consenti l\'accesso.';
+                    statusDiv.style.color = '#dc3545';
+                    return;
+                }
+            } catch (error) {
+                console.log('Impossibile verificare i permessi:', error);
+            }
+
+            // Richiedi accesso al microfono prima di iniziare
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                stream.getTracks().forEach(track => track.stop()); // Ferma subito lo stream
+            } catch (error) {
+                console.error('Errore accesso microfono:', error);
+                statusDiv.textContent = '❌ Impossibile accedere al microfono. Verifica i permessi del browser.';
+                statusDiv.style.color = '#dc3545';
                 return;
             }
 
@@ -577,8 +601,7 @@
             recognition.lang = 'it-IT';
             recognition.continuous = false;
             recognition.interimResults = false;
-
-            const statusDiv = document.getElementById('voice-status');
+            recognition.maxAlternatives = 1;
 
             if (isListening) {
                 recognition.stop();
@@ -594,13 +617,31 @@
             recognition.onresult = function(event) {
                 const command = event.results[0][0].transcript.toLowerCase();
                 console.log('Comando riconosciuto:', command);
-
                 parseVoiceCommand(command);
             };
 
             recognition.onerror = function(event) {
                 console.error('Errore riconoscimento vocale:', event.error);
-                statusDiv.textContent = 'Errore nel riconoscimento vocale. Riprova.';
+                
+                let errorMessage = 'Errore nel riconoscimento vocale. ';
+                switch(event.error) {
+                    case 'not-allowed':
+                        errorMessage = '❌ Permessi microfono negati. Clicca sull\'icona 🎤 nella barra degli indirizzi e consenti l\'accesso.';
+                        break;
+                    case 'no-speech':
+                        errorMessage = '⚠️ Nessun parlato rilevato. Riprova parlando più chiaramente.';
+                        break;
+                    case 'audio-capture':
+                        errorMessage = '❌ Microfono non disponibile. Verifica che sia collegato.';
+                        break;
+                    case 'network':
+                        errorMessage = '❌ Errore di rete. Verifica la connessione internet.';
+                        break;
+                    default:
+                        errorMessage += 'Riprova.';
+                }
+                
+                statusDiv.textContent = errorMessage;
                 statusDiv.style.color = '#dc3545';
                 resetVoiceButton();
             };
@@ -609,7 +650,14 @@
                 resetVoiceButton();
             };
 
-            recognition.start();
+            try {
+                recognition.start();
+            } catch (error) {
+                console.error('Errore avvio riconoscimento:', error);
+                statusDiv.textContent = '❌ Impossibile avviare il riconoscimento vocale.';
+                statusDiv.style.color = '#dc3545';
+                resetVoiceButton();
+            }
         }
 
         function resetVoiceButton() {
