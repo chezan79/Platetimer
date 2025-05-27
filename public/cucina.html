@@ -647,7 +647,8 @@
             };
 
             recognition.onend = function() {
-                resetVoiceButton();
+                // Avvia sempre il cooldown quando termina il riconoscimento
+                startVoiceButtonCooldown();
             };
 
             try {
@@ -663,14 +664,11 @@
         function resetVoiceButton() {
             isListening = false;
             const voiceButton = document.getElementById('voice-button');
-            const statusDiv = document.getElementById('voice-status');
-
-            // Resetta solo se il pulsante NON è in cooldown
-            if (!voiceButton.disabled) {
+            
+            // Resetta solo lo stato di ascolto, il cooldown gestirà il resto
+            if (isListening) {
                 voiceButton.style.backgroundColor = '#4CAF50';
                 voiceButton.textContent = '🎤 Comando Vocale';
-                statusDiv.textContent = 'Clicca per attivare il riconoscimento vocale';
-                statusDiv.style.color = '#666';
             }
         }
 
@@ -764,11 +762,6 @@
 
                 statusDiv.textContent = `✅ Countdown avviato: Tavolo ${tableNumber} - ${minutes} minuti`;
                 statusDiv.style.color = '#28a745';
-
-                // Avvia immediatamente il cooldown di 5 secondi per il pulsante vocale
-                setTimeout(() => {
-                    startVoiceButtonCooldown();
-                }, 100);
 
                 console.log(`Countdown avviato per tavolo ${tableNumber} - ${minutes} minuti`);
             } else {
