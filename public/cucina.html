@@ -582,7 +582,7 @@
             isListening = true;
             voiceButton.style.backgroundColor = '#ff4444';
             voiceButton.textContent = '🎤 Ascoltando...';
-            statusDiv.textContent = '🎤 Sto ascoltando... Dì "tavolo [numero] [minuti] minuti"';
+            statusDiv.textContent = '🎤 Sto ascoltando... Dì: "tavolo 5 10 minuti" o "tavolo 12 per 8 minuti"';
             statusDiv.style.color = '#ff4444';
 
             recognition.onresult = function(event) {
@@ -620,12 +620,18 @@
         function parseVoiceCommand(command) {
             const statusDiv = document.getElementById('voice-status');
             
-            // Pattern per riconoscere "tavolo [numero] [minuti] minuti"
+            console.log('🎤 Comando da analizzare:', command);
+            
+            // Pattern più flessibili per riconoscere diversi formati
             const patterns = [
-                /tavolo\s+(\d+)\s+(\d+)\s+minut[oi]/i,
-                /tavolo\s+(\d+)\s+per\s+(\d+)\s+minut[oi]/i,
-                /(\d+)\s+(\d+)\s+minut[oi]/i,
-                /tavolo\s+(\d+)\s+(\d+)/i
+                /tavolo\s*(\d+)\s*(\d+)\s*minut[oi]/i,
+                /tavolo\s*(\d+)\s*per\s*(\d+)\s*minut[oi]/i,
+                /tavolo\s*(\d+)\s*di\s*(\d+)\s*minut[oi]/i,
+                /(\d+)\s*(\d+)\s*minut[oi]/i,
+                /(\d+)\s*per\s*(\d+)\s*minut[oi]/i,
+                /tavolo\s*(\d+)\s*(\d+)/i,
+                /numero\s*(\d+)\s*(\d+)\s*minut[oi]/i,
+                /(\d+)\s*di\s*(\d+)\s*minut[oi]/i
             ];
 
             let tableNumber = null;
@@ -636,14 +642,15 @@
                 if (match) {
                     tableNumber = parseInt(match[1]);
                     minutes = parseInt(match[2]);
+                    console.log(`✅ Pattern matched: tavolo ${tableNumber}, minuti ${minutes}`);
                     break;
                 }
             }
 
             if (tableNumber && minutes) {
-                // Valida il numero del tavolo (20-606)
-                if (tableNumber < 20 || tableNumber > 606) {
-                    statusDiv.textContent = `❌ Numero tavolo ${tableNumber} non valido (20-606)`;
+                // Valida il numero del tavolo (1-999 per maggiore flessibilità)
+                if (tableNumber < 1 || tableNumber > 999) {
+                    statusDiv.textContent = `❌ Numero tavolo ${tableNumber} non valido (1-999)`;
                     statusDiv.style.color = '#dc3545';
                     return;
                 }
@@ -664,7 +671,8 @@
                 
                 console.log(`Countdown avviato per tavolo ${tableNumber} - ${minutes} minuti`);
             } else {
-                statusDiv.textContent = '❌ Comando non riconosciuto. Dì: "tavolo [numero] [minuti] minuti"';
+                console.log('❌ Nessun pattern riconosciuto per:', command);
+                statusDiv.textContent = `❌ Comando non riconosciuto: "${command}". Prova: "tavolo 5 10 minuti"`;
                 statusDiv.style.color = '#dc3545';
             }
         }
