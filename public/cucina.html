@@ -600,7 +600,27 @@
 
             recognition.onerror = function(event) {
                 console.error('Errore riconoscimento vocale:', event.error);
-                statusDiv.textContent = 'Errore nel riconoscimento vocale. Riprova.';
+                
+                let errorMessage = 'Errore nel riconoscimento vocale. ';
+                
+                switch(event.error) {
+                    case 'not-allowed':
+                        errorMessage = '🚫 Permesso microfono negato. Autorizza l\'accesso al microfono nelle impostazioni del browser.';
+                        break;
+                    case 'no-speech':
+                        errorMessage = '🔇 Nessun parlato rilevato. Riprova parlando più chiaramente.';
+                        break;
+                    case 'network':
+                        errorMessage = '🌐 Errore di rete. Controlla la connessione.';
+                        break;
+                    case 'audio-capture':
+                        errorMessage = '🎤 Errore accesso microfono. Verifica che sia collegato.';
+                        break;
+                    default:
+                        errorMessage += `Codice errore: ${event.error}. Riprova.`;
+                }
+                
+                statusDiv.textContent = errorMessage;
                 statusDiv.style.color = '#dc3545';
                 resetVoiceButton();
             };
@@ -700,9 +720,9 @@
             }
 
             if (tableNumber && minutes) {
-                // Valida il numero del tavolo (1-999 per maggiore flessibilità)
-                if (tableNumber < 1 || tableNumber > 999) {
-                    statusDiv.textContent = `❌ Numero tavolo ${tableNumber} non valido (1-999)`;
+                // Valida il numero del tavolo (20-606 come richiesto)
+                if (tableNumber < 20 || tableNumber > 606) {
+                    statusDiv.textContent = `❌ Numero tavolo ${tableNumber} non valido (20-606)`;
                     statusDiv.style.color = '#dc3545';
                     return;
                 }
