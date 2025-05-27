@@ -206,11 +206,12 @@
     <div id="leftContainer">
         <div style="text-align: center; margin: 5px 0;">
             <button onclick="startVoiceRecognition()" id="voice-button" style="padding: 8px; margin: 5px; background-color: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; transition: all 0.3s ease;">
-                 Comando Vocale
+                🎤 Comando Vocale
             </button>
             <div id="voice-status" style="margin-top: 5px; font-size: 12px; color: #666; min-height: 15px;">
+                Clicca per attivare il riconoscimento vocale
             </div>
-        </div>
+        </div></div>
         <input type="text" id="numeroTavolo" pattern="[0-9]*" inputmode="numeric" placeholder="Numero Tavolo" readonly>
         <div id="keyboard">
             <div class="key">1</div>
@@ -227,12 +228,16 @@
         </div>
         <div id="durationSelection" style="margin-top: 10px;">
             <h2 style="font-size: 18px; margin-bottom: 10px;">Seleziona Durata</h2>
-            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; max-width: 280px; margin: 0 auto;">
-                <button class="duration-button" data-minutes="4">4 Minuti</button>
-                <button class="duration-button" data-minutes="6">6 Minuti</button>
-                <button class="duration-button" data-minutes="8">8 Minuti</button>
-                <button class="duration-button" data-minutes="10">10 Minuti</button>
-                <button class="duration-button" data-minutes="12" style="grid-column: span 2;">12 Minuti</button>
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; max-width: 320px; margin: 0 auto;">
+                <button class="duration-button" data-minutes="4">4 Min</button>
+                <button class="duration-button" data-minutes="5">5 Min</button>
+                <button class="duration-button" data-minutes="6">6 Min</button>
+                <button class="duration-button" data-minutes="7">7 Min</button>
+                <button class="duration-button" data-minutes="8">8 Min</button>
+                <button class="duration-button" data-minutes="9">9 Min</button>
+                <button class="duration-button" data-minutes="10">10 Min</button>
+                <button class="duration-button" data-minutes="12">12 Min</button>
+                <button class="duration-button" data-minutes="15">15 Min</button>
             </div>
         </div>
     </div>
@@ -538,5 +543,122 @@
     <div style="position: absolute; top: 20px; right: 80px; z-index: 1000;">
         <button onclick="window.location.href='home.html'" style="padding: 6px 12px; background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500; transition: transform 0.2s, box-shadow 0.2s;">🏠 Home</button>
     </div>
+
+    <!-- Script per riconoscimento vocale -->
+    <script>
+        let recognition;
+        let isListening = false;
+
+        function startVoiceRecognition() {
+            if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+                alert('Il riconoscimento vocale non è supportato in questo browser');
+                return;
+            }
+
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            recognition = new SpeechRecognition();
+            
+            recognition.lang = 'it-IT';
+            recognition.continuous = false;
+            recognition.interimResults = false;
+
+            const statusDiv = document.getElementById('voice-status');
+            const voiceButton = document.getElementById('voice-button');
+
+            if (isListening) {
+                recognition.stop();
+                return;
+            }
+
+            isListening = true;
+            voiceButton.style.backgroundColor = '#ff4444';
+            voiceButton.textContent = '🎤 Ascoltando...';
+            statusDiv.textContent = '🎤 Sto ascoltando... Dì "tavolo [numero] [minuti] minuti"';
+            statusDiv.style.color = '#ff4444';
+
+            recognition.onresult = function(event) {
+                const command = event.results[0][0].transcript.toLowerCase();
+                console.log('Comando riconosciuto:', command);
+                
+                parseVoiceCommand(command);
+            };
+
+            recognition.onerror = function(event) {
+                console.error('Errore riconoscimento vocale:', event.error);
+                statusDiv.textContent = 'Errore nel riconoscimento vocale. Riprova.';
+                statusDiv.style.color = '#dc3545';
+                resetVoiceButton();
+            };
+
+            recognition.onend = function() {
+                resetVoiceButton();
+            };
+
+            recognition.start();
+        }
+
+        function resetVoiceButton() {
+            isListening = false;
+            const voiceButton = document.getElementById('voice-button');
+            const statusDiv = document.getElementById('voice-status');
+            
+            voiceButton.style.backgroundColor = '#4CAF50';
+            voiceButton.textContent = '🎤 Comando Vocale';
+            statusDiv.textContent = 'Clicca per attivare il riconoscimento vocale';
+            statusDiv.style.color = '#666';
+        }
+
+        function parseVoiceCommand(command) {
+            const statusDiv = document.getElementById('voice-status');
+            
+            // Pattern per riconoscere "tavolo [numero] [minuti] minuti"
+            const patterns = [
+                /tavolo\s+(\d+)\s+(\d+)\s+minut[oi]/i,
+                /tavolo\s+(\d+)\s+per\s+(\d+)\s+minut[oi]/i,
+                /(\d+)\s+(\d+)\s+minut[oi]/i,
+                /tavolo\s+(\d+)\s+(\d+)/i
+            ];
+
+            let tableNumber = null;
+            let minutes = null;
+
+            for (let pattern of patterns) {
+                const match = command.match(pattern);
+                if (match) {
+                    tableNumber = parseInt(match[1]);
+                    minutes = parseInt(match[2]);
+                    break;
+                }
+            }
+
+            if (tableNumber && minutes) {
+                // Valida il numero del tavolo (20-606)
+                if (tableNumber < 20 || tableNumber > 606) {
+                    statusDiv.textContent = `❌ Numero tavolo ${tableNumber} non valido (20-606)`;
+                    statusDiv.style.color = '#dc3545';
+                    return;
+                }
+
+                // Valida i minuti (4-15)
+                if (minutes < 4 || minutes > 15) {
+                    statusDiv.textContent = `❌ Durata ${minutes} minuti non valida (4-15)`;
+                    statusDiv.style.color = '#dc3545';
+                    return;
+                }
+
+                // Imposta il numero del tavolo e avvia il countdown
+                document.getElementById('numeroTavolo').value = tableNumber;
+                startCountdown(minutes, tableNumber);
+                
+                statusDiv.textContent = `✅ Countdown avviato: Tavolo ${tableNumber} - ${minutes} minuti`;
+                statusDiv.style.color = '#28a745';
+                
+                console.log(`Countdown avviato per tavolo ${tableNumber} - ${minutes} minuti`);
+            } else {
+                statusDiv.textContent = '❌ Comando non riconosciuto. Dì: "tavolo [numero] [minuti] minuti"';
+                statusDiv.style.color = '#dc3545';
+            }
+        }
+    </script>
 </body>
 </html>
