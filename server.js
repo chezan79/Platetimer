@@ -2,6 +2,7 @@ const express = require('express');
 const http = require('http');
 const WebSocket = require('ws');
 const crypto = require('crypto');
+const speech = require('@google-cloud/speech');
 
 const app = express();
 const server = http.createServer(app);
@@ -14,6 +15,79 @@ const wss = new WebSocket.Server({
 
 // Serve i file statici dalla directory "public"
 app.use(express.static('public'));
+
+// Middleware per parsing JSON
+app.use(express.json());
+
+// Configura Google Cloud Speech
+let speechClient = null;
+try {
+    if (process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON) {
+        const credentials = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON);
+        speechClient = new speech.SpeechClient({
+            projectId: credentials.project_id,
+            credentials: credentials
+        });
+        console.log('✅ Google Cloud Speech configurato correttamente');
+    } else {
+        console.log('⚠️ Credenziali Google Cloud Speech non trovate');
+    }
+} catch (error) {
+    console.error('❌ Errore configurazione Google Cloud Speech:', error.message);
+}
+
+// Endpoint per il riconoscimento vocale
+app.post('/api/speech-to-text', async (req, res) => {
+    try {
+        if (!speechClient) {
+            return res.status(500).json({ 
+                error: 'Google Cloud Speech non configurato',
+                details: 'Controlla le credenziali nei Secrets'
+            });
+        }
+
+        const { audioData, config = {} } = req.body;
+        
+        if (!audioData) {
+            return res.status(400).json({ error: 'Audio data richiesto' });
+        }
+
+        // Configurazione per il riconoscimento
+        const request = {
+            audio: {
+                content: audioData
+            },
+            config: {
+                encoding: config.encoding || 'WEBM_OPUS',
+                sampleRateHertz: config.sampleRateHertz || 48000,
+                languageCode: config.languageCode || 'it-IT',
+                model: 'command_and_search',
+                useEnhanced: true,
+                ...config
+            }
+        };
+
+        // Effettua il riconoscimento
+        const [response] = await speechClient.recognize(request);
+        const transcription = response.results
+            .map(result => result.alternatives[0].transcript)
+            .join('\n');
+
+        console.log('🎤 Trascrizione:', transcription);
+
+        res.json({
+            transcription: transcription,
+            confidence: response.results[0]?.alternatives[0]?.confidence || 0
+        });
+
+    } catch (error) {
+        console.error('❌ Errore Speech-to-Text:', error);
+        res.status(500).json({ 
+            error: 'Errore nel riconoscimento vocale',
+            details: error.message
+        });
+    }
+});
 
 // Store per le room delle aziende
 const companyRooms = new Map();
