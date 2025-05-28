@@ -1,0 +1,243 @@
+
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Forno</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .countdown-container {
+            max-width: 800px;
+            width: 100%;
+            background: white;
+            padding: 40px;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+        
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 28px;
+            font-weight: 300;
+        }
+        
+        .countdown-item {
+            margin: 8px 0;
+            padding: 12px 15px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background-color: #f8f9fa;
+            transition: background-color 0.3s, transform 0.2s, box-shadow 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            min-height: 50px;
+        }
+
+        .countdown-item:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .countdown-table {
+            flex: 0 0 auto;
+            margin-right: 15px;
+        }
+
+        .countdown-table h3 {
+            margin: 0;
+            color: #333;
+            font-size: 18px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .countdown-time {
+            flex: 1;
+            text-align: center;
+        }
+
+        .countdown-time p {
+            margin: 0;
+            font-size: 18px;
+            color: #d9534f;
+            font-weight: bold;
+        }
+        
+        button {
+            padding: 15px 30px;
+            background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin-top: 20px;
+            display: block;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(108, 117, 125, 0.3);
+        }
+    </style>
+</head>
+<body>
+    <!-- Nome Azienda fuori dal container in alto a sinistra -->
+    <div id="company-header" style="position: absolute; top: 20px; left: 20px; z-index: 1000; padding: 10px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; border-left: 4px solid #ff6b35;">
+        <h4 id="company-name" style="margin: 0; color: #333; font-weight: 600;">Nome Azienda</h4>
+    </div>
+    
+    <div class="countdown-container">
+        <h1>🔥 Forno</h1>
+        <div id="tavoli">
+            <!-- I countdown sincronizzati appariranno qui -->
+        </div>
+        </div>
+
+    <audio id="alertSound" src="alerte-346112.mp3" preload="auto"></audio>
+    <audio id="zeroSound" src="costa-rica-eas-alarm-346194.mp3" preload="auto"></audio>
+    
+    <!-- Tasto Home in alto a destra -->
+    <div style="position: absolute; top: 20px; right: 20px; z-index: 1000;">
+        <button onclick="window.location.href='home.html'" style="padding: 6px 12px; background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500; transition: transform 0.2s, box-shadow 0.2s;">🏠 Home</button>
+    </div>
+
+    <script>
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+        const countdowns = [];
+
+        ws.onopen = () => {
+            // Unisciti alla room dell'azienda
+            const companyName = localStorage.getItem('userCompany') || 'Nome Azienda';
+            const joinMessage = {
+                action: 'joinRoom',
+                companyName: companyName
+            };
+            ws.send(JSON.stringify(joinMessage));
+            console.log(`Forno connesso alla room: ${companyName}`);
+        };
+
+        function sortCountdowns() {
+            countdowns.sort((a, b) => a.timeRemaining - b.timeRemaining);
+            const container = document.getElementById('tavoli');
+            container.innerHTML = '';
+            countdowns.forEach(countdown => {
+                container.appendChild(countdown.element);
+            });
+        }
+
+        ws.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                if (data.action === 'startCountdown') {
+                    startCountdown(data.tableNumber, data.timeRemaining);
+                }
+            } catch (error) {
+                console.error('Errore nel parsing del messaggio:', error);
+            }
+        };
+
+        function startCountdown(tableNumber, timeRemaining) {
+            // Rimuovi il vecchio countdown se esiste
+            const existingIndex = countdowns.findIndex(c => c.tableNumber == tableNumber);
+            if (existingIndex !== -1) {
+                clearInterval(countdowns[existingIndex].interval);
+                if (countdowns[existingIndex].element && countdowns[existingIndex].element.parentNode) {
+                    countdowns[existingIndex].element.parentNode.removeChild(countdowns[existingIndex].element);
+                }
+                countdowns.splice(existingIndex, 1);
+                console.log(`🔄 Countdown esistente per tavolo ${tableNumber} sostituito nel forno`);
+            }
+
+            const countdownElement = document.createElement('div');
+            countdownElement.id = `countdown-${tableNumber}`;
+            countdownElement.classList.add('countdown-item');
+
+            let remainingTime = parseInt(timeRemaining);
+            
+            const countdown = {
+                tableNumber: tableNumber,
+                timeRemaining: remainingTime,
+                element: countdownElement,
+                interval: null
+            };
+            countdown.interval = setInterval(() => {
+                countdown.timeRemaining = remainingTime;
+                if (remainingTime <= 0) {
+                    clearInterval(countdown.interval);
+                    countdownElement.style.backgroundColor = '#ff4444';
+                    countdownElement.innerHTML = `
+                        <div class="countdown-table">
+                            <h3>Tavolo ${tableNumber}</h3>
+                        </div>
+                        <div class="countdown-time">
+                            <p>Tempo scaduto!</p>
+                        </div>
+                    `;
+                    
+                    // Riproduce il suono personalizzato per countdown a zero
+                    const zeroAudio = document.getElementById('zeroSound');
+                    if (zeroAudio) {
+                        zeroAudio.play().catch(e => console.log('Errore audio countdown zero:', e));
+                    }
+                    
+                    setTimeout(() => {
+                        const index = countdowns.indexOf(countdown);
+                        if (index > -1) {
+                            countdowns.splice(index, 1);
+                            sortCountdowns();
+                        }
+                    }, 45000);
+                    return;
+                }
+                sortCountdowns();
+
+                if (remainingTime === 60) {
+                    countdownElement.style.backgroundColor = '#ffeb3b';
+                    const audio = document.getElementById('alertSound');
+                    if (audio) audio.play().catch(e => console.log('Errore audio:', e));
+                }
+
+                countdownElement.innerHTML = `
+                    <div class="countdown-table">
+                        <h3>Tavolo ${tableNumber}</h3>
+                    </div>
+                    <div class="countdown-time">
+                        <p>${formatTime(remainingTime)}</p>
+                    </div>
+                `;
+                remainingTime--;
+            }, 1000);
+
+            countdowns.push(countdown);
+            sortCountdowns();
+        }
+
+        function formatTime(seconds) {
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = seconds % 60;
+            return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+        }
+    </script>
+    <script src="company-header.js"></script>
+</body>
+</html>
