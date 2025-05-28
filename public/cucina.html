@@ -674,8 +674,8 @@
             isListening = false;
             const voiceButton = document.getElementById('voice-button');
             
-            // Resetta solo lo stato di ascolto, il cooldown gestirà il resto
-            if (isListening) {
+            // Resetta lo stato visivo del pulsante se non è disabilitato (non in cooldown)
+            if (!voiceButton.disabled) {
                 voiceButton.style.backgroundColor = '#4CAF50';
                 voiceButton.textContent = '🎤 Comando Vocale';
             }
