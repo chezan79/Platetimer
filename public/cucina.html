@@ -731,34 +731,76 @@
 
             // Pattern più flessibili per riconoscere diversi formati
             const patterns = [
-                // Pattern classici
-                /tavolo\s*(\d+)\s*(\d+)\s*minut[oi]/i,
-                /tavolo\s*(\d+)\s*per\s*(\d+)\s*minut[oi]/i,
-                /tavolo\s*(\d+)\s*di\s*(\d+)\s*minut[oi]/i,
+                // Pattern classici con "minuti" - più specifici
+                /tavolo\s*(\d{1,3})\s*(?:per\s*)?(\d{1,2})\s*minut[oi]/i,
+                /tavolo\s*(\d{1,3})\s*(?:di\s*)?(\d{1,2})\s*minut[oi]/i,
                 
-                // Pattern per gestire formati orario come "05:10" o "5 10"
-                /tavolo\s*(\d+)\s*(\d+)/i,
-                /numero\s*(\d+)\s*(\d+)/i,
+                // Pattern per formati con separatori
+                /tavolo\s*(\d{1,3})[:\s]\s*(\d{1,2})\s*minut[oi]/i,
                 
-                // Pattern senza "tavolo"
-                /(\d+)\s*(\d+)\s*minut[oi]/i,
-                /(\d+)\s*per\s*(\d+)\s*minut[oi]/i,
-                /(\d+)\s*di\s*(\d+)\s*minut[oi]/i,
+                // Pattern per riconoscere numeri di tavolo a due cifre correttamente
+                // Cerca prima "tavolo" seguito da un numero di 2-3 cifre come unità singola
+                /tavolo\s*(\d{2,3})\s+(\d{1,2})(?:\s*minut[oi])?/i,
+                /numero\s*(\d{2,3})\s+(\d{1,2})(?:\s*minut[oi])?/i,
                 
-                // Pattern per numeri separati da spazi
-                /(\d+)\s+(\d+)/i
+                // Pattern per tavoli a cifra singola con minuti
+                /tavolo\s*(\d{1})\s+(\d{1,2})(?:\s*minut[oi])?/i,
+                
+                // Pattern senza "tavolo" ma con "minuti"
+                /(?:^|\s)(\d{1,3})\s*(?:per\s*)?(\d{1,2})\s*minut[oi]/i,
+                
+                // Pattern fallback più generici (usati solo se altri non matchano)
+                /tavolo\s*(\d+)[:;\s]\s*(\d+)/i,
+                /(\d{2,3})\s+(\d{1,2})$/i  // Solo numeri alla fine
             ];
 
             let tableNumber = null;
             let minutes = null;
 
-            for (let pattern of patterns) {
+            // Analisi più intelligente del comando
+            console.log('🔍 Analisi dettagliata del comando:', cleanCommand);
+
+            // Estrai tutti i numeri dal comando
+            const numbers = cleanCommand.match(/\d+/g);
+            console.log('🔢 Numeri trovati:', numbers);
+
+            for (let i = 0; i < patterns.length; i++) {
+                const pattern = patterns[i];
                 const match = cleanCommand.match(pattern);
                 if (match) {
-                    tableNumber = parseInt(match[1]);
-                    minutes = parseInt(match[2]);
-                    console.log(`✅ Pattern matched: tavolo ${tableNumber}, minuti ${minutes}`);
-                    break;
+                    const potentialTable = parseInt(match[1]);
+                    const potentialMinutes = parseInt(match[2]);
+                    
+                    console.log(`🎯 Pattern ${i+1} matched: tavolo ${potentialTable}, minuti ${potentialMinutes}`);
+                    
+                    // Validazione immediata per evitare interpretazioni errate
+                    if (potentialTable >= 1 && potentialTable <= 999 && 
+                        potentialMinutes >= 4 && potentialMinutes <= 15) {
+                        tableNumber = potentialTable;
+                        minutes = potentialMinutes;
+                        console.log(`✅ Pattern ${i+1} validato: tavolo ${tableNumber}, minuti ${minutes}`);
+                        break;
+                    } else {
+                        console.log(`❌ Pattern ${i+1} scartato: valori fuori range`);
+                        continue;
+                    }
+                }
+            }
+
+            // Fallback: se abbiamo esattamente 2 numeri e nessun pattern ha funzionato
+            if (!tableNumber && !minutes && numbers && numbers.length === 2) {
+                const num1 = parseInt(numbers[0]);
+                const num2 = parseInt(numbers[1]);
+                
+                // Logica intelligente: il numero più grande è probabilmente il tavolo
+                if (num1 >= 1 && num1 <= 999 && num2 >= 4 && num2 <= 15) {
+                    tableNumber = num1;
+                    minutes = num2;
+                    console.log(`🔄 Fallback applicato: tavolo ${tableNumber}, minuti ${minutes}`);
+                } else if (num2 >= 1 && num2 <= 999 && num1 >= 4 && num1 <= 15) {
+                    tableNumber = num2;
+                    minutes = num1;
+                    console.log(`🔄 Fallback invertito: tavolo ${tableNumber}, minuti ${minutes}`);
                 }
             }
 
