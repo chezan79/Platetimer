@@ -722,234 +722,75 @@
 
         function parseVoiceCommand(command) {
             const statusDiv = document.getElementById('voice-status');
-
-            console.log('🎤 Comando da analizzare:', command);
-
-            // Gestione specifica per Edge: correzioni per interpretazioni errate
-            let processedCommand = command;
             
-            // Mappature specifiche per Edge che interpreta i numeri diversamente
-            const edgeVoiceMappings = {
-                // Pattern comuni di Edge per numeri a due cifre
-                'tavolo 05:10': 'tavolo 34 8 minuti',      // 34 -> 05:10 in Edge
-                'tavolo 04:40': 'tavolo 44 8 minuti',      // 44 -> 04:40 in Edge  
-                'tavolo 03:30': 'tavolo 33 8 minuti',      // 33 -> 03:30 in Edge
-                'tavolo 03:00': 'tavolo 30 8 minuti',      // 30 -> 03:00 in Edge
-                'tavolo 03:10': 'tavolo 31 8 minuti',      // 31 -> 03:10 in Edge
-                'tavolo 03:20': 'tavolo 32 8 minuti',      // 32 -> 03:20 in Edge
-                'tavolo 03:40': 'tavolo 34 8 minuti',      // Alternativa per 34
-                'tavolo 04:00': 'tavolo 40 8 minuti',      // 40 -> 04:00 in Edge
-                'tavolo 04:10': 'tavolo 41 8 minuti',      // 41 -> 04:10 in Edge
-                'tavolo 04:20': 'tavolo 42 8 minuti',      // 42 -> 04:20 in Edge
-                'tavolo 04:30': 'tavolo 43 8 minuti',      // 43 -> 04:30 in Edge
-                'tavolo 04:50': 'tavolo 45 8 minuti',      // 45 -> 04:50 in Edge
-                'tavolo 05:00': 'tavolo 50 8 minuti',      // 50 -> 05:00 in Edge
-                'tavolo 05:50': 'tavolo 55 8 minuti',      // 55 -> 05:50 in Edge
-                'tavolo 02:20': 'tavolo 22 8 minuti',      // 22 -> 02:20 in Edge
-                'tavolo 02:50': 'tavolo 25 8 minuti',      // 25 -> 02:50 in Edge
-                'tavolo 01:10': 'tavolo 11 8 minuti',      // 11 -> 01:10 in Edge
-                'tavolo 01:20': 'tavolo 12 8 minuti',      // 12 -> 01:20 in Edge
-                'tavolo 01:30': 'tavolo 13 8 minuti',      // 13 -> 01:30 in Edge
-                'tavolo 01:40': 'tavolo 14 8 minuti',      // 14 -> 01:40 in Edge
-                'tavolo 01:50': 'tavolo 15 8 minuti',      // 15 -> 01:50 in Edge
-            };
-
-            // Normalizza il comando per la ricerca nelle mappature
-            const normalizedCommand = command.toLowerCase().replace(/[.,!?]/g, '').trim();
+            // Pulisci il comando
+            const cleanCommand = command.replace(/[.:,;!?]/g, ' ').replace(/\s+/g, ' ').trim();
             
-            // Controlla se il comando corrisponde a una mappatura Edge conosciuta
-            if (edgeVoiceMappings[normalizedCommand]) {
-                processedCommand = edgeVoiceMappings[normalizedCommand];
-                console.log('🔄 Mappatura Edge applicata:', normalizedCommand, '->', processedCommand);
-            } else {
-                // Gestione dinamica per pattern orario non mappati
-                const timeFormatMatch = command.match(/tavolo\s*(\d{1,2}):(\d{1,2})/i);
-                if (timeFormatMatch) {
-                    const hours = parseInt(timeFormatMatch[1]);
-                    const minutes = parseInt(timeFormatMatch[2]);
-                    
-                    console.log('🕐 Formato orario Edge rilevato:', `${hours}:${minutes}`);
-                    
-                    // Algoritmo per ricostruire il numero originale
-                    let reconstructedNumber = null;
-                    
-                    // Logica per Edge: 34 -> 05:10, 44 -> 04:40, etc.
-                    if (hours <= 6 && minutes <= 50) {
-                        // Prova ricostruzione basata su pattern osservati
-                        if (hours === 5 && minutes === 10) {
-                            reconstructedNumber = 34; // Pattern specifico osservato
-                        } else if (hours === 4 && minutes === 40) {
-                            reconstructedNumber = 44; // Pattern specifico osservato
-                        } else if (hours === 3 && minutes === 0) {
-                            reconstructedNumber = 30; // 30 -> 03:00
-                        } else if (hours === 3 && minutes === 10) {
-                            reconstructedNumber = 31; // 31 -> 03:10
-                        } else if (hours === 3 && minutes === 20) {
-                            reconstructedNumber = 32; // 32 -> 03:20
-                        } else if (hours === 3 && minutes === 30) {
-                            reconstructedNumber = 33; // 33 -> 03:30
-                        } else {
-                            // Fallback: prova concatenazione logica
-                            const candidate1 = hours * 10 + Math.floor(minutes / 10);
-                            const candidate2 = hours * 10 + Math.floor(minutes / 6);
-                            
-                            if (candidate1 >= 1 && candidate1 <= 999) {
-                                reconstructedNumber = candidate1;
-                            } else if (candidate2 >= 1 && candidate2 <= 999) {
-                                reconstructedNumber = candidate2;
-                            }
-                        }
-                    }
-                    
-                    if (reconstructedNumber) {
-                        processedCommand = `tavolo ${reconstructedNumber} 8 minuti`;
-                        console.log('🔄 Numero ricostruito dinamicamente:', reconstructedNumber);
-                    } else {
-                        // Ultimo fallback: usa ore come tavolo se ragionevole
-                        if (hours >= 1 && hours <= 999) {
-                            processedCommand = `tavolo ${hours} 8 minuti`;
-                            console.log('🔄 Fallback ore come tavolo:', hours);
-                        }
-                    }
+            // Gestione rapida per formato orario Edge (es. "05:10" -> "34")
+            const timeMatch = cleanCommand.match(/tavolo\s*(\d{1,2}):(\d{1,2})/i);
+            if (timeMatch) {
+                const hours = parseInt(timeMatch[1]);
+                const minutes = parseInt(timeMatch[2]);
+                let tableNum = null;
+                
+                // Pattern osservati in Edge
+                if (hours === 5 && minutes === 10) tableNum = 34;
+                else if (hours === 4 && minutes === 40) tableNum = 44;
+                else if (hours === 3 && minutes === 0) tableNum = 30;
+                else if (hours === 3 && minutes === 10) tableNum = 31;
+                else if (hours === 3 && minutes === 20) tableNum = 32;
+                else if (hours === 3 && minutes === 30) tableNum = 33;
+                else if (hours === 3 && minutes === 40) tableNum = 34;
+                else if (hours === 4 && minutes === 0) tableNum = 40;
+                else if (hours === 4 && minutes === 10) tableNum = 41;
+                else if (hours === 4 && minutes === 20) tableNum = 42;
+                else if (hours === 4 && minutes === 30) tableNum = 43;
+                else if (hours === 4 && minutes === 50) tableNum = 45;
+                else if (hours === 5 && minutes === 0) tableNum = 50;
+                else if (hours === 5 && minutes === 50) tableNum = 55;
+                
+                if (tableNum) {
+                    document.getElementById('numeroTavolo').value = tableNum;
+                    startCountdown(8, tableNum); // 8 minuti default
+                    statusDiv.textContent = `✅ Tavolo ${tableNum} - 8 minuti`;
+                    statusDiv.style.color = '#28a745';
+                    startVoiceButtonCooldown();
+                    return;
                 }
             }
-
-            // Pulisci il comando rimuovendo punteggiatura e normalizzando
-            const cleanCommand = processedCommand.replace(/[.:,;!?]/g, ' ').replace(/\s+/g, ' ').trim();
-            console.log('🧹 Comando pulito:', cleanCommand);
-
-            // Pattern migliorati con priorità per riconoscimento più accurato
+            
+            // Pattern semplici e veloci
             const patterns = [
-                // Pattern specifici per "minuti" (alta priorità)
-                /tavolo\s*(\d{1,3})\s*(?:per\s*)?(\d{1,2})\s*minut[oi]/i,
-                /tavolo\s*(\d{1,3})\s*(?:di\s*)?(\d{1,2})\s*minut[oi]/i,
-                
-                // Pattern per numero tavolo + durata senza "minuti" esplicito
-                /tavolo\s*(\d{1,3})\s+(\d{1,2})(?:\s|$)/i,
-                /numero\s*(\d{1,3})\s+(\d{1,2})(?:\s|$)/i,
-                
-                // Pattern per comandi diretti senza "tavolo"
-                /^(\d{1,3})\s+(\d{1,2})\s*minut[oi]/i,
-                /^(\d{1,3})\s+(\d{1,2})(?:\s|$)/i,
-                
-                // Pattern per separatori
-                /tavolo\s*(\d{1,3})[:;\-]\s*(\d{1,2})/i,
+                /tavolo\s*(\d{1,3})\s*(\d{1,2})\s*minut/i,
+                /tavolo\s*(\d{1,3})\s+(\d{1,2})/i,
+                /(\d{1,3})\s+(\d{1,2})/i
             ];
-
-            let tableNumber = null;
-            let minutes = null;
-
-            // Analisi pattern con logging dettagliato
-            console.log('🔍 Analisi dettagliata del comando:', cleanCommand);
-
-            // Estrai tutti i numeri dal comando
-            const numbers = cleanCommand.match(/\d+/g);
-            console.log('🔢 Numeri trovati:', numbers);
-
-            // Prova ogni pattern in ordine di priorità
-            for (let i = 0; i < patterns.length; i++) {
-                const pattern = patterns[i];
+            
+            for (let pattern of patterns) {
                 const match = cleanCommand.match(pattern);
                 if (match) {
-                    const potentialTable = parseInt(match[1]);
-                    const potentialMinutes = parseInt(match[2]);
+                    const table = parseInt(match[1]);
+                    const mins = parseInt(match[2]);
                     
-                    console.log(`🎯 Pattern ${i+1} matched: tavolo ${potentialTable}, minuti ${potentialMinutes}`);
-                    
-                    // Validazione rigorosa
-                    if (potentialTable >= 1 && potentialTable <= 999 && 
-                        potentialMinutes >= 4 && potentialMinutes <= 15) {
-                        tableNumber = potentialTable;
-                        minutes = potentialMinutes;
-                        console.log(`✅ Pattern ${i+1} validato: tavolo ${tableNumber}, minuti ${minutes}`);
-                        break;
-                    } else {
-                        console.log(`❌ Pattern ${i+1} scartato: tavolo ${potentialTable} o minuti ${potentialMinutes} fuori range`);
-                        continue;
+                    if (table >= 1 && table <= 999 && mins >= 4 && mins <= 15) {
+                        document.getElementById('numeroTavolo').value = table;
+                        startCountdown(mins, table);
+                        statusDiv.textContent = `✅ Tavolo ${table} - ${mins} minuti`;
+                        statusDiv.style.color = '#28a745';
+                        startVoiceButtonCooldown();
+                        return;
                     }
                 }
             }
-
-            // Fallback intelligente per numeri singoli o coppie
-            if (!tableNumber && !minutes && numbers) {
-                if (numbers.length === 1) {
-                    // Un solo numero: probabilmente il tavolo, usa durata default
-                    const num = parseInt(numbers[0]);
-                    if (num >= 1 && num <= 999) {
-                        tableNumber = num;
-                        minutes = 8; // Default ragionevole
-                        console.log(`🔄 Fallback singolo numero: tavolo ${tableNumber}, default ${minutes} minuti`);
-                    }
-                } else if (numbers.length === 2) {
-                    const num1 = parseInt(numbers[0]);
-                    const num2 = parseInt(numbers[1]);
-                    
-                    // Logica intelligente: il numero nel range tavoli diventa tavolo
-                    if (num1 >= 1 && num1 <= 999 && num2 >= 4 && num2 <= 15) {
-                        tableNumber = num1;
-                        minutes = num2;
-                        console.log(`🔄 Fallback due numeri (ord. normale): tavolo ${tableNumber}, minuti ${minutes}`);
-                    } else if (num2 >= 1 && num2 <= 999 && num1 >= 4 && num1 <= 15) {
-                        tableNumber = num2;
-                        minutes = num1;
-                        console.log(`🔄 Fallback due numeri (ord. inverso): tavolo ${tableNumber}, minuti ${minutes}`);
-                    } else if (num1 >= 1 && num1 <= 999) {
-                        // Solo il primo numero è valido per tavolo
-                        tableNumber = num1;
-                        minutes = 8; // Default
-                        console.log(`🔄 Fallback primo numero valido: tavolo ${tableNumber}, default ${minutes} minuti`);
-                    } else if (num2 >= 1 && num2 <= 999) {
-                        // Solo il secondo numero è valido per tavolo
-                        tableNumber = num2;
-                        minutes = 8; // Default
-                        console.log(`🔄 Fallback secondo numero valido: tavolo ${tableNumber}, default ${minutes} minuti`);
-                    }
-                }
-            }
-
-            if (tableNumber && minutes) {
-                // Valida il numero del tavolo (1-999 per maggiore flessibilità)
-                if (tableNumber < 1 || tableNumber > 999) {
-                    statusDiv.textContent = `❌ Numero tavolo ${tableNumber} non valido (1-999)`;
-                    statusDiv.style.color = '#dc3545';
-                    console.log(`❌ Validazione fallita: tavolo ${tableNumber} fuori range`);
-                    return;
-                }
-
-                // Valida i minuti (4-15)
-                if (minutes < 4 || minutes > 15) {
-                    statusDiv.textContent = `❌ Durata ${minutes} minuti non valida (4-15)`;
-                    statusDiv.style.color = '#dc3545';
-                    console.log(`❌ Validazione fallita: ${minutes} minuti fuori range`);
-                    return;
-                }
-
-                // Comando valido: avvia il cooldown e imposta il countdown
-                console.log(`✅ Comando valido: tavolo ${tableNumber}, ${minutes} minuti`);
-                
-                // Imposta il numero del tavolo e avvia il countdown
-                document.getElementById('numeroTavolo').value = tableNumber;
-                startCountdown(minutes, tableNumber);
-
-                statusDiv.textContent = `✅ Countdown avviato: Tavolo ${tableNumber} - ${minutes} minuti`;
-                statusDiv.style.color = '#28a745';
-
-                // Avvia il cooldown solo per comandi validi
-                startVoiceButtonCooldown();
-
-                console.log(`Countdown avviato per tavolo ${tableNumber} - ${minutes} minuti`);
-            } else {
-                console.log('❌ Nessun pattern riconosciuto per:', command);
-                statusDiv.textContent = `❌ Comando non riconosciuto: "${command}". Prova: "tavolo 5 10 minuti"`;
-                statusDiv.style.color = '#dc3545';
-                
-                // Per comandi non riconosciuti, resetta semplicemente il pulsante senza cooldown
-                setTimeout(() => {
-                    resetVoiceButton();
-                    statusDiv.textContent = 'Clicca per attivare il riconoscimento vocale';
-                    statusDiv.style.color = '#666';
-                }, 2000);
-            }
+            
+            // Comando non riconosciuto
+            statusDiv.textContent = `❌ Non riconosciuto: "${command}"`;
+            statusDiv.style.color = '#dc3545';
+            setTimeout(() => {
+                resetVoiceButton();
+                statusDiv.textContent = 'Clicca per attivare il riconoscimento vocale';
+                statusDiv.style.color = '#666';
+            }, 2000);
         }
     </script>
 </body>
