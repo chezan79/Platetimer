@@ -725,72 +725,90 @@
 
             console.log('🎤 Comando da analizzare:', command);
 
-            // Gestione speciale per formati orario trasformati dal riconoscimento vocale
-            // Es: "tavolo 34" -> "tavolo 05:10" (Chrome interpreta 34 come 05:10)
+            // Gestione specifica per Edge: correzioni per interpretazioni errate
             let processedCommand = command;
             
-            // Gestisci formati orario che potrebbero essere numeri di tavolo
-            const timeFormatMatch = command.match(/tavolo\s*(\d{1,2}):(\d{1,2})/i);
-            if (timeFormatMatch) {
-                const hours = parseInt(timeFormatMatch[1]);
-                const minutes = parseInt(timeFormatMatch[2]);
-                
-                // Ricostruisci il numero originale se sembra plausibile
-                // Es: 05:10 -> 510, ma se 05:10 -> prova 34 (5*10+10/2 = 55, non valido)
-                // Logica: se ore < 10 e minuti hanno senso, prova a ricostruire
-                if (hours < 24 && minutes < 60) {
-                    // Prova diverse interpretazioni
-                    const possibleNumbers = [];
+            // Mappature specifiche per Edge che interpreta i numeri diversamente
+            const edgeVoiceMappings = {
+                // Pattern comuni di Edge per numeri a due cifre
+                'tavolo 05:10': 'tavolo 34 8 minuti',      // 34 -> 05:10 in Edge
+                'tavolo 04:40': 'tavolo 44 8 minuti',      // 44 -> 04:40 in Edge  
+                'tavolo 03:30': 'tavolo 33 8 minuti',      // 33 -> 03:30 in Edge
+                'tavolo 03:00': 'tavolo 30 8 minuti',      // 30 -> 03:00 in Edge
+                'tavolo 03:10': 'tavolo 31 8 minuti',      // 31 -> 03:10 in Edge
+                'tavolo 03:20': 'tavolo 32 8 minuti',      // 32 -> 03:20 in Edge
+                'tavolo 03:40': 'tavolo 34 8 minuti',      // Alternativa per 34
+                'tavolo 04:00': 'tavolo 40 8 minuti',      // 40 -> 04:00 in Edge
+                'tavolo 04:10': 'tavolo 41 8 minuti',      // 41 -> 04:10 in Edge
+                'tavolo 04:20': 'tavolo 42 8 minuti',      // 42 -> 04:20 in Edge
+                'tavolo 04:30': 'tavolo 43 8 minuti',      // 43 -> 04:30 in Edge
+                'tavolo 04:50': 'tavolo 45 8 minuti',      // 45 -> 04:50 in Edge
+                'tavolo 05:00': 'tavolo 50 8 minuti',      // 50 -> 05:00 in Edge
+                'tavolo 05:50': 'tavolo 55 8 minuti',      // 55 -> 05:50 in Edge
+                'tavolo 02:20': 'tavolo 22 8 minuti',      // 22 -> 02:20 in Edge
+                'tavolo 02:50': 'tavolo 25 8 minuti',      // 25 -> 02:50 in Edge
+                'tavolo 01:10': 'tavolo 11 8 minuti',      // 11 -> 01:10 in Edge
+                'tavolo 01:20': 'tavolo 12 8 minuti',      // 12 -> 01:20 in Edge
+                'tavolo 01:30': 'tavolo 13 8 minuti',      // 13 -> 01:30 in Edge
+                'tavolo 01:40': 'tavolo 14 8 minuti',      // 14 -> 01:40 in Edge
+                'tavolo 01:50': 'tavolo 15 8 minuti',      // 15 -> 01:50 in Edge
+            };
+
+            // Normalizza il comando per la ricerca nelle mappature
+            const normalizedCommand = command.toLowerCase().replace(/[.,!?]/g, '').trim();
+            
+            // Controlla se il comando corrisponde a una mappatura Edge conosciuta
+            if (edgeVoiceMappings[normalizedCommand]) {
+                processedCommand = edgeVoiceMappings[normalizedCommand];
+                console.log('🔄 Mappatura Edge applicata:', normalizedCommand, '->', processedCommand);
+            } else {
+                // Gestione dinamica per pattern orario non mappati
+                const timeFormatMatch = command.match(/tavolo\s*(\d{1,2}):(\d{1,2})/i);
+                if (timeFormatMatch) {
+                    const hours = parseInt(timeFormatMatch[1]);
+                    const minutes = parseInt(timeFormatMatch[2]);
                     
-                    // Concatenazione diretta: 05:10 -> 510 (troppo alto)
-                    const concat1 = parseInt(`${hours}${minutes}`);
-                    if (concat1 >= 1 && concat1 <= 999) possibleNumbers.push(concat1);
+                    console.log('🕐 Formato orario Edge rilevato:', `${hours}:${minutes}`);
                     
-                    // Interpretazione come due cifre: 05:10 -> 5 e 10 -> tavolo 5, 10 minuti
-                    if (hours >= 1 && hours <= 999 && minutes >= 4 && minutes <= 15) {
-                        possibleNumbers.push({table: hours, minutes: minutes});
-                    }
+                    // Algoritmo per ricostruire il numero originale
+                    let reconstructedNumber = null;
                     
-                    // Interpretazione inversa: 05:10 -> tavolo 10, 5 minuti
-                    if (minutes >= 1 && minutes <= 999 && hours >= 4 && hours <= 15) {
-                        possibleNumbers.push({table: minutes, minutes: hours});
-                    }
-                    
-                    // Ricostruzione intelligente per numeri a due cifre comuni
-                    // 05:10 potrebbe essere 34 (trasformazione comune del riconoscimento vocale)
-                    const timeBasedMappings = {
-                        '05:10': [34, 510], // 34 spesso diventa 05:10
-                        '04:40': [44, 440], // 44 spesso diventa 04:40
-                        '05:50': [55, 550], // 55 -> 05:50
-                        '03:30': [33, 330], // 33 -> 03:30
-                        '02:20': [22, 220], // 22 -> 02:20
-                        '01:10': [11, 110], // 11 -> 01:10
-                        '06:60': [66, 660], // 66 -> 06:60 (non valido ma proviamo)
-                    };
-                    
-                    const timeKey = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
-                    if (timeBasedMappings[timeKey]) {
-                        timeBasedMappings[timeKey].forEach(num => {
-                            if (num >= 1 && num <= 999) possibleNumbers.push(num);
-                        });
-                    }
-                    
-                    console.log('🕐 Formato orario rilevato:', timeKey, 'Possibili interpretazioni:', possibleNumbers);
-                    
-                    // Se abbiamo possibili numeri, ricostruisci il comando
-                    if (possibleNumbers.length > 0) {
-                        // Prendi il primo numero ragionevole per il tavolo
-                        for (const possibility of possibleNumbers) {
-                            if (typeof possibility === 'object') {
-                                processedCommand = `tavolo ${possibility.table} ${possibility.minutes} minuti`;
-                                console.log('🔄 Comando ricostruito (oggetto):', processedCommand);
-                                break;
-                            } else if (possibility >= 1 && possibility <= 999) {
-                                // Usa 8 minuti come default ragionevole
-                                processedCommand = `tavolo ${possibility} 8 minuti`;
-                                console.log('🔄 Comando ricostruito (numero):', processedCommand);
-                                break;
+                    // Logica per Edge: 34 -> 05:10, 44 -> 04:40, etc.
+                    if (hours <= 6 && minutes <= 50) {
+                        // Prova ricostruzione basata su pattern osservati
+                        if (hours === 5 && minutes === 10) {
+                            reconstructedNumber = 34; // Pattern specifico osservato
+                        } else if (hours === 4 && minutes === 40) {
+                            reconstructedNumber = 44; // Pattern specifico osservato
+                        } else if (hours === 3 && minutes === 0) {
+                            reconstructedNumber = 30; // 30 -> 03:00
+                        } else if (hours === 3 && minutes === 10) {
+                            reconstructedNumber = 31; // 31 -> 03:10
+                        } else if (hours === 3 && minutes === 20) {
+                            reconstructedNumber = 32; // 32 -> 03:20
+                        } else if (hours === 3 && minutes === 30) {
+                            reconstructedNumber = 33; // 33 -> 03:30
+                        } else {
+                            // Fallback: prova concatenazione logica
+                            const candidate1 = hours * 10 + Math.floor(minutes / 10);
+                            const candidate2 = hours * 10 + Math.floor(minutes / 6);
+                            
+                            if (candidate1 >= 1 && candidate1 <= 999) {
+                                reconstructedNumber = candidate1;
+                            } else if (candidate2 >= 1 && candidate2 <= 999) {
+                                reconstructedNumber = candidate2;
                             }
+                        }
+                    }
+                    
+                    if (reconstructedNumber) {
+                        processedCommand = `tavolo ${reconstructedNumber} 8 minuti`;
+                        console.log('🔄 Numero ricostruito dinamicamente:', reconstructedNumber);
+                    } else {
+                        // Ultimo fallback: usa ore come tavolo se ragionevole
+                        if (hours >= 1 && hours <= 999) {
+                            processedCommand = `tavolo ${hours} 8 minuti`;
+                            console.log('🔄 Fallback ore come tavolo:', hours);
                         }
                     }
                 }
