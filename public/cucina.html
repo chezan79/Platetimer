@@ -656,8 +656,8 @@
             };
 
             recognition.onend = function() {
-                // Avvia sempre il cooldown quando termina il riconoscimento
-                startVoiceButtonCooldown();
+                // Reset del pulsante senza cooldown se non è già stato processato un comando valido
+                resetVoiceButton();
             };
 
             try {
@@ -767,6 +767,7 @@
                 if (tableNumber < 1 || tableNumber > 999) {
                     statusDiv.textContent = `❌ Numero tavolo ${tableNumber} non valido (1-999)`;
                     statusDiv.style.color = '#dc3545';
+                    console.log(`❌ Validazione fallita: tavolo ${tableNumber} fuori range`);
                     return;
                 }
 
@@ -774,9 +775,13 @@
                 if (minutes < 4 || minutes > 15) {
                     statusDiv.textContent = `❌ Durata ${minutes} minuti non valida (4-15)`;
                     statusDiv.style.color = '#dc3545';
+                    console.log(`❌ Validazione fallita: ${minutes} minuti fuori range`);
                     return;
                 }
 
+                // Comando valido: avvia il cooldown e imposta il countdown
+                console.log(`✅ Comando valido: tavolo ${tableNumber}, ${minutes} minuti`);
+                
                 // Imposta il numero del tavolo e avvia il countdown
                 document.getElementById('numeroTavolo').value = tableNumber;
                 startCountdown(minutes, tableNumber);
@@ -784,11 +789,21 @@
                 statusDiv.textContent = `✅ Countdown avviato: Tavolo ${tableNumber} - ${minutes} minuti`;
                 statusDiv.style.color = '#28a745';
 
+                // Avvia il cooldown solo per comandi validi
+                startVoiceButtonCooldown();
+
                 console.log(`Countdown avviato per tavolo ${tableNumber} - ${minutes} minuti`);
             } else {
                 console.log('❌ Nessun pattern riconosciuto per:', command);
                 statusDiv.textContent = `❌ Comando non riconosciuto: "${command}". Prova: "tavolo 5 10 minuti"`;
                 statusDiv.style.color = '#dc3545';
+                
+                // Per comandi non riconosciuti, resetta semplicemente il pulsante senza cooldown
+                setTimeout(() => {
+                    resetVoiceButton();
+                    statusDiv.textContent = 'Clicca per attivare il riconoscimento vocale';
+                    statusDiv.style.color = '#666';
+                }, 2000);
             }
         }
     </script>
