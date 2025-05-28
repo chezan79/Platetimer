@@ -179,7 +179,10 @@
                 interval: null
             };
             countdown.interval = setInterval(() => {
+                // Decrementa PRIMA come in cucina.html
+                remainingTime--;
                 countdown.timeRemaining = remainingTime;
+                
                 if (remainingTime <= 0) {
                     clearInterval(countdown.interval);
                     countdownElement.style.backgroundColor = '#ff4444';
@@ -207,7 +210,11 @@
                     }, 45000);
                     return;
                 }
-                sortCountdowns();
+
+                // Riordina ogni 5 secondi come in cucina.html
+                if (remainingTime % 5 === 0) {
+                    sortCountdowns();
+                }
 
                 if (remainingTime === 60) {
                     countdownElement.style.backgroundColor = '#ffeb3b';
@@ -223,7 +230,6 @@
                         <p>${formatTime(remainingTime)}</p>
                     </div>
                 `;
-                remainingTime--;
             }, 1000);
 
             countdowns.push(countdown);
