@@ -822,6 +822,12 @@
                         startCountdown(8, tableNum);
                         statusDiv.textContent = `✅ Tavolo ${tableNum} (Edge: ${timeKey}) - 8 minuti`;
                         statusDiv.style.color = '#28a745';
+                        
+                        // Pulisci il campo tavolo dopo 1.5 secondi
+                        setTimeout(() => {
+                            document.getElementById('numeroTavolo').value = '';
+                        }, 1500);
+                        
                         startVoiceButtonCooldown();
                         return;
                     } else {
@@ -852,6 +858,12 @@
                         startCountdown(mins, table);
                         statusDiv.textContent = `✅ Tavolo ${table} - ${mins} minuti`;
                         statusDiv.style.color = '#28a745';
+                        
+                        // Pulisci il campo tavolo dopo 1.5 secondi
+                        setTimeout(() => {
+                            document.getElementById('numeroTavolo').value = '';
+                        }, 1500);
+                        
                         startVoiceButtonCooldown();
                         return;
                     } else {
