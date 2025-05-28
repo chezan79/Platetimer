@@ -616,7 +616,16 @@
 
             recognition.onresult = function(event) {
                 const command = event.results[0][0].transcript.toLowerCase();
-                console.log('Comando riconosciuto:', command);
+                const confidence = event.results[0][0].confidence;
+                
+                console.log('🎤 Comando riconosciuto:', command);
+                console.log('🎯 Confidenza:', confidence);
+                console.log('📊 Risultati completi:', event.results[0]);
+                
+                // Mostra il comando riconosciuto all'utente
+                statusDiv.textContent = `🎤 Riconosciuto: "${command}" (${Math.round(confidence * 100)}%)`;
+                statusDiv.style.color = '#007bff';
+                
                 parseVoiceCommand(command);
             };
 
@@ -716,23 +725,35 @@
 
             console.log('🎤 Comando da analizzare:', command);
 
+            // Pulisci il comando rimuovendo punteggiatura e normalizzando
+            const cleanCommand = command.replace(/[.:,;!?]/g, ' ').replace(/\s+/g, ' ').trim();
+            console.log('🧹 Comando pulito:', cleanCommand);
+
             // Pattern più flessibili per riconoscere diversi formati
             const patterns = [
+                // Pattern classici
                 /tavolo\s*(\d+)\s*(\d+)\s*minut[oi]/i,
                 /tavolo\s*(\d+)\s*per\s*(\d+)\s*minut[oi]/i,
                 /tavolo\s*(\d+)\s*di\s*(\d+)\s*minut[oi]/i,
+                
+                // Pattern per gestire formati orario come "05:10" o "5 10"
+                /tavolo\s*(\d+)\s*(\d+)/i,
+                /numero\s*(\d+)\s*(\d+)/i,
+                
+                // Pattern senza "tavolo"
                 /(\d+)\s*(\d+)\s*minut[oi]/i,
                 /(\d+)\s*per\s*(\d+)\s*minut[oi]/i,
-                /tavolo\s*(\d+)\s*(\d+)/i,
-                /numero\s*(\d+)\s*(\d+)\s*minut[oi]/i,
-                /(\d+)\s*di\s*(\d+)\s*minut[oi]/i
+                /(\d+)\s*di\s*(\d+)\s*minut[oi]/i,
+                
+                // Pattern per numeri separati da spazi
+                /(\d+)\s+(\d+)/i
             ];
 
             let tableNumber = null;
             let minutes = null;
 
             for (let pattern of patterns) {
-                const match = command.match(pattern);
+                const match = cleanCommand.match(pattern);
                 if (match) {
                     tableNumber = parseInt(match[1]);
                     minutes = parseInt(match[2]);
