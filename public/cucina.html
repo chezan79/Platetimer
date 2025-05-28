@@ -728,99 +728,105 @@
             // Pulisci il comando
             const cleanCommand = command.replace(/[.:,;!?]/g, ' ').replace(/\s+/g, ' ').trim();
 
-            // PRIMO: Gestione specifica formato orario Edge (bypass pattern semplici)
-            console.log('🔍 Controllo formato orario Edge...');
-            const timeMatch = cleanCommand.match(/tavolo\s*(\d{1,2}):(\d{1,2})/i);
-            if (timeMatch) {
-                const hours = parseInt(timeMatch[1]);
-                const minutes = parseInt(timeMatch[2]);
-                console.log(`⏰ Edge format detected: ${hours}:${minutes}`);
+            // CONTROLLO BROWSER-SPECIFICO: Formato orario Edge (solo se necessario)
+            const isEdge = navigator.userAgent.includes('Edg/');
+            console.log('🌐 Browser rilevato:', isEdge ? 'Edge' : 'Altri (Chrome/Firefox/Safari)');
 
-                // Mappatura diretta per tutti i numeri 25-99
-                let tableNum = null;
+            // Controllo formato orario SOLO per Edge
+            if (isEdge) {
+                console.log('🔍 Controllo formato orario Edge...');
+                const timeMatch = cleanCommand.match(/tavolo\s*(\d{1,2}):(\d{1,2})/i);
+                if (timeMatch) {
+                    const hours = parseInt(timeMatch[1]);
+                    const minutes = parseInt(timeMatch[2]);
+                    console.log(`⏰ Edge format detected: ${hours}:${minutes}`);
 
-                // 1. MAPPA DIRETTA per pattern osservati
-                const directMapping = {
-                    '5:10': 34,  // Confermato nei log
-                    '2:50': 25,  // 25 -> 02:50
-                    '2:60': 26,  // 26 -> 02:60
-                    '2:70': 27,  // 27 -> 02:70
-                    '2:80': 28,  // 28 -> 02:80
-                    '2:90': 29,  // 29 -> 02:90
-                    '3:0': 30,   // 30 -> 03:00
-                    '3:10': 31,  // 31 -> 03:10
-                    '3:20': 32,  // 32 -> 03:20
-                    '3:30': 33,  // 33 -> 03:30
-                    '3:40': 34,  // 34 -> 03:40 (alternativo)
-                    '3:50': 35,  // 35 -> 03:50
-                    '3:60': 36,  // 36 -> 03:60
-                    '3:70': 37,  // 37 -> 03:70
-                    '3:80': 38,  // 38 -> 03:80
-                    '3:90': 39,  // 39 -> 03:90
-                    '4:0': 40,   // 40 -> 04:00
-                    '4:10': 41,  // 41 -> 04:10
-                    '4:20': 42,  // 42 -> 04:20
-                    '4:30': 43,  // 43 -> 04:30
-                    '4:40': 44,  // 44 -> 04:40
-                    '4:50': 45,  // 45 -> 04:50
-                    '4:60': 46,  // 46 -> 04:60
-                    '4:70': 47,  // 47 -> 04:70
-                    '4:80': 48,  // 48 -> 04:80
-                    '4:90': 49,  // 49 -> 04:90
-                    '5:0': 50,   // 50 -> 05:00
-                    '5:50': 55,  // 55 -> 05:50
-                    '5:60': 56,  // 56 -> 05:60
-                    '5:70': 57,  // 57 -> 05:70
-                    '5:80': 58,  // 58 -> 05:80
-                    '5:90': 59,  // 59 -> 05:90
-                    '6:0': 60,   // 60 -> 06:00
-                    '6:10': 61,  // 61 -> 06:10
-                    '6:50': 65,  // 65 -> 06:50
-                    '7:0': 70,   // 70 -> 07:00
-                    '7:50': 75,  // 75 -> 07:50
-                    '8:0': 80,   // 80 -> 08:00
-                    '8:50': 85,  // 85 -> 08:50
-                    '9:0': 90,   // 90 -> 09:00
-                    '9:50': 95,  // 95 -> 09:50
-                    '9:90': 99   // 99 -> 09:90
-                };
+                    // Mappatura diretta per tutti i numeri 25-99
+                    let tableNum = null;
 
-                const timeKey = `${hours}:${minutes}`;
-                tableNum = directMapping[timeKey];
+                    // 1. MAPPA DIRETTA per pattern osservati
+                    const directMapping = {
+                        '5:10': 34,  // Confermato nei log
+                        '2:50': 25,  // 25 -> 02:50
+                        '2:60': 26,  // 26 -> 02:60
+                        '2:70': 27,  // 27 -> 02:70
+                        '2:80': 28,  // 28 -> 02:80
+                        '2:90': 29,  // 29 -> 02:90
+                        '3:0': 30,   // 30 -> 03:00
+                        '3:10': 31,  // 31 -> 03:10
+                        '3:20': 32,  // 32 -> 03:20
+                        '3:30': 33,  // 33 -> 03:30
+                        '3:40': 34,  // 34 -> 03:40 (alternativo)
+                        '3:50': 35,  // 35 -> 03:50
+                        '3:60': 36,  // 36 -> 03:60
+                        '3:70': 37,  // 37 -> 03:70
+                        '3:80': 38,  // 38 -> 03:80
+                        '3:90': 39,  // 39 -> 03:90
+                        '4:0': 40,   // 40 -> 04:00
+                        '4:10': 41,  // 41 -> 04:10
+                        '4:20': 42,  // 42 -> 04:20
+                        '4:30': 43,  // 43 -> 04:30
+                        '4:40': 44,  // 44 -> 04:40
+                        '4:50': 45,  // 45 -> 04:50
+                        '4:60': 46,  // 46 -> 04:60
+                        '4:70': 47,  // 47 -> 04:70
+                        '4:80': 48,  // 48 -> 04:80
+                        '4:90': 49,  // 49 -> 04:90
+                        '5:0': 50,   // 50 -> 05:00
+                        '5:50': 55,  // 55 -> 05:50
+                        '5:60': 56,  // 56 -> 05:60
+                        '5:70': 57,  // 57 -> 05:70
+                        '5:80': 58,  // 58 -> 05:80
+                        '5:90': 59,  // 59 -> 05:90
+                        '6:0': 60,   // 60 -> 06:00
+                        '6:10': 61,  // 61 -> 06:10
+                        '6:50': 65,  // 65 -> 06:50
+                        '7:0': 70,   // 70 -> 07:00
+                        '7:50': 75,  // 75 -> 07:50
+                        '8:0': 80,   // 80 -> 08:00
+                        '8:50': 85,  // 85 -> 08:50
+                        '9:0': 90,   // 90 -> 09:00
+                        '9:50': 95,  // 95 -> 09:50
+                        '9:90': 99   // 99 -> 09:90
+                    };
 
-                // 2. ALGORITMO FALLBACK se non è in mappa diretta
-                if (!tableNum) {
-                    console.log(`🔄 Trying algorithmic conversion for ${timeKey}`);
-                    
-                    // Formula: hours*10 + (minutes/10) per minuti multipli di 10
-                    if (minutes % 10 === 0 && minutes <= 90) {
-                        const calculated = hours * 10 + (minutes / 10);
-                        if (calculated >= 25 && calculated <= 99) {
-                            tableNum = calculated;
-                            console.log(`🧮 Calculated: ${timeKey} -> ${tableNum}`);
+                    const timeKey = `${hours}:${minutes}`;
+                    tableNum = directMapping[timeKey];
+
+                    // 2. ALGORITMO FALLBACK se non è in mappa diretta
+                    if (!tableNum) {
+                        console.log(`🔄 Trying algorithmic conversion for ${timeKey}`);
+
+                        // Formula: hours*10 + (minutes/10) per minuti multipli di 10
+                        if (minutes % 10 === 0 && minutes <= 90) {
+                            const calculated = hours * 10 + (minutes / 10);
+                            if (calculated >= 25 && calculated <= 99) {
+                                tableNum = calculated;
+                                console.log(`🧮 Calculated: ${timeKey} -> ${tableNum}`);
+                            }
+                        }
+
+                        // Formula alternativa: hours*10 + minutes per minuti < 10
+                        if (!tableNum && minutes < 10) {
+                            const calculated = hours * 10 + minutes;
+                            if (calculated >= 25 && calculated <= 99) {
+                                tableNum = calculated;
+                                console.log(`🧮 Alternative calc: ${timeKey} -> ${tableNum}`);
+                            }
                         }
                     }
-                    
-                    // Formula alternativa: hours*10 + minutes per minuti < 10
-                    if (!tableNum && minutes < 10) {
-                        const calculated = hours * 10 + minutes;
-                        if (calculated >= 25 && calculated <= 99) {
-                            tableNum = calculated;
-                            console.log(`🧮 Alternative calc: ${timeKey} -> ${tableNum}`);
-                        }
-                    }
-                }
 
-                if (tableNum) {
-                    console.log(`✅ Edge SUCCESS: "${timeKey}" -> tavolo ${tableNum}`);
-                    document.getElementById('numeroTavolo').value = tableNum;
-                    startCountdown(8, tableNum);
-                    statusDiv.textContent = `✅ Tavolo ${tableNum} (Edge: ${timeKey}) - 8 minuti`;
-                    statusDiv.style.color = '#28a745';
-                    startVoiceButtonCooldown();
-                    return;
-                } else {
-                    console.log(`❌ Edge format "${timeKey}" not recognized`);
+                    if (tableNum) {
+                        console.log(`✅ Edge SUCCESS: "${timeKey}" -> tavolo ${tableNum}`);
+                        document.getElementById('numeroTavolo').value = tableNum;
+                        startCountdown(8, tableNum);
+                        statusDiv.textContent = `✅ Tavolo ${tableNum} (Edge: ${timeKey}) - 8 minuti`;
+                        statusDiv.style.color = '#28a745';
+                        startVoiceButtonCooldown();
+                        return;
+                    } else {
+                        console.log(`❌ Edge format "${timeKey}" not recognized`);
+                    }
                 }
             }
 
