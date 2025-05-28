@@ -92,6 +92,9 @@ app.post('/api/speech-to-text', async (req, res) => {
 // Store per le room delle aziende
 const companyRooms = new Map();
 
+// Store per i countdown attivi per ogni azienda
+const activeCountdowns = new Map();
+
 // Mappa per sessioni autenticate
 const authenticatedSessions = new Map();
 
@@ -194,6 +197,30 @@ wss.on('connection', (ws) => {
 
                 console.log(`✅ Client aggiunto alla room: ${companyName} (${companyRooms.get(companyName).size} client)`);
 
+                // Invia tutti i countdown attivi al nuovo client
+                if (activeCountdowns.has(companyName)) {
+                    const companyCountdowns = activeCountdowns.get(companyName);
+                    companyCountdowns.forEach((countdown, tableNumber) => {
+                        // Calcola il tempo rimanente attuale
+                        const currentTime = Date.now();
+                        const elapsed = Math.floor((currentTime - countdown.startTime) / 1000);
+                        const remainingTime = Math.max(0, countdown.initialDuration - elapsed);
+                        
+                        if (remainingTime > 0) {
+                            const syncMessage = {
+                                action: 'startCountdown',
+                                tableNumber: tableNumber,
+                                timeRemaining: remainingTime
+                            };
+                            ws.send(JSON.stringify(syncMessage));
+                            console.log(`📡 Countdown sincronizzato inviato: Tavolo ${tableNumber}, ${Math.floor(remainingTime/60)}:${(remainingTime%60).toString().padStart(2, '0')}`);
+                        } else {
+                            // Rimuovi countdown scaduti
+                            companyCountdowns.delete(tableNumber);
+                        }
+                    });
+                }
+
             } else if (data.action === 'startCountdown') {
                 // Validazione dati countdown
                 if (!data.tableNumber || !data.timeRemaining) {
@@ -209,6 +236,22 @@ wss.on('connection', (ws) => {
                 if (typeof data.timeRemaining !== 'number' || data.timeRemaining <= 0) {
                     console.log('⚠️ Tempo rimanente non valido');
                     return;
+                }
+
+                // Memorizza il countdown attivo
+                if (ws.companyRoom) {
+                    if (!activeCountdowns.has(ws.companyRoom)) {
+                        activeCountdowns.set(ws.companyRoom, new Map());
+                    }
+                    
+                    const companyCountdowns = activeCountdowns.get(ws.companyRoom);
+                    companyCountdowns.set(data.tableNumber, {
+                        startTime: Date.now(),
+                        initialDuration: data.timeRemaining,
+                        tableNumber: data.tableNumber
+                    });
+                    
+                    console.log(`💾 Countdown memorizzato per azienda "${ws.companyRoom}": Tavolo ${data.tableNumber}`);
                 }
 
                 // Invia solo ai client della stessa room/azienda
@@ -265,7 +308,28 @@ setInterval(() => {
         }
     }
 
-    console.log(`Risorse pulite - Rate limiter: ${rateLimiter.size}, Rooms: ${companyRooms.size}`);
+    // Pulisci countdown scaduti
+    let totalActiveCountdowns = 0;
+    activeCountdowns.forEach((companyCountdowns, companyName) => {
+        companyCountdowns.forEach((countdown, tableNumber) => {
+            const elapsed = Math.floor((now - countdown.startTime) / 1000);
+            const remainingTime = countdown.initialDuration - elapsed;
+            
+            if (remainingTime <= -45) { // 45 secondi dopo la scadenza
+                companyCountdowns.delete(tableNumber);
+                console.log(`🗑️ Countdown scaduto rimosso: Azienda "${companyName}", Tavolo ${tableNumber}`);
+            } else {
+                totalActiveCountdowns++;
+            }
+        });
+        
+        // Rimuovi aziende senza countdown attivi
+        if (companyCountdowns.size === 0) {
+            activeCountdowns.delete(companyName);
+        }
+    });
+
+    console.log(`🧹 Risorse pulite - Rate limiter: ${rateLimiter.size}, Rooms: ${companyRooms.size}, Countdown attivi: ${totalActiveCountdowns}`);
 }, 300000); // Ogni 5 minuti
 
 // Avvia il server
