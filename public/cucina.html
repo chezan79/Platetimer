@@ -617,21 +617,21 @@
             recognition.onresult = function(event) {
                 const command = event.results[0][0].transcript.toLowerCase();
                 const confidence = event.results[0][0].confidence;
-                
+
                 console.log('🎤 Comando riconosciuto:', command);
                 console.log('🎯 Confidenza:', confidence);
                 console.log('📊 Risultati completi:', event.results[0]);
-                
+
                 // Mostra il comando riconosciuto all'utente
                 statusDiv.textContent = `🎤 Riconosciuto: "${command}" (${Math.round(confidence * 100)}%)`;
                 statusDiv.style.color = '#007bff';
-                
+
                 parseVoiceCommand(command);
             };
 
             recognition.onerror = function(event) {
                 console.error('Errore riconoscimento vocale:', event.error);
-                
+
                 let errorMessage = 'Errore nel riconoscimento vocale. ';
                 switch(event.error) {
                     case 'not-allowed':
@@ -649,7 +649,7 @@
                     default:
                         errorMessage += 'Riprova.';
                 }
-                
+
                 statusDiv.textContent = errorMessage;
                 statusDiv.style.color = '#dc3545';
                 resetVoiceButton();
@@ -673,7 +673,7 @@
         function resetVoiceButton() {
             isListening = false;
             const voiceButton = document.getElementById('voice-button');
-            
+
             // Resetta lo stato visivo del pulsante se non è disabilitato (non in cooldown)
             if (!voiceButton.disabled) {
                 voiceButton.style.backgroundColor = '#4CAF50';
@@ -722,56 +722,104 @@
 
         function parseVoiceCommand(command) {
             const statusDiv = document.getElementById('voice-status');
-            
+
+            console.log('🎤 Comando da analizzare:', command);
+
             // Pulisci il comando
             const cleanCommand = command.replace(/[.:,;!?]/g, ' ').replace(/\s+/g, ' ').trim();
-            
-            // Gestione rapida per formato orario Edge (es. "05:10" -> "34")
+
+            // PRIMO: Gestione algoritmica per Edge - formato orario
+            console.log('🔍 Controllo formato orario...');
             const timeMatch = cleanCommand.match(/tavolo\s*(\d{1,2}):(\d{1,2})/i);
             if (timeMatch) {
                 const hours = parseInt(timeMatch[1]);
                 const minutes = parseInt(timeMatch[2]);
+                console.log(`⏰ Formato orario rilevato: ${hours}:${minutes}`);
+
+                // ALGORITMO GENERICO: Ricostruisce il numero originale
                 let tableNum = null;
-                
-                // Pattern osservati in Edge
-                if (hours === 5 && minutes === 10) tableNum = 34;
-                else if (hours === 4 && minutes === 40) tableNum = 44;
-                else if (hours === 3 && minutes === 0) tableNum = 30;
-                else if (hours === 3 && minutes === 10) tableNum = 31;
-                else if (hours === 3 && minutes === 20) tableNum = 32;
-                else if (hours === 3 && minutes === 30) tableNum = 33;
-                else if (hours === 3 && minutes === 40) tableNum = 34;
-                else if (hours === 4 && minutes === 0) tableNum = 40;
-                else if (hours === 4 && minutes === 10) tableNum = 41;
-                else if (hours === 4 && minutes === 20) tableNum = 42;
-                else if (hours === 4 && minutes === 30) tableNum = 43;
-                else if (hours === 4 && minutes === 50) tableNum = 45;
-                else if (hours === 5 && minutes === 0) tableNum = 50;
-                else if (hours === 5 && minutes === 50) tableNum = 55;
-                
-                if (tableNum) {
+
+                // Logica di conversione Edge -> Numero tavolo
+                if (hours >= 1 && hours <= 9 && minutes >= 0 && minutes <= 59) {
+                    // Casi comuni: Edge converte numeri a 2 cifre in formato orario
+
+                    // Pattern 1: XX -> 0X:X0 (es. 34 -> 03:40, 25 -> 02:50)
+                    if (minutes % 10 === 0 && minutes > 0) {
+                        const possibleTable = hours * 10 + (minutes / 10);
+                        if (possibleTable >= 10 && possibleTable <= 99) {
+                            tableNum = possibleTable;
+                            console.log(`🔄 Pattern XX->0X:X0: ${hours}:${minutes} -> ${tableNum}`);
+                        }
+                    }
+
+                    // Pattern 2: XX -> 0X:X (es. 34 -> 03:4, 56 -> 05:6)  
+                    else if (minutes < 10) {
+                        const possibleTable = hours * 10 + minutes;
+                        if (possibleTable >= 10 && possibleTable <= 99) {
+                            tableNum = possibleTable;
+                            console.log(`🔄 Pattern XX->0X:X: ${hours}:${minutes} -> ${tableNum}`);
+                        }
+                    }
+
+                    // Pattern 3: Special cases (es. 34 -> 05:10, osservato nei log)
+                    else {
+                        // Calcolo inverso basato su osservazioni
+                        if (hours === 5 && minutes === 10) tableNum = 34;
+                        else if (hours === 4 && minutes === 40) tableNum = 44;
+                        else if (hours === 5 && minutes === 40) tableNum = 54;
+                        else if (hours === 5 && minutes === 60) tableNum = 56; // Minuti "impossibili"
+
+                        // Prova anche combinazioni logiche
+                        else {
+                            const reverseCalc = (hours - 1) * 10 + (minutes / 10);
+                            if (reverseCalc >= 10 && reverseCalc <= 99 && minutes % 10 === 0) {
+                                tableNum = reverseCalc;
+                                console.log(`🔄 Pattern inverso: ${hours}:${minutes} -> ${tableNum}`);
+                            }
+                        }
+
+                        if (tableNum) {
+                            console.log(`🔄 Pattern speciale: ${hours}:${minutes} -> ${tableNum}`);
+                        }
+                    }
+
+                    // Pattern 4: Numeri semplici (X0 -> 0X:00)
+                    if (!tableNum && minutes === 0) {
+                        const possibleTable = hours * 10;
+                        if (possibleTable >= 10 && possibleTable <= 90) {
+                            tableNum = possibleTable;
+                            console.log(`🔄 Pattern X0->0X:00: ${hours}:${minutes} -> ${tableNum}`);
+                        }
+                    }
+                }
+
+                // Validazione finale
+                if (tableNum && tableNum >= 1 && tableNum <= 999) {
+                    console.log(`✅ Edge conversion: ${hours}:${minutes} -> tavolo ${tableNum}`);
                     document.getElementById('numeroTavolo').value = tableNum;
                     startCountdown(8, tableNum); // 8 minuti default
-                    statusDiv.textContent = `✅ Tavolo ${tableNum} - 8 minuti`;
+                    statusDiv.textContent = `✅ Tavolo ${tableNum} riconosciuto (da ${hours}:${minutes}) - 8 minuti`;
                     statusDiv.style.color = '#28a745';
                     startVoiceButtonCooldown();
                     return;
+                } else {
+                    console.log(`❌ Formato orario ${hours}:${minutes} non convertibile in tavolo valido`);
                 }
             }
-            
+
             // Pattern semplici e veloci
             const patterns = [
                 /tavolo\s*(\d{1,3})\s*(\d{1,2})\s*minut/i,
                 /tavolo\s*(\d{1,3})\s+(\d{1,2})/i,
                 /(\d{1,3})\s+(\d{1,2})/i
             ];
-            
+
             for (let pattern of patterns) {
                 const match = cleanCommand.match(pattern);
                 if (match) {
                     const table = parseInt(match[1]);
                     const mins = parseInt(match[2]);
-                    
+
                     if (table >= 1 && table <= 999 && mins >= 4 && mins <= 15) {
                         document.getElementById('numeroTavolo').value = table;
                         startCountdown(mins, table);
@@ -782,7 +830,7 @@
                     }
                 }
             }
-            
+
             // Comando non riconosciuto
             statusDiv.textContent = `❌ Non riconosciuto: "${command}"`;
             statusDiv.style.color = '#dc3545';
