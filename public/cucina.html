@@ -497,6 +497,18 @@
                 }
                 countdowns.splice(countdownIndex, 1);
                 console.log(`Countdown tavolo ${tableNumber} eliminato manualmente`);
+
+                // 🔄 Sincronizza l'eliminazione via WebSocket
+                if (ws.readyState === WebSocket.OPEN) {
+                    const deleteMessage = {
+                        action: 'deleteCountdown',
+                        tableNumber: tableNumber
+                    };
+                    ws.send(JSON.stringify(deleteMessage));
+                    console.log(`📤 Eliminazione countdown inviata via WebSocket: Tavolo ${tableNumber}`);
+                } else {
+                    console.error('❌ WebSocket non connesso per eliminazione');
+                }
             }
         }
 

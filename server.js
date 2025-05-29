@@ -271,6 +271,40 @@ wss.on('connection', (ws) => {
                 } else {
                     console.log('⚠️ Client non assegnato a nessuna room');
                 }
+
+            } else if (data.action === 'deleteCountdown') {
+                // Validazione dati eliminazione
+                if (!data.tableNumber) {
+                    console.log('⚠️ Numero tavolo mancante per eliminazione');
+                    return;
+                }
+
+                // Rimuovi il countdown attivo dalla memoria del server
+                if (ws.companyRoom && activeCountdowns.has(ws.companyRoom)) {
+                    const companyCountdowns = activeCountdowns.get(ws.companyRoom);
+                    if (companyCountdowns.has(data.tableNumber)) {
+                        companyCountdowns.delete(data.tableNumber);
+                        console.log(`🗑️ Countdown rimosso dalla memoria server: Azienda "${ws.companyRoom}", Tavolo ${data.tableNumber}`);
+                    }
+                }
+
+                // Invia eliminazione a tutti i client della room
+                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    const deleteMessage = JSON.stringify(data);
+
+                    let sentCount = 0;
+                    roomClients.forEach((client) => {
+                        if (client.readyState === WebSocket.OPEN && client !== ws) { // Non inviare a chi ha eliminato
+                            client.send(deleteMessage);
+                            sentCount++;
+                        }
+                    });
+
+                    console.log(`🗑️ Eliminazione inviata alla room "${ws.companyRoom}" (${sentCount}/${roomClients.size-1} client): Tavolo ${data.tableNumber}`);
+                } else {
+                    console.log('⚠️ Client non assegnato a nessuna room per eliminazione');
+                }
             }
         } catch (error) {
             console.error('❌ Errore nel parsing del messaggio:', error);
