@@ -221,7 +221,7 @@ wss.on('connection', (ws) => {
                     });
                 }
 
-             else if (data.action === 'startCountdown') {
+            } else if (data.action === 'startCountdown') {
                 // Validazione dati countdown
                 if (!data.tableNumber || !data.timeRemaining) {
                     console.log('⚠️ Dati countdown non validi');
