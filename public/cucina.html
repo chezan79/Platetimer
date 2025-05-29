@@ -567,12 +567,17 @@
 
         // Funzione per attivare/disattivare il riconoscimento continuo
         async function toggleContinuousVoice() {
+            console.log('🎯 Toggle voce premuto, stato attuale:', isContinuousListening);
+            
             if (isContinuousListening) {
                 stopContinuousListening();
             } else {
                 await startContinuousListening();
             }
         }
+
+        // Rendi la funzione disponibile globalmente
+        window.toggleContinuousVoice = toggleContinuousVoice;
 
         // Ferma il riconoscimento continuo
         function stopContinuousListening() {
@@ -827,6 +832,70 @@
             } catch (error) {
                 console.log('Impossibile riprodurre beep:', error);
             }
+        }
+
+        // Funzione per parsing comandi vocali
+        function parseVoiceCommand(command) {
+            console.log('🔍 Parsing comando:', command);
+            
+            // Cerca pattern tipo "tavolo X Y minuti"
+            const patterns = [
+                /tavolo\s+(\d+)\s+(\d+)\s+minut[oi]/i,
+                /(\d+)\s+tavolo\s+(\d+)\s+minut[oi]/i,
+                /tavolo\s+(\d+)\s+(\w+)\s+minut[oi]/i
+            ];
+            
+            const numberWords = {
+                'uno': 1, 'due': 2, 'tre': 3, 'quattro': 4, 'cinque': 5,
+                'sei': 6, 'sette': 7, 'otto': 8, 'nove': 9, 'dieci': 10,
+                'undici': 11, 'dodici': 12, 'quindici': 15, 'venti': 20
+            };
+            
+            for (const pattern of patterns) {
+                const match = command.match(pattern);
+                if (match) {
+                    let tableNumber, minutes;
+                    
+                    if (patterns.indexOf(pattern) === 0) {
+                        // tavolo X Y minuti
+                        tableNumber = match[1];
+                        minutes = parseInt(match[2]) || numberWords[match[2].toLowerCase()];
+                    } else if (patterns.indexOf(pattern) === 1) {
+                        // X tavolo Y minuti (invertito)
+                        minutes = parseInt(match[1]) || numberWords[match[1].toLowerCase()];
+                        tableNumber = match[2];
+                    } else {
+                        // tavolo X word minuti
+                        tableNumber = match[1];
+                        minutes = parseInt(match[2]) || numberWords[match[2].toLowerCase()];
+                    }
+                    
+                    if (tableNumber && minutes) {
+                        console.log(`✅ Comando riconosciuto: Tavolo ${tableNumber}, ${minutes} minuti`);
+                        
+                        // Simula input manuale
+                        document.getElementById('numeroTavolo').value = tableNumber;
+                        
+                        // Avvia countdown
+                        startCountdown(minutes, tableNumber);
+                        
+                        // Feedback positivo
+                        const statusDiv = document.getElementById('voice-status');
+                        statusDiv.textContent = `✅ Countdown avviato: Tavolo ${tableNumber}, ${minutes} min`;
+                        statusDiv.style.color = '#28a745';
+                        
+                        return true;
+                    }
+                }
+            }
+            
+            // Comando non riconosciuto
+            const statusDiv = document.getElementById('voice-status');
+            statusDiv.textContent = `❌ Comando non riconosciuto: "${command}"`;
+            statusDiv.style.color = '#dc3545';
+            
+            console.log('❌ Pattern non trovato per:', command);
+            return false;
         }
 
         // Auto-avvio riconoscimento continuo quando la pagina è pronta
