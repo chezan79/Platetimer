@@ -576,7 +576,7 @@
             }
         }
 
-        // Rendi la funzione disponibile globalmente
+        // Rendi la funzione disponibile globalmente per il pulsante HTML
         window.toggleContinuousVoice = toggleContinuousVoice;
 
         // Ferma il riconoscimento continuo
@@ -910,10 +910,13 @@
                     console.log(`🔍 Debug vocale: listening=${isContinuousListening}, processing=${isProcessingCommand}, state=${stateText}`);
 
                     // Se è in listening ma il riconoscimento non è attivo
-                    if (continuousRecognition.readyState === 0 && !isProcessingCommand) {
+                    if (continuousRecognition && continuousRecognition.readyState === 0 && !isProcessingCommand) {
                         console.log('🔄 Riconoscimento inattivo, riavvio...');
                         restartRecognitionFromScratch();
                     }
                 }
             }, 5000); // Controllo ogni 5 secondi
         });
+    </script>
+</body>
+</html>
