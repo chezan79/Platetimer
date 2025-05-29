@@ -302,13 +302,15 @@
             document.body.appendChild(chatButton);
             document.body.appendChild(chatStatus);
             
-            chatButton.onclick = toggleVoiceChat;
+            chatButton.onclick = function() {
+                toggleVoiceChat();
+            };
             
             // Listener per messaggi chat vocale
             ws.addEventListener('message', handleVoiceChatMessage);
         }
 
-        async function toggleVoiceChat() {
+        window.toggleVoiceChat = async function() {
             if (voiceChat.isActive) {
                 stopVoiceChat();
             } else {
