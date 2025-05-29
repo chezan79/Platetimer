@@ -603,92 +603,14 @@
                 return;
             }
 
-            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-            continuousRecognition = new SpeechRecognition();
-
-            // Configurazione per ascolto continuo
-            continuousRecognition.lang = 'it-IT';
-            continuousRecognition.continuous = true;  // ✅ Ascolto continuo
-            continuousRecognition.interimResults = true;  // ✅ Risultati intermedi
-            continuousRecognition.maxAlternatives = 1;
-
             isContinuousListening = true;
+            isProcessingCommand = false;
             updateVoiceUI(true);
 
-            // Gestione risultati vocali
-            continuousRecognition.onresult = function(event) {
-                let finalTranscript = '';
-                let interimTranscript = '';
-
-                // Elabora tutti i risultati
-                for (let i = event.resultIndex; i < event.results.length; ++i) {
-                    const transcript = event.results[i][0].transcript;
-                    if (event.results[i].isFinal) {
-                        finalTranscript += transcript;
-                    } else {
-                        interimTranscript += transcript;
-                    }
-                }
-
-                // Mostra trascrizione in tempo reale
-                const statusDiv = document.getElementById('voice-status');
-                if (interimTranscript) {
-                    statusDiv.textContent = `🎤 "${interimTranscript.trim()}"`;
-                    statusDiv.style.color = '#007bff';
-                }
-
-                // Processa comando finale se contiene wake word
-                if (finalTranscript && !isProcessingCommand) {
-                    processContinuousCommand(finalTranscript.toLowerCase().trim());
-                }
-            };
-
-            // Gestione errori
-            continuousRecognition.onerror = function(event) {
-                console.error('Errore riconoscimento continuo:', event.error);
-                
-                if (event.error === 'not-allowed') {
-                    const statusDiv = document.getElementById('voice-status');
-                    statusDiv.textContent = '❌ Permessi microfono negati. Riattiva dai permessi del browser.';
-                    statusDiv.style.color = '#dc3545';
-                    stopContinuousListening();
-                }
-            };
-
-            // Riavvio automatico se si ferma
-            continuousRecognition.onend = function() {
-                console.log('📴 Riconoscimento terminato, isListening:', isContinuousListening, 'isProcessing:', isProcessingCommand);
-                
-                // Solo riavvia automaticamente se NON stiamo processando un comando
-                // (quando processiamo, il riavvio è gestito nel setTimeout del comando)
-                if (isContinuousListening && !isProcessingCommand) {
-                    console.log('🔄 Riavvio automatico riconoscimento continuo...');
-                    setTimeout(() => {
-                        if (isContinuousListening && !isProcessingCommand) {
-                            try {
-                                continuousRecognition.start();
-                                console.log('✅ Riconoscimento riavviato automaticamente');
-                            } catch (error) {
-                                console.error('❌ Errore riavvio automatico:', error);
-                                // Fallback: ricreo completamente il riconoscimento
-                                console.log('🔧 Ricreando completamente il riconoscimento...');
-                                startContinuousListening();
-                            }
-                        }
-                    }, 300);
-                } else if (isProcessingCommand) {
-                    console.log('⏳ Comando in corso, riavvio gestito dal timeout del comando');
-                }
-            };
-
-            // Avvia il riconoscimento
-            try {
-                continuousRecognition.start();
-                console.log('🎤 Riconoscimento vocale continuo avviato - Dì "Hey Cucina"');
-            } catch (error) {
-                console.error('Errore avvio riconoscimento continuo:', error);
-                updateVoiceUI(false);
-            }
+            // Usa la nuova funzione per creare il riconoscimento
+            createNewRecognition();
+            
+            console.log('🎤 Riconoscimento vocale continuo avviato - Dì "Hey Cucina"');
         }
 
         // Processa comandi con wake word
@@ -717,7 +639,14 @@
                 return;
             }
 
-            // ✅ Wake word trovata! Processa il comando
+            // ✅ Wake word trovata! FERMA IMMEDIATAMENTE il riconoscimento
+            console.log('🛑 STOP immediato del riconoscimento per elaborare comando...');
+            try {
+                continuousRecognition.stop();
+            } catch (e) {
+                console.log('Stop error (ignorato):', e);
+            }
+            
             isProcessingCommand = true;
             const statusDiv = document.getElementById('voice-status');
             const indicatorDiv = document.getElementById('voice-indicator');
@@ -738,42 +667,122 @@
                 statusDiv.style.color = '#dc3545';
             }
 
-            // Riattiva listening dopo 1 secondo con riavvio garantito
+            // SOLUZIONE DEFINITIVA: RICREA completamente il riconoscimento
             setTimeout(() => {
+                console.log('🔄 RICREO completamente il riconoscimento...');
                 isProcessingCommand = false;
+                
                 if (isContinuousListening) {
                     statusDiv.textContent = 'Dì "Hey Cucina" seguito dal comando';
                     statusDiv.style.color = '#666';
                     indicatorDiv.textContent = '🟢 In ascolto continuo...';
                     
-                    // SOLUZIONE: Sempre ferma e riavvia il riconoscimento dopo un comando
-                    console.log('🔄 Riavvio garantito del riconoscimento dopo comando...');
-                    try {
-                        // Ferma completamente il riconoscimento corrente
-                        continuousRecognition.stop();
-                        
-                        // Aspetta 200ms e riavvia
-                        setTimeout(() => {
-                            if (isContinuousListening) {
-                                try {
-                                    continuousRecognition.start();
-                                    console.log('✅ Riconoscimento riavviato con successo dopo comando');
-                                } catch (error) {
-                                    console.error('❌ Errore riavvio dopo stop:', error);
-                                    // Fallback: ricrea completamente il riconoscimento
-                                    startContinuousListening();
-                                }
-                            }
-                        }, 200);
-                    } catch (error) {
-                        console.error('❌ Errore stop riconoscimento:', error);
-                        // Fallback: ricrea completamente
-                        if (isContinuousListening) {
-                            startContinuousListening();
-                        }
+                    // RICREA completamente il riconoscimento da zero
+                    restartRecognitionFromScratch();
+                }
+            }, 1500);
+        }
+
+        // Funzione per ricreare completamente il riconoscimento
+        function restartRecognitionFromScratch() {
+            console.log('🏗️ Ricreando riconoscimento da zero...');
+            
+            try {
+                // Distruggi il riconoscimento esistente
+                if (continuousRecognition) {
+                    continuousRecognition.onresult = null;
+                    continuousRecognition.onerror = null;
+                    continuousRecognition.onend = null;
+                    continuousRecognition.stop();
+                    continuousRecognition = null;
+                }
+            } catch (e) {
+                console.log('Cleanup error (ignorato):', e);
+            }
+
+            // Aspetta un momento prima di ricreare
+            setTimeout(() => {
+                if (isContinuousListening) {
+                    console.log('🚀 Creando nuovo riconoscimento...');
+                    createNewRecognition();
+                }
+            }, 300);
+        }
+
+        // Funzione per creare un nuovo riconoscimento
+        function createNewRecognition() {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            continuousRecognition = new SpeechRecognition();
+
+            // Configurazione
+            continuousRecognition.lang = 'it-IT';
+            continuousRecognition.continuous = true;
+            continuousRecognition.interimResults = true;
+            continuousRecognition.maxAlternatives = 1;
+
+            // Gestione risultati
+            continuousRecognition.onresult = function(event) {
+                let finalTranscript = '';
+                let interimTranscript = '';
+
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    const transcript = event.results[i][0].transcript;
+                    if (event.results[i].isFinal) {
+                        finalTranscript += transcript;
+                    } else {
+                        interimTranscript += transcript;
                     }
                 }
-            }, 1000);
+
+                const statusDiv = document.getElementById('voice-status');
+                if (interimTranscript && !isProcessingCommand) {
+                    statusDiv.textContent = `🎤 "${interimTranscript.trim()}"`;
+                    statusDiv.style.color = '#007bff';
+                }
+
+                if (finalTranscript && !isProcessingCommand) {
+                    processContinuousCommand(finalTranscript.toLowerCase().trim());
+                }
+            };
+
+            // Gestione errori
+            continuousRecognition.onerror = function(event) {
+                console.error('Errore riconoscimento:', event.error);
+                if (event.error === 'not-allowed') {
+                    const statusDiv = document.getElementById('voice-status');
+                    statusDiv.textContent = '❌ Permessi microfono negati';
+                    statusDiv.style.color = '#dc3545';
+                    stopContinuousListening();
+                }
+            };
+
+            // Riavvio automatico SOLO se non stiamo processando
+            continuousRecognition.onend = function() {
+                console.log('📴 Riconoscimento terminato, isListening:', isContinuousListening, 'isProcessing:', isProcessingCommand);
+                
+                if (isContinuousListening && !isProcessingCommand) {
+                    console.log('🔄 Riavvio automatico...');
+                    setTimeout(() => {
+                        if (isContinuousListening && !isProcessingCommand) {
+                            try {
+                                continuousRecognition.start();
+                                console.log('✅ Riavviato automaticamente');
+                            } catch (error) {
+                                console.error('❌ Errore riavvio:', error);
+                                restartRecognitionFromScratch();
+                            }
+                        }
+                    }, 300);
+                }
+            };
+
+            // Avvia il nuovo riconoscimento
+            try {
+                continuousRecognition.start();
+                console.log('✅ Nuovo riconoscimento avviato con successo');
+            } catch (error) {
+                console.error('❌ Errore avvio nuovo riconoscimento:', error);
+            }
         }
 
         // Aggiorna interfaccia utente
