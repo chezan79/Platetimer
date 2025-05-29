@@ -316,19 +316,20 @@
             }
         }
 
-        async function toggleVoiceChat() {
-            if (voiceChat.isActive) {
-                stopVoiceChat();
-            } else {
-                await startVoiceChat();
-            }
-        }
-
         async function startVoiceChat() {
             const button = document.getElementById('voice-chat-button');
             const status = document.getElementById('voice-chat-status');
             
             try {
+                // Verifica se i permessi sono già stati negati
+                const permission = await navigator.permissions.query({ name: 'microphone' });
+                if (permission.state === 'denied') {
+                    status.style.display = 'block';
+                    status.textContent = '❌ Permessi microfono negati. Clicca sull\'icona 🎤 nella barra degli indirizzi e consenti l\'accesso.';
+                    status.style.background = 'rgba(220, 53, 69, 0.9)';
+                    return;
+                }
+                
                 // Richiedi permessi microfono
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 stream.getTracks().forEach(track => track.stop()); // Chiudi subito lo stream di test
@@ -354,7 +355,23 @@
             } catch (error) {
                 console.error('Errore accesso microfono:', error);
                 status.style.display = 'block';
-                status.textContent = '❌ Errore: permessi microfono negati';
+                
+                let errorMessage = '❌ Errore microfono: ';
+                switch(error.name) {
+                    case 'NotAllowedError':
+                        errorMessage += 'Permessi negati. Clicca sull\'icona 🎤 nella barra degli indirizzi e consenti l\'accesso.';
+                        break;
+                    case 'NotFoundError':
+                        errorMessage += 'Microfono non trovato. Verifica che sia collegato.';
+                        break;
+                    case 'NotReadableError':
+                        errorMessage += 'Microfono in uso da altra app. Chiudi altre applicazioni.';
+                        break;
+                    default:
+                        errorMessage += 'Verifica i permessi del browser.';
+                }
+                
+                status.textContent = errorMessage;
                 status.style.background = 'rgba(220, 53, 69, 0.9)';
             }
         }
