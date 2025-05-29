@@ -261,7 +261,7 @@
             // Crea pulsante chat vocale
             const chatButton = document.createElement('button');
             chatButton.id = 'voice-chat-button';
-            chatButton.innerHTML = '💬 Chat Vocale';
+            chatButton.innerHTML = '💬 Attiva Chat Vocale';
             chatButton.style.cssText = `
                 position: fixed;
                 top: 80px;
@@ -299,10 +299,18 @@
             document.body.appendChild(chatButton);
             document.body.appendChild(chatStatus);
             
-            chatButton.onclick = startVoiceChat;
+            chatButton.onclick = toggleVoiceChat;
             
             // Listener per messaggi chat vocale
             ws.addEventListener('message', handleVoiceChatMessage);
+        }
+
+        async function toggleVoiceChat() {
+            if (voiceChat.isRecording) {
+                stopVoiceChat();
+            } else {
+                await startVoiceChat();
+            }
         }
 
         async function startVoiceChat() {
@@ -320,7 +328,7 @@
                 stream.getTracks().forEach(track => track.stop()); // Chiudi lo stream di test
                 
                 button.style.background = '#dc3545';
-                button.innerHTML = '🔴 Ascoltando... (1h)';
+                button.innerHTML = '🔴 Chat Attiva (1h)';
                 status.style.display = 'block';
                 status.textContent = '🎤 Dì: "messaggio cucina" o "messaggio insalata"';
                 
@@ -506,7 +514,7 @@
             voiceChat.audioChunks = [];
             
             button.style.background = 'linear-gradient(135deg, #17a2b8 0%, #138496 100%)';
-            button.innerHTML = '💬 Chat Vocale';
+            button.innerHTML = '💬 Attiva Chat Vocale';
             status.style.display = 'none';
             status.style.background = 'rgba(0,0,0,0.8)';
         }
