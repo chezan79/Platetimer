@@ -221,41 +221,7 @@ wss.on('connection', (ws) => {
                     });
                 }
 
-            } else if (data.action === 'voiceMessage') {
-                // Gestione messaggi vocali tra reparti
-                if (!data.from || !data.to || !data.audioData) {
-                    console.log('⚠️ Messaggio vocale non valido');
-                    return;
-                }
-
-                // Validazione mittente e destinatario
-                const validDepartments = ['cucina', 'pizzeria', 'insalata', 'sala'];
-                if (!validDepartments.includes(data.from) || !validDepartments.includes(data.to)) {
-                    console.log('⚠️ Reparto non valido nel messaggio vocale');
-                    return;
-                }
-
-                console.log(`🎤 Messaggio vocale: ${data.from.toUpperCase()} → ${data.to.toUpperCase()}`);
-
-                // Invia il messaggio a tutti i client della room
-                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
-                    const roomClients = companyRooms.get(ws.companyRoom);
-                    const messageToSend = JSON.stringify(data);
-
-                    let sentCount = 0;
-                    roomClients.forEach((client) => {
-                        if (client.readyState === WebSocket.OPEN) {
-                            client.send(messageToSend);
-                            sentCount++;
-                        }
-                    });
-
-                    console.log(`📡 Messaggio vocale inviato alla room "${ws.companyRoom}" (${sentCount}/${roomClients.size} client)`);
-                } else {
-                    console.log('⚠️ Client non assegnato a nessuna room per messaggio vocale');
-                }
-
-            } else if (data.action === 'startCountdown') {
+             else if (data.action === 'startCountdown') {
                 // Validazione dati countdown
                 if (!data.tableNumber || !data.timeRemaining) {
                     console.log('⚠️ Dati countdown non validi');
