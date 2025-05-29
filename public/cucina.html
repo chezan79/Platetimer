@@ -621,24 +621,7 @@
             chatButton.innerHTML = '💬 Attiva Chat Vocale';
             chatButton.onclick = toggleVoiceChat;
             
-            // Timer display
-            const timerDisplay = document.createElement('div');
-            timerDisplay.id = 'voice-timer-display';
-            timerDisplay.style.cssText = `
-                position: fixed;
-                top: 160px;
-                right: 20px;
-                z-index: 1000;
-                padding: 5px 10px;
-                background: rgba(40, 167, 69, 0.9);
-                color: white;
-                border-radius: 5px;
-                font-size: 11px;
-                display: none;
-                font-weight: 600;
-            `;
             
-            document.body.appendChild(timerDisplay);
             
             // Listener per messaggi chat vocale
             ws.addEventListener('message', handleVoiceChatMessage);

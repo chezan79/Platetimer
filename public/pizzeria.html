@@ -299,26 +299,8 @@
                 word-wrap: break-word;
             `;
             
-            // Timer display
-            const timerDisplay = document.createElement('div');
-            timerDisplay.id = 'voice-timer-display';
-            timerDisplay.style.cssText = `
-                position: fixed;
-                top: 160px;
-                right: 20px;
-                z-index: 1000;
-                padding: 5px 10px;
-                background: rgba(40, 167, 69, 0.9);
-                color: white;
-                border-radius: 5px;
-                font-size: 11px;
-                display: none;
-                font-weight: 600;
-            `;
-            
             document.body.appendChild(chatButton);
             document.body.appendChild(chatStatus);
-            document.body.appendChild(timerDisplay);
             
             chatButton.onclick = toggleVoiceChat;
             
@@ -345,7 +327,6 @@
         async function startVoiceChat() {
             const button = document.getElementById('voice-chat-button');
             const status = document.getElementById('voice-chat-status');
-            const timer = document.getElementById('voice-timer-display');
             
             try {
                 // Richiedi permessi microfono
@@ -356,7 +337,6 @@
                 button.innerHTML = '🔴 Chat Attiva (1h)';
                 status.style.display = 'block';
                 status.textContent = '🎤 In ascolto continuo - Dì: "messaggio cucina" o "messaggio insalata"';
-                timer.style.display = 'block';
                 
                 voiceChat.isActive = true;
                 
@@ -364,7 +344,6 @@
                 startContinuousWakeWordRecognition();
                 
                 // Imposta timer per 1 ora
-                updateTimerDisplay();
                 voiceChat.sessionTimeout = setTimeout(() => {
                     console.log('⏰ Sessione chat vocale scaduta dopo 1 ora');
                     stopVoiceChat();
@@ -478,30 +457,7 @@
             voiceChat.wakeWordRecognition.start();
         }
 
-        function updateTimerDisplay() {
-            const timer = document.getElementById('voice-timer-display');
-            const startTime = Date.now();
-            
-            const updateTimer = () => {
-                if (!voiceChat.isActive) return;
-                
-                const elapsed = Date.now() - startTime;
-                const remaining = voiceChat.sessionDuration - elapsed;
-                
-                if (remaining <= 0) {
-                    timer.textContent = 'Scaduto';
-                    return;
-                }
-                
-                const minutes = Math.floor(remaining / 60000);
-                const seconds = Math.floor((remaining % 60000) / 1000);
-                timer.textContent = `⏱️ ${minutes}:${seconds.toString().padStart(2, '0')} rimanenti`;
-                
-                setTimeout(updateTimer, 1000);
-            };
-            
-            updateTimer();
-        }
+        
 
         function showTemporaryStatus(message, duration = 3000) {
             const status = document.getElementById('voice-chat-status');
@@ -601,7 +557,6 @@
         function stopVoiceChat() {
             const button = document.getElementById('voice-chat-button');
             const status = document.getElementById('voice-chat-status');
-            const timer = document.getElementById('voice-timer-display');
             
             // Ferma tutto
             voiceChat.isActive = false;
@@ -630,7 +585,6 @@
             button.innerHTML = '💬 Attiva Chat Vocale';
             status.style.display = 'none';
             status.style.background = 'rgba(0,0,0,0.8)';
-            timer.style.display = 'none';
             
             console.log('🔴 Chat vocale disattivata');
         }
