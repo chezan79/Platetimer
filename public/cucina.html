@@ -657,17 +657,25 @@
 
             // Riavvio automatico se si ferma
             continuousRecognition.onend = function() {
+                console.log('📴 Riconoscimento terminato, isListening:', isContinuousListening, 'isProcessing:', isProcessingCommand);
+                
                 if (isContinuousListening && !isProcessingCommand) {
-                    console.log('🔄 Riavvio riconoscimento continuo...');
+                    console.log('🔄 Riavvio automatico riconoscimento continuo...');
                     setTimeout(() => {
-                        if (isContinuousListening) {
+                        if (isContinuousListening && !isProcessingCommand) {
                             try {
                                 continuousRecognition.start();
+                                console.log('✅ Riconoscimento riavviato con successo');
                             } catch (error) {
-                                console.error('Errore riavvio:', error);
+                                console.error('❌ Errore riavvio automatico:', error);
+                                // Fallback: ricreo il riconoscimento
+                                if (error.name === 'InvalidStateError') {
+                                    console.log('🔧 Ricreando il riconoscimento...');
+                                    startContinuousListening();
+                                }
                             }
                         }
-                    }, 1000);
+                    }, 500);
                 }
             };
 
@@ -728,15 +736,25 @@
                 statusDiv.style.color = '#dc3545';
             }
 
-            // Riattiva listening dopo 3 secondi
+            // Riattiva listening dopo 2 secondi e forza restart se necessario
             setTimeout(() => {
                 isProcessingCommand = false;
                 if (isContinuousListening) {
                     statusDiv.textContent = 'Dì "Hey Cucina" seguito dal comando';
                     statusDiv.style.color = '#666';
                     indicatorDiv.textContent = '🟢 In ascolto continuo...';
+                    
+                    // Forza riavvio del riconoscimento se non è attivo
+                    if (continuousRecognition.readyState !== 1) { // 1 = CONNECTING/OPEN
+                        console.log('🔄 Forzando riavvio riconoscimento dopo comando...');
+                        try {
+                            continuousRecognition.start();
+                        } catch (error) {
+                            console.error('Errore riavvio forzato:', error);
+                        }
+                    }
                 }
-            }, 3000);
+            }, 2000);
         }
 
         // Aggiorna interfaccia utente
@@ -786,6 +804,13 @@
         // Auto-avvio riconoscimento continuo quando la pagina è pronta
         document.addEventListener('DOMContentLoaded', function() {
             console.log('🎤 Pagina caricata - Riconoscimento vocale continuo disponibile');
+            
+            // Debug periodico dello stato del riconoscimento
+            setInterval(() => {
+                if (isContinuousListening && continuousRecognition) {
+                    console.log(`🔍 Debug: isListening=${isContinuousListening}, isProcessing=${isProcessingCommand}, state=${continuousRecognition.readyState || 'undefined'}`);
+                }
+            }, 10000); // Ogni 10 secondi
             
             // Avvia automaticamente dopo 2 secondi (opzionale)
             // setTimeout(() => {
