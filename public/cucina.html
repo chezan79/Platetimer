@@ -212,7 +212,7 @@
                 🎤 Attiva Voce Continua
             </button>
             <div id="voice-status" style="margin-top: 8px; font-size: 14px; color: #666; min-height: 20px;">
-                Dì "Hey Cucina" seguito dal comando (es: "Hey Cucina tavolo 5 otto minuti")
+                Dì "tavolo" seguito dal numero e minuti (es: "tavolo 5 otto minuti")
             </div>
             <div id="voice-indicator" style="margin-top: 5px; font-size: 12px; color: #999;">
                 🔴 Voce disattivata
@@ -511,7 +511,7 @@
         let isContinuousListening = false;
         let isProcessingCommand = false;
 
-        const WAKE_WORDS = ['hey cucina', 'ciao cucina', 'cucina'];
+        const WAKE_WORDS = ['tavolo'];
 
         async function toggleContinuousVoice() {
             console.log('🎯 Toggle voce premuto, stato attuale:', isContinuousListening);
@@ -555,31 +555,24 @@
             isProcessingCommand = false;
             updateVoiceUI(true);
             createNewRecognition();
-            console.log('🎤 Riconoscimento vocale continuo avviato - Dì "Hey Cucina"');
+            console.log('🎤 Riconoscimento vocale continuo avviato - Dì "tavolo"');
         }
 
         function processContinuousCommand(command) {
             console.log('🎧 Comando ricevuto:', command);
 
-            let wakeWordFound = false;
-            let commandAfterWake = '';
-
-            for (const wakeWord of WAKE_WORDS) {
-                const wakeIndex = command.indexOf(wakeWord);
-                if (wakeIndex !== -1) {
-                    wakeWordFound = true;
-                    commandAfterWake = command.substring(wakeIndex + wakeWord.length).trim();
-                    console.log(`🎯 Wake word "${wakeWord}" rilevata! Comando: "${commandAfterWake}"`);
-                    break;
-                }
-            }
-
-            if (!wakeWordFound) {
+            // Cerca la parola "tavolo" nel comando
+            const tavoloIndex = command.indexOf('tavolo');
+            if (tavoloIndex === -1) {
                 const statusDiv = document.getElementById('voice-status');
-                statusDiv.textContent = 'Dì "Hey Cucina" seguito dal comando';
+                statusDiv.textContent = 'Dì "tavolo" seguito dal numero e minuti';
                 statusDiv.style.color = '#666';
                 return;
             }
+
+            // Estrae il comando dopo "tavolo"
+            const commandAfterTavolo = command.substring(tavoloIndex).trim();
+            console.log(`🎯 Parola "tavolo" rilevata! Comando completo: "${commandAfterTavolo}"`);
 
             console.log('🛑 STOP immediato del riconoscimento per elaborare comando...');
             try {
@@ -592,16 +585,16 @@
             const statusDiv = document.getElementById('voice-status');
             const indicatorDiv = document.getElementById('voice-indicator');
 
-            statusDiv.textContent = `🎯 Comando in elaborazione: "${commandAfterWake}"`;
+            statusDiv.textContent = `🎯 Comando in elaborazione: "${commandAfterTavolo}"`;
             statusDiv.style.color = '#ff6600';
             indicatorDiv.textContent = '🟡 Elaborando comando...';
 
             playBeep();
 
-            if (commandAfterWake) {
-                parseVoiceCommand(commandAfterWake);
+            if (commandAfterTavolo) {
+                parseVoiceCommand(commandAfterTavolo);
             } else {
-                statusDiv.textContent = '❌ Nessun comando dopo "Hey Cucina"';
+                statusDiv.textContent = '❌ Nessun comando dopo "tavolo"';
                 statusDiv.style.color = '#dc3545';
             }
 
@@ -610,7 +603,7 @@
                 isProcessingCommand = false;
 
                 if (isContinuousListening) {
-                    statusDiv.textContent = 'Dì "Hey Cucina" seguito dal comando';
+                    statusDiv.textContent = 'Dì "tavolo" seguito dal numero e minuti';
                     statusDiv.style.color = '#666';
                     indicatorDiv.textContent = '🟢 In ascolto continuo...';
                     restartRecognitionFromScratch();
@@ -719,14 +712,14 @@
             if (isActive) {
                 voiceButton.style.backgroundColor = '#ff6600';
                 voiceButton.textContent = '🎤 Voce Attiva - STOP';
-                statusDiv.textContent = 'Dì "Hey Cucina" seguito dal comando (es: "Hey Cucina tavolo 5 otto minuti")';
+                statusDiv.textContent = 'Dì "tavolo" seguito dal numero e minuti (es: "tavolo 5 otto minuti")';
                 statusDiv.style.color = '#666';
                 indicatorDiv.textContent = '🟢 In ascolto continuo...';
                 indicatorDiv.style.color = '#28a745';
             } else {
                 voiceButton.style.backgroundColor = '#4CAF50';
                 voiceButton.textContent = '🎤 Attiva Voce Continua';
-                statusDiv.textContent = 'Dì "Hey Cucina" seguito dal comando (es: "Hey Cucina tavolo 5 otto minuti")';
+                statusDiv.textContent = 'Dì "tavolo" seguito dal numero e minuti (es: "tavolo 5 otto minuti")';
                 statusDiv.style.color = '#666';
                 indicatorDiv.textContent = '🔴 Voce disattivata';
                 indicatorDiv.style.color = '#dc3545';
@@ -756,9 +749,9 @@
         function parseVoiceCommand(command) {
             console.log('🔍 Parsing comando:', command);
 
+            // Pattern semplificati per "tavolo X Y minuti"
             const patterns = [
                 /tavolo\s+(\d+)\s+(\d+)\s+minut[oi]/i,
-                /(\d+)\s+tavolo\s+(\d+)\s+minut[oi]/i,
                 /tavolo\s+(\d+)\s+(\w+)\s+minut[oi]/i
             ];
 
@@ -771,17 +764,14 @@
             for (const pattern of patterns) {
                 const match = command.match(pattern);
                 if (match) {
-                    let tableNumber, minutes;
+                    const tableNumber = match[1];
+                    let minutes;
 
+                    // Controlla se il secondo gruppo è un numero o una parola
                     if (patterns.indexOf(pattern) === 0) {
-                        tableNumber = match[1];
-                        minutes = parseInt(match[2]) || numberWords[match[2].toLowerCase()];
-                    } else if (patterns.indexOf(pattern) === 1) {
-                        minutes = parseInt(match[1]) || numberWords[match[1].toLowerCase()];
-                        tableNumber = match[2];
+                        minutes = parseInt(match[2]);
                     } else {
-                        tableNumber = match[1];
-                        minutes = parseInt(match[2]) || numberWords[match[2].toLowerCase()];
+                        minutes = numberWords[match[2].toLowerCase()];
                     }
 
                     if (tableNumber && minutes) {
