@@ -249,7 +249,10 @@
             audioChunks: [],
             currentTarget: null,
             wakeWordRecognition: null,
-            messageRecognition: null
+            messageRecognition: null,
+            isActive: false,
+            sessionTimeout: null,
+            sessionDuration: 3600000 // 1 ora in millisecondi
         };
 
         // Inizializza chat vocale al caricamento
@@ -296,8 +299,26 @@
                 word-wrap: break-word;
             `;
             
+            // Timer display
+            const timerDisplay = document.createElement('div');
+            timerDisplay.id = 'voice-timer-display';
+            timerDisplay.style.cssText = `
+                position: fixed;
+                top: 160px;
+                right: 20px;
+                z-index: 1000;
+                padding: 5px 10px;
+                background: rgba(40, 167, 69, 0.9);
+                color: white;
+                border-radius: 5px;
+                font-size: 11px;
+                display: none;
+                font-weight: 600;
+            `;
+            
             document.body.appendChild(chatButton);
             document.body.appendChild(chatStatus);
+            document.body.appendChild(timerDisplay);
             
             chatButton.onclick = toggleVoiceChat;
             
@@ -306,7 +327,7 @@
         }
 
         async function toggleVoiceChat() {
-            if (voiceChat.isRecording) {
+            if (voiceChat.isActive) {
                 stopVoiceChat();
             } else {
                 await startVoiceChat();
@@ -316,35 +337,32 @@
         async function startVoiceChat() {
             const button = document.getElementById('voice-chat-button');
             const status = document.getElementById('voice-chat-status');
-            
-            if (voiceChat.isRecording) {
-                stopVoiceChat();
-                return;
-            }
+            const timer = document.getElementById('voice-timer-display');
             
             try {
                 // Richiedi permessi microfono
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                stream.getTracks().forEach(track => track.stop()); // Chiudi lo stream di test
+                stream.getTracks().forEach(track => track.stop()); // Chiudi subito lo stream di test
                 
-                button.style.background = '#dc3545';
-                button.innerHTML = '🔴 Chat Attiva (1h)';
+                button.style.background = 'linear-gradient(135deg, #28a745 0%, #20c997 100%)';
+                button.innerHTML = '🔴 Chat Attiva';
                 status.style.display = 'block';
-                status.textContent = '🎤 Dì: "messaggio cucina" o "messaggio insalata"';
+                status.textContent = '🎤 In ascolto continuo - Dì: "messaggio cucina" o "messaggio insalata"';
+                timer.style.display = 'block';
                 
-                voiceChat.isRecording = true;
+                voiceChat.isActive = true;
                 
-                // Avvia riconoscimento parola chiave
-                startWakeWordRecognition();
+                // Avvia riconoscimento parola chiave continuo
+                startContinuousWakeWordRecognition();
                 
-                // Auto-stop dopo 1 ora
-                voiceChat.autoStopTimeout = setTimeout(() => {
-                    if (voiceChat.isRecording) {
-                        status.textContent = '⏰ Sessione scaduta dopo 1 ora';
-                        status.style.background = 'rgba(255, 193, 7, 0.9)';
-                        setTimeout(() => stopVoiceChat(), 3000);
-                    }
-                }, 3600000); // 1 ora = 3600000ms
+                // Imposta timer per 1 ora
+                updateTimerDisplay();
+                voiceChat.sessionTimeout = setTimeout(() => {
+                    console.log('⏰ Sessione chat vocale scaduta dopo 1 ora');
+                    stopVoiceChat();
+                }, voiceChat.sessionDuration);
+                
+                console.log('✅ Chat vocale attivata per 1 ora');
                 
             } catch (error) {
                 console.error('Errore accesso microfono:', error);
@@ -354,7 +372,7 @@
             }
         }
 
-        function startWakeWordRecognition() {
+        function startContinuousWakeWordRecognition() {
             if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
                 alert('Riconoscimento vocale non supportato');
                 return;
@@ -368,6 +386,8 @@
             voiceChat.wakeWordRecognition.interimResults = false;
             
             voiceChat.wakeWordRecognition.onresult = function(event) {
+                if (!voiceChat.isActive) return; // Controlla se ancora attivo
+                
                 const result = event.results[event.results.length - 1];
                 const command = result[0].transcript.toLowerCase();
                 
@@ -384,39 +404,76 @@
                     
                     if (target) {
                         voiceChat.currentTarget = target;
-                        voiceChat.wakeWordRecognition.stop();
+                        // Non fermare il riconoscimento continuo, solo registra il messaggio
                         startMessageRecording();
                     } else {
-                        const status = document.getElementById('voice-chat-status');
-                        status.textContent = '⚠️ Specifica destinatario: "messaggio cucina" o "messaggio insalata"';
+                        showTemporaryStatus('⚠️ Specifica destinatario: "messaggio cucina" o "messaggio insalata"', 3000);
                     }
-                }
-            };
-            
-            voiceChat.wakeWordRecognition.onend = function() {
-                // Riavvia automaticamente il riconoscimento se ancora in modalità ascolto
-                if (voiceChat.isRecording && !voiceChat.currentTarget) {
-                    setTimeout(() => {
-                        if (voiceChat.isRecording && !voiceChat.currentTarget) {
-                            voiceChat.wakeWordRecognition.start();
-                        }
-                    }, 100);
                 }
             };
             
             voiceChat.wakeWordRecognition.onerror = function(event) {
                 console.error('Errore wake word:', event.error);
-                // Riavvia in caso di errore non critico
-                if (event.error !== 'aborted' && voiceChat.isRecording) {
+                // Riavvia automaticamente il riconoscimento se c'è un errore
+                if (voiceChat.isActive && event.error !== 'aborted') {
                     setTimeout(() => {
-                        if (voiceChat.isRecording && !voiceChat.currentTarget) {
+                        if (voiceChat.isActive) {
                             voiceChat.wakeWordRecognition.start();
                         }
                     }, 1000);
                 }
             };
             
+            voiceChat.wakeWordRecognition.onend = function() {
+                // Riavvia automaticamente il riconoscimento se la sessione è ancora attiva
+                if (voiceChat.isActive) {
+                    setTimeout(() => {
+                        if (voiceChat.isActive) {
+                            voiceChat.wakeWordRecognition.start();
+                        }
+                    }, 100);
+                }
+            };
+            
             voiceChat.wakeWordRecognition.start();
+        }
+
+        function updateTimerDisplay() {
+            const timer = document.getElementById('voice-timer-display');
+            const startTime = Date.now();
+            
+            const updateTimer = () => {
+                if (!voiceChat.isActive) return;
+                
+                const elapsed = Date.now() - startTime;
+                const remaining = voiceChat.sessionDuration - elapsed;
+                
+                if (remaining <= 0) {
+                    timer.textContent = 'Scaduto';
+                    return;
+                }
+                
+                const minutes = Math.floor(remaining / 60000);
+                const seconds = Math.floor((remaining % 60000) / 1000);
+                timer.textContent = `⏱️ ${minutes}:${seconds.toString().padStart(2, '0')} rimanenti`;
+                
+                setTimeout(updateTimer, 1000);
+            };
+            
+            updateTimer();
+        }
+
+        function showTemporaryStatus(message, duration = 3000) {
+            const status = document.getElementById('voice-chat-status');
+            const originalText = status.textContent;
+            
+            status.textContent = message;
+            status.style.background = 'rgba(255, 193, 7, 0.9)';
+            
+            setTimeout(() => {
+                status.textContent = originalText;
+                status.style.background = 'rgba(0,0,0,0.8)';
+            }, duration);
         }
 
         async function startMessageRecording() {
@@ -483,8 +540,14 @@
                     status.style.background = 'rgba(220, 53, 69, 0.9)';
                 }
                 
+                // Reset per messaggio successivo
+                voiceChat.currentTarget = null;
+                voiceChat.audioChunks = [];
+                
+                // Torna allo stato di ascolto dopo 2 secondi
                 setTimeout(() => {
-                    stopVoiceChat();
+                    status.textContent = '🎤 In ascolto continuo - Dì: "messaggio cucina" o "messaggio insalata"';
+                    status.style.background = 'rgba(0,0,0,0.8)';
                 }, 2000);
             };
             
@@ -494,6 +557,10 @@
         function stopVoiceChat() {
             const button = document.getElementById('voice-chat-button');
             const status = document.getElementById('voice-chat-status');
+            const timer = document.getElementById('voice-timer-display');
+            
+            // Ferma tutto
+            voiceChat.isActive = false;
             
             if (voiceChat.wakeWordRecognition) {
                 voiceChat.wakeWordRecognition.stop();
@@ -504,19 +571,24 @@
                 voiceChat.mediaRecorder.stop();
             }
             
-            if (voiceChat.autoStopTimeout) {
-                clearTimeout(voiceChat.autoStopTimeout);
-                voiceChat.autoStopTimeout = null;
+            if (voiceChat.sessionTimeout) {
+                clearTimeout(voiceChat.sessionTimeout);
+                voiceChat.sessionTimeout = null;
             }
             
+            // Reset stato
             voiceChat.isRecording = false;
             voiceChat.currentTarget = null;
             voiceChat.audioChunks = [];
             
+            // Reset UI
             button.style.background = 'linear-gradient(135deg, #17a2b8 0%, #138496 100%)';
             button.innerHTML = '💬 Attiva Chat Vocale';
             status.style.display = 'none';
             status.style.background = 'rgba(0,0,0,0.8)';
+            timer.style.display = 'none';
+            
+            console.log('🔴 Chat vocale disattivata');
         }
 
         function handleVoiceChatMessage(event) {
@@ -533,46 +605,59 @@
         function playReceivedVoiceMessage(data) {
             console.log(`🔊 Messaggio vocale ricevuto da ${data.from.toUpperCase()}`);
             
-            // Crea notifica visiva
+            // Mostra notifica
+            showVoiceNotification(data.from);
+            
+            // Riproduci il messaggio audio
+            playReceivedVoiceMessageAudio(data.audioData);
+        }
+
+        function showVoiceNotification(from) {
+            // Crea notifica temporanea
             const notification = document.createElement('div');
             notification.style.cssText = `
                 position: fixed;
-                top: 160px;
-                right: 20px;
-                z-index: 1001;
-                padding: 10px 15px;
-                background: rgba(255, 193, 7, 0.95);
-                color: #333;
-                border-radius: 5px;
-                font-size: 14px;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+                color: white;
+                padding: 15px 25px;
+                border-radius: 10px;
+                box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+                z-index: 2000;
                 font-weight: 600;
-                animation: pulse 2s infinite;
+                font-size: 16px;
+                animation: slideIn 0.3s ease-out;
             `;
-            notification.textContent = `📢 Messaggio da ${data.from.toUpperCase()}`;
+            notification.innerHTML = `🎤 Messaggio da ${from.toUpperCase()}`;
+            
+            // Aggiungi animazione CSS
+            const style = document.createElement('style');
+            style.textContent = `
+                @keyframes slideIn {
+                    from { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+                    to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+                }
+            `;
+            document.head.appendChild(style);
+            
             document.body.appendChild(notification);
             
-            // Riproduce audio
-            const audio = new Audio(data.audioData);
-            audio.play().catch(e => console.log('Errore riproduzione:', e));
-            
-            // Rimuovi notifica dopo 5 secondi
+            // Rimuovi dopo 3 secondi
             setTimeout(() => {
-                if (notification.parentNode) {
-                    notification.parentNode.removeChild(notification);
-                }
-            }, 5000);
-            
-            // Aggiungi stile pulse se non esiste
-            if (!document.getElementById('pulseStyle')) {
-                const style = document.createElement('style');
-                style.id = 'pulseStyle';
-                style.textContent = `
-                    @keyframes pulse {
-                        0%, 100% { opacity: 1; transform: scale(1); }
-                        50% { opacity: 0.8; transform: scale(1.05); }
-                    }
-                `;
-                document.head.appendChild(style);
+                notification.remove();
+                style.remove();
+            }, 3000);
+        }
+
+        function playReceivedVoiceMessageAudio(audioData) {
+            try {
+                const audio = new Audio(audioData);
+                audio.volume = 0.8;
+                audio.play().catch(e => console.log('Errore riproduzione audio:', e));
+            } catch (error) {
+                console.error('Errore creazione audio:', error);
             }
         }
     </script>
