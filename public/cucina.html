@@ -1,4 +1,5 @@
-<!DOCTYPE html>
+
+<old_str><!DOCTYPE html>
 <html>
 <head>
     <title>Cucina</title>
@@ -919,4 +920,840 @@
         });
     </script>
 </body>
+</html></old_str>
+<new_str><!DOCTYPE html>
+<html>
+<head>
+    <title>Cucina</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            padding-top: 80px;
+            display: flex;
+            flex-direction: row;
+            gap: 20px;
+        }
+
+        /* Colonna della tastiera */
+        #leftContainer {
+            width: 35%;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Colonna dei countdown */
+        #rightContainer {
+            width: 65%;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+
+        h1, h2 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            font-size: 28px;
+            font-weight: 300;
+        }
+
+        h2 {
+            font-size: 20px;
+        }
+
+        input[type="text"] {
+            width: 60%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+            margin: 10px 0;
+            box-sizing: border-box;
+            text-align: center;
+        }
+
+        #keyboard {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 8px;
+            max-width: 360px;
+            margin: 15px 0;
+        }
+
+        .key {
+            padding: 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            font-size: 16px;
+            text-align: center;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            border: none;
+        }
+
+        .duration-button {
+            padding: 12px 20px;
+            margin: 5px;
+            background: linear-gradient(135deg, #28a745 0%, #218838 100%);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: transform 0.2s, background-color 0.3s, box-shadow 0.2s;
+            font-weight: 600;
+            font-size: 16px;
+            min-width: 80px;
+        }
+
+        .duration-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(40, 167, 69, 0.3);
+        }
+
+        #countdownList {
+            width: 100%;
+            max-height: 60vh;
+            overflow-y: auto;
+        }
+
+        .countdown-item {
+            margin: 5px 0;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background-color: #f8f9fa;
+            transition: background-color 0.3s, transform 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            min-height: 50px;
+            max-height: 65px;
+        }
+
+        .countdown-item:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .countdown-table {
+            flex: 1;
+            text-align: left;
+        }
+
+        .countdown-time {
+            flex: 2;
+            text-align: center;
+            font-size: 16px;
+            color: #d9534f;
+            font-weight: bold;
+        }
+
+        .countdown-delete {
+            flex: 1;
+            text-align: right;
+        }
+
+        .countdown-item h3 {
+            margin: 0;
+            color: #333;
+            font-size: 22px;
+        }
+
+        .countdown-item p {
+            margin: 0;
+            font-size: 22px;
+            color: #d9534f;
+            font-weight: bold;
+        }
+
+        button {
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin: 10px 5px;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(108, 117, 125, 0.3);
+        }
+
+        button[style*="background-color: #4CAF50"] {
+            background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%) !important;
+        }
+
+        .delete-btn {
+            background-color: #dc3545;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            flex-shrink: 0;
+            height: fit-content;
+        }
+    </style>
+</head>
+<body>
+    <!-- Nome Azienda e Tasto Home - Fuori dai container -->
+    <div id="company-header" style="position: absolute; top: 20px; left: 20px; z-index: 1000; padding: 10px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; border-left: 4px solid #28a745;">
+        <h4 id="company-name" style="margin: 0; color: #333; font-weight: 600;">Nome Azienda</h4>
+    </div>
+    
+    <!-- Contenitore sinistro: Tastiera e input -->
+    <div id="leftContainer">
+        <h1>🍳 Cucina</h1>
+
+        <!-- Sistema comando vocale continuo -->
+        <div style="text-align: center; margin: 15px 0;">
+            <button onclick="toggleContinuousVoice()" id="voice-button" style="padding: 10px 20px; background-color: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; transition: all 0.3s ease; font-size: 16px; font-weight: 600;">
+                🎤 Attiva Voce Continua
+            </button>
+            <div id="voice-status" style="margin-top: 8px; font-size: 14px; color: #666; min-height: 20px;">
+                Dì "Hey Cucina" seguito dal comando (es: "Hey Cucina tavolo 5 otto minuti")
+            </div>
+            <div id="voice-indicator" style="margin-top: 5px; font-size: 12px; color: #999;">
+                🔴 Voce disattivata
+            </div>
+        </div>
+
+        <!-- Input numero tavolo -->
+        <input type="text" id="numeroTavolo" pattern="[0-9]*" inputmode="numeric" placeholder="Numero Tavolo" readonly>
+
+        <!-- Tastiera numerica -->
+        <div id="keyboard">
+            <div class="key">1</div>
+            <div class="key">2</div>
+            <div class="key">3</div>
+            <div class="key">4</div>
+            <div class="key">5</div>
+            <div class="key">C</div>
+            <div class="key">6</div>
+            <div class="key">7</div>
+            <div class="key">8</div>
+            <div class="key">9</div>
+            <div class="key">0</div>
+        </div>
+
+        <!-- Selezione durata -->
+        <div id="durationSelection" style="margin-top: 15px;">
+            <h2 style="font-size: 18px; margin-bottom: 10px;">Seleziona Durata</h2>
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; max-width: 320px; margin: 0 auto;">
+                <button class="duration-button" data-minutes="4">4 Min</button>
+                <button class="duration-button" data-minutes="5">5 Min</button>
+                <button class="duration-button" data-minutes="6">6 Min</button>
+                <button class="duration-button" data-minutes="7">7 Min</button>
+                <button class="duration-button" data-minutes="8">8 Min</button>
+                <button class="duration-button" data-minutes="9">9 Min</button>
+                <button class="duration-button" data-minutes="10">10 Min</button>
+                <button class="duration-button" data-minutes="12">12 Min</button>
+                <button class="duration-button" data-minutes="15">15 Min</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Contenitore destro: Countdown -->
+    <div id="rightContainer">
+        <h2>Tavoli in corso</h2>
+        <div id="countdownList"></div>
+    </div>
+    
+    <!-- Tasto Home in alto a destra -->
+    <div style="position: absolute; top: 20px; right: 80px; z-index: 1000;">
+        <button onclick="window.location.href='home.html'" style="padding: 6px 12px; background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500; transition: transform 0.2s, box-shadow 0.2s;">🏠 Home</button>
+    </div>
+
+    <audio id="alertSound" src="alerte-346112.mp3" preload="auto"></audio>
+    <audio id="zeroSound" src="costa-rica-eas-alarm-346194.mp3" preload="auto"></audio>
+
+    <script>
+        // Verifica disponibilità audio all'avvio
+        document.addEventListener('DOMContentLoaded', () => {
+            const audio = document.getElementById('alertSound');
+            const zeroAudio = document.getElementById('zeroSound');
+
+            audio.addEventListener('error', () => {
+                console.log('⚠️ File alert.mp3 non trovato. Verrà usato solo feedback visivo.');
+            });
+            audio.addEventListener('canplaythrough', () => {
+                console.log('✅ Audio alert.mp3 caricato correttamente');
+            });
+
+            zeroAudio.addEventListener('error', () => {
+                console.log('⚠️ File costa-rica-eas-alarm-346194.mp3 non trovato.');
+            });
+            zeroAudio.addEventListener('canplaythrough', () => {
+                console.log('✅ Audio costa-rica-eas-alarm-346194.mp3 caricato correttamente');
+            });
+        });
+
+        // Selezione elementi
+        const numeroTavoloInput = document.getElementById('numeroTavolo');
+        const keyboard = document.getElementById('keyboard');
+        const durationSelection = document.getElementById('durationSelection');
+        const countdownList = document.getElementById('countdownList');
+
+        // Array per memorizzare i countdown
+        const countdowns = [];
+
+        // Gestione tastiera virtuale
+        keyboard.addEventListener('click', (event) => {
+            if (event.target.classList.contains('key')) {
+                const key = event.target.textContent;
+                if (key === 'C') {
+                    numeroTavoloInput.value = '';
+                } else {
+                    numeroTavoloInput.value += key;
+                }
+            }
+        });
+
+        // Gestione selezione durata e avvio countdown
+        durationSelection.addEventListener('click', (event) => {
+            if (event.target.classList.contains('duration-button')) {
+                const minutes = parseInt(event.target.getAttribute('data-minutes'));
+                const tableNumber = numeroTavoloInput.value;
+
+                if (tableNumber !== '') {
+                    startCountdown(minutes, tableNumber);
+                    numeroTavoloInput.value = '';
+                } else {
+                    alert('Inserisci prima il numero del tavolo');
+                }
+            }
+        });
+
+        // Connessione WebSocket persistente
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+
+        ws.onopen = () => {
+            const companyName = localStorage.getItem('userCompany') || 'Nome Azienda';
+            const joinMessage = {
+                action: 'joinRoom',
+                companyName: companyName
+            };
+            ws.send(JSON.stringify(joinMessage));
+            console.log(`Connesso alla room: ${companyName}`);
+        };
+
+        ws.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                if (data.action === 'startCountdown') {
+                    console.log('📥 Countdown ricevuto via WebSocket:', data);
+                    startCountdownVisual(data.tableNumber, data.timeRemaining);
+                }
+            } catch (error) {
+                console.error('Errore nel parsing del messaggio WebSocket:', error);
+            }
+        };
+
+        function startCountdown(minutes, tableNumber) {
+            let timeRemaining = minutes * 60;
+
+            if (ws.readyState === WebSocket.OPEN) {
+                const message = {
+                    action: 'startCountdown',
+                    tableNumber: tableNumber,
+                    timeRemaining: timeRemaining
+                };
+                console.log('📤 Invio countdown via WebSocket:', message);
+                ws.send(JSON.stringify(message));
+            } else {
+                console.error('❌ WebSocket non connesso, stato:', ws.readyState);
+            }
+
+            startCountdownVisual(tableNumber, timeRemaining);
+        }
+
+        function startCountdownVisual(tableNumber, timeRemaining) {
+            const existingCountdownIndex = countdowns.findIndex(c => c.tableNumber == tableNumber);
+            if (existingCountdownIndex !== -1) {
+                const existingCountdown = countdowns[existingCountdownIndex];
+                clearInterval(existingCountdown.interval);
+                if (existingCountdown.element && existingCountdown.element.parentNode) {
+                    existingCountdown.element.parentNode.removeChild(existingCountdown.element);
+                }
+                countdowns.splice(existingCountdownIndex, 1);
+                console.log(`🔄 Countdown esistente per tavolo ${tableNumber} sostituito`);
+            }
+
+            const countdown = {
+                tableNumber,
+                timeRemaining,
+                element: null,
+                interval: null
+            };
+
+            const countdownItem = document.createElement('div');
+            countdownItem.classList.add('countdown-item');
+            countdownItem.innerHTML = `
+                <div class="countdown-table">
+                    <h3>Tavolo ${tableNumber}</h3>
+                </div>
+                <div class="countdown-time">
+                    <p>${formatTime(timeRemaining)}</p>
+                </div>
+                <div class="countdown-delete">
+                    <button onclick="eliminaCountdown(${tableNumber})" class="delete-btn">
+                        🗑️ Elimina
+                    </button>
+                </div>
+            `;
+            countdown.element = countdownItem;
+
+            countdowns.push(countdown);
+            countdownList.appendChild(countdownItem);
+            sortCountdowns();
+
+            countdown.interval = setInterval(() => {
+                countdown.timeRemaining--;
+
+                if (countdown.timeRemaining <= 0) {
+                    clearInterval(countdown.interval);
+                    countdown.element.style.backgroundColor = '#ff4444';
+                    countdown.element.querySelector('p').textContent = 'Tempo scaduto!';
+
+                    const zeroAudio = document.getElementById('zeroSound');
+                    if (zeroAudio) {
+                        zeroAudio.play().catch(e => {
+                            console.log('⚠️ Errore riproduzione audio a zero:', e);
+                            alert(`🚨 TEMPO SCADUTO - Tavolo ${countdown.tableNumber}!`);
+                        });
+                    } else {
+                        console.log('⚠️ Elemento audio per zero non trovato');
+                        alert(`🚨 TEMPO SCADUTO - Tavolo ${countdown.tableNumber}!`);
+                    }
+
+                    setTimeout(() => {
+                        if (countdownList.contains(countdown.element)) {
+                            countdownList.removeChild(countdown.element);
+                            const index = countdowns.indexOf(countdown);
+                            if (index > -1) countdowns.splice(index, 1);
+                        }
+                    }, 45000);
+                    return;
+                }
+
+                if (countdown.timeRemaining === 60) {
+                    countdown.element.style.backgroundColor = '#ffeb3b';
+
+                    const audio = document.getElementById('alertSound');
+                    if (audio) {
+                        audio.play().catch(e => {
+                            console.log('⚠️ Errore audio:', e);
+                            countdown.element.style.border = '3px solid #ff0000';
+                            countdown.element.style.animation = 'blink 1s infinite';
+
+                            if (!document.getElementById('blinkStyle')) {
+                                const style = document.createElement('style');
+                                style.id = 'blinkStyle';
+                                style.textContent = `
+                                    @keyframes blink {
+                                        0%, 50% { opacity: 1; }
+                                        51%, 100% { opacity: 0.5; }
+                                    }
+                                `;
+                                document.head.appendChild(style);
+                            }
+                        });
+                    } else {
+                        console.log('⚠️ Elemento audio non trovato');
+                        countdown.element.style.border = '3px solid #ff0000';
+                        alert(`⏰ ATTENZIONE: Tavolo ${countdown.tableNumber} - 1 MINUTO RIMANENTE!`);
+                    }
+                }
+
+                const timeElement = countdown.element.querySelector('p');
+                if (timeElement) {
+                    timeElement.textContent = `Tempo rimanente: ${formatTime(countdown.timeRemaining)}`;
+                }
+
+                if (countdown.timeRemaining % 5 === 0) {
+                    sortCountdowns();
+                }
+            }, 1000);
+        }
+
+        function sortCountdowns() {
+            countdowns.sort((a, b) => a.timeRemaining - b.timeRemaining);
+            const container = document.getElementById('countdownList');
+            container.innerHTML = '';
+            countdowns.forEach(countdown => {
+                container.appendChild(countdown.element);
+            });
+        }
+
+        function eliminaCountdown(tableNumber) {
+            const countdownIndex = countdowns.findIndex(c => c.tableNumber == tableNumber);
+            if (countdownIndex !== -1) {
+                const countdown = countdowns[countdownIndex];
+                clearInterval(countdown.interval);
+                if (countdown.element && countdown.element.parentNode) {
+                    countdown.element.parentNode.removeChild(countdown.element);
+                }
+                countdowns.splice(countdownIndex, 1);
+                console.log(`Countdown tavolo ${tableNumber} eliminato manualmente`);
+            }
+        }
+
+        function formatTime(seconds) {
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = seconds % 60;
+            return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+        }
+
+        // Sistema riconoscimento vocale continuo
+        let continuousRecognition;
+        let isContinuousListening = false;
+        let isProcessingCommand = false;
+
+        const WAKE_WORDS = ['hey cucina', 'ciao cucina', 'cucina'];
+
+        async function toggleContinuousVoice() {
+            console.log('🎯 Toggle voce premuto, stato attuale:', isContinuousListening);
+            
+            if (isContinuousListening) {
+                stopContinuousListening();
+            } else {
+                await startContinuousListening();
+            }
+        }
+
+        window.toggleContinuousVoice = toggleContinuousVoice;
+
+        function stopContinuousListening() {
+            if (continuousRecognition) {
+                continuousRecognition.stop();
+                isContinuousListening = false;
+                updateVoiceUI(false);
+                console.log('🛑 Riconoscimento vocale continuo fermato');
+            }
+        }
+
+        async function startContinuousListening() {
+            if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+                alert('Il riconoscimento vocale non è supportato in questo browser. Usa Chrome o Edge.');
+                return;
+            }
+
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                stream.getTracks().forEach(track => track.stop());
+            } catch (error) {
+                console.error('Errore accesso microfono:', error);
+                const statusDiv = document.getElementById('voice-status');
+                statusDiv.textContent = '❌ Impossibile accedere al microfono. Verifica i permessi del browser.';
+                statusDiv.style.color = '#dc3545';
+                return;
+            }
+
+            isContinuousListening = true;
+            isProcessingCommand = false;
+            updateVoiceUI(true);
+            createNewRecognition();
+            console.log('🎤 Riconoscimento vocale continuo avviato - Dì "Hey Cucina"');
+        }
+
+        function processContinuousCommand(command) {
+            console.log('🎧 Comando ricevuto:', command);
+
+            let wakeWordFound = false;
+            let commandAfterWake = '';
+
+            for (const wakeWord of WAKE_WORDS) {
+                const wakeIndex = command.indexOf(wakeWord);
+                if (wakeIndex !== -1) {
+                    wakeWordFound = true;
+                    commandAfterWake = command.substring(wakeIndex + wakeWord.length).trim();
+                    console.log(`🎯 Wake word "${wakeWord}" rilevata! Comando: "${commandAfterWake}"`);
+                    break;
+                }
+            }
+
+            if (!wakeWordFound) {
+                const statusDiv = document.getElementById('voice-status');
+                statusDiv.textContent = 'Dì "Hey Cucina" seguito dal comando';
+                statusDiv.style.color = '#666';
+                return;
+            }
+
+            console.log('🛑 STOP immediato del riconoscimento per elaborare comando...');
+            try {
+                continuousRecognition.stop();
+            } catch (e) {
+                console.log('Stop error (ignorato):', e);
+            }
+
+            isProcessingCommand = true;
+            const statusDiv = document.getElementById('voice-status');
+            const indicatorDiv = document.getElementById('voice-indicator');
+
+            statusDiv.textContent = `🎯 Comando in elaborazione: "${commandAfterWake}"`;
+            statusDiv.style.color = '#ff6600';
+            indicatorDiv.textContent = '🟡 Elaborando comando...';
+
+            playBeep();
+
+            if (commandAfterWake) {
+                parseVoiceCommand(commandAfterWake);
+            } else {
+                statusDiv.textContent = '❌ Nessun comando dopo "Hey Cucina"';
+                statusDiv.style.color = '#dc3545';
+            }
+
+            setTimeout(() => {
+                console.log('🔄 RICREO completamente il riconoscimento...');
+                isProcessingCommand = false;
+
+                if (isContinuousListening) {
+                    statusDiv.textContent = 'Dì "Hey Cucina" seguito dal comando';
+                    statusDiv.style.color = '#666';
+                    indicatorDiv.textContent = '🟢 In ascolto continuo...';
+                    restartRecognitionFromScratch();
+                }
+            }, 1500);
+        }
+
+        function restartRecognitionFromScratch() {
+            console.log('🏗️ Ricreando riconoscimento da zero...');
+
+            try {
+                if (continuousRecognition) {
+                    continuousRecognition.onresult = null;
+                    continuousRecognition.onerror = null;
+                    continuousRecognition.onend = null;
+                    continuousRecognition.stop();
+                    continuousRecognition = null;
+                }
+            } catch (e) {
+                console.log('Cleanup error (ignorato):', e);
+            }
+
+            setTimeout(() => {
+                if (isContinuousListening) {
+                    console.log('🚀 Creando nuovo riconoscimento...');
+                    createNewRecognition();
+                }
+            }, 300);
+        }
+
+        function createNewRecognition() {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            continuousRecognition = new SpeechRecognition();
+
+            continuousRecognition.lang = 'it-IT';
+            continuousRecognition.continuous = true;
+            continuousRecognition.interimResults = true;
+            continuousRecognition.maxAlternatives = 1;
+
+            continuousRecognition.onresult = function(event) {
+                let finalTranscript = '';
+                let interimTranscript = '';
+
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    const transcript = event.results[i][0].transcript;
+                    if (event.results[i].isFinal) {
+                        finalTranscript += transcript;
+                    } else {
+                        interimTranscript += transcript;
+                    }
+                }
+
+                const statusDiv = document.getElementById('voice-status');
+                if (interimTranscript && !isProcessingCommand) {
+                    statusDiv.textContent = `🎤 "${interimTranscript.trim()}"`;
+                    statusDiv.style.color = '#007bff';
+                }
+
+                if (finalTranscript && !isProcessingCommand) {
+                    processContinuousCommand(finalTranscript.toLowerCase().trim());
+                }
+            };
+
+            continuousRecognition.onerror = function(event) {
+                console.error('Errore riconoscimento:', event.error);
+                if (event.error === 'not-allowed') {
+                    const statusDiv = document.getElementById('voice-status');
+                    statusDiv.textContent = '❌ Permessi microfono negati';
+                    statusDiv.style.color = '#dc3545';
+                    stopContinuousListening();
+                }
+            };
+
+            continuousRecognition.onend = function() {
+                console.log('📴 Riconoscimento terminato, isListening:', isContinuousListening, 'isProcessing:', isProcessingCommand);
+
+                if (isContinuousListening && !isProcessingCommand) {
+                    console.log('🔄 Riavvio automatico...');
+                    setTimeout(() => {
+                        if (isContinuousListening && !isProcessingCommand) {
+                            try {
+                                continuousRecognition.start();
+                                console.log('✅ Riavviato automaticamente');
+                            } catch (error) {
+                                console.error('❌ Errore riavvio:', error);
+                                restartRecognitionFromScratch();
+                            }
+                        }
+                    }, 300);
+                }
+            };
+
+            try {
+                continuousRecognition.start();
+                console.log('✅ Nuovo riconoscimento avviato con successo');
+            } catch (error) {
+                console.error('❌ Errore avvio nuovo riconoscimento:', error);
+            }
+        }
+
+        function updateVoiceUI(isActive) {
+            const voiceButton = document.getElementById('voice-button');
+            const statusDiv = document.getElementById('voice-status');
+            const indicatorDiv = document.getElementById('voice-indicator');
+
+            if (isActive) {
+                voiceButton.style.backgroundColor = '#ff6600';
+                voiceButton.textContent = '🎤 Voce Attiva - STOP';
+                statusDiv.textContent = 'Dì "Hey Cucina" seguito dal comando (es: "Hey Cucina tavolo 5 otto minuti")';
+                statusDiv.style.color = '#666';
+                indicatorDiv.textContent = '🟢 In ascolto continuo...';
+                indicatorDiv.style.color = '#28a745';
+            } else {
+                voiceButton.style.backgroundColor = '#4CAF50';
+                voiceButton.textContent = '🎤 Attiva Voce Continua';
+                statusDiv.textContent = 'Dì "Hey Cucina" seguito dal comando (es: "Hey Cucina tavolo 5 otto minuti")';
+                statusDiv.style.color = '#666';
+                indicatorDiv.textContent = '🔴 Voce disattivata';
+                indicatorDiv.style.color = '#dc3545';
+            }
+        }
+
+        function playBeep() {
+            try {
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioContext.createOscillator();
+                const gain = audioContext.createGain();
+
+                oscillator.connect(gain);
+                gain.connect(audioContext.destination);
+
+                oscillator.frequency.value = 800;
+                gain.gain.setValueAtTime(0.1, audioContext.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+
+                oscillator.start(audioContext.currentTime);
+                oscillator.stop(audioContext.currentTime + 0.2);
+            } catch (error) {
+                console.log('Impossibile riprodurre beep:', error);
+            }
+        }
+
+        function parseVoiceCommand(command) {
+            console.log('🔍 Parsing comando:', command);
+            
+            const patterns = [
+                /tavolo\s+(\d+)\s+(\d+)\s+minut[oi]/i,
+                /(\d+)\s+tavolo\s+(\d+)\s+minut[oi]/i,
+                /tavolo\s+(\d+)\s+(\w+)\s+minut[oi]/i
+            ];
+            
+            const numberWords = {
+                'uno': 1, 'due': 2, 'tre': 3, 'quattro': 4, 'cinque': 5,
+                'sei': 6, 'sette': 7, 'otto': 8, 'nove': 9, 'dieci': 10,
+                'undici': 11, 'dodici': 12, 'quindici': 15, 'venti': 20
+            };
+            
+            for (const pattern of patterns) {
+                const match = command.match(pattern);
+                if (match) {
+                    let tableNumber, minutes;
+                    
+                    if (patterns.indexOf(pattern) === 0) {
+                        tableNumber = match[1];
+                        minutes = parseInt(match[2]) || numberWords[match[2].toLowerCase()];
+                    } else if (patterns.indexOf(pattern) === 1) {
+                        minutes = parseInt(match[1]) || numberWords[match[1].toLowerCase()];
+                        tableNumber = match[2];
+                    } else {
+                        tableNumber = match[1];
+                        minutes = parseInt(match[2]) || numberWords[match[2].toLowerCase()];
+                    }
+                    
+                    if (tableNumber && minutes) {
+                        console.log(`✅ Comando riconosciuto: Tavolo ${tableNumber}, ${minutes} minuti`);
+                        
+                        document.getElementById('numeroTavolo').value = tableNumber;
+                        startCountdown(minutes, tableNumber);
+                        
+                        const statusDiv = document.getElementById('voice-status');
+                        statusDiv.textContent = `✅ Countdown avviato: Tavolo ${tableNumber}, ${minutes} min`;
+                        statusDiv.style.color = '#28a745';
+                        
+                        return true;
+                    }
+                }
+            }
+            
+            const statusDiv = document.getElementById('voice-status');
+            statusDiv.textContent = `❌ Comando non riconosciuto: "${command}"`;
+            statusDiv.style.color = '#dc3545';
+            
+            console.log('❌ Pattern non trovato per:', command);
+            return false;
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🎤 Pagina caricata - Riconoscimento vocale continuo disponibile');
+
+            setInterval(() => {
+                if (isContinuousListening && continuousRecognition) {
+                    const states = ['INACTIVE', 'STARTING', 'ACTIVE'];
+                    const stateText = states[continuousRecognition.readyState] || `UNKNOWN(${continuousRecognition.readyState})`;
+                    console.log(`🔍 Debug vocale: listening=${isContinuousListening}, processing=${isProcessingCommand}, state=${stateText}`);
+
+                    if (continuousRecognition && continuousRecognition.readyState === 0 && !isProcessingCommand) {
+                        console.log('🔄 Riconoscimento inattivo, riavvio...');
+                        restartRecognitionFromScratch();
+                    }
+                }
+            }, 5000);
+        });
+
+        function setCompanyName(name) {
+            localStorage.setItem('userCompany', name);
+            document.getElementById('company-name').textContent = name;
+            console.log('Nome azienda impostato:', name);
+        }
+    </script>
+    <script src="company-header.js"></script>
+</body>
 </html>
+</new_str>
