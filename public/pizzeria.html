@@ -190,7 +190,10 @@
                 interval: null
             };
             countdown.interval = setInterval(() => {
+                // Decrementa PRIMA come negli altri file
+                remainingTime--;
                 countdown.timeRemaining = remainingTime;
+                
                 if (remainingTime <= 0) {
                     clearInterval(countdown.interval);
                     countdownElement.style.backgroundColor = '#ff4444';
@@ -218,12 +221,18 @@
                     }, 45000);
                     return;
                 }
-                sortCountdowns();
+
+                // Riordina ogni 5 secondi come negli altri file
+                if (remainingTime % 5 === 0) {
+                    sortCountdowns();
+                }
 
                 if (remainingTime === 60) {
                     countdownElement.style.backgroundColor = '#ffeb3b';
                     const audio = document.getElementById('alertSound');
-                    if (audio) audio.play().catch(e => console.log('Errore audio:', e));
+                    if (audio) {
+                        audio.play().catch(e => console.log('Errore audio 1 minuto:', e));
+                    }
                 }
 
                 countdownElement.innerHTML = `
@@ -234,7 +243,6 @@
                         <p>${formatTime(remainingTime)}</p>
                     </div>
                 `;
-                remainingTime--;
             }, 1000);
 
             countdowns.push(countdown);
