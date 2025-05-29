@@ -659,23 +659,25 @@
             continuousRecognition.onend = function() {
                 console.log('📴 Riconoscimento terminato, isListening:', isContinuousListening, 'isProcessing:', isProcessingCommand);
                 
+                // Solo riavvia automaticamente se NON stiamo processando un comando
+                // (quando processiamo, il riavvio è gestito nel setTimeout del comando)
                 if (isContinuousListening && !isProcessingCommand) {
                     console.log('🔄 Riavvio automatico riconoscimento continuo...');
                     setTimeout(() => {
                         if (isContinuousListening && !isProcessingCommand) {
                             try {
                                 continuousRecognition.start();
-                                console.log('✅ Riconoscimento riavviato con successo');
+                                console.log('✅ Riconoscimento riavviato automaticamente');
                             } catch (error) {
                                 console.error('❌ Errore riavvio automatico:', error);
-                                // Fallback: ricreo il riconoscimento
-                                if (error.name === 'InvalidStateError') {
-                                    console.log('🔧 Ricreando il riconoscimento...');
-                                    startContinuousListening();
-                                }
+                                // Fallback: ricreo completamente il riconoscimento
+                                console.log('🔧 Ricreando completamente il riconoscimento...');
+                                startContinuousListening();
                             }
                         }
-                    }, 500);
+                    }, 300);
+                } else if (isProcessingCommand) {
+                    console.log('⏳ Comando in corso, riavvio gestito dal timeout del comando');
                 }
             };
 
@@ -736,7 +738,7 @@
                 statusDiv.style.color = '#dc3545';
             }
 
-            // Riattiva listening dopo 2 secondi e forza restart se necessario
+            // Riattiva listening dopo 1 secondo con riavvio garantito
             setTimeout(() => {
                 isProcessingCommand = false;
                 if (isContinuousListening) {
@@ -744,17 +746,34 @@
                     statusDiv.style.color = '#666';
                     indicatorDiv.textContent = '🟢 In ascolto continuo...';
                     
-                    // Forza riavvio del riconoscimento se non è attivo
-                    if (continuousRecognition.readyState !== 1) { // 1 = CONNECTING/OPEN
-                        console.log('🔄 Forzando riavvio riconoscimento dopo comando...');
-                        try {
-                            continuousRecognition.start();
-                        } catch (error) {
-                            console.error('Errore riavvio forzato:', error);
+                    // SOLUZIONE: Sempre ferma e riavvia il riconoscimento dopo un comando
+                    console.log('🔄 Riavvio garantito del riconoscimento dopo comando...');
+                    try {
+                        // Ferma completamente il riconoscimento corrente
+                        continuousRecognition.stop();
+                        
+                        // Aspetta 200ms e riavvia
+                        setTimeout(() => {
+                            if (isContinuousListening) {
+                                try {
+                                    continuousRecognition.start();
+                                    console.log('✅ Riconoscimento riavviato con successo dopo comando');
+                                } catch (error) {
+                                    console.error('❌ Errore riavvio dopo stop:', error);
+                                    // Fallback: ricrea completamente il riconoscimento
+                                    startContinuousListening();
+                                }
+                            }
+                        }, 200);
+                    } catch (error) {
+                        console.error('❌ Errore stop riconoscimento:', error);
+                        // Fallback: ricrea completamente
+                        if (isContinuousListening) {
+                            startContinuousListening();
                         }
                     }
                 }
-            }, 2000);
+            }, 1000);
         }
 
         // Aggiorna interfaccia utente
@@ -808,9 +827,22 @@
             // Debug periodico dello stato del riconoscimento
             setInterval(() => {
                 if (isContinuousListening && continuousRecognition) {
-                    console.log(`🔍 Debug: isListening=${isContinuousListening}, isProcessing=${isProcessingCommand}, state=${continuousRecognition.readyState || 'undefined'}`);
+                    const states = ['INACTIVE', 'STARTING', 'ACTIVE'];
+                    const stateText = states[continuousRecognition.readyState] || `UNKNOWN(${continuousRecognition.readyState})`;
+                    console.log(`🔍 Debug vocale: listening=${isContinuousListening}, processing=${isProcessingCommand}, state=${stateText}`);
+                    
+                    // Se è in listening ma il riconoscimento non è attivo, forza riavvio
+                    if (isContinuousListening && !isProcessingCommand && continuousRecognition.readyState === 0) {
+                        console.log('🚨 Riconoscimento inattivo rilevato! Forzando riavvio...');
+                        try {
+                            continuousRecognition.start();
+                        } catch (error) {
+                            console.error('❌ Errore riavvio forzato dal debug:', error);
+                            startContinuousListening();
+                        }
+                    }
                 }
-            }, 10000); // Ogni 10 secondi
+            }, 5000); // Ogni 5 secondi per debug più frequente
             
             // Avvia automaticamente dopo 2 secondi (opzionale)
             // setTimeout(() => {
