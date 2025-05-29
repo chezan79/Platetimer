@@ -230,6 +230,9 @@
                     setTimeout(() => {
                         const index = countdowns.indexOf(countdown);
                         if (index > -1) {
+                            if (countdownElement && countdownElement.parentNode) {
+                                countdownElement.parentNode.removeChild(countdownElement);
+                            }
                             countdowns.splice(index, 1);
                             sortCountdowns();
                         }
