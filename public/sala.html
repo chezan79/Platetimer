@@ -123,6 +123,16 @@
         const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
         const countdowns = [];
 
+        // Sistema Chat Vocale
+        let voiceChat = {
+            isRecording: false,
+            mediaRecorder: null,
+            audioChunks: [],
+            currentTarget: null,
+            wakeWordRecognition: null,
+            messageRecognition: null
+        };
+
         ws.onopen = () => {
             // Unisciti alla room dell'azienda
             const companyName = localStorage.getItem('userCompany') || 'Nome Azienda';
@@ -133,6 +143,11 @@
             ws.send(JSON.stringify(joinMessage));
             console.log(`Sala connessa alla room: ${companyName}`);
         };
+
+        // Inizializza chat vocale al caricamento
+        document.addEventListener('DOMContentLoaded', () => {
+            initVoiceChat();
+        });
 
         function sortCountdowns() {
             countdowns.sort((a, b) => a.timeRemaining - b.timeRemaining);
@@ -240,6 +255,295 @@
             const minutes = Math.floor(seconds / 60);
             const remainingSeconds = seconds % 60;
             return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+        }
+
+        function initVoiceChat() {
+            // Crea pulsante chat vocale
+            const chatButton = document.createElement('button');
+            chatButton.id = 'voice-chat-button';
+            chatButton.innerHTML = '💬 Chat Vocale';
+            chatButton.style.cssText = `
+                position: fixed;
+                top: 80px;
+                right: 20px;
+                z-index: 1000;
+                padding: 10px 15px;
+                background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
+                color: white;
+                border: none;
+                border-radius: 5px;
+                cursor: pointer;
+                font-size: 14px;
+                font-weight: 600;
+                transition: all 0.3s ease;
+            `;
+            
+            // Status chat vocale
+            const chatStatus = document.createElement('div');
+            chatStatus.id = 'voice-chat-status';
+            chatStatus.style.cssText = `
+                position: fixed;
+                top: 120px;
+                right: 20px;
+                z-index: 1000;
+                padding: 8px 12px;
+                background: rgba(0,0,0,0.8);
+                color: white;
+                border-radius: 5px;
+                font-size: 12px;
+                display: none;
+                max-width: 200px;
+                word-wrap: break-word;
+            `;
+            
+            document.body.appendChild(chatButton);
+            document.body.appendChild(chatStatus);
+            
+            chatButton.onclick = startVoiceChat;
+            
+            // Listener per messaggi chat vocale
+            ws.addEventListener('message', handleVoiceChatMessage);
+        }
+
+        async function startVoiceChat() {
+            const button = document.getElementById('voice-chat-button');
+            const status = document.getElementById('voice-chat-status');
+            
+            if (voiceChat.isRecording) {
+                stopVoiceChat();
+                return;
+            }
+            
+            try {
+                // Richiedi permessi microfono
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                
+                button.style.background = '#dc3545';
+                button.innerHTML = '🔴 Ascoltando...';
+                status.style.display = 'block';
+                status.textContent = '🎤 Dì: "messaggio cucina", "messaggio pizzeria" o "messaggio insalata"';
+                
+                voiceChat.isRecording = true;
+                
+                // Avvia riconoscimento parola chiave
+                startWakeWordRecognition();
+                
+            } catch (error) {
+                console.error('Errore accesso microfono:', error);
+                status.style.display = 'block';
+                status.textContent = '❌ Errore: permessi microfono negati';
+                status.style.background = 'rgba(220, 53, 69, 0.9)';
+            }
+        }
+
+        function startWakeWordRecognition() {
+            if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+                alert('Riconoscimento vocale non supportato');
+                return;
+            }
+            
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            voiceChat.wakeWordRecognition = new SpeechRecognition();
+            
+            voiceChat.wakeWordRecognition.lang = 'it-IT';
+            voiceChat.wakeWordRecognition.continuous = true;
+            voiceChat.wakeWordRecognition.interimResults = false;
+            
+            voiceChat.wakeWordRecognition.onresult = function(event) {
+                const result = event.results[event.results.length - 1];
+                const command = result[0].transcript.toLowerCase();
+                
+                console.log('🎤 Wake word riconosciuto:', command);
+                
+                // Controlla parola chiave + destinatario
+                if (command.includes('messaggio')) {
+                    let target = null;
+                    if (command.includes('cucina')) {
+                        target = 'cucina';
+                    } else if (command.includes('pizzeria')) {
+                        target = 'pizzeria';
+                    } else if (command.includes('insalata')) {
+                        target = 'insalata';
+                    }
+                    
+                    if (target) {
+                        voiceChat.currentTarget = target;
+                        voiceChat.wakeWordRecognition.stop();
+                        startMessageRecording();
+                    } else {
+                        const status = document.getElementById('voice-chat-status');
+                        status.textContent = '⚠️ Specifica destinatario: "messaggio cucina", "messaggio pizzeria" o "messaggio insalata"';
+                    }
+                }
+            };
+            
+            voiceChat.wakeWordRecognition.onerror = function(event) {
+                console.error('Errore wake word:', event.error);
+            };
+            
+            voiceChat.wakeWordRecognition.start();
+        }
+
+        async function startMessageRecording() {
+            const status = document.getElementById('voice-chat-status');
+            status.textContent = `🎤 Registrando messaggio per ${voiceChat.currentTarget.toUpperCase()}...`;
+            status.style.background = 'rgba(40, 167, 69, 0.9)';
+            
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                voiceChat.mediaRecorder = new MediaRecorder(stream);
+                voiceChat.audioChunks = [];
+                
+                voiceChat.mediaRecorder.ondataavailable = function(event) {
+                    voiceChat.audioChunks.push(event.data);
+                };
+                
+                voiceChat.mediaRecorder.onstop = function() {
+                    sendVoiceMessage();
+                    stream.getTracks().forEach(track => track.stop());
+                };
+                
+                voiceChat.mediaRecorder.start();
+                
+                // Registra per 5 secondi
+                setTimeout(() => {
+                    if (voiceChat.mediaRecorder && voiceChat.mediaRecorder.state === 'recording') {
+                        voiceChat.mediaRecorder.stop();
+                    }
+                }, 5000);
+                
+            } catch (error) {
+                console.error('Errore registrazione:', error);
+                status.textContent = '❌ Errore registrazione';
+                status.style.background = 'rgba(220, 53, 69, 0.9)';
+                stopVoiceChat();
+            }
+        }
+
+        function sendVoiceMessage() {
+            const status = document.getElementById('voice-chat-status');
+            status.textContent = `📤 Inviando messaggio a ${voiceChat.currentTarget.toUpperCase()}...`;
+            
+            const audioBlob = new Blob(voiceChat.audioChunks, { type: 'audio/webm' });
+            const reader = new FileReader();
+            
+            reader.onload = function() {
+                const audioData = reader.result;
+                
+                // Invia messaggio vocale via WebSocket
+                const message = {
+                    action: 'voiceMessage',
+                    from: 'sala',
+                    to: voiceChat.currentTarget,
+                    audioData: audioData,
+                    timestamp: Date.now()
+                };
+                
+                if (ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify(message));
+                    status.textContent = `✅ Messaggio inviato a ${voiceChat.currentTarget.toUpperCase()}`;
+                    status.style.background = 'rgba(40, 167, 69, 0.9)';
+                } else {
+                    status.textContent = '❌ Errore connessione WebSocket';
+                    status.style.background = 'rgba(220, 53, 69, 0.9)';
+                }
+                
+                setTimeout(() => {
+                    stopVoiceChat();
+                }, 2000);
+            };
+            
+            reader.readAsDataURL(audioBlob);
+        }
+
+        function stopVoiceChat() {
+            const button = document.getElementById('voice-chat-button');
+            const status = document.getElementById('voice-chat-status');
+            
+            if (voiceChat.wakeWordRecognition) {
+                voiceChat.wakeWordRecognition.stop();
+                voiceChat.wakeWordRecognition = null;
+            }
+            
+            if (voiceChat.mediaRecorder && voiceChat.mediaRecorder.state !== 'inactive') {
+                voiceChat.mediaRecorder.stop();
+            }
+            
+            voiceChat.isRecording = false;
+            voiceChat.currentTarget = null;
+            voiceChat.audioChunks = [];
+            
+            button.style.background = 'linear-gradient(135deg, #17a2b8 0%, #138496 100%)';
+            button.innerHTML = '💬 Chat Vocale';
+            status.style.display = 'none';
+            status.style.background = 'rgba(0,0,0,0.8)';
+        }
+
+        function handleVoiceChatMessage(event) {
+            try {
+                const data = JSON.parse(event.data);
+                
+                if (data.action === 'voiceMessage' && data.to === 'sala') {
+                    console.log(`🎤 Messaggio vocale ricevuto da ${data.from.toUpperCase()}`);
+                    
+                    // Mostra notifica
+                    showVoiceNotification(data.from);
+                    
+                    // Riproduci il messaggio audio
+                    playReceivedVoiceMessage(data.audioData);
+                }
+            } catch (error) {
+                console.error('Errore gestione messaggio vocale:', error);
+            }
+        }
+
+        function showVoiceNotification(from) {
+            // Crea notifica temporanea
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+                color: white;
+                padding: 15px 25px;
+                border-radius: 10px;
+                box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+                z-index: 2000;
+                font-weight: 600;
+                font-size: 16px;
+                animation: slideIn 0.3s ease-out;
+            `;
+            notification.innerHTML = `🎤 Messaggio da ${from.toUpperCase()}`;
+            
+            // Aggiungi animazione CSS
+            const style = document.createElement('style');
+            style.textContent = `
+                @keyframes slideIn {
+                    from { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+                    to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+                }
+            `;
+            document.head.appendChild(style);
+            
+            document.body.appendChild(notification);
+            
+            // Rimuovi dopo 3 secondi
+            setTimeout(() => {
+                notification.remove();
+                style.remove();
+            }, 3000);
+        }
+
+        function playReceivedVoiceMessage(audioData) {
+            try {
+                const audio = new Audio(audioData);
+                audio.volume = 0.8;
+                audio.play().catch(e => console.log('Errore riproduzione audio:', e));
+            } catch (error) {
+                console.error('Errore creazione audio:', error);
+            }
         }
     </script>
     <script src="company-header.js"></script>

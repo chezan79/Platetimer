@@ -1,10 +1,9 @@
-
 <!DOCTYPE html>
 <html lang="it">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pizzeria</title>
+    <title>Insalata</title>
     <link rel="stylesheet" href="style.css">
     <style>
         body {
@@ -101,16 +100,16 @@
 </head>
 <body>
     <!-- Nome Azienda fuori dal container in alto a sinistra -->
-    <div id="company-header" style="position: absolute; top: 20px; left: 20px; z-index: 1000; padding: 10px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; border-left: 4px solid #dc3545;">
+    <div id="company-header" style="position: absolute; top: 20px; left: 20px; z-index: 1000; padding: 10px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; border-left: 4px solid #28a745;">
         <h4 id="company-name" style="margin: 0; color: #333; font-weight: 600;">Nome Azienda</h4>
     </div>
     
     <div class="countdown-container">
-        <h1>🍕 Pizzeria</h1>
+        <h1>🥗 Insalata</h1>
         <div id="tavoli">
             <!-- I countdown sincronizzati appariranno qui -->
         </div>
-        </div>
+    </div>
 
     <audio id="alertSound" src="alerte-346112.mp3" preload="auto"></audio>
     <audio id="zeroSound" src="costa-rica-eas-alarm-346194.mp3" preload="auto"></audio>
@@ -133,7 +132,7 @@
                 companyName: companyName
             };
             ws.send(JSON.stringify(joinMessage));
-            console.log(`Pizzeria connessa alla room: ${companyName}`);
+            console.log(`Insalata connessa alla room: ${companyName}`);
         };
 
         function sortCountdowns() {
@@ -165,7 +164,7 @@
                     countdowns[existingIndex].element.parentNode.removeChild(countdowns[existingIndex].element);
                 }
                 countdowns.splice(existingIndex, 1);
-                console.log(`🔄 Countdown esistente per tavolo ${tableNumber} sostituito in pizzeria`);
+                console.log(`🔄 Countdown esistente per tavolo ${tableNumber} sostituito in insalata`);
             }
 
             const countdownElement = document.createElement('div');
@@ -173,7 +172,7 @@
             countdownElement.classList.add('countdown-item');
 
             let remainingTime = parseInt(timeRemaining);
-            
+
             const countdown = {
                 tableNumber: tableNumber,
                 timeRemaining: remainingTime,
@@ -181,7 +180,10 @@
                 interval: null
             };
             countdown.interval = setInterval(() => {
+                // Decrementa PRIMA come in cucina.html
+                remainingTime--;
                 countdown.timeRemaining = remainingTime;
+                
                 if (remainingTime <= 0) {
                     clearInterval(countdown.interval);
                     countdownElement.style.backgroundColor = '#ff4444';
@@ -209,7 +211,11 @@
                     }, 45000);
                     return;
                 }
-                sortCountdowns();
+
+                // Riordina ogni 5 secondi come in cucina.html
+                if (remainingTime % 5 === 0) {
+                    sortCountdowns();
+                }
 
                 if (remainingTime === 60) {
                     countdownElement.style.backgroundColor = '#ffeb3b';
@@ -225,7 +231,6 @@
                         <p>${formatTime(remainingTime)}</p>
                     </div>
                 `;
-                remainingTime--;
             }, 1000);
 
             countdowns.push(countdown);
@@ -240,7 +245,7 @@
     </script>
     <script src="company-header.js"></script>
 
-    <!-- Sistema Chat Vocale per Pizzeria -->
+    <!-- Sistema Chat Vocale per Insalata -->
     <script>
         // Sistema Chat Vocale
         let voiceChat = {
@@ -321,7 +326,7 @@
                 button.style.background = '#dc3545';
                 button.innerHTML = '🔴 Ascoltando...';
                 status.style.display = 'block';
-                status.textContent = '🎤 Dì: "messaggio cucina" o "messaggio insalata"';
+                status.textContent = '🎤 Dì: "messaggio cucina" o "messaggio pizzeria"';
                 
                 voiceChat.isRecording = true;
                 
@@ -360,8 +365,8 @@
                     let target = null;
                     if (command.includes('cucina')) {
                         target = 'cucina';
-                    } else if (command.includes('insalata')) {
-                        target = 'insalata';
+                    } else if (command.includes('pizzeria')) {
+                        target = 'pizzeria';
                     }
                     
                     if (target) {
@@ -370,7 +375,7 @@
                         startMessageRecording();
                     } else {
                         const status = document.getElementById('voice-chat-status');
-                        status.textContent = '⚠️ Specifica destinatario: "messaggio cucina" o "messaggio insalata"';
+                        status.textContent = '⚠️ Specifica destinatario: "messaggio cucina" o "messaggio pizzeria"';
                     }
                 }
             };
@@ -431,7 +436,7 @@
                 // Invia messaggio vocale via WebSocket
                 const message = {
                     action: 'voiceMessage',
-                    from: 'pizzeria',
+                    from: 'insalata',
                     to: voiceChat.currentTarget,
                     audioData: audioData,
                     timestamp: Date.now()
@@ -479,7 +484,7 @@
         function handleVoiceChatMessage(event) {
             try {
                 const data = JSON.parse(event.data);
-                if (data.action === 'voiceMessage' && data.to === 'pizzeria') {
+                if (data.action === 'voiceMessage' && data.to === 'insalata') {
                     playReceivedVoiceMessage(data);
                 }
             } catch (error) {
