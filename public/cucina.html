@@ -792,6 +792,12 @@
 
                         document.getElementById('numeroTavolo').value = tableNumber;
                         startCountdown(minutes, tableNumber);
+                        
+                        // 🧹 Pulisce automaticamente l'input dopo il comando vocale
+                        setTimeout(() => {
+                            document.getElementById('numeroTavolo').value = '';
+                            console.log('🧹 Input tavolo pulito automaticamente dopo comando vocale');
+                        }, 500);
 
                         const statusDiv = document.getElementById('voice-status');
                         statusDiv.textContent = `✅ Countdown avviato: Tavolo ${tableNumber}, ${minutes} min`;
