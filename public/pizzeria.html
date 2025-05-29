@@ -121,6 +121,15 @@
     </div>
 
     <script>
+        // Funzione globale per il riconoscimento vocale
+        function toggleVoiceChat() {
+            console.log('Funzione toggleVoiceChat chiamata');
+            // Implementazione del riconoscimento vocale per pizzeria
+            if (typeof startVoiceRecognition === 'function') {
+                startVoiceRecognition();
+            }
+        }
+
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
         const countdowns = [];

@@ -558,6 +558,23 @@
         let recognition;
         let isListening = false;
 
+        // Funzione globale per attivare/disattivare il riconoscimento vocale
+        function toggleVoiceChat() {
+            if (isListening) {
+                stopVoiceRecognition();
+            } else {
+                startVoiceRecognition();
+            }
+        }
+
+        function stopVoiceRecognition() {
+            if (recognition) {
+                recognition.stop();
+                isListening = false;
+                resetVoiceButton();
+            }
+        }
+
         async function startVoiceRecognition() {
             if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
                 alert('Il riconoscimento vocale non è supportato in questo browser. Usa Chrome o Edge.');
