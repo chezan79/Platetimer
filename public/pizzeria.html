@@ -142,7 +142,20 @@
                 companyName: companyName
             };
             ws.send(JSON.stringify(joinMessage));
-            console.log(`Pizzeria connessa alla room: ${companyName}`);
+            console.log(`✅ Pizzeria connessa alla room: ${companyName}`);
+        };
+
+        ws.onerror = (error) => {
+            console.error('❌ Errore WebSocket in pizzeria:', error);
+        };
+
+        ws.onclose = (event) => {
+            console.log('🔌 Connessione WebSocket chiusa in pizzeria:', event.code, event.reason);
+            // Tentativo di riconnessione dopo 3 secondi
+            setTimeout(() => {
+                console.log('🔄 Tentativo di riconnessione...');
+                location.reload();
+            }, 3000);
         };
 
         function sortCountdowns() {
@@ -157,11 +170,13 @@
         ws.onmessage = (event) => {
             try {
                 const data = JSON.parse(event.data);
+                console.log('📥 Messaggio ricevuto in pizzeria:', data);
                 if (data.action === 'startCountdown') {
+                    console.log(`🍕 Avvio countdown in pizzeria: Tavolo ${data.tableNumber}, ${Math.floor(data.timeRemaining/60)}:${(data.timeRemaining%60).toString().padStart(2, '0')}`);
                     startCountdown(data.tableNumber, data.timeRemaining);
                 }
             } catch (error) {
-                console.error('Errore nel parsing del messaggio:', error);
+                console.error('❌ Errore nel parsing del messaggio in pizzeria:', error);
             }
         };
 
