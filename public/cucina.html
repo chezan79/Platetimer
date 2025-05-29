@@ -206,13 +206,16 @@
     <div id="leftContainer">
         <h1>🍳 Cucina</h1>
 
-        <!-- Comando vocale in alto -->
+        <!-- Sistema comando vocale continuo -->
         <div style="text-align: center; margin: 15px 0;">
-            <button onclick="toggleVoiceChat()" id="voice-button" style="padding: 10px 20px; background-color: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; transition: all 0.3s ease; font-size: 16px; font-weight: 600;">
-                🎤 Comando Vocale
+            <button onclick="toggleContinuousVoice()" id="voice-button" style="padding: 10px 20px; background-color: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; transition: all 0.3s ease; font-size: 16px; font-weight: 600;">
+                🎤 Attiva Voce Continua
             </button>
             <div id="voice-status" style="margin-top: 8px; font-size: 14px; color: #666; min-height: 20px;">
-                Clicca per attivare il riconoscimento vocale
+                Dì "Hey Cucina" seguito dal comando (es: "Hey Cucina tavolo 5 otto minuti")
+            </div>
+            <div id="voice-indicator" style="margin-top: 5px; font-size: 12px; color: #999;">
+                🔴 Voce disattivata
             </div>
         </div>
 
@@ -553,189 +556,242 @@
         <button onclick="window.location.href='home.html'" style="padding: 6px 12px; background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500; transition: transform 0.2s, box-shadow 0.2s;">🏠 Home</button>
     </div>
 
-    <!-- Script per riconoscimento vocale -->
+    <!-- Sistema riconoscimento vocale continuo tipo Alexa -->
     <script>
-        let recognition;
-        let isListening = false;
+        let continuousRecognition;
+        let isContinuousListening = false;
+        let isProcessingCommand = false;
 
-        // Funzione globale per attivare/disattivare il riconoscimento vocale
-        function toggleVoiceChat() {
-            if (isListening) {
-                stopVoiceRecognition();
+        // Wake words supportate
+        const WAKE_WORDS = ['hey cucina', 'ciao cucina', 'cucina'];
+
+        // Funzione per attivare/disattivare il riconoscimento continuo
+        async function toggleContinuousVoice() {
+            if (isContinuousListening) {
+                stopContinuousListening();
             } else {
-                startVoiceRecognition();
+                await startContinuousListening();
             }
         }
 
-        function stopVoiceRecognition() {
-            if (recognition) {
-                recognition.stop();
-                isListening = false;
-                resetVoiceButton();
+        // Ferma il riconoscimento continuo
+        function stopContinuousListening() {
+            if (continuousRecognition) {
+                continuousRecognition.stop();
+                isContinuousListening = false;
+                updateVoiceUI(false);
+                console.log('🛑 Riconoscimento vocale continuo fermato');
             }
         }
 
-        async function startVoiceRecognition() {
+        // Avvia il riconoscimento continuo
+        async function startContinuousListening() {
             if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
                 alert('Il riconoscimento vocale non è supportato in questo browser. Usa Chrome o Edge.');
                 return;
             }
 
-            const voiceButton = document.getElementById('voice-button');
-            const statusDiv = document.getElementById('voice-status');
-
-            // Controlla se il pulsante è in cooldown
-            if (voiceButton.disabled) {
-                return;
-            }
-
-            // Controlla i permessi del microfono
-            try {
-                const permission = await navigator.permissions.query({ name: 'microphone' });
-                if (permission.state === 'denied') {
-                    statusDiv.textContent = '❌ Permessi microfono negati. Clicca sull\'icona del microfono nella barra degli indirizzi e consenti l\'accesso.';
-                    statusDiv.style.color = '#dc3545';
-                    return;
-                }
-            } catch (error) {
-                console.log('Impossibile verificare i permessi:', error);
-            }
-
-            // Richiedi accesso al microfono prima di iniziare
+            // Verifica permessi microfono
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                stream.getTracks().forEach(track => track.stop()); // Ferma subito lo stream
+                stream.getTracks().forEach(track => track.stop());
             } catch (error) {
                 console.error('Errore accesso microfono:', error);
+                const statusDiv = document.getElementById('voice-status');
                 statusDiv.textContent = '❌ Impossibile accedere al microfono. Verifica i permessi del browser.';
                 statusDiv.style.color = '#dc3545';
                 return;
             }
 
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-            recognition = new SpeechRecognition();
+            continuousRecognition = new SpeechRecognition();
 
-            recognition.lang = 'it-IT';
-            recognition.continuous = false;
-            recognition.interimResults = false;
-            recognition.maxAlternatives = 1;
+            // Configurazione per ascolto continuo
+            continuousRecognition.lang = 'it-IT';
+            continuousRecognition.continuous = true;  // ✅ Ascolto continuo
+            continuousRecognition.interimResults = true;  // ✅ Risultati intermedi
+            continuousRecognition.maxAlternatives = 1;
 
-            if (isListening) {
-                recognition.stop();
+            isContinuousListening = true;
+            updateVoiceUI(true);
+
+            // Gestione risultati vocali
+            continuousRecognition.onresult = function(event) {
+                let finalTranscript = '';
+                let interimTranscript = '';
+
+                // Elabora tutti i risultati
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    const transcript = event.results[i][0].transcript;
+                    if (event.results[i].isFinal) {
+                        finalTranscript += transcript;
+                    } else {
+                        interimTranscript += transcript;
+                    }
+                }
+
+                // Mostra trascrizione in tempo reale
+                const statusDiv = document.getElementById('voice-status');
+                if (interimTranscript) {
+                    statusDiv.textContent = `🎤 "${interimTranscript.trim()}"`;
+                    statusDiv.style.color = '#007bff';
+                }
+
+                // Processa comando finale se contiene wake word
+                if (finalTranscript && !isProcessingCommand) {
+                    processContinuousCommand(finalTranscript.toLowerCase().trim());
+                }
+            };
+
+            // Gestione errori
+            continuousRecognition.onerror = function(event) {
+                console.error('Errore riconoscimento continuo:', event.error);
+                
+                if (event.error === 'not-allowed') {
+                    const statusDiv = document.getElementById('voice-status');
+                    statusDiv.textContent = '❌ Permessi microfono negati. Riattiva dai permessi del browser.';
+                    statusDiv.style.color = '#dc3545';
+                    stopContinuousListening();
+                }
+            };
+
+            // Riavvio automatico se si ferma
+            continuousRecognition.onend = function() {
+                if (isContinuousListening && !isProcessingCommand) {
+                    console.log('🔄 Riavvio riconoscimento continuo...');
+                    setTimeout(() => {
+                        if (isContinuousListening) {
+                            try {
+                                continuousRecognition.start();
+                            } catch (error) {
+                                console.error('Errore riavvio:', error);
+                            }
+                        }
+                    }, 1000);
+                }
+            };
+
+            // Avvia il riconoscimento
+            try {
+                continuousRecognition.start();
+                console.log('🎤 Riconoscimento vocale continuo avviato - Dì "Hey Cucina"');
+            } catch (error) {
+                console.error('Errore avvio riconoscimento continuo:', error);
+                updateVoiceUI(false);
+            }
+        }
+
+        // Processa comandi con wake word
+        function processContinuousCommand(command) {
+            console.log('🎧 Comando ricevuto:', command);
+
+            // Cerca wake word
+            let wakeWordFound = false;
+            let commandAfterWake = '';
+
+            for (const wakeWord of WAKE_WORDS) {
+                const wakeIndex = command.indexOf(wakeWord);
+                if (wakeIndex !== -1) {
+                    wakeWordFound = true;
+                    commandAfterWake = command.substring(wakeIndex + wakeWord.length).trim();
+                    console.log(`🎯 Wake word "${wakeWord}" rilevata! Comando: "${commandAfterWake}"`);
+                    break;
+                }
+            }
+
+            if (!wakeWordFound) {
+                // Non c'è wake word, torna al listening
+                const statusDiv = document.getElementById('voice-status');
+                statusDiv.textContent = 'Dì "Hey Cucina" seguito dal comando';
+                statusDiv.style.color = '#666';
                 return;
             }
 
-            isListening = true;
-            voiceButton.style.backgroundColor = '#ff4444';
-            voiceButton.textContent = '🎤 Ascoltando...';
-            statusDiv.textContent = '🎤 Sto ascoltando... Dì: "tavolo 5 10 minuti" o "tavolo 12 per 8 minuti"';
-            statusDiv.style.color = '#ff4444';
+            // ✅ Wake word trovata! Processa il comando
+            isProcessingCommand = true;
+            const statusDiv = document.getElementById('voice-status');
+            const indicatorDiv = document.getElementById('voice-indicator');
 
-            recognition.onresult = function(event) {
-                const command = event.results[0][0].transcript.toLowerCase();
-                const confidence = event.results[0][0].confidence;
+            // Feedback visivo
+            statusDiv.textContent = `🎯 Comando in elaborazione: "${commandAfterWake}"`;
+            statusDiv.style.color = '#ff6600';
+            indicatorDiv.textContent = '🟡 Elaborando comando...';
 
-                console.log('🎤 Comando riconosciuto:', command);
-                console.log('🎯 Confidenza:', confidence);
-                console.log('📊 Risultati completi:', event.results[0]);
+            // Feedback audio (opzionale)
+            playBeep();
 
-                // Mostra il comando riconosciuto all'utente
-                statusDiv.textContent = `🎤 Riconosciuto: "${command}" (${Math.round(confidence * 100)}%)`;
-                statusDiv.style.color = '#007bff';
+            // Processa il comando dopo wake word
+            if (commandAfterWake) {
+                parseVoiceCommand(commandAfterWake);
+            } else {
+                statusDiv.textContent = '❌ Nessun comando dopo "Hey Cucina"';
+                statusDiv.style.color = '#dc3545';
+            }
 
-                parseVoiceCommand(command);
-            };
-
-            recognition.onerror = function(event) {
-                console.error('Errore riconoscimento vocale:', event.error);
-
-                let errorMessage = 'Errore nel riconoscimento vocale. ';
-                switch(event.error) {
-                    case 'not-allowed':
-                        errorMessage = '❌ Permessi microfono negati. Clicca sull\'icona 🎤 nella barra degli indirizzi e consenti l\'accesso.';
-                        break;
-                    case 'no-speech':
-                        errorMessage = '⚠️ Nessun parlato rilevato. Riprova parlando più chiaramente.';
-                        break;
-                    case 'audio-capture':
-                        errorMessage = '❌ Microfono non disponibile. Verifica che sia collegato.';
-                        break;
-                    case 'network':
-                        errorMessage = '❌ Errore di rete. Verifica la connessione internet.';
-                        break;
-                    default:
-                        errorMessage += 'Riprova.';
+            // Riattiva listening dopo 3 secondi
+            setTimeout(() => {
+                isProcessingCommand = false;
+                if (isContinuousListening) {
+                    statusDiv.textContent = 'Dì "Hey Cucina" seguito dal comando';
+                    statusDiv.style.color = '#666';
+                    indicatorDiv.textContent = '🟢 In ascolto continuo...';
                 }
-
-                statusDiv.textContent = errorMessage;
-                statusDiv.style.color = '#dc3545';
-                resetVoiceButton();
-            };
-
-            recognition.onend = function() {
-                // Reset del pulsante senza cooldown se non è già stato processato un comando valido
-                resetVoiceButton();
-            };
-
-            try {
-                recognition.start();
-            } catch (error) {
-                console.error('Errore avvio riconoscimento:', error);
-                statusDiv.textContent = '❌ Impossibile avviare il riconoscimento vocale.';
-                statusDiv.style.color = '#dc3545';
-                resetVoiceButton();
-            }
+            }, 3000);
         }
 
-        function resetVoiceButton() {
-            isListening = false;
-            const voiceButton = document.getElementById('voice-button');
-
-            // Resetta lo stato visivo del pulsante se non è disabilitato (non in cooldown)
-            if (!voiceButton.disabled) {
-                voiceButton.style.backgroundColor = '#4CAF50';
-                voiceButton.textContent = '🎤 Comando Vocale';
-            }
-        }
-
-        // Funzione per gestire il cooldown del pulsante comando vocale
-        function startVoiceButtonCooldown() {
+        // Aggiorna interfaccia utente
+        function updateVoiceUI(isActive) {
             const voiceButton = document.getElementById('voice-button');
             const statusDiv = document.getElementById('voice-status');
+            const indicatorDiv = document.getElementById('voice-indicator');
 
-            // Disabilita il pulsante
-            voiceButton.disabled = true;
-            voiceButton.style.backgroundColor = '#6c757d';
-            voiceButton.style.cursor = 'not-allowed';
-            voiceButton.style.opacity = '0.6';
-
-            let remainingSeconds = 5;
-
-            // Aggiorna il testo del pulsante con il countdown
-            const updateButtonText = () => {
-                if (remainingSeconds >= 0) {
-                    voiceButton.textContent = `🎤 Attendi (${remainingSeconds}s)`;
-                    statusDiv.textContent = `Pulsante disponibile tra ${remainingSeconds} secondi`;
-                    statusDiv.style.color = '#6c757d';
-                    remainingSeconds--;
-                    setTimeout(updateButtonText, 1000);
-                } else {
-                    // Riabilita completamente il pulsante
-                    voiceButton.disabled = false;
-                    voiceButton.textContent = '🎤 Comando Vocale';
-                    voiceButton.style.backgroundColor = '#4CAF50';
-                    voiceButton.style.cursor = 'pointer';
-                    voiceButton.style.opacity = '1';
-                    statusDiv.textContent = 'Clicca per attivare il riconoscimento vocale';
-                    statusDiv.style.color = '#666';
-
-                    console.log('✅ Pulsante comando vocale riabilitato dopo cooldown');
-                }
-            };
-
-            updateButtonText();
-            console.log('⏱️ Cooldown avviato per pulsante comando vocale - 5 secondi');
+            if (isActive) {
+                voiceButton.style.backgroundColor = '#ff6600';
+                voiceButton.textContent = '🎤 Voce Attiva - STOP';
+                statusDiv.textContent = 'Dì "Hey Cucina" seguito dal comando (es: "Hey Cucina tavolo 5 otto minuti")';
+                statusDiv.style.color = '#666';
+                indicatorDiv.textContent = '🟢 In ascolto continuo...';
+                indicatorDiv.style.color = '#28a745';
+            } else {
+                voiceButton.style.backgroundColor = '#4CAF50';
+                voiceButton.textContent = '🎤 Attiva Voce Continua';
+                statusDiv.textContent = 'Dì "Hey Cucina" seguito dal comando (es: "Hey Cucina tavolo 5 otto minuti")';
+                statusDiv.style.color = '#666';
+                indicatorDiv.textContent = '🔴 Voce disattivata';
+                indicatorDiv.style.color = '#dc3545';
+            }
         }
+
+        // Suono di feedback (beep corto)
+        function playBeep() {
+            try {
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioContext.createOscillator();
+                const gain = audioContext.createGain();
+                
+                oscillator.connect(gain);
+                gain.connect(audioContext.destination);
+                
+                oscillator.frequency.value = 800; // Frequenza beep
+                gain.gain.setValueAtTime(0.1, audioContext.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+                
+                oscillator.start(audioContext.currentTime);
+                oscillator.stop(audioContext.currentTime + 0.2);
+            } catch (error) {
+                console.log('Impossibile riprodurre beep:', error);
+            }
+        }
+
+        // Auto-avvio riconoscimento continuo quando la pagina è pronta
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🎤 Pagina caricata - Riconoscimento vocale continuo disponibile');
+            
+            // Avvia automaticamente dopo 2 secondi (opzionale)
+            // setTimeout(() => {
+            //     startContinuousListening();
+            // }, 2000);
+        });
 
         function parseVoiceCommand(command) {
             const statusDiv = document.getElementById('voice-status');
