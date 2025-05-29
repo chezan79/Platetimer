@@ -254,7 +254,10 @@
             audioChunks: [],
             currentTarget: null,
             wakeWordRecognition: null,
-            messageRecognition: null
+            messageRecognition: null,
+            isActive: false,
+            sessionTimeout: null,
+            sessionDuration: 3600000 // 1 ora in millisecondi
         };
 
         // Inizializza chat vocale al caricamento
