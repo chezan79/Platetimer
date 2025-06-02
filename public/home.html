@@ -37,7 +37,49 @@
     </div>
 
     <script>
-        
+        // Funzione per andare al login
+        function goToLogin() {
+            window.location.href = 'index.html';
+        }
+
+        // Gestione del nome dell'azienda
+        document.addEventListener('DOMContentLoaded', function() {
+            function updateCompanyName() {
+                const companyName = localStorage.getItem('userCompany');
+                const companyElement = document.getElementById('company-name');
+                
+                if (companyElement) {
+                    if (companyName && companyName.trim() !== '') {
+                        companyElement.textContent = companyName;
+                    } else {
+                        // Fallback: mostra un nome predefinito
+                        companyElement.textContent = 'Nome Azienda';
+                    }
+                }
+                
+                console.log('Nome azienda dal localStorage:', companyName);
+            }
+
+            // Aggiorna immediatamente
+            updateCompanyName();
+            
+            // Ascolta i cambiamenti nel localStorage
+            window.addEventListener('storage', function(e) {
+                if (e.key === 'userCompany') {
+                    updateCompanyName();
+                }
+            });
+        });
+
+        // Funzione per impostare manualmente il nome dell'azienda (per test)
+        function setCompanyName(name) {
+            localStorage.setItem('userCompany', name);
+            const companyElement = document.getElementById('company-name');
+            if (companyElement) {
+                companyElement.textContent = name;
+            }
+            console.log('Nome azienda impostato:', name);
+        }
     </script>
 </body>
 </html>
