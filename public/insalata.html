@@ -149,6 +149,9 @@
                 const data = JSON.parse(event.data);
                 if (data.action === 'startCountdown') {
                     startCountdown(data.tableNumber, data.timeRemaining);
+                } else if (data.action === 'deleteCountdown') {
+                    console.log(`🗑️ Eliminazione countdown in insalata: Tavolo ${data.tableNumber}`);
+                    deleteCountdown(data.tableNumber);
                 }
             } catch (error) {
                 console.error('Errore nel parsing del messaggio:', error);
@@ -238,6 +241,20 @@
 
             countdowns.push(countdown);
             sortCountdowns();
+        }
+
+        function deleteCountdown(tableNumber) {
+            const countdownIndex = countdowns.findIndex(c => c.tableNumber == tableNumber);
+            if (countdownIndex !== -1) {
+                const countdown = countdowns[countdownIndex];
+                clearInterval(countdown.interval);
+                if (countdown.element && countdown.element.parentNode) {
+                    countdown.element.parentNode.removeChild(countdown.element);
+                }
+                countdowns.splice(countdownIndex, 1);
+                console.log(`🗑️ Countdown tavolo ${tableNumber} eliminato in insalata via WebSocket`);
+                sortCountdowns();
+            }
         }
 
         function formatTime(seconds) {
