@@ -1,2 +1,128 @@
-The requested change involves adding a link to the administration page within the header of the application.
-```
+
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestione Ordini - Home</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container home-container">
+        <div class="header">
+            <h1>Gestione Ordini</h1>
+            <div class="user-info">
+                <span id="user-name">Caricamento...</span>
+                <div class="user-actions">
+                    <a href="admin.html" id="admin-link" style="display: none; margin-right: 15px; color: #dc3545; text-decoration: none; font-weight: 600;">👥 Amministrazione</a>
+                    <button onclick="logout()" class="logout-btn">Logout</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="company-info">
+            <h2 id="company-display">Azienda: <span id="company-name">Caricamento...</span></h2>
+        </div>
+
+        <div class="button-grid">
+            <a href="cucina.html" class="nav-button cucina">
+                🍳 Cucina
+            </a>
+            <a href="sala.html" class="nav-button sala">
+                🍽️ Sala
+            </a>
+            <a href="pizzeria.html" class="nav-button pizzeria">
+                🍕 Pizzeria
+            </a>
+            <a href="insalata.html" class="nav-button insalata">
+                🥗 Insalata
+            </a>
+        </div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getAuth, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+        import { getFirestore, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+        // Configurazione Firebase
+        const firebaseConfig = {
+            apiKey: "AIzaSyDZ0FdjenO-ngblcuXKdwWwvRV5liiR18I",
+            authDomain: "app-dati-tavoli.firebaseapp.com",
+            projectId: "app-dati-tavoli",
+            storageBucket: "app-dati-tavoli.appspot.com",
+            messagingSenderId: "267339065819",
+            appId: "1:267339065819:web:1e74647f740bdf1d725ffe",
+            measurementId: "G-F79QERTN6C"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // Lista degli admin autorizzati
+        const adminEmails = [
+            'admin@esempio.it',
+            'proprietario@esempio.it'
+        ];
+
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                console.log('Utente autenticato:', user.email);
+                
+                try {
+                    // Recupera i dati dell'utente da Firestore
+                    const userDoc = await getDoc(doc(db, 'users', user.uid));
+                    
+                    if (userDoc.exists()) {
+                        const userData = userDoc.data();
+                        
+                        // Mostra il nome dell'utente
+                        const userNameElement = document.getElementById('user-name');
+                        userNameElement.textContent = `${userData.firstName} ${userData.lastName}`;
+                        
+                        // Mostra l'azienda
+                        const companyNameElement = document.getElementById('company-name');
+                        companyNameElement.textContent = userData.company || 'Non specificata';
+                        
+                        // Salva il nome dell'azienda nel localStorage per le altre pagine
+                        if (userData.company) {
+                            localStorage.setItem('companyName', userData.company);
+                        }
+
+                        // Mostra il link di amministrazione se l'utente è un admin
+                        if (adminEmails.includes(user.email)) {
+                            document.getElementById('admin-link').style.display = 'inline';
+                        }
+                        
+                    } else {
+                        console.error('Documento utente non trovato');
+                        document.getElementById('user-name').textContent = user.email;
+                        document.getElementById('company-name').textContent = 'Non specificata';
+                    }
+                } catch (error) {
+                    console.error('Errore nel recupero dei dati utente:', error);
+                    document.getElementById('user-name').textContent = user.email;
+                    document.getElementById('company-name').textContent = 'Errore nel caricamento';
+                }
+            } else {
+                // Reindirizza al login se non autenticato
+                window.location.href = 'index.html';
+            }
+        });
+
+        // Funzione di logout globale
+        window.logout = async function() {
+            try {
+                await signOut(auth);
+                localStorage.removeItem('companyName');
+                window.location.href = 'index.html';
+            } catch (error) {
+                console.error('Errore durante il logout:', error);
+                alert('Errore durante il logout');
+            }
+        };
+    </script>
+</body>
+</html>
