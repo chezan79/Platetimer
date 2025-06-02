@@ -723,16 +723,16 @@
             const indicatorDiv = document.getElementById('voice-indicator');
 
             if (isActive) {
-                voiceButton.style.backgroundColor = '#28a745'; // Verde quando attivo
-                voiceButton.style.color = 'white';
+                voiceButton.style.setProperty('background-color', '#28a745', 'important'); // Verde quando attivo
+                voiceButton.style.setProperty('color', 'white', 'important');
                 voiceButton.textContent = '🎤 Voce Attiva - STOP';
                 statusDiv.textContent = 'Dì "tavolo" seguito dal numero e minuti (es: "tavolo 5 otto minuti")';
                 statusDiv.style.color = '#666';
                 indicatorDiv.textContent = '🟢 In ascolto continuo...';
                 indicatorDiv.style.color = '#28a745';
             } else {
-                voiceButton.style.backgroundColor = '#DCDCDC'; // Grigio quando disattivo
-                voiceButton.style.color = '#696969';
+                voiceButton.style.setProperty('background-color', '#DCDCDC', 'important'); // Grigio quando disattivo
+                voiceButton.style.setProperty('color', '#696969', 'important');
                 voiceButton.textContent = '🎤 Attiva Comando vocale';
                 statusDiv.textContent = 'Dì "tavolo" seguito dal numero e minuti (es: "tavolo 5 otto minuti")';
                 statusDiv.style.color = '#666';
