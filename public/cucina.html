@@ -183,6 +183,17 @@
             background: linear-gradient(135deg, #A9A9A9 0%, #A9A9A9 100%) !important;
         }
 
+        /* Classi specifiche per il pulsante vocale */
+        .voice-active {
+            background-color: #28a745 !important;
+            color: white !important;
+        }
+
+        .voice-inactive {
+            background-color: #DCDCDC !important;
+            color: #696969 !important;
+        }
+
         .delete-btn {
             background-color: #A9A9A9;
             color: white;
@@ -723,16 +734,18 @@
             const indicatorDiv = document.getElementById('voice-indicator');
 
             if (isActive) {
-                voiceButton.style.setProperty('background-color', '#28a745', 'important'); // Verde quando attivo
-                voiceButton.style.setProperty('color', 'white', 'important');
+                // Rimuovi la classe inattiva e aggiungi quella attiva
+                voiceButton.classList.remove('voice-inactive');
+                voiceButton.classList.add('voice-active');
                 voiceButton.textContent = '🎤 Voce Attiva - STOP';
                 statusDiv.textContent = 'Dì "tavolo" seguito dal numero e minuti (es: "tavolo 5 otto minuti")';
                 statusDiv.style.color = '#666';
                 indicatorDiv.textContent = '🟢 In ascolto continuo...';
                 indicatorDiv.style.color = '#28a745';
             } else {
-                voiceButton.style.setProperty('background-color', '#DCDCDC', 'important'); // Grigio quando disattivo
-                voiceButton.style.setProperty('color', '#696969', 'important');
+                // Rimuovi la classe attiva e aggiungi quella inattiva
+                voiceButton.classList.remove('voice-active');
+                voiceButton.classList.add('voice-inactive');
                 voiceButton.textContent = '🎤 Attiva Comando vocale';
                 statusDiv.textContent = 'Dì "tavolo" seguito dal numero e minuti (es: "tavolo 5 otto minuti")';
                 statusDiv.style.color = '#666';
