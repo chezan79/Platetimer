@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sistema Gestione Ordini - Login/Registrazione</title>
-    
+
     <link rel="stylesheet" href="style.css">
 </head>
 
@@ -197,7 +197,7 @@
                 try {
                     await sendPasswordResetEmail(auth, email);
                     showMessage('forgot-password-message', 'Email di reset password inviata! Controlla la tua casella di posta.', false);
-                    
+
                     // Torna al login dopo 3 secondi
                     setTimeout(() => {
                         forgotPasswordFormEl.style.display = 'none';
@@ -207,7 +207,7 @@
                 } catch (error) {
                     console.error('Errore durante il reset password:', error);
                     let errorMessage = 'Errore durante l\'invio dell\'email di reset';
-                    
+
                     switch (error.code) {
                         case 'auth/user-not-found':
                             errorMessage = 'Email non trovata nel sistema';
@@ -216,7 +216,7 @@
                             errorMessage = 'Email non valida';
                             break;
                     }
-                    
+
                     showMessage('forgot-password-message', errorMessage, true);
                 }
             });
@@ -389,7 +389,7 @@
 
                     // Importa updatePassword dinamicamente
                     const { updatePassword } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js');
-                    
+
                     // Aggiorna la password
                     await updatePassword(user, newPassword);
 
@@ -432,3 +432,19 @@
     </script>
 </body>
 </html>
+```
+
+```css
+body {
+  background: 
+    linear-gradient(rgba(248, 249, 250, 0.9), rgba(238, 242, 247, 0.9)),
+    url('mealmaster-logo.jpg') center center/contain no-repeat;
+  background-attachment: fixed;
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+  color: var(--text);
+  line-height: 1.6;
+}
