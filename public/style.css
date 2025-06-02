@@ -219,28 +219,36 @@ button[type="submit"]:hover {
 }
 
 .cucina {
-  background: linear-gradient(135deg, var(--cucina) 0%, #23963d 100%); }
+  background: linear-gradient(135deg, var(--cucina) 0%, #98FB98 100%); 
+  color: #212529;
+}
 
 .cucina:hover {
-  background: linear-gradient(135deg, #23963d 0%, var(--cucina) 100%); }
+  background: linear-gradient(135deg, #98FB98 0%, var(--cucina) 100%); }
 
-.sala {
-  background: linear-gradient(135deg, var(--sala) 0%, #c82333 100%); }
-
-.sala:hover {
-  background: linear-gradient(135deg, #c82333 0%, var(--sala) 100%); }
 
 .pizzeria {
-  background: linear-gradient(135deg, var(--pizzeria) 0%, #e0a800 100%);
+  background: linear-gradient(135deg, var(--pizzeria) 0%, #FFE4C4 100%);
   color: #212529;
 }
 
 .pizzeria:hover {
-  background: linear-gradient(135deg, #e0a800 0%, var(--pizzeria) 100%); }
+  background: linear-gradient(135deg, #B0E0E6 0%, var(--pizzeria) 100%);
+}
 
 .insalata {
-  background: linear-gradient(135deg, var(--insalata) 0%, #f7931e 100%); }
+  background: linear-gradient(135deg, var(--insalata) 0%, #B0E0E6 100%); 
+  color: #212529;
+}
 
 .insalata:hover {
-  background: linear-gradient(135deg, #f7931e 0%, var(--insalata) 100%); }
+  background: linear-gradient(135deg, #E6E6FA 0%, var(--insalata) 100%); }
+
+.sala {
+  background: linear-gradient(135deg, var(--sala) 0%, #E0FFFF 100%); 
+  color: #212529;
+}
+
+.sala:hover {
+  background: linear-gradient(135deg, #E0FFFF 0%, var(--sala) 100%); }
 
