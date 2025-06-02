@@ -183,20 +183,29 @@
             background: linear-gradient(135deg, #A9A9A9 0%, #A9A9A9 100%) !important;
         }
 
-        /* Classi specifiche per il pulsante vocale */
-        .voice-active {
+        /* Classi specifiche per il pulsante vocale con massima priorità */
+        #voice-button.voice-active {
+            background: #28a745 !important;
             background-color: #28a745 !important;
             color: white !important;
         }
 
-        .voice-inactive {
+        #voice-button.voice-inactive {
+            background: #DCDCDC !important;
             background-color: #DCDCDC !important;
             color: #696969 !important;
         }
 
+        /* Rimuovi tutti i gradienti dal pulsante vocale */
+        #voice-button.voice-active,
+        #voice-button.voice-inactive {
+            background-image: none !important;
+        }
+
         .delete-btn {
-            background-color: #A9A9A9;
-            color: white;
+            background: #DCDCDC !important;
+            background-color: #DCDCDC !important;
+            color: #696969 !important;
             border: none;
             padding: 6px 12px;
             border-radius: 4px;
@@ -204,6 +213,13 @@
             font-size: 12px;
             flex-shrink: 0;
             height: fit-content;
+            background-image: none !important;
+        }
+
+        .delete-btn:hover {
+            background: #A9A9A9 !important;
+            background-color: #A9A9A9 !important;
+            transform: translateY(-1px);
         }
     </style>
 </head>
