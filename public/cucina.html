@@ -89,7 +89,7 @@
         .duration-button {
             padding: 12px 20px;
             margin: 5px;
-            background: linear-gradient(135deg, #28a745 0%, #218838 100%);
+            background: linear-gradient(135deg, 	#696969 0%, #A9A9A9 100%);
             color: white;
             border: none;
             border-radius: 5px;
@@ -163,7 +163,7 @@
 
         button {
             padding: 12px 24px;
-            background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%);
+            background: linear-gradient(135deg, #98FB98 0%, #98FB98 100%);
             color: white;
             border: none;
             border-radius: 5px;
@@ -179,12 +179,12 @@
             box-shadow: 0 5px 15px rgba(108, 117, 125, 0.3);
         }
 
-        button[style*="background-color: #4CAF50"] {
-            background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%) !important;
+        button[style*="background-color: #A9A9A9"] {
+            background: linear-gradient(135deg, #A9A9A9 0%, #A9A9A9 100%) !important;
         }
 
         .delete-btn {
-            background-color: #dc3545;
+            background-color: #A9A9A9;
             color: white;
             border: none;
             padding: 6px 12px;
@@ -208,11 +208,11 @@
 
         <!-- Sistema comando vocale continuo -->
         <div style="text-align: center; margin: 15px 0;">
-            <button onclick="toggleContinuousVoice()" id="voice-button" style="padding: 10px 20px; background-color: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; transition: all 0.3s ease; font-size: 16px; font-weight: 600;">
-                🎤 Attiva Voce Continua
+            <button onclick="toggleContinuousVoice()" id="voice-button" style="padding: 10px 20px; background-color: #DCDCDC; color: #696969; border: none; border-radius: 5px; cursor: pointer; transition: all 0.3s ease; font-size: 16px; font-weight: 600;">
+                🎤 Attiva Comando vocale
             </button>
             <div id="voice-status" style="margin-top: 8px; font-size: 14px; color: #666; min-height: 20px;">
-                Dì "tavolo" seguito dal numero e minuti (es: "tavolo 5 otto minuti")
+                "tavolo" seguito dal numero e minuti (es: "tavolo 5 otto minuti")
             </div>
             <div id="voice-indicator" style="margin-top: 5px; font-size: 12px; color: #999;">
                 🔴 Voce disattivata
@@ -262,7 +262,7 @@
 
     <!-- Tasto Home in alto a destra -->
     <div style="position: absolute; top: 20px; right: 80px; z-index: 1000;">
-        <button onclick="window.location.href='home.html'" style="padding: 6px 12px; background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500; transition: transform 0.2s, box-shadow 0.2s;">🏠 Home</button>
+        <button onclick="window.location.href='home.html'" style="padding: 6px 12px; background: linear-gradient(135deg, #A9A9A9 0%, #A9A9A9 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500; transition: transform 0.2s, box-shadow 0.2s;">🏠 Home</button>
     </div>
 
     <audio id="alertSound" src="alerte-346112.mp3" preload="auto"></audio>
@@ -548,7 +548,7 @@
 
         async function startContinuousListening() {
             if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-                alert('Il riconoscimento vocale non è supportato in questo browser. Usa Chrome o Edge.');
+                alert('Il riconoscimento vocale non è supportato in questo browser. Usa Chrome.');
                 return;
             }
 
@@ -616,7 +616,7 @@
 
                 if (isContinuousListening) {
                     statusDiv.textContent = 'Dì "tavolo" seguito dal numero e minuti';
-                    statusDiv.style.color = '#666';
+                    statusDiv.style.color = '#DCDCDC';
                     indicatorDiv.textContent = '🟢 In ascolto continuo...';
                     restartRecognitionFromScratch();
                 }
@@ -723,14 +723,14 @@
             const indicatorDiv = document.getElementById('voice-indicator');
 
             if (isActive) {
-                voiceButton.style.backgroundColor = '#ff6600';
+                voiceButton.style.backgroundColor = '#DCDCDC';
                 voiceButton.textContent = '🎤 Voce Attiva - STOP';
                 statusDiv.textContent = 'Dì "tavolo" seguito dal numero e minuti (es: "tavolo 5 otto minuti")';
                 statusDiv.style.color = '#666';
                 indicatorDiv.textContent = '🟢 In ascolto continuo...';
                 indicatorDiv.style.color = '#28a745';
             } else {
-                voiceButton.style.backgroundColor = '#4CAF50';
+                voiceButton.style.backgroundColor = '#DCDCDC';
                 voiceButton.textContent = '🎤 Attiva Voce Continua';
                 statusDiv.textContent = 'Dì "tavolo" seguito dal numero e minuti (es: "tavolo 5 otto minuti")';
                 statusDiv.style.color = '#666';

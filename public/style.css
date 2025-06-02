@@ -101,7 +101,7 @@ input[type="password"]:focus {
 }
 
 button[type="submit"] {
-  background: linear-gradient(135deg, var(--accent) 0%, #3a56e6 100%);
+  background: linear-gradient(135deg, var(--accent) 0%, 	#696969 100%);
   color: white;
   padding: 16px;
   border: none;
