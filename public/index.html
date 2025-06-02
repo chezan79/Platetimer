@@ -45,6 +45,19 @@
                 </div>
             </div>
 
+            <!-- Modulo per password dimenticata -->
+            <div id="forgot-password-form" style="display: none;">
+                <h2>Password Dimenticata</h2>
+                <div id="forgot-password-message" class="message"></div>
+                <form id="form-forgot-password">
+                    <input type="email" id="forgot-email" placeholder="Inserisci la tua email" required>
+                    <button type="submit">Invia Link Reset</button>
+                </form>
+                <div class="toggle-link">
+                    <span><a href="#" id="back-to-login-from-forgot">Torna al Login</a></span>
+                </div>
+            </div>
+
             <!-- Modulo per cambio password -->
             <div id="change-password-form" style="display: none;">
                 <h2>Cambia Password</h2>
@@ -57,7 +70,7 @@
                     <button type="submit">Cambia Password</button>
                 </form>
                 <div class="toggle-link">
-                    <span><a href="#" id="back-to-login">Torna al Login</a></span>
+                    <span><a href="#" id="back-to-login-from-change">Torna al Login</a></span>
                 </div>
             </div>
         </div>
@@ -88,15 +101,18 @@
         // Elementi DOM
         const registerFormEl = document.getElementById('register-form');
         const loginFormEl = document.getElementById('login-form');
+        const forgotPasswordFormEl = document.getElementById('forgot-password-form');
         const changePasswordFormEl = document.getElementById('change-password-form');
         const formRegister = document.getElementById('form-register');
         const formLogin = document.getElementById('form-login');
+        const formForgotPassword = document.getElementById('form-forgot-password');
         const formChangePassword = document.getElementById('form-change-password');
         const goToLogin = document.getElementById('go-to-login');
         const goToRegister = document.getElementById('go-to-register');
         const forgotPassword = document.getElementById('forgot-password');
         const changePassword = document.getElementById('change-password');
-        const backToLogin = document.getElementById('back-to-login');
+        const backToLoginFromForgot = document.getElementById('back-to-login-from-forgot');
+        const backToLoginFromChange = document.getElementById('back-to-login-from-change');
 
         // Funzioni per mostrare messaggi
         function showMessage(elementId, message, isError = false) {
@@ -113,6 +129,7 @@
             goToLogin.addEventListener('click', (e) => {
                 e.preventDefault();
                 registerFormEl.style.display = 'none';
+                forgotPasswordFormEl.style.display = 'none';
                 changePasswordFormEl.style.display = 'none';
                 loginFormEl.style.display = 'block';
             });
@@ -122,8 +139,19 @@
             goToRegister.addEventListener('click', (e) => {
                 e.preventDefault();
                 loginFormEl.style.display = 'none';
+                forgotPasswordFormEl.style.display = 'none';
                 changePasswordFormEl.style.display = 'none';
                 registerFormEl.style.display = 'block';
+            });
+        }
+
+        if (forgotPassword) {
+            forgotPassword.addEventListener('click', (e) => {
+                e.preventDefault();
+                loginFormEl.style.display = 'none';
+                registerFormEl.style.display = 'none';
+                changePasswordFormEl.style.display = 'none';
+                forgotPasswordFormEl.style.display = 'block';
             });
         }
 
@@ -132,33 +160,47 @@
                 e.preventDefault();
                 loginFormEl.style.display = 'none';
                 registerFormEl.style.display = 'none';
+                forgotPasswordFormEl.style.display = 'none';
                 changePasswordFormEl.style.display = 'block';
             });
         }
 
-        if (backToLogin) {
-            backToLogin.addEventListener('click', (e) => {
+        if (backToLoginFromForgot) {
+            backToLoginFromForgot.addEventListener('click', (e) => {
                 e.preventDefault();
-                changePasswordFormEl.style.display = 'none';
+                forgotPasswordFormEl.style.display = 'none';
                 registerFormEl.style.display = 'none';
+                changePasswordFormEl.style.display = 'none';
                 loginFormEl.style.display = 'block';
             });
         }
 
-        // Gestione reset password
-        if (forgotPassword) {
-            forgotPassword.addEventListener('click', async (e) => {
+        if (backToLoginFromChange) {
+            backToLoginFromChange.addEventListener('click', (e) => {
                 e.preventDefault();
-                const email = document.getElementById('login-email').value;
-                
-                if (!email) {
-                    showMessage('login-message', 'Inserisci la tua email prima di richiedere il reset password', true);
-                    return;
-                }
+                changePasswordFormEl.style.display = 'none';
+                registerFormEl.style.display = 'none';
+                forgotPasswordFormEl.style.display = 'none';
+                loginFormEl.style.display = 'block';
+            });
+        }
+
+        // Gestione form password dimenticata
+        if (formForgotPassword) {
+            formForgotPassword.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const email = document.getElementById('forgot-email').value;
 
                 try {
                     await sendPasswordResetEmail(auth, email);
-                    showMessage('login-message', 'Email di reset password inviata! Controlla la tua casella di posta.', false);
+                    showMessage('forgot-password-message', 'Email di reset password inviata! Controlla la tua casella di posta.', false);
+                    
+                    // Torna al login dopo 3 secondi
+                    setTimeout(() => {
+                        forgotPasswordFormEl.style.display = 'none';
+                        loginFormEl.style.display = 'block';
+                        document.getElementById('form-forgot-password').reset();
+                    }, 3000);
                 } catch (error) {
                     console.error('Errore durante il reset password:', error);
                     let errorMessage = 'Errore durante l\'invio dell\'email di reset';
@@ -172,7 +214,7 @@
                             break;
                     }
                     
-                    showMessage('login-message', errorMessage, true);
+                    showMessage('forgot-password-message', errorMessage, true);
                 }
             });
         }
