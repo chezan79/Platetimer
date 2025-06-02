@@ -225,8 +225,13 @@
 </head>
 <body>
     <!-- Nome Azienda centralizzato -->
-    <div id="company-header" style="position: absolute; top: 20px; left: 50%; transform: translateX(-50%); z-index: 1000; padding: 10px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; border-left: 4px solid #28a745;">
+    <div id="company-header" style="position: absolute; top: 20px; left: 20px; z-index: 1000; padding: 10px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; border-left: 4px solid #28a745;">
         <h4 id="company-name" style="margin: 0; color: #333; font-weight: 600;">Nome Azienda</h4>
+    </div>
+
+    <div style="position: absolute; top: 20px; right: 20px; z-index: 1000; display: flex; gap: 10px;">
+        <button onclick="window.location.href='home.html'" style="padding: 6px 12px; background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500; transition: transform 0.2s, box-shadow 0.2s;">🏠 Home</button>
+        <button onclick="window.location.href='index.html'" style="padding: 6px 12px; background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500; transition: transform 0.2s, box-shadow 0.2s;">🚪 Esci</button>
     </div>
 
     <!-- Contenitore sinistro: Tastiera e input -->
@@ -285,11 +290,6 @@
     <div id="rightContainer">
         <h2>Tavoli in corso</h2>
         <div id="countdownList"></div>
-    </div>
-
-    <!-- Tasto Home in alto a destra -->
-    <div style="position: absolute; top: 20px; right: 80px; z-index: 1000;">
-        <button onclick="window.location.href='home.html'" style="padding: 6px 12px; background: linear-gradient(135deg, #A9A9A9 0%, #A9A9A9 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500; transition: transform 0.2s, box-shadow 0.2s;">🏠 Home</button>
     </div>
 
     <audio id="alertSound" src="alerte-346112.mp3" preload="auto"></audio>
@@ -823,7 +823,7 @@
 
                         document.getElementById('numeroTavolo').value = tableNumber;
                         startCountdown(minutes, tableNumber);
-                        
+
                         // 🧹 Pulisce automaticamente l'input dopo il comando vocale
                         setTimeout(() => {
                             document.getElementById('numeroTavolo').value = '';
