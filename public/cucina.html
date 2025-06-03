@@ -475,9 +475,6 @@
                         } else if (data.action === 'voiceMessage') {
                             console.log('📢 Messaggio vocale ricevuto:', data);
                             displayVoiceMessage(data);
-                        } else if (data.action === 'deleteVoiceMessage') {
-                            console.log('🗑️ Eliminazione messaggio vocale ricevuta:', data);
-                            removeVoiceMessage(data.messageId);
                         } else if (data.action === 'voiceMessage') {
                             console.log('📢 Messaggio vocale ricevuto:', data);
                             displayVoiceMessage(data);
@@ -1065,11 +1062,11 @@
         // Gestione messaggi vocali
         function displayVoiceMessage(messageData) {
             const messagesList = document.getElementById('voice-messages-list');
-            const messagesContainer = document.getElementById('messagesContainer');
+            const messagesContainerElement = document.getElementById('messagesContainer');
             
             // 🎯 Mostra il container dei messaggi quando arriva il primo messaggio
-            if (messagesContainer.style.display === 'none') {
-                messagesContainer.style.display = 'flex';
+            if (messagesContainerElement.style.display === 'none') {
+                messagesContainerElement.style.display = 'flex';
                 console.log('📦 Container messaggi mostrato');
             }
 
@@ -1232,10 +1229,10 @@
 
                     // 🎯 Se non ci sono più messaggi, nascondi il container
                     const messagesList = document.getElementById('voice-messages-list');
-                    const messagesContainer = document.getElementById('messagesContainer');
+                    const messagesContainerElement = document.getElementById('messagesContainer');
                     
                     if (messagesList.children.length === 0) {
-                        messagesContainer.style.display = 'none';
+                        messagesContainerElement.style.display = 'none';
                         console.log('📦 Container messaggi nascosto (nessun messaggio)');
                     }
                 }, 300);
