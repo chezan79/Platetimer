@@ -182,10 +182,10 @@
                         
                         if (data.action === 'startCountdown') {
                             console.log('📥 Countdown ricevuto in pizzeria:', data);
-                            startCountdownVisual(data.tableNumber, data.timeRemaining);
+                            startCountdown(data.tableNumber, data.timeRemaining);
                         } else if (data.action === 'deleteCountdown') {
                             console.log('📥 Eliminazione countdown ricevuta in pizzeria:', data);
-                            removeCountdownVisual(data.tableNumber);
+                            deleteCountdown(data.tableNumber);
                         }
                     } catch (error) {
                         console.error('Errore parsing messaggio pizzeria:', error);
@@ -271,21 +271,7 @@
             });
         }
 
-        ws.onmessage = (event) => {
-            try {
-                const data = JSON.parse(event.data);
-                console.log('📥 Messaggio ricevuto in pizzeria:', data);
-                if (data.action === 'startCountdown') {
-                    console.log(`🍕 Avvio countdown in pizzeria: Tavolo ${data.tableNumber}, ${Math.floor(data.timeRemaining/60)}:${(data.timeRemaining%60).toString().padStart(2, '0')}`);
-                    startCountdown(data.tableNumber, data.timeRemaining);
-                } else if (data.action === 'deleteCountdown') {
-                    console.log(`🗑️ Eliminazione countdown in pizzeria: Tavolo ${data.tableNumber}`);
-                    deleteCountdown(data.tableNumber);
-                }
-            } catch (error) {
-                console.error('❌ Errore nel parsing del messaggio in pizzeria:', error);
-            }
-        };
+        
 
         function startCountdown(tableNumber, timeRemaining) {
             // Rimuovi il vecchio countdown se esiste
