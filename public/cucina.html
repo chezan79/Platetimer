@@ -475,9 +475,6 @@
                         } else if (data.action === 'voiceMessage') {
                             console.log('📢 Messaggio vocale ricevuto:', data);
                             displayVoiceMessage(data);
-                        } else if (data.action === 'voiceMessage') {
-                            console.log('📢 Messaggio vocale ricevuto:', data);
-                            displayVoiceMessage(data);
                         } else if (data.action === 'deleteVoiceMessage') {
                             console.log('🗑️ Eliminazione messaggio vocale ricevuta:', data);
                             removeVoiceMessage(data.messageId);
