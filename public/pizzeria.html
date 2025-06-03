@@ -164,6 +164,9 @@
         let isConnected = false;
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const countdowns = [];
+        
+        // ✅ Evita dichiarazione duplicata di messagesContainer
+        let messagesContainer;
 
         function connectWebSocket() {
             try {
