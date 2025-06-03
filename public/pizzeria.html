@@ -427,6 +427,8 @@
 
             voiceRecognition.onstart = () => {
                 console.log('🎤 Registrazione messaggio vocale avviata (tieni premuto)');
+                currentTranscript = ''; // ✅ Reset completo del transcript
+                console.log('🔄 Transcript resettato per nuova registrazione');
                 const statusDiv = document.getElementById('voice-message-status');
                 statusDiv.textContent = '🎤 Registrando... Continua a tenere premuto!';
                 statusDiv.style.color = '#dc3545';
@@ -436,8 +438,8 @@
                 let interimTranscript = '';
                 let finalTranscript = '';
 
-                // ✅ Processa TUTTI i risultati disponibili, non solo quelli nuovi
-                for (let i = 0; i < event.results.length; ++i) {
+                // ✅ Processa SOLO i risultati nuovi per evitare duplicazioni
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
                     const transcript = event.results[i][0].transcript;
                     const confidence = event.results[i][0].confidence;
                     
@@ -450,12 +452,13 @@
                     }
                 }
 
-                // ✅ Accumula tutto il testo finale e quello temporaneo
+                // ✅ Accumula solo il testo finale nuovo
                 if (finalTranscript) {
                     currentTranscript += finalTranscript;
                     console.log(`📝 Transcript accumulato aggiornato: "${currentTranscript}"`);
                 }
                 
+                // ✅ Mostra il testo accumulato + quello temporaneo corrente
                 const displayText = currentTranscript + interimTranscript;
                 
                 const statusDiv = document.getElementById('voice-message-status');
