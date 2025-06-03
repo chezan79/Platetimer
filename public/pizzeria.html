@@ -445,8 +445,12 @@
                     }
                 }
 
-                currentTranscript = finalTranscript;
-                const displayText = finalTranscript + interimTranscript;
+                // ✅ Accumula tutto il testo finale e quello temporaneo
+                if (finalTranscript) {
+                    currentTranscript += finalTranscript;
+                }
+                
+                const displayText = currentTranscript + interimTranscript;
                 
                 const statusDiv = document.getElementById('voice-message-status');
                 if (displayText.trim()) {
@@ -456,6 +460,8 @@
                     statusDiv.textContent = '🎤 Registrando... Continua a tenere premuto!';
                     statusDiv.style.color = '#dc3545';
                 }
+                
+                console.log(`📝 Trascrizione aggiornata: finale="${currentTranscript}", temporanea="${interimTranscript}"`);
             };
 
             voiceRecognition.onerror = (event) => {
@@ -497,31 +503,39 @@
 
             isRecordingMessage = false;
             
-            if (voiceRecognition) {
-                voiceRecognition.stop();
-                voiceRecognition = null;
-            }
-
+            const statusDiv = document.getElementById('voice-message-status');
+            statusDiv.textContent = '🔄 Elaborando messaggio completo...';
+            statusDiv.style.color = '#ffc107';
+            
             updateVoiceMessageUI(false);
 
-            // Invia il messaggio se c'è del testo
-            if (currentTranscript && currentTranscript.trim().length > 0) {
-                const statusDiv = document.getElementById('voice-message-status');
-                statusDiv.textContent = `✅ Messaggio registrato: "${currentTranscript.trim()}"`;
-                statusDiv.style.color = '#28a745';
-                sendVoiceMessage(currentTranscript.trim());
-            } else {
-                const statusDiv = document.getElementById('voice-message-status');
-                statusDiv.textContent = '⚠️ Nessun messaggio registrato';
-                statusDiv.style.color = '#ffc107';
-                
-                setTimeout(() => {
-                    statusDiv.textContent = 'Tieni premuto il pulsante per registrare';
-                    statusDiv.style.color = '#666';
-                }, 2000);
-            }
+            // ✅ Ritardo per permettere al riconoscimento di completare l'elaborazione
+            setTimeout(() => {
+                if (voiceRecognition) {
+                    voiceRecognition.stop();
+                    voiceRecognition = null;
+                }
 
-            currentTranscript = '';
+                // Attendi un altro momento per essere sicuri che tutti i risultati siano stati processati
+                setTimeout(() => {
+                    // Invia il messaggio se c'è del testo
+                    if (currentTranscript && currentTranscript.trim().length > 0) {
+                        statusDiv.textContent = `✅ Messaggio completo registrato: "${currentTranscript.trim()}"`;
+                        statusDiv.style.color = '#28a745';
+                        sendVoiceMessage(currentTranscript.trim());
+                    } else {
+                        statusDiv.textContent = '⚠️ Nessun messaggio registrato';
+                        statusDiv.style.color = '#ffc107';
+                        
+                        setTimeout(() => {
+                            statusDiv.textContent = 'Tieni premuto il pulsante per registrare';
+                            statusDiv.style.color = '#666';
+                        }, 2000);
+                    }
+
+                    currentTranscript = '';
+                }, 500); // Ritardo aggiuntivo per elaborazione finale
+            }, 800); // Ritardo principale per catturare tutto l'audio
         }
 
         function updateVoiceMessageUI(isRecording) {
