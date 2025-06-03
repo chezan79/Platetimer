@@ -271,7 +271,7 @@
     <!-- Logo posizionato in alto al centro -->
     <div style="position: absolute; top: 20px; left: 50%; transform: translateX(-50%); z-index: 1000;">
         <a href="https://imgbox.com/Bt6wfdF9" target="_blank">
-            <img src="https://thumbs2.imgbox.com/3b/04/Bt6wfdF9_t.jpg" alt="MealMaster Logo" style="width: 120px; height: auto;">
+            <img src="https://thumbs2.imgbox.com/3b/04/Bt6wfdF9_t.jpg" alt="MealMaster Logo" style="width: 80px; height: auto;">
         </a>
     </div>
     
@@ -472,6 +472,12 @@
                                 countdowns.splice(countdownIndex, 1);
                                 console.log(`🗑️ Countdown tavolo ${data.tableNumber} eliminato da altro client`);
                             }
+                        } else if (data.action === 'voiceMessage') {
+                            console.log('📢 Messaggio vocale ricevuto:', data);
+                            displayVoiceMessage(data);
+                        } else if (data.action === 'deleteVoiceMessage') {
+                            console.log('🗑️ Eliminazione messaggio vocale ricevuta:', data);
+                            removeVoiceMessage(data.messageId);
                         } else if (data.action === 'voiceMessage') {
                             console.log('📢 Messaggio vocale ricevuto:', data);
                             displayVoiceMessage(data);
