@@ -436,18 +436,24 @@
                 let interimTranscript = '';
                 let finalTranscript = '';
 
-                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                // ✅ Processa TUTTI i risultati disponibili, non solo quelli nuovi
+                for (let i = 0; i < event.results.length; ++i) {
                     const transcript = event.results[i][0].transcript;
+                    const confidence = event.results[i][0].confidence;
+                    
                     if (event.results[i].isFinal) {
                         finalTranscript += transcript;
+                        console.log(`📝 Risultato FINALE: "${transcript}" (confidence: ${confidence})`);
                     } else {
                         interimTranscript += transcript;
+                        console.log(`📝 Risultato temporaneo: "${transcript}"`);
                     }
                 }
 
                 // ✅ Accumula tutto il testo finale e quello temporaneo
                 if (finalTranscript) {
                     currentTranscript += finalTranscript;
+                    console.log(`📝 Transcript accumulato aggiornato: "${currentTranscript}"`);
                 }
                 
                 const displayText = currentTranscript + interimTranscript;
@@ -461,7 +467,7 @@
                     statusDiv.style.color = '#dc3545';
                 }
                 
-                console.log(`📝 Trascrizione aggiornata: finale="${currentTranscript}", temporanea="${interimTranscript}"`);
+                console.log(`📝 Display completo: "${displayText}" (${displayText.length} caratteri)`);
             };
 
             voiceRecognition.onerror = (event) => {
@@ -509,19 +515,20 @@
             
             updateVoiceMessageUI(false);
 
-            // ✅ Ritardo per permettere al riconoscimento di completare l'elaborazione
+            // ✅ Ritardo MAGGIORE per permettere al riconoscimento di completare l'elaborazione di messaggi lunghi
             setTimeout(() => {
                 if (voiceRecognition) {
                     voiceRecognition.stop();
                     voiceRecognition = null;
                 }
 
-                // Attendi un altro momento per essere sicuri che tutti i risultati siano stati processati
+                // Attendi tempo extra per essere sicuri che tutti i risultati siano stati processati
                 setTimeout(() => {
                     // Invia il messaggio se c'è del testo
                     if (currentTranscript && currentTranscript.trim().length > 0) {
                         statusDiv.textContent = `✅ Messaggio completo registrato: "${currentTranscript.trim()}"`;
                         statusDiv.style.color = '#28a745';
+                        console.log(`📝 Messaggio finale da inviare: "${currentTranscript.trim()}" (${currentTranscript.trim().length} caratteri)`);
                         sendVoiceMessage(currentTranscript.trim());
                     } else {
                         statusDiv.textContent = '⚠️ Nessun messaggio registrato';
@@ -534,8 +541,8 @@
                     }
 
                     currentTranscript = '';
-                }, 500); // Ritardo aggiuntivo per elaborazione finale
-            }, 800); // Ritardo principale per catturare tutto l'audio
+                }, 1000); // Ritardo RADDOPPIATO per elaborazione finale (era 500ms)
+            }, 1500); // Ritardo principale QUASI RADDOPPIATO per catturare tutto l'audio (era 800ms)
         }
 
         function updateVoiceMessageUI(isRecording) {
