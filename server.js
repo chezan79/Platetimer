@@ -318,6 +318,70 @@ wss.on('connection', (ws) => {
                 } else {
                     console.log('⚠️ Client non assegnato a nessuna room per eliminazione');
                 }
+
+            } else if (data.action === 'voiceMessage') {
+                // Validazione messaggio vocale
+                if (!data.message || typeof data.message !== 'string') {
+                    console.log('⚠️ Messaggio vocale non valido');
+                    return;
+                }
+
+                if (!data.messageId || typeof data.messageId !== 'string') {
+                    console.log('⚠️ ID messaggio vocale mancante');
+                    return;
+                }
+
+                // Invia messaggio vocale a tutti i client della room
+                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    const voiceMessage = JSON.stringify({
+                        action: 'voiceMessage',
+                        message: data.message,
+                        messageId: data.messageId,
+                        timestamp: new Date().toLocaleTimeString('it-IT'),
+                        from: data.from || 'Pizzeria'
+                    });
+
+                    let sentCount = 0;
+                    roomClients.forEach((client) => {
+                        if (client.readyState === WebSocket.OPEN) {
+                            client.send(voiceMessage);
+                            sentCount++;
+                        }
+                    });
+
+                    console.log(`📢 Messaggio vocale inviato alla room "${ws.companyRoom}" (${sentCount}/${roomClients.size} client): "${data.message}"`);
+                } else {
+                    console.log('⚠️ Client non assegnato a nessuna room per messaggio vocale');
+                }
+
+            } else if (data.action === 'deleteVoiceMessage') {
+                // Validazione eliminazione messaggio vocale
+                if (!data.messageId) {
+                    console.log('⚠️ ID messaggio vocale mancante per eliminazione');
+                    return;
+                }
+
+                // Invia eliminazione messaggio vocale a tutti i client della room
+                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    const deleteMessage = JSON.stringify({
+                        action: 'deleteVoiceMessage',
+                        messageId: data.messageId
+                    });
+
+                    let sentCount = 0;
+                    roomClients.forEach((client) => {
+                        if (client.readyState === WebSocket.OPEN) {
+                            client.send(deleteMessage);
+                            sentCount++;
+                        }
+                    });
+
+                    console.log(`🗑️ Eliminazione messaggio vocale inviata alla room "${ws.companyRoom}" (${sentCount}/${roomClients.size} client): ID ${data.messageId}`);
+                } else {
+                    console.log('⚠️ Client non assegnato a nessuna room per eliminazione messaggio vocale');
+                }
             }
         } catch (error) {
             console.error('❌ Errore nel parsing del messaggio:', error);

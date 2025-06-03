@@ -114,6 +114,18 @@
     
     <div class="countdown-container">
         <h1>🍕 Pizzeria</h1>
+        
+        <!-- Sistema messaggio vocale per cucina -->
+        <div style="text-align: center; margin: 20px 0; padding: 15px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; border-left: 4px solid #007bff;">
+            <h3 style="margin: 0 0 10px 0; color: #333; font-size: 18px;">📢 Messaggio per la Cucina</h3>
+            <button onclick="toggleVoiceMessage()" id="voice-message-button" style="padding: 12px 24px; background: linear-gradient(135deg, #007bff 0%, #0056b3 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: 600; margin: 5px; transition: all 0.3s ease;">
+                🎤 Registra Messaggio
+            </button>
+            <div id="voice-message-status" style="margin-top: 10px; font-size: 14px; color: #666; min-height: 20px;">
+                Premi il pulsante per registrare un messaggio vocale
+            </div>
+        </div>
+        
         <div id="tavoli">
             <!-- I countdown sincronizzati appariranno qui -->
         </div>
@@ -378,6 +390,135 @@
             const minutes = Math.floor(seconds / 60);
             const remainingSeconds = seconds % 60;
             return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+        }
+
+        // Sistema messaggio vocale
+        let voiceRecognition = null;
+        let isRecordingMessage = false;
+
+        function toggleVoiceMessage() {
+            if (isRecordingMessage) {
+                stopVoiceMessage();
+            } else {
+                startVoiceMessage();
+            }
+        }
+
+        function startVoiceMessage() {
+            if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+                alert('Il riconoscimento vocale non è supportato in questo browser. Usa Chrome.');
+                return;
+            }
+
+            isRecordingMessage = true;
+            updateVoiceMessageUI(true);
+
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            voiceRecognition = new SpeechRecognition();
+
+            voiceRecognition.lang = 'it-IT';
+            voiceRecognition.continuous = false;
+            voiceRecognition.interimResults = true;
+            voiceRecognition.maxAlternatives = 1;
+
+            voiceRecognition.onstart = () => {
+                console.log('🎤 Registrazione messaggio vocale avviata');
+                const statusDiv = document.getElementById('voice-message-status');
+                statusDiv.textContent = '🎤 Registrando... Parla ora!';
+                statusDiv.style.color = '#dc3545';
+            };
+
+            voiceRecognition.onresult = (event) => {
+                let transcript = '';
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    transcript += event.results[i][0].transcript;
+                }
+
+                const statusDiv = document.getElementById('voice-message-status');
+                if (event.results[event.results.length - 1].isFinal) {
+                    statusDiv.textContent = `✅ Messaggio registrato: "${transcript}"`;
+                    statusDiv.style.color = '#28a745';
+                    sendVoiceMessage(transcript);
+                } else {
+                    statusDiv.textContent = `🎤 "${transcript}"`;
+                    statusDiv.style.color = '#007bff';
+                }
+            };
+
+            voiceRecognition.onerror = (event) => {
+                console.error('Errore riconoscimento vocale:', event.error);
+                const statusDiv = document.getElementById('voice-message-status');
+                statusDiv.textContent = `❌ Errore: ${event.error}`;
+                statusDiv.style.color = '#dc3545';
+                stopVoiceMessage();
+            };
+
+            voiceRecognition.onend = () => {
+                console.log('🛑 Registrazione messaggio vocale terminata');
+                stopVoiceMessage();
+            };
+
+            try {
+                voiceRecognition.start();
+            } catch (error) {
+                console.error('Errore avvio riconoscimento:', error);
+                stopVoiceMessage();
+            }
+        }
+
+        function stopVoiceMessage() {
+            if (voiceRecognition) {
+                voiceRecognition.stop();
+                voiceRecognition = null;
+            }
+            isRecordingMessage = false;
+            updateVoiceMessageUI(false);
+        }
+
+        function updateVoiceMessageUI(isRecording) {
+            const button = document.getElementById('voice-message-button');
+            const statusDiv = document.getElementById('voice-message-status');
+
+            if (isRecording) {
+                button.textContent = '🛑 Stop Registrazione';
+                button.style.background = 'linear-gradient(135deg, #dc3545 0%, #c82333 100%)';
+            } else {
+                button.textContent = '🎤 Registra Messaggio';
+                button.style.background = 'linear-gradient(135deg, #007bff 0%, #0056b3 100%)';
+                
+                setTimeout(() => {
+                    statusDiv.textContent = 'Premi il pulsante per registrare un messaggio vocale';
+                    statusDiv.style.color = '#666';
+                }, 3000);
+            }
+        }
+
+        function sendVoiceMessage(message) {
+            if (!message.trim()) {
+                console.log('Messaggio vuoto, non inviato');
+                return;
+            }
+
+            const messageId = Date.now().toString();
+            
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                const voiceMessageData = {
+                    action: 'voiceMessage',
+                    message: message.trim(),
+                    messageId: messageId,
+                    from: 'Pizzeria'
+                };
+                
+                ws.send(JSON.stringify(voiceMessageData));
+                console.log('📢 Messaggio vocale inviato:', message);
+                
+                const statusDiv = document.getElementById('voice-message-status');
+                statusDiv.textContent = '✅ Messaggio inviato alla cucina!';
+                statusDiv.style.color = '#28a745';
+            } else {
+                console.error('❌ WebSocket non connesso per messaggio vocale');
+                alert('⚠️ Connessione persa. Impossibile inviare il messaggio.');
+            }
         }
     </script>
     <script src="company-header.js"></script>
