@@ -17,7 +17,7 @@
 
         /* Colonna della tastiera */
         #leftContainer {
-            width: 35%;
+            width: 30%;
             background: white;
             padding: 20px;
             border-radius: 10px;
@@ -30,7 +30,7 @@
 
         /* Colonna dei countdown */
         #rightContainer {
-            width: 65%;
+            width: 45%;
             background: white;
             padding: 20px;
             border-radius: 10px;
@@ -38,6 +38,12 @@
             display: flex;
             flex-direction: column;
             overflow-y: auto;
+        }
+
+        /* Container messaggi */
+        #messagesContainer {
+            width: 25%;
+            min-width: 300px;
         }
 
         h1, h2 {
@@ -297,10 +303,12 @@
     <div id="rightContainer">
         <h2>Tavoli in corso</h2>
         <div id="countdownList"></div>
-        
-        <!-- Container messaggi vocali dalla pizzeria -->
-        <div id="voice-messages-container" style="margin-top: 30px; padding: 15px; background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-radius: 8px; border-left: 4px solid #2196f3;">
-            <h3 style="margin: 0 0 15px 0; color: #1976d2; font-size: 18px;">📢 Messaggi dalla Pizzeria</h3>
+    </div>
+
+    <!-- Container dedicato per i messaggi della pizzeria -->
+    <div id="messagesContainer" style="width: 100%; max-width: 400px; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2); margin-left: 20px; display: flex; flex-direction: column; max-height: 80vh; overflow-y: auto;">
+        <div id="voice-messages-container" style="padding: 15px; background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-radius: 8px; border-left: 4px solid #2196f3;">
+            <h3 style="margin: 0 0 15px 0; color: #1976d2; font-size: 18px;">📢 Messaggi Pizzeria</h3>
             <div id="voice-messages-list">
                 <p style="margin: 0; color: #666; font-style: italic;">Nessun messaggio</p>
             </div>
@@ -1069,26 +1077,75 @@
 
             messagesList.appendChild(messageElement);
 
-            // Suono di notifica per nuovo messaggio
-            try {
-                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                const oscillator = audioContext.createOscillator();
-                const gain = audioContext.createGain();
+            // 🔊 Riproduci allarme per nuovo messaggio dalla pizzeria
+            const messageAlert = document.getElementById('alertSound');
+            if (messageAlert) {
+                messageAlert.play().catch(error => {
+                    console.log('⚠️ Errore riproduzione allarme messaggio:', error);
+                    
+                    // Fallback: suono generato se l'audio non funziona
+                    try {
+                        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                        const oscillator = audioContext.createOscillator();
+                        const gain = audioContext.createGain();
 
-                oscillator.connect(gain);
-                gain.connect(audioContext.destination);
+                        oscillator.connect(gain);
+                        gain.connect(audioContext.destination);
 
-                oscillator.frequency.value = 800;
-                gain.gain.setValueAtTime(0.1, audioContext.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+                        // Due beep per distinguere dai countdown
+                        oscillator.frequency.value = 1000;
+                        gain.gain.setValueAtTime(0.1, audioContext.currentTime);
+                        gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
 
-                oscillator.start(audioContext.currentTime);
-                oscillator.stop(audioContext.currentTime + 0.3);
-            } catch (error) {
-                console.log('Impossibile riprodurre suono notifica:', error);
+                        oscillator.start(audioContext.currentTime);
+                        oscillator.stop(audioContext.currentTime + 0.2);
+
+                        // Secondo beep
+                        setTimeout(() => {
+                            const oscillator2 = audioContext.createOscillator();
+                            const gain2 = audioContext.createGain();
+                            oscillator2.connect(gain2);
+                            gain2.connect(audioContext.destination);
+                            oscillator2.frequency.value = 1200;
+                            gain2.gain.setValueAtTime(0.1, audioContext.currentTime);
+                            gain2.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+                            oscillator2.start(audioContext.currentTime);
+                            oscillator2.stop(audioContext.currentTime + 0.2);
+                        }, 300);
+                    } catch (synthError) {
+                        console.log('Impossibile riprodurre allarme sintetico:', synthError);
+                    }
+                });
+            } else {
+                console.log('⚠️ File audio alerte-346112.mp3 non trovato');
             }
 
-            console.log(`📢 Messaggio vocale visualizzato: "${messageData.message}"`);
+            // Animazione visiva per attirare l'attenzione
+            const messagesContainer = document.getElementById('voice-messages-container');
+            messagesContainer.style.border = '2px solid #ff6b6b';
+            messagesContainer.style.animation = 'pulse 2s ease-in-out 3';
+            
+            // Aggiungi CSS per l'animazione pulse se non esiste
+            if (!document.getElementById('pulseAnimation')) {
+                const style = document.createElement('style');
+                style.id = 'pulseAnimation';
+                style.textContent = `
+                    @keyframes pulse {
+                        0% { box-shadow: 0 0 0 0 rgba(255, 107, 107, 0.7); }
+                        70% { box-shadow: 0 0 0 10px rgba(255, 107, 107, 0); }
+                        100% { box-shadow: 0 0 0 0 rgba(255, 107, 107, 0); }
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+
+            // Rimuovi l'effetto visivo dopo qualche secondo
+            setTimeout(() => {
+                messagesContainer.style.border = 'none';
+                messagesContainer.style.animation = '';
+            }, 6000);
+
+            console.log(`📢 🔊 Messaggio vocale visualizzato con allarme: "${messageData.message}"`);
         }
 
         function deleteVoiceMessage(messageId) {
