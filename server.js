@@ -251,6 +251,14 @@ wss.on('connection', (ws) => {
                     return;
                 }
 
+                // Validazione destinazione
+                const validDestinations = ['cucina', 'pizzeria', 'insalata'];
+                const destination = data.destination || 'cucina';
+                if (!validDestinations.includes(destination)) {
+                    console.log('⚠️ Destinazione non valida');
+                    return;
+                }
+
                 // Memorizza il countdown attivo
                 if (ws.companyRoom) {
                     if (!activeCountdowns.has(ws.companyRoom)) {
@@ -261,16 +269,20 @@ wss.on('connection', (ws) => {
                     companyCountdowns.set(data.tableNumber, {
                         startTime: Date.now(),
                         initialDuration: data.timeRemaining,
-                        tableNumber: data.tableNumber
+                        tableNumber: data.tableNumber,
+                        destination: destination
                     });
                     
-                    console.log(`💾 Countdown memorizzato per azienda "${ws.companyRoom}": Tavolo ${data.tableNumber}`);
+                    console.log(`💾 Countdown memorizzato per azienda "${ws.companyRoom}": Tavolo ${data.tableNumber}, Destinazione: ${destination}`);
                 }
 
                 // Invia solo ai client della stessa room/azienda
                 if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
                     const roomClients = companyRooms.get(ws.companyRoom);
-                    const messageToSend = JSON.stringify(data);
+                    const messageToSend = JSON.stringify({
+                        ...data,
+                        destination: destination
+                    });
 
                     let sentCount = 0;
                     roomClients.forEach((client) => {
@@ -280,7 +292,7 @@ wss.on('connection', (ws) => {
                         }
                     });
 
-                    console.log(`📡 Countdown inviato alla room "${ws.companyRoom}" (${sentCount}/${roomClients.size} client): Tavolo ${data.tableNumber}, ${Math.floor(data.timeRemaining/60)}:${(data.timeRemaining%60).toString().padStart(2, '0')}`);
+                    console.log(`📡 Countdown inviato alla room "${ws.companyRoom}" (${sentCount}/${roomClients.size} client): Tavolo ${data.tableNumber}, Destinazione: ${destination}, ${Math.floor(data.timeRemaining/60)}:${(data.timeRemaining%60).toString().padStart(2, '0')}`);
                 } else {
                     console.log('⚠️ Client non assegnato a nessuna room');
                 }

@@ -125,6 +125,29 @@
             border: none;
         }
 
+        .destination-button {
+            padding: 8px 12px;
+            margin: 3px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: transform 0.2s, background-color 0.3s, box-shadow 0.2s;
+            font-weight: 600;
+            font-size: 14px;
+            min-width: 60px;
+        }
+
+        .destination-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .destination-button.selected {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            border: 2px solid #333;
+        }
+
         .duration-button {
             padding: 8px 12px;
             margin: 3px;
@@ -139,9 +162,15 @@
             min-width: 60px;
         }
 
-        .duration-button:hover {
+        .duration-button:hover:not(:disabled) {
             transform: translateY(-2px);
             box-shadow: 0 5px 15px rgba(40, 167, 69, 0.3);
+        }
+
+        .duration-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            background: linear-gradient(135deg, #cccccc 0%, #cccccc 100%);
         }
 
         #countdownList {
@@ -315,20 +344,32 @@
             </div>
         </div>
 
+        <!-- Sezione selezione destinazione -->
+        <div id="destinationSection">
+            <h2 style="color: #333; text-align: center; margin-bottom: 15px; font-size: 18px;">🎯 Destinazione</h2>
+            <div id="destinationSelection">
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; max-width: 240px;">
+                    <button class="destination-button" data-destination="cucina" style="background: linear-gradient(135deg, #28a745 0%, #98FB98 100%); color: #212529;">🍳 Cucina</button>
+                    <button class="destination-button" data-destination="pizzeria" style="background: linear-gradient(135deg, #ffc107 0%, #FFE4C4 100%); color: #212529;">🍕 Pizzeria</button>
+                    <button class="destination-button" data-destination="insalata" style="background: linear-gradient(135deg, #ff6b35 0%, #B0E0E6 100%); color: #212529;">🥗 Insalata</button>
+                </div>
+            </div>
+        </div>
+
         <!-- Sezione selezione durata -->
         <div id="durationSection">
             <h2 style="color: #333; text-align: center; margin-bottom: 15px; font-size: 18px;">⏱️ Durata</h2>
             <div id="durationSelection">
                 <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; max-width: 240px;">
-                    <button class="duration-button" data-minutes="4">4 Min</button>
-                    <button class="duration-button" data-minutes="5">5 Min</button>
-                    <button class="duration-button" data-minutes="6">6 Min</button>
-                    <button class="duration-button" data-minutes="7">7 Min</button>
-                    <button class="duration-button" data-minutes="8">8 Min</button>
-                    <button class="duration-button" data-minutes="9">9 Min</button>
-                    <button class="duration-button" data-minutes="10">10 Min</button>
-                    <button class="duration-button" data-minutes="12">12 Min</button>
-                    <button class="duration-button" data-minutes="15">15 Min</button>
+                    <button class="duration-button" data-minutes="4" disabled>4 Min</button>
+                    <button class="duration-button" data-minutes="5" disabled>5 Min</button>
+                    <button class="duration-button" data-minutes="6" disabled>6 Min</button>
+                    <button class="duration-button" data-minutes="7" disabled>7 Min</button>
+                    <button class="duration-button" data-minutes="8" disabled>8 Min</button>
+                    <button class="duration-button" data-minutes="9" disabled>9 Min</button>
+                    <button class="duration-button" data-minutes="10" disabled>10 Min</button>
+                    <button class="duration-button" data-minutes="12" disabled>12 Min</button>
+                    <button class="duration-button" data-minutes="15" disabled>15 Min</button>
                 </div>
             </div>
         </div>
@@ -395,20 +436,63 @@
             }
         });
 
+        // Variabile per memorizzare la destinazione selezionata
+        let selectedDestination = null;
+
+        // Gestione selezione destinazione
+        const destinationSelection = document.getElementById('destinationSelection');
+        destinationSelection.addEventListener('click', (event) => {
+            if (event.target.classList.contains('destination-button')) {
+                // Rimuovi selezione precedente
+                document.querySelectorAll('.destination-button').forEach(btn => {
+                    btn.classList.remove('selected');
+                });
+                
+                // Seleziona nuova destinazione
+                event.target.classList.add('selected');
+                selectedDestination = event.target.getAttribute('data-destination');
+                
+                // Abilita i pulsanti durata
+                document.querySelectorAll('.duration-button').forEach(btn => {
+                    btn.disabled = false;
+                });
+                
+                console.log('Destinazione selezionata:', selectedDestination);
+            }
+        });
+
         // Gestione selezione durata e avvio countdown
         durationSelection.addEventListener('click', (event) => {
-            if (event.target.classList.contains('duration-button')) {
+            if (event.target.classList.contains('duration-button') && !event.target.disabled) {
                 const minutes = parseInt(event.target.getAttribute('data-minutes'));
                 const tableNumber = numeroTavoloInput.value;
 
                 if (tableNumber !== '') {
-                    startCountdown(minutes, tableNumber);
-                    numeroTavoloInput.value = '';
+                    if (selectedDestination) {
+                        startCountdown(minutes, tableNumber, selectedDestination);
+                        numeroTavoloInput.value = '';
+                        
+                        // Resetta la selezione dopo l'invio
+                        resetSelection();
+                    } else {
+                        alert('Seleziona prima la destinazione (Cucina, Pizzeria o Insalata)');
+                    }
                 } else {
                     alert('Inserisci prima il numero del tavolo');
                 }
             }
         });
+
+        // Funzione per resettare la selezione
+        function resetSelection() {
+            selectedDestination = null;
+            document.querySelectorAll('.destination-button').forEach(btn => {
+                btn.classList.remove('selected');
+            });
+            document.querySelectorAll('.duration-button').forEach(btn => {
+                btn.disabled = true;
+            });
+        }
 
         // Sistema WebSocket con riconnessione automatica
         let ws = null;
@@ -459,7 +543,7 @@
                         
                         if (data.action === 'startCountdown') {
                             console.log('📥 Countdown ricevuto via WebSocket:', data);
-                            startCountdownVisual(data.tableNumber, data.timeRemaining);
+                            startCountdownVisual(data.tableNumber, data.timeRemaining, data.destination || 'cucina');
                         } else if (data.action === 'deleteCountdown') {
                             console.log('📥 Eliminazione countdown ricevuta via WebSocket:', data);
                             const countdownIndex = countdowns.findIndex(c => c.tableNumber == data.tableNumber);
@@ -563,14 +647,15 @@
         // Inizializza connessione
         connectWebSocket();
 
-        function startCountdown(minutes, tableNumber) {
+        function startCountdown(minutes, tableNumber, destination) {
             let timeRemaining = minutes * 60;
 
             if (ws && ws.readyState === WebSocket.OPEN) {
                 const message = {
                     action: 'startCountdown',
                     tableNumber: tableNumber,
-                    timeRemaining: timeRemaining
+                    timeRemaining: timeRemaining,
+                    destination: destination
                 };
                 console.log('📤 Invio countdown via WebSocket:', message);
                 ws.send(JSON.stringify(message));
@@ -579,10 +664,10 @@
                 alert('⚠️ Connessione persa. Il countdown verrà avviato localmente. Riconnessione in corso...');
             }
 
-            startCountdownVisual(tableNumber, timeRemaining);
+            startCountdownVisual(tableNumber, timeRemaining, destination);
         }
 
-        function startCountdownVisual(tableNumber, timeRemaining) {
+        function startCountdownVisual(tableNumber, timeRemaining, destination) {
             const existingCountdownIndex = countdowns.findIndex(c => c.tableNumber == tableNumber);
             if (existingCountdownIndex !== -1) {
                 const existingCountdown = countdowns[existingCountdownIndex];
@@ -597,15 +682,32 @@
             const countdown = {
                 tableNumber,
                 timeRemaining,
+                destination,
                 element: null,
                 interval: null
             };
 
+            // Icone per destinazioni
+            const destinationIcons = {
+                'cucina': '🍳',
+                'pizzeria': '🍕',
+                'insalata': '🥗'
+            };
+
+            // Colori per destinazioni
+            const destinationColors = {
+                'cucina': '#d4edda',
+                'pizzeria': '#fff3cd',
+                'insalata': '#d1ecf1'
+            };
+
             const countdownItem = document.createElement('div');
             countdownItem.classList.add('countdown-item');
+            countdownItem.style.backgroundColor = destinationColors[destination] || '#f8f9fa';
             countdownItem.innerHTML = `
                 <div class="countdown-table">
-                    <h3>Tavolo ${tableNumber}</h3>
+                    <h3>${destinationIcons[destination]} Tavolo ${tableNumber}</h3>
+                    <small style="color: #666; text-transform: capitalize;">${destination}</small>
                 </div>
                 <div class="countdown-time">
                     <p>${formatTime(timeRemaining)}</p>
@@ -1008,7 +1110,9 @@
                         console.log(`✅ Comando riconosciuto: Tavolo ${tableNumber}, ${minutes} minuti`);
 
                         document.getElementById('numeroTavolo').value = tableNumber;
-                        startCountdown(minutes, tableNumber);
+                        
+                        // Per il comando vocale, usa automaticamente "cucina" come destinazione di default
+                        startCountdown(minutes, tableNumber, 'cucina');
 
                         // 🧹 Pulisce automaticamente l'input dopo il comando vocale
                         setTimeout(() => {

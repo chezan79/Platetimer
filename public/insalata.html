@@ -156,7 +156,12 @@
             try {
                 const data = JSON.parse(event.data);
                 if (data.action === 'startCountdown') {
-                    startCountdown(data.tableNumber, data.timeRemaining);
+                    // Mostra solo i countdown destinati all'insalata
+                    if (data.destination === 'insalata') {
+                        startCountdown(data.tableNumber, data.timeRemaining);
+                    } else {
+                        console.log(`🚫 Countdown ignorato - Destinazione: ${data.destination}, Tavolo: ${data.tableNumber}`);
+                    }
                 } else if (data.action === 'deleteCountdown') {
                     console.log(`🗑️ Eliminazione countdown in insalata: Tavolo ${data.tableNumber}`);
                     deleteCountdown(data.tableNumber);
