@@ -11,28 +11,54 @@
             padding: 20px;
             padding-top: 120px;
             display: flex;
-            flex-direction: row;
-            gap: 15px;
+            flex-direction: column;
+            gap: 20px;
             position: relative;
         }
 
-        /* Colonna della tastiera */
-        #leftContainer {
-            width: 28%;
+        /* Container principale per riconoscimento vocale e tastiera - in alto orizzontale */
+        #topContainer {
+            width: 90%;
+            margin: 0 auto;
             background: white;
             padding: 20px;
             border-radius: 10px;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
             display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: fit-content;
+            flex-direction: row;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 30px;
         }
 
-        /* Colonna dei countdown - molto più ampia */
-        #rightContainer {
-            width: 50%;
+        /* Sezione riconoscimento vocale */
+        #voiceSection {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        /* Sezione tastiera e input */
+        #keyboardSection {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        /* Sezione selezione durata */
+        #durationSection {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        /* Container per i countdown - ora occupa tutta la larghezza sotto */
+        #bottomContainer {
+            width: 90%;
+            margin: 0 auto;
             background: white;
             padding: 25px;
             border-radius: 10px;
@@ -40,7 +66,7 @@
             display: flex;
             flex-direction: column;
             overflow-y: auto;
-            max-height: 75vh;
+            max-height: 50vh;
         }
 
         /* Container messaggi - più stretto e posizionato in alto a destra */
@@ -82,9 +108,9 @@
         #keyboard {
             display: grid;
             grid-template-columns: repeat(6, 1fr);
-            gap: 8px;
-            max-width: 360px;
-            margin: 15px 0;
+            gap: 6px;
+            max-width: 240px;
+            margin: 0 auto;
         }
 
         .key {
@@ -100,8 +126,8 @@
         }
 
         .duration-button {
-            padding: 12px 20px;
-            margin: 5px;
+            padding: 8px 12px;
+            margin: 3px;
             background: linear-gradient(135deg, 	#696969 0%, #A9A9A9 100%);
             color: white;
             border: none;
@@ -109,8 +135,8 @@
             cursor: pointer;
             transition: transform 0.2s, background-color 0.3s, box-shadow 0.2s;
             font-weight: 600;
-            font-size: 16px;
-            min-width: 80px;
+            font-size: 14px;
+            min-width: 60px;
         }
 
         .duration-button:hover {
@@ -254,61 +280,63 @@
         <button onclick="window.location.href='index.html'" style="padding: 6px 12px; background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500; transition: transform 0.2s, box-shadow 0.2s;">🚪 Esci</button>
     </div>
 
-    <!-- Contenitore sinistro: Tastiera e input -->
-    <div id="leftContainer">
-        <h1>🍳 Cucina</h1>
-
-        <!-- Sistema comando vocale continuo -->
-        <div style="text-align: center; margin: 15px 0;">
+    <!-- Container principale in alto - riconoscimento vocale, tastiera e durata in orizzontale -->
+    <div id="topContainer">
+        <!-- Sezione riconoscimento vocale -->
+        <div id="voiceSection">
+            <h2 style="color: #333; text-align: center; margin-bottom: 15px; font-size: 18px;">🎤 Comando Vocale</h2>
             <button onclick="toggleContinuousVoice()" id="voice-button" style="padding: 10px 20px; background-color: #DCDCDC; color: #696969; border: none; border-radius: 5px; cursor: pointer; transition: all 0.3s ease; font-size: 16px; font-weight: 600;">
                 🎤 Attiva Comando vocale
             </button>
-            <div id="voice-status" style="margin-top: 8px; font-size: 14px; color: #666; min-height: 20px;">
-                "tavolo" seguito dal numero e minuti (es: "tavolo 5 otto minuti")
+            <div id="voice-status" style="margin-top: 8px; font-size: 12px; color: #666; min-height: 20px; text-align: center;">
+                "tavolo" seguito dal numero e minuti
             </div>
-            <div id="voice-indicator" style="margin-top: 5px; font-size: 12px; color: #999;">
+            <div id="voice-indicator" style="margin-top: 5px; font-size: 12px; color: #999; text-align: center;">
                 🔴 Voce disattivata
             </div>
         </div>
 
-        <!-- Input numero tavolo -->
-        <input type="text" id="numeroTavolo" pattern="[0-9]*" inputmode="numeric" placeholder="Numero Tavolo" readonly>
-
-        <!-- Tastiera numerica -->
-        <div id="keyboard">
-            <div class="key">1</div>
-            <div class="key">2</div>
-            <div class="key">3</div>
-            <div class="key">4</div>
-            <div class="key">5</div>
-            <div class="key">C</div>
-            <div class="key">6</div>
-            <div class="key">7</div>
-            <div class="key">8</div>
-            <div class="key">9</div>
-            <div class="key">0</div>
+        <!-- Sezione tastiera e input -->
+        <div id="keyboardSection">
+            <h2 style="color: #333; text-align: center; margin-bottom: 15px; font-size: 18px;">🔢 Tastiera</h2>
+            <input type="text" id="numeroTavolo" pattern="[0-9]*" inputmode="numeric" placeholder="Numero Tavolo" readonly style="width: 80%; margin-bottom: 15px;">
+            <div id="keyboard">
+                <div class="key">1</div>
+                <div class="key">2</div>
+                <div class="key">3</div>
+                <div class="key">4</div>
+                <div class="key">5</div>
+                <div class="key">C</div>
+                <div class="key">6</div>
+                <div class="key">7</div>
+                <div class="key">8</div>
+                <div class="key">9</div>
+                <div class="key">0</div>
+            </div>
         </div>
 
-        <!-- Selezione durata -->
-        <div id="durationSelection" style="margin-top: 15px;">
-            <h2 style="font-size: 18px; margin-bottom: 10px;">Seleziona Durata</h2>
-            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; max-width: 320px; margin: 0 auto;">
-                <button class="duration-button" data-minutes="4">4 Min</button>
-                <button class="duration-button" data-minutes="5">5 Min</button>
-                <button class="duration-button" data-minutes="6">6 Min</button>
-                <button class="duration-button" data-minutes="7">7 Min</button>
-                <button class="duration-button" data-minutes="8">8 Min</button>
-                <button class="duration-button" data-minutes="9">9 Min</button>
-                <button class="duration-button" data-minutes="10">10 Min</button>
-                <button class="duration-button" data-minutes="12">12 Min</button>
-                <button class="duration-button" data-minutes="15">15 Min</button>
+        <!-- Sezione selezione durata -->
+        <div id="durationSection">
+            <h2 style="color: #333; text-align: center; margin-bottom: 15px; font-size: 18px;">⏱️ Durata</h2>
+            <div id="durationSelection">
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; max-width: 240px;">
+                    <button class="duration-button" data-minutes="4">4 Min</button>
+                    <button class="duration-button" data-minutes="5">5 Min</button>
+                    <button class="duration-button" data-minutes="6">6 Min</button>
+                    <button class="duration-button" data-minutes="7">7 Min</button>
+                    <button class="duration-button" data-minutes="8">8 Min</button>
+                    <button class="duration-button" data-minutes="9">9 Min</button>
+                    <button class="duration-button" data-minutes="10">10 Min</button>
+                    <button class="duration-button" data-minutes="12">12 Min</button>
+                    <button class="duration-button" data-minutes="15">15 Min</button>
+                </div>
             </div>
         </div>
     </div>
 
-    <!-- Contenitore destro: Countdown -->
-    <div id="rightContainer">
-        <h2>Tavoli in corso</h2>
+    <!-- Container in basso per i countdown -->
+    <div id="bottomContainer">
+        <h1 style="color: #333; text-align: center; margin-bottom: 20px; font-size: 24px;">🍳 Tavoli in Corso</h1>
         <div id="countdownList"></div>
     </div>
 
