@@ -115,21 +115,21 @@
     <div class="countdown-container">
         <h1>🍕 Pizzeria</h1>
         
-        <!-- Sistema messaggio vocale per cucina -->
-        <div style="text-align: center; margin: 20px 0; padding: 15px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; border-left: 4px solid #007bff;">
-            <h3 style="margin: 0 0 10px 0; color: #333; font-size: 18px;">📢 Messaggio per la Cucina</h3>
-            <button onclick="toggleVoiceMessage()" id="voice-message-button" style="padding: 12px 24px; background: linear-gradient(135deg, #007bff 0%, #0056b3 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: 600; margin: 5px; transition: all 0.3s ease;">
-                🎤 Registra Messaggio
-            </button>
-            <div id="voice-message-status" style="margin-top: 10px; font-size: 14px; color: #666; min-height: 20px;">
-                Premi il pulsante per registrare un messaggio vocale
-            </div>
-        </div>
-        
         <div id="tavoli">
             <!-- I countdown sincronizzati appariranno qui -->
         </div>
+    </div>
+
+    <!-- Sistema messaggio vocale per cucina posizionato in basso -->
+    <div style="position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 1000; text-align: center; padding: 15px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 12px; border-left: 4px solid #007bff; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); min-width: 320px;">
+        <h3 style="margin: 0 0 10px 0; color: #333; font-size: 16px;">📢 Messaggio per la Cucina</h3>
+        <button onclick="toggleVoiceMessage()" id="voice-message-button" style="padding: 12px 24px; background: linear-gradient(135deg, #007bff 0%, #0056b3 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: 600; margin: 5px; transition: all 0.3s ease;">
+            🎤 Registra Messaggio
+        </button>
+        <div id="voice-message-status" style="margin-top: 10px; font-size: 12px; color: #666; min-height: 16px;">
+            Premi il pulsante per registrare un messaggio vocale
         </div>
+    </div>
 
     <audio id="alertSound" src="alerte-346112.mp3" preload="auto"></audio>
     <audio id="zeroSound" src="costa-rica-eas-alarm-346194.mp3" preload="auto"></audio>
