@@ -170,6 +170,19 @@ wss.on('connection', (ws) => {
                 return;
             }
 
+            // Gestisci ping/pong per heartbeat
+            if (data.action === 'ping') {
+                if (ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ action: 'pong' }));
+                }
+                return;
+            }
+            
+            if (data.action === 'pong') {
+                // Pong ricevuto, connessione attiva
+                return;
+            }
+
             if (data.action === 'joinRoom') {
                 // Validazione nome azienda
                 if (!data.companyName || typeof data.companyName !== 'string' || data.companyName.trim().length === 0) {

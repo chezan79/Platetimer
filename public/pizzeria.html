@@ -138,33 +138,129 @@
             }
         }
 
+        // Sistema WebSocket con riconnessione automatica
+        let ws = null;
+        let reconnectInterval = null;
+        let heartbeatInterval = null;
+        let isConnected = false;
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
         const countdowns = [];
 
-        ws.onopen = () => {
-            // Unisciti alla room dell'azienda
-            const companyName = localStorage.getItem('userCompany') || 'Nome Azienda';
-            const joinMessage = {
-                action: 'joinRoom',
-                companyName: companyName
-            };
-            ws.send(JSON.stringify(joinMessage));
-            console.log(`✅ Pizzeria connessa alla room: ${companyName}`);
-        };
+        function connectWebSocket() {
+            try {
+                ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
 
-        ws.onerror = (error) => {
-            console.error('❌ Errore WebSocket in pizzeria:', error);
-        };
+                ws.onopen = () => {
+                    console.log('🔗 Pizzeria WebSocket connesso');
+                    isConnected = true;
+                    
+                    if (reconnectInterval) {
+                        clearInterval(reconnectInterval);
+                        reconnectInterval = null;
+                    }
 
-        ws.onclose = (event) => {
-            console.log('🔌 Connessione WebSocket chiusa in pizzeria:', event.code, event.reason);
-            // Tentativo di riconnessione dopo 3 secondi
-            setTimeout(() => {
-                console.log('🔄 Tentativo di riconnessione...');
-                location.reload();
-            }, 3000);
-        };
+                    startHeartbeat();
+
+                    const companyName = localStorage.getItem('userCompany') || 'Nome Azienda';
+                    const joinMessage = {
+                        action: 'joinRoom',
+                        companyName: companyName
+                    };
+                    ws.send(JSON.stringify(joinMessage));
+                    console.log(`✅ Pizzeria connessa alla room: ${companyName}`);
+                    updateConnectionStatus(true);
+                };
+
+                ws.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        
+                        if (data.action === 'ping') {
+                            ws.send(JSON.stringify({ action: 'pong' }));
+                            return;
+                        }
+                        
+                        if (data.action === 'startCountdown') {
+                            console.log('📥 Countdown ricevuto in pizzeria:', data);
+                            startCountdownVisual(data.tableNumber, data.timeRemaining);
+                        } else if (data.action === 'deleteCountdown') {
+                            console.log('📥 Eliminazione countdown ricevuta in pizzeria:', data);
+                            removeCountdownVisual(data.tableNumber);
+                        }
+                    } catch (error) {
+                        console.error('Errore parsing messaggio pizzeria:', error);
+                    }
+                };
+
+                ws.onclose = (event) => {
+                    console.log(`🔌 Pizzeria WebSocket disconnesso: ${event.code}`);
+                    isConnected = false;
+                    stopHeartbeat();
+                    updateConnectionStatus(false);
+                    
+                    if (!reconnectInterval) {
+                        console.log('🔄 Avvio riconnessione pizzeria...');
+                        reconnectInterval = setInterval(() => {
+                            console.log('🔄 Tentativo riconnessione pizzeria...');
+                            connectWebSocket();
+                        }, 3000);
+                    }
+                };
+
+                ws.onerror = (error) => {
+                    console.error('❌ Errore WebSocket pizzeria:', error);
+                };
+
+            } catch (error) {
+                console.error('❌ Errore creazione WebSocket pizzeria:', error);
+                isConnected = false;
+                updateConnectionStatus(false);
+            }
+        }
+
+        function startHeartbeat() {
+            heartbeatInterval = setInterval(() => {
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ action: 'ping' }));
+                }
+            }, 30000);
+        }
+
+        function stopHeartbeat() {
+            if (heartbeatInterval) {
+                clearInterval(heartbeatInterval);
+                heartbeatInterval = null;
+            }
+        }
+
+        function updateConnectionStatus(connected) {
+            let status = document.getElementById('connection-status');
+            if (!status) {
+                status = document.createElement('div');
+                status.id = 'connection-status';
+                status.style.cssText = `
+                    position: fixed; top: 60px; right: 20px; z-index: 1001;
+                    padding: 8px 12px; border-radius: 6px; font-size: 12px;
+                    font-weight: 600; transition: all 0.3s ease;
+                `;
+                document.body.appendChild(status);
+            }
+            
+            if (connected) {
+                status.textContent = '🟢 Connesso';
+                status.style.backgroundColor = '#d4edda';
+                status.style.color = '#155724';
+                status.style.border = '1px solid #c3e6cb';
+            } else {
+                status.textContent = '🔴 Disconnesso - Riconnessione...';
+                status.style.backgroundColor = '#f8d7da';
+                status.style.color = '#721c24';
+                status.style.border = '1px solid #f5c6cb';
+            }
+        }
+
+        // Inizializza connessione
+        connectWebSocket();
 
         function sortCountdowns() {
             countdowns.sort((a, b) => a.timeRemaining - b.timeRemaining);

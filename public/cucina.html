@@ -359,36 +359,157 @@
             }
         });
 
-        // Connessione WebSocket persistente
+        // Sistema WebSocket con riconnessione automatica
+        let ws = null;
+        let reconnectInterval = null;
+        let heartbeatInterval = null;
+        let isConnected = false;
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
 
-        ws.onopen = () => {
-            const companyName = localStorage.getItem('userCompany') || 'Nome Azienda';
-            const joinMessage = {
-                action: 'joinRoom',
-                companyName: companyName
-            };
-            ws.send(JSON.stringify(joinMessage));
-            console.log(`Connesso alla room: ${companyName}`);
-        };
-
-        ws.onmessage = (event) => {
+        function connectWebSocket() {
             try {
-                const data = JSON.parse(event.data);
-                if (data.action === 'startCountdown') {
-                    console.log('📥 Countdown ricevuto via WebSocket:', data);
-                    startCountdownVisual(data.tableNumber, data.timeRemaining);
-                }
+                ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+
+                ws.onopen = () => {
+                    console.log('🔗 WebSocket connesso');
+                    isConnected = true;
+                    
+                    // Pulisci eventuali tentativi di riconnessione
+                    if (reconnectInterval) {
+                        clearInterval(reconnectInterval);
+                        reconnectInterval = null;
+                    }
+
+                    // Avvia heartbeat
+                    startHeartbeat();
+
+                    // Unisciti alla room
+                    const companyName = localStorage.getItem('userCompany') || 'Nome Azienda';
+                    const joinMessage = {
+                        action: 'joinRoom',
+                        companyName: companyName
+                    };
+                    ws.send(JSON.stringify(joinMessage));
+                    console.log(`✅ Connesso alla room: ${companyName}`);
+
+                    // Mostra stato connessione
+                    updateConnectionStatus(true);
+                };
+
+                ws.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        
+                        // Gestisci ping/pong per heartbeat
+                        if (data.action === 'ping') {
+                            ws.send(JSON.stringify({ action: 'pong' }));
+                            return;
+                        }
+                        
+                        if (data.action === 'startCountdown') {
+                            console.log('📥 Countdown ricevuto via WebSocket:', data);
+                            startCountdownVisual(data.tableNumber, data.timeRemaining);
+                        } else if (data.action === 'deleteCountdown') {
+                            console.log('📥 Eliminazione countdown ricevuta via WebSocket:', data);
+                            const countdownIndex = countdowns.findIndex(c => c.tableNumber == data.tableNumber);
+                            if (countdownIndex !== -1) {
+                                const countdown = countdowns[countdownIndex];
+                                clearInterval(countdown.interval);
+                                if (countdown.element && countdown.element.parentNode) {
+                                    countdown.element.parentNode.removeChild(countdown.element);
+                                }
+                                countdowns.splice(countdownIndex, 1);
+                                console.log(`🗑️ Countdown tavolo ${data.tableNumber} eliminato da altro client`);
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Errore nel parsing del messaggio WebSocket:', error);
+                    }
+                };
+
+                ws.onclose = (event) => {
+                    console.log(`🔌 WebSocket disconnesso: ${event.code} - ${event.reason}`);
+                    isConnected = false;
+                    stopHeartbeat();
+                    updateConnectionStatus(false);
+                    
+                    // Avvia riconnessione automatica
+                    if (!reconnectInterval) {
+                        console.log('🔄 Avvio riconnessione automatica...');
+                        reconnectInterval = setInterval(() => {
+                            console.log('🔄 Tentativo di riconnessione...');
+                            connectWebSocket();
+                        }, 3000);
+                    }
+                };
+
+                ws.onerror = (error) => {
+                    console.error('❌ Errore WebSocket:', error);
+                };
+
             } catch (error) {
-                console.error('Errore nel parsing del messaggio WebSocket:', error);
+                console.error('❌ Errore creazione WebSocket:', error);
+                isConnected = false;
+                updateConnectionStatus(false);
             }
-        };
+        }
+
+        function startHeartbeat() {
+            heartbeatInterval = setInterval(() => {
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ action: 'ping' }));
+                }
+            }, 30000); // Ping ogni 30 secondi
+        }
+
+        function stopHeartbeat() {
+            if (heartbeatInterval) {
+                clearInterval(heartbeatInterval);
+                heartbeatInterval = null;
+            }
+        }
+
+        function updateConnectionStatus(connected) {
+            const statusElement = document.getElementById('connection-status');
+            if (!statusElement) {
+                // Crea elemento status se non esiste
+                const status = document.createElement('div');
+                status.id = 'connection-status';
+                status.style.cssText = `
+                    position: fixed;
+                    top: 60px;
+                    right: 20px;
+                    z-index: 1001;
+                    padding: 8px 12px;
+                    border-radius: 6px;
+                    font-size: 12px;
+                    font-weight: 600;
+                    transition: all 0.3s ease;
+                `;
+                document.body.appendChild(status);
+            }
+            
+            const status = document.getElementById('connection-status');
+            if (connected) {
+                status.textContent = '🟢 Connesso';
+                status.style.backgroundColor = '#d4edda';
+                status.style.color = '#155724';
+                status.style.border = '1px solid #c3e6cb';
+            } else {
+                status.textContent = '🔴 Disconnesso - Riconnessione...';
+                status.style.backgroundColor = '#f8d7da';
+                status.style.color = '#721c24';
+                status.style.border = '1px solid #f5c6cb';
+            }
+        }
+
+        // Inizializza connessione
+        connectWebSocket();
 
         function startCountdown(minutes, tableNumber) {
             let timeRemaining = minutes * 60;
 
-            if (ws.readyState === WebSocket.OPEN) {
+            if (ws && ws.readyState === WebSocket.OPEN) {
                 const message = {
                     action: 'startCountdown',
                     tableNumber: tableNumber,
@@ -397,7 +518,8 @@
                 console.log('📤 Invio countdown via WebSocket:', message);
                 ws.send(JSON.stringify(message));
             } else {
-                console.error('❌ WebSocket non connesso, stato:', ws.readyState);
+                console.error('❌ WebSocket non connesso, stato:', ws ? ws.readyState : 'null');
+                alert('⚠️ Connessione persa. Il countdown verrà avviato localmente. Riconnessione in corso...');
             }
 
             startCountdownVisual(tableNumber, timeRemaining);
@@ -533,7 +655,7 @@
                 console.log(`Countdown tavolo ${tableNumber} eliminato manualmente`);
 
                 // 🔄 Sincronizza l'eliminazione via WebSocket
-                if (ws.readyState === WebSocket.OPEN) {
+                if (ws && ws.readyState === WebSocket.OPEN) {
                     const deleteMessage = {
                         action: 'deleteCountdown',
                         tableNumber: tableNumber
