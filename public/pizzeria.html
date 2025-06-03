@@ -435,8 +435,10 @@
             };
 
             voiceRecognition.onresult = (event) => {
+                if (!isRecordingMessage) return; // ✅ Ignora risultati se non stiamo più registrando
+                
                 let interimTranscript = '';
-                let finalTranscript = '';
+                let newFinalTranscript = '';
 
                 // ✅ Processa SOLO i risultati nuovi per evitare duplicazioni
                 for (let i = event.resultIndex; i < event.results.length; ++i) {
@@ -444,22 +446,28 @@
                     const confidence = event.results[i][0].confidence;
                     
                     if (event.results[i].isFinal) {
-                        finalTranscript += transcript;
-                        console.log(`📝 Risultato FINALE: "${transcript}" (confidence: ${confidence})`);
+                        newFinalTranscript += transcript;
+                        console.log(`📝 Risultato FINALE nuovo: "${transcript}" (confidence: ${confidence})`);
                     } else {
                         interimTranscript += transcript;
                         console.log(`📝 Risultato temporaneo: "${transcript}"`);
                     }
                 }
 
-                // ✅ Accumula solo il testo finale nuovo
-                if (finalTranscript) {
-                    currentTranscript += finalTranscript;
-                    console.log(`📝 Transcript accumulato aggiornato: "${currentTranscript}"`);
+                // ✅ Accumula SOLO il nuovo testo finale per evitare duplicazioni
+                if (newFinalTranscript.trim()) {
+                    // ✅ Verifica che non sia già presente per evitare duplicazioni da tablet Android
+                    const trimmedNew = newFinalTranscript.trim();
+                    if (!currentTranscript.toLowerCase().includes(trimmedNew.toLowerCase())) {
+                        currentTranscript += (currentTranscript ? ' ' : '') + trimmedNew;
+                        console.log(`📝 Transcript aggiornato: "${currentTranscript}"`);
+                    } else {
+                        console.log(`🔄 Risultato già presente, ignorato: "${trimmedNew}"`);
+                    }
                 }
                 
-                // ✅ Mostra il testo accumulato + quello temporaneo corrente
-                const displayText = currentTranscript + interimTranscript;
+                // ✅ Mostra solo il contenuto accumulato + quello temporaneo più recente
+                const displayText = currentTranscript + (interimTranscript ? (currentTranscript ? ' ' : '') + interimTranscript : '');
                 
                 const statusDiv = document.getElementById('voice-message-status');
                 if (displayText.trim()) {
@@ -470,7 +478,7 @@
                     statusDiv.style.color = '#dc3545';
                 }
                 
-                console.log(`📝 Display completo: "${displayText}" (${displayText.length} caratteri)`);
+                console.log(`📝 Display finale: "${displayText}" (lunghezza: ${displayText.length})`);
             };
 
             voiceRecognition.onerror = (event) => {
@@ -513,39 +521,83 @@
             isRecordingMessage = false;
             
             const statusDiv = document.getElementById('voice-message-status');
-            statusDiv.textContent = '🔄 Elaborando messaggio completo...';
+            statusDiv.textContent = '🔄 Elaborando messaggio finale...';
             statusDiv.style.color = '#ffc107';
             
             updateVoiceMessageUI(false);
 
-            // ✅ Ritardo MAGGIORE per permettere al riconoscimento di completare l'elaborazione di messaggi lunghi
-            setTimeout(() => {
-                if (voiceRecognition) {
+            // ✅ Ferma immediatamente il riconoscimento per evitare ulteriori risultati
+            if (voiceRecognition) {
+                try {
                     voiceRecognition.stop();
-                    voiceRecognition = null;
+                } catch (error) {
+                    console.log('Errore stop riconoscimento:', error);
+                }
+                voiceRecognition = null;
+            }
+
+            // ✅ Attendi solo il tempo necessario per processare l'ultimo risultato finale
+            setTimeout(() => {
+                // ✅ Pulisce e ottimizza il messaggio finale
+                let finalMessage = currentTranscript.trim();
+                
+                if (finalMessage.length > 0) {
+                    // ✅ NUOVO: Rimuove parole ripetute consecutive (problema tablet Android)
+                    finalMessage = cleanDuplicateWords(finalMessage);
+                    
+                    statusDiv.textContent = `✅ Messaggio pulito: "${finalMessage}"`;
+                    statusDiv.style.color = '#28a745';
+                    console.log(`📝 Messaggio finale pulito: "${finalMessage}" (era: "${currentTranscript.trim()}")`);
+                    sendVoiceMessage(finalMessage);
+                } else {
+                    statusDiv.textContent = '⚠️ Nessun messaggio registrato';
+                    statusDiv.style.color = '#ffc107';
+                    
+                    setTimeout(() => {
+                        statusDiv.textContent = 'Tieni premuto il pulsante per registrare';
+                        statusDiv.style.color = '#666';
+                    }, 2000);
                 }
 
-                // Attendi tempo extra per essere sicuri che tutti i risultati siano stati processati
-                setTimeout(() => {
-                    // Invia il messaggio se c'è del testo
-                    if (currentTranscript && currentTranscript.trim().length > 0) {
-                        statusDiv.textContent = `✅ Messaggio completo registrato: "${currentTranscript.trim()}"`;
-                        statusDiv.style.color = '#28a745';
-                        console.log(`📝 Messaggio finale da inviare: "${currentTranscript.trim()}" (${currentTranscript.trim().length} caratteri)`);
-                        sendVoiceMessage(currentTranscript.trim());
-                    } else {
-                        statusDiv.textContent = '⚠️ Nessun messaggio registrato';
-                        statusDiv.style.color = '#ffc107';
-                        
-                        setTimeout(() => {
-                            statusDiv.textContent = 'Tieni premuto il pulsante per registrare';
-                            statusDiv.style.color = '#666';
-                        }, 2000);
-                    }
+                currentTranscript = '';
+            }, 800); // Tempo ridotto ma sufficiente
+        }
 
-                    currentTranscript = '';
-                }, 1000); // Ritardo RADDOPPIATO per elaborazione finale (era 500ms)
-            }, 1500); // Ritardo principale QUASI RADDOPPIATO per catturare tutto l'audio (era 800ms)
+        // ✅ NUOVA FUNZIONE: Pulisce le parole duplicate consecutive
+        function cleanDuplicateWords(text) {
+            if (!text || text.trim().length === 0) return '';
+            
+            console.log(`🧹 Pulizia testo originale: "${text}"`);
+            
+            // Divide in parole mantenendo spazi e punteggiatura
+            const words = text.toLowerCase().split(/(\s+)/);
+            const cleanedWords = [];
+            let lastWord = '';
+            
+            for (let i = 0; i < words.length; i++) {
+                const currentWord = words[i].trim();
+                
+                // Mantieni spazi e caratteri non-parola
+                if (currentWord === '' || /^\s+$/.test(words[i])) {
+                    if (cleanedWords.length > 0) {
+                        cleanedWords.push(words[i]);
+                    }
+                    continue;
+                }
+                
+                // Aggiungi solo se diversa dalla parola precedente
+                if (currentWord !== lastWord) {
+                    cleanedWords.push(words[i]);
+                    lastWord = currentWord;
+                } else {
+                    console.log(`🗑️ Rimossa parola duplicata: "${currentWord}"`);
+                }
+            }
+            
+            const cleanedText = cleanedWords.join('');
+            console.log(`✅ Testo pulito: "${cleanedText}"`);
+            
+            return cleanedText;
         }
 
         function updateVoiceMessageUI(isRecording) {
