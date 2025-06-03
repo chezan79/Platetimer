@@ -366,6 +366,15 @@ setInterval(() => {
     console.log(`🧹 Risorse pulite - Rate limiter: ${rateLimiter.size}, Rooms: ${companyRooms.size}, Countdown attivi: ${totalActiveCountdowns}`);
 }, 300000); // Ogni 5 minuti
 
+// Gestione errori globali per prevenire crash
+process.on('uncaughtException', (error) => {
+    console.error('❌ Errore non gestito:', error);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('❌ Promise rifiutata non gestita:', reason);
+});
+
 // Avvia il server
 const PORT = 5000;
 server.listen(PORT, '0.0.0.0', () => {
@@ -373,4 +382,6 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log('✅ Autenticazione WebSocket attiva');
     console.log('✅ Validazione dati attiva');
     console.log('✅ Rate limiting attivo');
+}).on('error', (error) => {
+    console.error('❌ Errore avvio server:', error);
 });
