@@ -223,10 +223,11 @@ wss.on('connection', (ws) => {
                             const syncMessage = {
                                 action: 'startCountdown',
                                 tableNumber: tableNumber,
-                                timeRemaining: remainingTime
+                                timeRemaining: remainingTime,
+                                destination: countdown.destination
                             };
                             ws.send(JSON.stringify(syncMessage));
-                            console.log(`📡 Countdown sincronizzato inviato: Tavolo ${tableNumber}, ${Math.floor(remainingTime/60)}:${(remainingTime%60).toString().padStart(2, '0')}`);
+                            console.log(`📡 Countdown sincronizzato inviato: Tavolo ${tableNumber}, Destinazione: ${countdown.destination}, ${Math.floor(remainingTime/60)}:${(remainingTime%60).toString().padStart(2, '0')}`);
                         } else {
                             // Rimuovi countdown scaduti
                             companyCountdowns.delete(tableNumber);

@@ -155,12 +155,20 @@
         ws.onmessage = (event) => {
             try {
                 const data = JSON.parse(event.data);
+                
+                if (data.action === 'ping') {
+                    ws.send(JSON.stringify({ action: 'pong' }));
+                    return;
+                }
+                
                 if (data.action === 'startCountdown') {
+                    console.log('📥 Countdown ricevuto in insalata:', data);
                     // Mostra solo i countdown destinati all'insalata
                     if (data.destination === 'insalata') {
+                        console.log(`✅ Countdown accettato per insalata - Tavolo: ${data.tableNumber}`);
                         startCountdown(data.tableNumber, data.timeRemaining);
                     } else {
-                        console.log(`🚫 Countdown ignorato - Destinazione: ${data.destination}, Tavolo: ${data.tableNumber}`);
+                        console.log(`🚫 Countdown ignorato - Destinazione: ${data.destination || 'undefined'}, Tavolo: ${data.tableNumber}`);
                     }
                 } else if (data.action === 'deleteCountdown') {
                     console.log(`🗑️ Eliminazione countdown in insalata: Tavolo ${data.tableNumber}`);

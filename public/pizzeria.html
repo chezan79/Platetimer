@@ -206,13 +206,17 @@
                             console.log('📥 Countdown ricevuto in pizzeria:', data);
                             // Mostra solo i countdown destinati alla pizzeria
                             if (data.destination === 'pizzeria') {
+                                console.log(`✅ Countdown accettato per pizzeria - Tavolo: ${data.tableNumber}`);
                                 startCountdown(data.tableNumber, data.timeRemaining);
                             } else {
-                                console.log(`🚫 Countdown ignorato - Destinazione: ${data.destination}, Tavolo: ${data.tableNumber}`);
+                                console.log(`🚫 Countdown ignorato - Destinazione: ${data.destination || 'undefined'}, Tavolo: ${data.tableNumber}`);
                             }
                         } else if (data.action === 'deleteCountdown') {
                             console.log('📥 Eliminazione countdown ricevuta in pizzeria:', data);
                             deleteCountdown(data.tableNumber);
+                        } else if (data.action === 'voiceMessage') {
+                            // Gestione messaggi vocali se necessario
+                            console.log('📢 Messaggio vocale ricevuto in pizzeria:', data);
                         }
                     } catch (error) {
                         console.error('Errore parsing messaggio pizzeria:', error);
