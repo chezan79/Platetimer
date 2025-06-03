@@ -145,7 +145,26 @@
         .destination-button.selected {
             transform: translateY(-2px);
             box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
-            border: 2px solid #333;
+            border: 3px solid #333;
+            position: relative;
+        }
+
+        .destination-button.selected::after {
+            content: '✓';
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background: #28a745;
+            color: white;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+            border: 2px solid white;
         }
 
         .duration-button {
@@ -436,28 +455,36 @@
             }
         });
 
-        // Variabile per memorizzare la destinazione selezionata
-        let selectedDestination = null;
+        // Array per memorizzare le destinazioni selezionate
+        let selectedDestinations = [];
 
-        // Gestione selezione destinazione
+        // Gestione selezione multipla destinazioni
         const destinationSelection = document.getElementById('destinationSelection');
         destinationSelection.addEventListener('click', (event) => {
             if (event.target.classList.contains('destination-button')) {
-                // Rimuovi selezione precedente
-                document.querySelectorAll('.destination-button').forEach(btn => {
-                    btn.classList.remove('selected');
-                });
+                const destination = event.target.getAttribute('data-destination');
                 
-                // Seleziona nuova destinazione
-                event.target.classList.add('selected');
-                selectedDestination = event.target.getAttribute('data-destination');
+                // Toggle della selezione
+                if (event.target.classList.contains('selected')) {
+                    // Rimuovi dalla selezione
+                    event.target.classList.remove('selected');
+                    selectedDestinations = selectedDestinations.filter(d => d !== destination);
+                } else {
+                    // Aggiungi alla selezione
+                    event.target.classList.add('selected');
+                    selectedDestinations.push(destination);
+                }
                 
-                // Abilita i pulsanti durata
+                // Abilita i pulsanti durata solo se almeno una destinazione è selezionata
+                const hasDestinations = selectedDestinations.length > 0;
                 document.querySelectorAll('.duration-button').forEach(btn => {
-                    btn.disabled = false;
+                    btn.disabled = !hasDestinations;
                 });
                 
-                console.log('Destinazione selezionata:', selectedDestination);
+                console.log('Destinazioni selezionate:', selectedDestinations);
+                
+                // Aggiorna il feedback visivo
+                updateDestinationFeedback();
             }
         });
 
@@ -468,14 +495,21 @@
                 const tableNumber = numeroTavoloInput.value;
 
                 if (tableNumber !== '') {
-                    if (selectedDestination) {
-                        startCountdown(minutes, tableNumber, selectedDestination);
+                    if (selectedDestinations.length > 0) {
+                        // Avvia countdown per ogni destinazione selezionata
+                        selectedDestinations.forEach(destination => {
+                            startCountdown(minutes, tableNumber, destination);
+                        });
+                        
                         numeroTavoloInput.value = '';
                         
                         // Resetta la selezione dopo l'invio
                         resetSelection();
+                        
+                        // Feedback di conferma
+                        showConfirmationMessage(tableNumber, selectedDestinations, minutes);
                     } else {
-                        alert('Seleziona prima la destinazione (Cucina, Pizzeria o Insalata)');
+                        alert('Seleziona almeno una destinazione (Cucina, Pizzeria o Insalata)');
                     }
                 } else {
                     alert('Inserisci prima il numero del tavolo');
@@ -485,13 +519,44 @@
 
         // Funzione per resettare la selezione
         function resetSelection() {
-            selectedDestination = null;
+            selectedDestinations = [];
             document.querySelectorAll('.destination-button').forEach(btn => {
                 btn.classList.remove('selected');
             });
             document.querySelectorAll('.duration-button').forEach(btn => {
                 btn.disabled = true;
             });
+            updateDestinationFeedback();
+        }
+
+        // Funzione per aggiornare il feedback visivo delle destinazioni
+        function updateDestinationFeedback() {
+            const sectionTitle = document.querySelector('#destinationSection h2');
+            if (selectedDestinations.length === 0) {
+                sectionTitle.textContent = '🎯 Destinazione';
+            } else if (selectedDestinations.length === 1) {
+                const icons = {'cucina': '🍳', 'pizzeria': '🍕', 'insalata': '🥗'};
+                sectionTitle.textContent = `🎯 ${icons[selectedDestinations[0]]} ${selectedDestinations[0].charAt(0).toUpperCase() + selectedDestinations[0].slice(1)}`;
+            } else {
+                sectionTitle.textContent = `🎯 ${selectedDestinations.length} Destinazioni`;
+            }
+        }
+
+        // Funzione per mostrare messaggio di conferma
+        function showConfirmationMessage(tableNumber, destinations, minutes) {
+            const statusDiv = document.getElementById('voice-status');
+            const icons = {'cucina': '🍳', 'pizzeria': '🍕', 'insalata': '🥗'};
+            const destList = destinations.map(d => `${icons[d]} ${d.charAt(0).toUpperCase() + d.slice(1)}`).join(', ');
+            
+            statusDiv.textContent = `✅ Tavolo ${tableNumber}: ${minutes}min → ${destList}`;
+            statusDiv.style.color = '#28a745';
+            
+            setTimeout(() => {
+                if (!isContinuousListening) {
+                    statusDiv.textContent = '"tavolo" seguito dal numero e minuti';
+                    statusDiv.style.color = '#666';
+                }
+            }, 3000);
         }
 
         // Sistema WebSocket con riconnessione automatica
@@ -1112,7 +1177,15 @@
                         document.getElementById('numeroTavolo').value = tableNumber;
                         
                         // Per il comando vocale, usa automaticamente "cucina" come destinazione di default
-                        startCountdown(minutes, tableNumber, 'cucina');
+                        // Se ci sono destinazioni selezionate manualmente, usale; altrimenti usa cucina
+                        if (selectedDestinations.length > 0) {
+                            selectedDestinations.forEach(destination => {
+                                startCountdown(minutes, tableNumber, destination);
+                            });
+                            showConfirmationMessage(tableNumber, selectedDestinations, minutes);
+                        } else {
+                            startCountdown(minutes, tableNumber, 'cucina');
+                        }
 
                         // 🧹 Pulisce automaticamente l'input dopo il comando vocale
                         setTimeout(() => {
