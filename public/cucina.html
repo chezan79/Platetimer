@@ -760,9 +760,32 @@
         }
 
         async function startContinuousListening() {
-            if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-                alert('Il riconoscimento vocale non è supportato in questo browser. Usa Chrome.');
+            // Controllo compatibilità avanzato
+            const isSupported = ('webkitSpeechRecognition' in window) || ('SpeechRecognition' in window);
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+            const isAndroid = /Android/.test(navigator.userAgent);
+            const isMobile = /Mobi|Android/i.test(navigator.userAgent);
+
+            if (!isSupported) {
+                let message = 'Il riconoscimento vocale non è supportato in questo browser.';
+                
+                if (isIOS) {
+                    message += '\n\n📱 IPAD/IPHONE: Safari non supporta il riconoscimento vocale.\nUsa Chrome o Firefox per iOS.';
+                } else if (isAndroid) {
+                    message += '\n\n🤖 ANDROID: Prova con Google Chrome aggiornato.\nVerifica che i permessi microfono siano attivi.';
+                } else {
+                    message += '\n\nUsa Google Chrome o Microsoft Edge.';
+                }
+                
+                alert(message);
                 return;
+            }
+
+            // Avviso per dispositivi mobili
+            if (isMobile) {
+                const statusDiv = document.getElementById('voice-status');
+                statusDiv.innerHTML = '📱 Dispositivo mobile rilevato<br>Potrebbe essere meno accurato<br>Parla chiaramente e vicino al microfono';
+                statusDiv.style.color = '#ff8800';
             }
 
             try {
@@ -863,10 +886,34 @@
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             continuousRecognition = new SpeechRecognition();
 
+            // Configurazione ottimizzata per diversi dispositivi
+            const isMobile = /Mobi|Android/i.test(navigator.userAgent);
+            const isAndroid = /Android/.test(navigator.userAgent);
+
             continuousRecognition.lang = 'it-IT';
-            continuousRecognition.continuous = true;
-            continuousRecognition.interimResults = true;
-            continuousRecognition.maxAlternatives = 1;
+            
+            // Per Android, riduci la continuità per migliorare l'accuratezza
+            if (isAndroid) {
+                continuousRecognition.continuous = false; // Meno continuo ma più accurato
+                continuousRecognition.interimResults = false; // Solo risultati finali
+                continuousRecognition.maxAlternatives = 3; // Più alternative
+                console.log('🤖 Configurazione Android: continuous=false, interim=false');
+            } else {
+                continuousRecognition.continuous = true;
+                continuousRecognition.interimResults = true;
+                continuousRecognition.maxAlternatives = 1;
+            }
+
+            // Configurazioni aggiuntive per mobile
+            if (isMobile) {
+                // Timeout più lungo per dispositivi mobili
+                if (continuousRecognition.setTimeout) {
+                    continuousRecognition.setTimeout = 10000;
+                }
+                if (continuousRecognition.speechTimeout) {
+                    continuousRecognition.speechTimeout = 5000;
+                }
+            }
 
             continuousRecognition.onresult = function(event) {
                 let finalTranscript = '';
@@ -905,8 +952,14 @@
             continuousRecognition.onend = function() {
                 console.log('📴 Riconoscimento terminato, isListening:', isContinuousListening, 'isProcessing:', isProcessingCommand);
 
+                const isAndroid = /Android/.test(navigator.userAgent);
+
                 if (isContinuousListening && !isProcessingCommand) {
                     console.log('🔄 Riavvio automatico...');
+                    
+                    // Android ha bisogno di più tempo tra riavvii
+                    const restartDelay = isAndroid ? 1000 : 300;
+                    
                     setTimeout(() => {
                         if (isContinuousListening && !isProcessingCommand) {
                             try {
@@ -917,7 +970,7 @@
                                 restartRecognitionFromScratch();
                             }
                         }
-                    }, 300);
+                    }, restartDelay);
                 }
             };
 
