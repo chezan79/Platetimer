@@ -320,13 +320,13 @@
         
         <!-- Sistema messaggio audio standardizzato -->
         <div style="padding: 12px; background: linear-gradient(135deg, #e8f5e8 0%, #c8e6c9 100%); border-radius: 8px; border-left: 4px solid #4caf50; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);">
-            <h4 style="margin: 0 0 12px 0; color: #2e7d32; font-size: 14px;">🎤 Invia Audio</h4>
+
             
             <!-- Container orizzontale per selezione destinazione e pulsante -->
             <div style="display: flex; gap: 10px; align-items: center;">
                 <!-- Selezione destinazione -->
                 <div style="flex: 1;">
-                    <label style="font-size: 11px; color: #666; display: block; margin-bottom: 4px;">Invia a:</label>
+                    <label style="font-size: 11px; color: #666; display: block; margin-bottom: 4px;"></label>
                     <select id="audioDestinationSelect" style="width: 100%; padding: 4px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px;">
                         <option value="pizzeria">🍕 Pizzeria</option>
                         <option value="insalata">🥗 Insalata</option>
@@ -344,18 +344,15 @@
                         ontouchend="stopAudioMessage()"
                         id="audio-message-button" 
                         style="width: 100%; padding: 8px; background: linear-gradient(135deg, #4caf50 0%, #45a049 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600; transition: all 0.3s ease; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;">
-                        🎤 Tieni Premuto
+                        🎤 Invia messaggio
                     </button>
                 </div>
             </div>
             
-            <div id="audio-message-status" style="margin-top: 6px; font-size: 10px; color: #666; min-height: 14px; text-align: center;">
-                Premi e tieni premuto
-            </div>
         </div>
     </div>
 
-    <div style="position: absolute; top: 20px; right: 20px; z-index: 1000; display: flex; gap: 10px;">
+    <div style="position: absolute; top: 10px; right: 20px; z-index: 1000; display: flex; gap: 20px;">
         <button onclick="window.location.href='home.html'" style="padding: 6px 12px; background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500; transition: transform 0.2s, box-shadow 0.2s;">🏠 Home</button>
         <button onclick="window.location.href='index.html'" style="padding: 6px 12px; background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500; transition: transform 0.2s, box-shadow 0.2s;">🚪 Esci</button>
     </div>
