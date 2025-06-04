@@ -1255,10 +1255,14 @@
                             startCountdown(minutes, tableNumber, 'cucina');
                         }
 
-                        // 🧹 Pulisce automaticamente l'input dopo il comando vocale
+                        // 🧹 Pulisce automaticamente l'input e le destinazioni dopo il comando vocale
                         setTimeout(() => {
                             document.getElementById('numeroTavolo').value = '';
                             console.log('🧹 Input tavolo pulito automaticamente dopo comando vocale');
+                            
+                            // Reset selezione destinazioni anche per comando vocale
+                            resetSelection();
+                            console.log('🧹 Destinazioni resettate automaticamente dopo comando vocale');
                         }, 500);
 
                         const statusDiv = document.getElementById('voice-status');
