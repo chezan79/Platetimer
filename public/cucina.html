@@ -376,7 +376,7 @@
         <!-- Sezione tastiera e input -->
         <div id="keyboardSection">
             <h2 style="color: #333; text-align: center; margin-bottom: 15px; font-size: 18px;">🔢 Tastiera</h2>
-            <input type="text" id="numeroTavolo" pattern="[0-9]*" inputmode="numeric" placeholder="Numero Tavolo" style="width: 80%; margin-bottom: 15px;" maxlength="3">
+            <input type="text" id="numeroTavolo" pattern="[0-9]*" inputmode="numeric" placeholder="Numero Tavolo" readonly style="width: 80%; margin-bottom: 15px;">
             <div id="keyboard">
                 <div class="key">1</div>
                 <div class="key">2</div>
@@ -477,40 +477,14 @@
 
         // Gestione tastiera virtuale
         keyboard.addEventListener('click', (event) => {
-            event.preventDefault(); // Previene comportamenti indesiderati
-            
             if (event.target.classList.contains('key')) {
                 const key = event.target.textContent.trim();
-                console.log('🔢 Tasto premuto:', key);
-                
-                // Aggiungi feedback visivo al tasto premuto
-                event.target.style.transform = 'scale(0.95)';
-                setTimeout(() => {
-                    event.target.style.transform = 'scale(1)';
-                }, 150);
-                
                 if (key === 'C') {
                     numeroTavoloInput.value = '';
-                    numeroTavoloInput.focus(); // Mantieni il focus
                     console.log('🧹 Campo tavolo pulito');
                 } else if (/^\d$/.test(key)) {
-                    // Controlla che sia un numero e che non superi 3 cifre
-                    if (numeroTavoloInput.value.length < 3) {
-                        numeroTavoloInput.value += key;
-                        numeroTavoloInput.focus(); // Mantieni il focus
-                        console.log(`🔢 Aggiunto numero: ${key}, valore attuale: ${numeroTavoloInput.value}`);
-                        
-                        // Trigger dell'evento input per eventuali listener
-                        numeroTavoloInput.dispatchEvent(new Event('input', { bubbles: true }));
-                    } else {
-                        console.log('⚠️ Numero tavolo troppo lungo (massimo 3 cifre)');
-                        
-                        // Feedback visivo per errore
-                        numeroTavoloInput.style.borderColor = '#dc3545';
-                        setTimeout(() => {
-                            numeroTavoloInput.style.borderColor = '#ddd';
-                        }, 1000);
-                    }
+                    numeroTavoloInput.value += key;
+                    console.log(`🔢 Aggiunto numero: ${key}, valore attuale: ${numeroTavoloInput.value}`);
                 }
             }
         });
@@ -1279,18 +1253,6 @@
 
         document.addEventListener('DOMContentLoaded', function() {
             console.log('🎤 Pagina caricata - Riconoscimento vocale continuo disponibile');
-            
-            // Test della tastiera virtuale
-            console.log('🔢 Testando tastiera virtuale...');
-            const keyboardElement = document.getElementById('keyboard');
-            const inputElement = document.getElementById('numeroTavolo');
-            
-            if (keyboardElement && inputElement) {
-                console.log('✅ Elementi tastiera trovati correttamente');
-                console.log('🔢 Numero di tasti:', keyboardElement.querySelectorAll('.key').length);
-            } else {
-                console.error('❌ Elementi tastiera non trovati!');
-            }
 
             setInterval(() => {
                 if (isContinuousListening && continuousRecognition) {
