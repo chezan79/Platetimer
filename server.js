@@ -370,7 +370,7 @@ wss.on('connection', (ws) => {
                 }
 
                 // Validazione destinazione
-                const validDestinations = ['cucina', 'insalata'];
+                const validDestinations = ['cucina', 'insalata', 'pizzeria'];
                 const destination = data.destination;
                 if (!destination || !validDestinations.includes(destination)) {
                     console.log('⚠️ Destinazione messaggio vocale non valida:', destination);
