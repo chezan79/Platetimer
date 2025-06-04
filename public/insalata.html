@@ -104,11 +104,26 @@
         <h4 id="company-name" style="margin: 0; color: #333; font-weight: 600;">Nome Azienda</h4>
     </div>
     
-    <!-- Logo posizionato in alto al centro -->
-    <div style="position: absolute; top: 20px; left: 50%; transform: translateX(-50%); z-index: 1000;">
-        <a href="https://imgbox.com/Bt6wfdF9" target="_blank">
-            <img src="https://thumbs2.imgbox.com/3b/04/Bt6wfdF9_t.jpg" alt="MealMaster Logo" style="width: 120px; height: auto;">
-        </a>
+    <!-- Sistema messaggio vocale con scelta destinazione -->
+    <div style="position: absolute; top: 20px; left: 50%; transform: translateX(-50%); text-align: center; padding: 8px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; border-left: 4px solid #007bff; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); min-width: 280px; z-index: 500;">
+        <div style="display: flex; justify-content: center; align-items: center; gap: 6px; flex-wrap: nowrap;">
+            <button class="destination-button" data-destination="cucina" style="padding: 6px 12px; background: linear-gradient(135deg, #28a745 0%, #98FB98 100%); color: #212529; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
+                🍳 Cucina
+            </button>
+            <button class="destination-button" data-destination="pizzeria" style="padding: 6px 12px; background: linear-gradient(135deg, #ffc107 0%, #FFE4C4 100%); color: #212529; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
+                🍕 Pizzeria
+            </button>
+            <button 
+                onclick="toggleVoiceRecording()" 
+                id="voice-message-button" 
+                style="padding: 6px 12px; background: linear-gradient(135deg, #007bff 0%, #0056b3 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; white-space: nowrap;">
+                🎤 5s
+            </button>
+        </div>
+        <div id="voice-message-status" style="margin-top: 4px; font-size: 10px; color: #666; min-height: 12px;">
+        </div>
+        <div id="selected-destinations" style="margin-top: 2px; font-size: 10px; color: #007bff; font-weight: 600;">
+        </div>
     </div>
     
     <!-- Container dedicato per i messaggi della pizzeria - posizionato in alto a destra (inizialmente nascosto) -->
@@ -333,6 +348,24 @@
                 animation: slideIn 0.3s ease-out;
             `;
 
+            // Aggiungi animazione CSS se non esiste
+            if (!document.getElementById('messageAnimations')) {
+                const style = document.createElement('style');
+                style.id = 'messageAnimations';
+                style.textContent = `
+                    @keyframes slideIn {
+                        from { opacity: 0; transform: translateX(-20px); }
+                        to { opacity: 1; transform: translateX(0); }
+                    }
+                    @keyframes pulse {
+                        0% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7); }
+                        70% { box-shadow: 0 0 0 10px rgba(40, 167, 69, 0); }
+                        100% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0); }
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+
             // Crea contenuto con audio se disponibile
             let audioControls = '';
             if (messageData.hasAudio && messageData.audioData) {
@@ -380,17 +413,63 @@
 
             messagesList.appendChild(messageElement);
 
-            // Riproduci allarme per nuovo messaggio
+            // 🔊 Riproduci allarme per nuovo messaggio
             const messageAlert = document.getElementById('alertSound');
             if (messageAlert) {
                 messageAlert.play().catch(error => {
                     console.log('⚠️ Errore riproduzione allarme messaggio in insalata:', error);
+                    
+                    // Fallback: suono generato se l'audio non funziona
+                    try {
+                        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                        const oscillator = audioContext.createOscillator();
+                        const gain = audioContext.createGain();
+
+                        oscillator.connect(gain);
+                        gain.connect(audioContext.destination);
+
+                        // Due beep per distinguere dai countdown
+                        oscillator.frequency.value = 1000;
+                        gain.gain.setValueAtTime(0.1, audioContext.currentTime);
+                        gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+
+                        oscillator.start(audioContext.currentTime);
+                        oscillator.stop(audioContext.currentTime + 0.2);
+
+                        // Secondo beep
+                        setTimeout(() => {
+                            const oscillator2 = audioContext.createOscillator();
+                            const gain2 = audioContext.createGain();
+                            oscillator2.connect(gain2);
+                            gain2.connect(audioContext.destination);
+                            oscillator2.frequency.value = 1200;
+                            gain2.gain.setValueAtTime(0.1, audioContext.currentTime);
+                            gain2.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+                            oscillator2.start(audioContext.currentTime);
+                            oscillator2.stop(audioContext.currentTime + 0.2);
+                        }, 300);
+                    } catch (synthError) {
+                        console.log('Impossibile riprodurre allarme sintetico in insalata:', synthError);
+                    }
                 });
+            } else {
+                console.log('⚠️ File audio alerte-346112.mp3 non trovato in insalata');
             }
 
-            console.log(`📢 🔊 Messaggio vocale visualizzato in insalata: "${messageData.message}"`);
+            // Animazione visiva per attirare l'attenzione
+            const messagesContainer = document.getElementById('voice-messages-container');
+            messagesContainer.style.border = '2px solid #28a745';
+            messagesContainer.style.animation = 'pulse 2s ease-in-out 3';
+
+            // Rimuovi l'effetto visivo dopo qualche secondo
+            setTimeout(() => {
+                messagesContainer.style.border = 'none';
+                messagesContainer.style.animation = '';
+            }, 6000);
+
+            console.log(`📢 🔊 Messaggio vocale visualizzato in insalata con allarme: "${messageData.message}"`);
             
-            // Auto-riproduzione se c'è audio
+            // 🔊 Auto-riproduzione se c'è audio
             if (messageData.hasAudio && messageData.audioData) {
                 setTimeout(() => {
                     const audioId = `audio-${messageData.messageId}`;
@@ -453,6 +532,296 @@
 
                 console.log(`🗑️ Messaggio vocale eliminato in insalata: ID ${messageId}`);
             }
+        }
+
+        // Sistema messaggio vocale con registrazione audio per insalata
+        let voiceRecognition = null;
+        let isRecordingMessage = false;
+        let currentTranscript = '';
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let selectedDestinations = [];
+
+        // Gestione selezione destinazioni
+        document.addEventListener('DOMContentLoaded', function() {
+            const destinationButtons = document.querySelectorAll('.destination-button');
+
+            destinationButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    const destination = this.getAttribute('data-destination');
+
+                    // Toggle singola destinazione
+                    if (selectedDestinations.includes(destination)) {
+                        selectedDestinations = selectedDestinations.filter(d => d !== destination);
+                        this.classList.remove('selected');
+                    } else {
+                        selectedDestinations.push(destination);
+                        this.classList.add('selected');
+                    }
+
+                    updateDestinationDisplay();
+                    console.log('Destinazioni selezionate in insalata:', selectedDestinations);
+                });
+            });
+
+            // Stile per pulsanti selezionati
+            const style = document.createElement('style');
+            style.textContent = `
+                .destination-button {
+                    transition: transform 0.2s, background-color 0.3s, box-shadow 0.2s;
+                    min-width: 60px;
+                }
+
+                .destination-button:hover {
+                    transform: translateY(-2px);
+                    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+                }
+
+                .destination-button.selected {
+                    transform: translateY(-2px);
+                    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+                    border: 3px solid #333 !important;
+                    position: relative;
+                }
+
+                .destination-button.selected::after {
+                    content: '✓';
+                    position: absolute;
+                    top: -5px;
+                    right: -5px;
+                    background: #28a745;
+                    color: white;
+                    border-radius: 50%;
+                    width: 20px;
+                    height: 20px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 12px;
+                    font-weight: bold;
+                    border: 2px solid white;
+                }
+            `;
+            document.head.appendChild(style);
+        });
+
+        function updateDestinationDisplay() {
+            const displayDiv = document.getElementById('selected-destinations');
+
+            if (selectedDestinations.length === 0) {
+                displayDiv.textContent = '';
+            } else {
+                const icons = { 'cucina': '🍳', 'pizzeria': '🍕' };
+                const destName = selectedDestinations[0].charAt(0).toUpperCase() + selectedDestinations[0].slice(1);
+                displayDiv.textContent = `${icons[selectedDestinations[0]]} ${destName}`;
+            }
+        }
+
+        async function toggleVoiceRecording() {
+            // Previeni avvio multiplo
+            if (isRecordingMessage) {
+                console.log('⚠️ Registrazione già in corso in insalata, ignorato');
+                return;
+            }
+
+            // Verifica destinazioni selezionate
+            if (selectedDestinations.length === 0) {
+                alert('⚠️ Seleziona almeno una destinazione prima di registrare!');
+                return;
+            }
+
+            try {
+                // Avvia registrazione audio
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream, {
+                    mimeType: 'audio/webm;codecs=opus'
+                });
+                audioChunks = [];
+
+                mediaRecorder.ondataavailable = event => {
+                    audioChunks.push(event.data);
+                };
+
+                mediaRecorder.onstop = () => {
+                    // Ferma tutti i track del microfono
+                    stream.getTracks().forEach(track => track.stop());
+                    // Elabora l'audio registrato
+                    processRecordedAudio();
+                };
+
+                mediaRecorder.start();
+                console.log('🎤 Registrazione audio pura avviata per 5 secondi in insalata');
+
+                isRecordingMessage = true;
+                updateVoiceMessageUI(true);
+
+                const statusDiv = document.getElementById('voice-message-status');
+                statusDiv.textContent = '🎤 Registrando...';
+                statusDiv.style.color = '#dc3545';
+
+                startCountdownRecording(5);
+
+                // Auto-stop dopo 5 secondi
+                setTimeout(() => {
+                    if (isRecordingMessage && mediaRecorder.state === 'recording') {
+                        mediaRecorder.stop();
+                    }
+                }, 5000);
+
+            } catch (error) {
+                console.error('❌ Errore accesso microfono in insalata:', error);
+                alert('❌ Impossibile accedere al microfono. Verifica i permessi.');
+                isRecordingMessage = false;
+                updateVoiceMessageUI(false);
+                return;
+            }
+        }
+
+        function startCountdownRecording(seconds) {
+            let remaining = seconds;
+            const statusDiv = document.getElementById('voice-message-status');
+
+            const countdownInterval = setInterval(() => {
+                remaining--;
+                if (remaining > 0) {
+                    statusDiv.textContent = `🎤 ${remaining}s`;
+                } else {
+                    clearInterval(countdownInterval);
+                }
+            }, 1000);
+        }
+
+        function processRecordedAudio() {
+            isRecordingMessage = false;
+            updateVoiceMessageUI(false);
+
+            const statusDiv = document.getElementById('voice-message-status');
+            statusDiv.textContent = '🔄 Elaborando...';
+            statusDiv.style.color = '#ffc107';
+
+            if (audioChunks.length === 0) {
+                statusDiv.textContent = '⚠️ Riprova';
+                statusDiv.style.color = '#ffc107';
+
+                setTimeout(() => {
+                    statusDiv.textContent = '';
+                    statusDiv.style.color = '#666';
+                }, 3000);
+                return;
+            }
+
+            // Crea blob audio
+            const audioBlob = new Blob(audioChunks, { type: 'audio/webm;codecs=opus' });
+
+            // Verifica dimensione audio
+            if (audioBlob.size < 1000) {
+                statusDiv.textContent = '⚠️ Parla più forte';
+                statusDiv.style.color = '#ffc107';
+
+                setTimeout(() => {
+                    statusDiv.textContent = '';
+                    statusDiv.style.color = '#666';
+                }, 3000);
+                return;
+            }
+
+            console.log(`🎤 Audio insalata: ${audioBlob.size} bytes, tipo: ${audioBlob.type}`);
+
+            // Converti in base64 e invia
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                const audioDataBase64 = reader.result.split(',')[1];
+
+                statusDiv.textContent = '✅ Invio...';
+                statusDiv.style.color = '#28a745';
+
+                sendVoiceAudioMessage(audioDataBase64, audioBlob.size);
+            };
+
+            reader.onerror = () => {
+                console.error('❌ Errore audio in insalata');
+                statusDiv.textContent = '❌ Errore';
+                statusDiv.style.color = '#dc3545';
+            };
+
+            reader.readAsDataURL(audioBlob);
+        }
+
+        function updateVoiceMessageUI(isRecording) {
+            const button = document.getElementById('voice-message-button');
+            const statusDiv = document.getElementById('voice-message-status');
+
+            if (isRecording) {
+                button.textContent = '🔴 Registrando...';
+                button.style.background = 'linear-gradient(135deg, #dc3545 0%, #c82333 100%)';
+                button.style.transform = 'scale(1.05)';
+                button.disabled = true;
+            } else {
+                button.textContent = '🎤 5s';
+                button.style.background = 'linear-gradient(135deg, #007bff 0%, #0056b3 100%)';
+                button.style.transform = 'scale(1)';
+                button.disabled = false;
+
+                setTimeout(() => {
+                    if (!isRecordingMessage) {
+                        statusDiv.textContent = '';
+                        statusDiv.style.color = '#666';
+                    }
+                }, 3000);
+            }
+        }
+
+        function sendVoiceAudioMessage(audioDataBase64, audioSize) {
+            const messageId = Date.now().toString();
+            const currentTime = new Date().toLocaleTimeString('it-IT');
+
+            // Invia a tutte le destinazioni selezionate
+            selectedDestinations.forEach(destination => {
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    const voiceMessageData = {
+                        action: 'voiceMessage',
+                        message: `Messaggio vocale da Insalata (${Math.round(audioSize/1024)}KB)`,
+                        messageId: `${messageId}_${destination}`,
+                        from: 'Insalata',
+                        destination: destination,
+                        audioData: audioDataBase64,
+                        hasAudio: true,
+                        audioSize: audioSize,
+                        timestamp: currentTime
+                    };
+
+                    ws.send(JSON.stringify(voiceMessageData));
+                    console.log(`📢 🎤 Inviato da insalata a ${destination}: ${Math.round(audioSize/1024)}KB`);
+                } else {
+                    console.error('❌ WebSocket non connesso in insalata');
+                    alert('❌ Connessione persa.');
+                    return;
+                }
+            });
+
+            const statusDiv = document.getElementById('voice-message-status');
+            const destText = selectedDestinations.length === 1 ? 
+                selectedDestinations[0] : 
+                `${selectedDestinations.length} destinazioni`;
+
+            statusDiv.textContent = `✅ A ${destText}! (${Math.round(audioSize/1024)}KB)`;
+            statusDiv.style.color = '#28a745';
+
+            // Reset delle destinazioni selezionate
+            selectedDestinations = [];
+            document.querySelectorAll('.destination-button').forEach(btn => {
+                btn.classList.remove('selected');
+            });
+            updateDestinationDisplay();
+
+            // Pulisci lo stato
+            audioChunks = [];
+            mediaRecorder = null;
+
+            setTimeout(() => {
+                statusDiv.textContent = '';
+                statusDiv.style.color = '#666';
+            }, 3000);
         }
     </script>
     <script src="company-header.js"></script>
