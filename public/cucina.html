@@ -403,7 +403,7 @@
     <!-- Container dedicato per i messaggi della pizzeria - posizionato in alto a destra (inizialmente nascosto) -->
     <div id="messagesContainer" style="background: white; padding: 15px; border-radius: 10px; box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15); display: none; flex-direction: column; max-height: 60vh; overflow-y: auto;">
         <div id="voice-messages-container" style="padding: 12px; background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-radius: 8px; border-left: 4px solid #2196f3;">
-            <h3 style="margin: 0 0 12px 0; color: #1976d2; font-size: 16px;">📢 Messaggi Pizzeria</h3>
+            <h3 style="margin: 0 0 12px 0; color: #1976d2; font-size: 16px;">📢🔊 Messaggi Audio Pizzeria</h3>
             <div id="voice-messages-list">
                 <!-- I messaggi appariranno qui dinamicamente -->
             </div>
@@ -624,9 +624,15 @@
                         } else if (data.action === 'voiceMessage') {
                             console.log('📢 Messaggio vocale ricevuto:', data);
                             displayVoiceMessage(data);
+                        } else if (data.action === 'audioMessage') {
+                            console.log('🔊 Messaggio audio ricevuto:', data);
+                            displayAudioMessage(data);
                         } else if (data.action === 'deleteVoiceMessage') {
                             console.log('🗑️ Eliminazione messaggio vocale ricevuta:', data);
                             removeVoiceMessage(data.messageId);
+                        } else if (data.action === 'deleteAudioMessage') {
+                            console.log('🗑️ Eliminazione messaggio audio ricevuta:', data);
+                            removeAudioMessage(data.messageId);
                         }
                     } catch (error) {
                         console.error('Errore nel parsing del messaggio WebSocket:', error);
@@ -1413,6 +1419,199 @@
 
                 console.log(`🗑️ Messaggio vocale eliminato: ID ${messageId}`);
             }
+        }
+
+        // Funzioni per la gestione dei messaggi audio
+        function displayAudioMessage(messageData) {
+            const messagesList = document.getElementById('voice-messages-list');
+            const messagesContainerElement = document.getElementById('messagesContainer');
+            
+            // 🎯 Mostra il container dei messaggi quando arriva il primo messaggio
+            if (messagesContainerElement.style.display === 'none') {
+                messagesContainerElement.style.display = 'flex';
+                console.log('📦 Container messaggi mostrato per audio');
+            }
+
+            // Converti base64 in blob per riproduzione
+            const audioBlob = base64ToBlob(messageData.audioData, messageData.mimeType);
+            const audioUrl = URL.createObjectURL(audioBlob);
+
+            // Crea elemento messaggio audio
+            const messageElement = document.createElement('div');
+            messageElement.id = `audio-message-${messageData.messageId}`;
+            messageElement.style.cssText = `
+                background: white;
+                padding: 12px;
+                margin: 8px 0;
+                border-radius: 6px;
+                border-left: 3px solid #ff6b35;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                display: flex;
+                flex-direction: column;
+                animation: slideIn 0.3s ease-out;
+            `;
+
+            messageElement.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <div style="font-weight: 600; color: #ff6b35; font-size: 14px;">
+                        🔊 ${messageData.from} - ${messageData.timestamp}
+                    </div>
+                    <button onclick="deleteAudioMessage('${messageData.messageId}')" 
+                            style="background: #f44336; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 10px; transition: background 0.2s;">
+                        🗑️ Elimina
+                    </button>
+                </div>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <audio controls style="flex: 1; height: 32px;">
+                        <source src="${audioUrl}" type="${messageData.mimeType}">
+                        Il tuo browser non supporta l'elemento audio.
+                    </audio>
+                    <button onclick="playAudio('${messageData.messageId}')" 
+                            style="background: #28a745; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; transition: background 0.2s;">
+                        ▶️ Riproduci
+                    </button>
+                </div>
+            `;
+
+            // Aggiungi animazione CSS se non esiste
+            if (!document.getElementById('messageAnimations')) {
+                const style = document.createElement('style');
+                style.id = 'messageAnimations';
+                style.textContent = `
+                    @keyframes slideIn {
+                        from { opacity: 0; transform: translateX(-20px); }
+                        to { opacity: 1; transform: translateX(0); }
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+
+            messagesList.appendChild(messageElement);
+
+            // Memorizza l'URL per la pulizia successiva
+            messageElement.audioUrl = audioUrl;
+
+            // 🔊 Riproduci allarme per nuovo messaggio audio
+            const messageAlert = document.getElementById('alertSound');
+            if (messageAlert) {
+                messageAlert.play().catch(error => {
+                    console.log('⚠️ Errore riproduzione allarme messaggio audio:', error);
+                });
+            }
+
+            // Animazione visiva per attirare l'attenzione
+            const messagesContainer = document.getElementById('voice-messages-container');
+            messagesContainer.style.border = '2px solid #ff6b35';
+            messagesContainer.style.animation = 'pulse 2s ease-in-out 3';
+            
+            // Aggiungi CSS per l'animazione pulse se non esiste
+            if (!document.getElementById('pulseAnimation')) {
+                const style = document.createElement('style');
+                style.id = 'pulseAnimation';
+                style.textContent = `
+                    @keyframes pulse {
+                        0% { box-shadow: 0 0 0 0 rgba(255, 107, 53, 0.7); }
+                        70% { box-shadow: 0 0 0 10px rgba(255, 107, 53, 0); }
+                        100% { box-shadow: 0 0 0 0 rgba(255, 107, 53, 0); }
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+
+            // Rimuovi l'effetto visivo dopo qualche secondo
+            setTimeout(() => {
+                messagesContainer.style.border = 'none';
+                messagesContainer.style.animation = '';
+            }, 6000);
+
+            console.log(`🔊 Messaggio audio visualizzato con allarme: ID ${messageData.messageId}`);
+        }
+
+        function playAudio(messageId) {
+            const messageElement = document.getElementById(`audio-message-${messageId}`);
+            if (messageElement) {
+                const audioElement = messageElement.querySelector('audio');
+                if (audioElement) {
+                    audioElement.currentTime = 0; // Riavvolgi all'inizio
+                    audioElement.play().catch(error => {
+                        console.error('❌ Errore riproduzione audio:', error);
+                        alert('Errore nella riproduzione audio. Prova a usare i controlli audio standard.');
+                    });
+                    console.log(`▶️ Riproduzione audio avviata: ID ${messageId}`);
+                }
+            }
+        }
+
+        function deleteAudioMessage(messageId) {
+            // Invia eliminazione via WebSocket
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                const deleteMessage = {
+                    action: 'deleteAudioMessage',
+                    messageId: messageId
+                };
+                ws.send(JSON.stringify(deleteMessage));
+                console.log(`📤 Eliminazione messaggio audio inviata: ID ${messageId}`);
+            } else {
+                console.error('❌ WebSocket non connesso per eliminazione messaggio audio');
+            }
+
+            // Rimuovi localmente
+            removeAudioMessage(messageId);
+        }
+
+        function removeAudioMessage(messageId) {
+            const messageElement = document.getElementById(`audio-message-${messageId}`);
+            if (messageElement) {
+                // Rilascia l'URL dell'audio per liberare memoria
+                if (messageElement.audioUrl) {
+                    URL.revokeObjectURL(messageElement.audioUrl);
+                }
+
+                messageElement.style.animation = 'slideOut 0.3s ease-out';
+                
+                // Aggiungi animazione di uscita se non esiste
+                if (!document.getElementById('slideOutAnimation')) {
+                    const style = document.createElement('style');
+                    style.id = 'slideOutAnimation';
+                    style.textContent = `
+                        @keyframes slideOut {
+                            from { opacity: 1; transform: translateX(0); }
+                            to { opacity: 0; transform: translateX(20px); }
+                        }
+                    `;
+                    document.head.appendChild(style);
+                }
+
+                setTimeout(() => {
+                    if (messageElement && messageElement.parentNode) {
+                        messageElement.parentNode.removeChild(messageElement);
+                    }
+
+                    // 🎯 Se non ci sono più messaggi, nascondi il container
+                    const messagesList = document.getElementById('voice-messages-list');
+                    const messagesContainerElement = document.getElementById('messagesContainer');
+                    
+                    if (messagesList.children.length === 0) {
+                        messagesContainerElement.style.display = 'none';
+                        console.log('📦 Container messaggi nascosto (nessun messaggio audio)');
+                    }
+                }, 300);
+
+                console.log(`🗑️ Messaggio audio eliminato: ID ${messageId}`);
+            }
+        }
+
+        // Funzione utility per convertire base64 in blob
+        function base64ToBlob(base64Data, mimeType) {
+            const byteCharacters = atob(base64Data);
+            const byteNumbers = new Array(byteCharacters.length);
+            
+            for (let i = 0; i < byteCharacters.length; i++) {
+                byteNumbers[i] = byteCharacters.charCodeAt(i);
+            }
+            
+            const byteArray = new Uint8Array(byteNumbers);
+            return new Blob([byteArray], { type: mimeType });
         }
     </script>
     <script src="company-header.js"></script>

@@ -122,7 +122,7 @@
 
     <!-- Sistema messaggio vocale per cucina posizionato in basso -->
     <div style="position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 1000; text-align: center; padding: 15px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 12px; border-left: 4px solid #007bff; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); min-width: 320px;">
-        <h3 style="margin: 0 0 10px 0; color: #333; font-size: 16px;">📢 Messaggio per la Cucina</h3>
+        <h3 style="margin: 0 0 10px 0; color: #333; font-size: 16px;">🔊 Messaggio Audio per la Cucina</h3>
         <button 
             onmousedown="startVoiceMessage()" 
             onmouseup="stopVoiceMessage()" 
@@ -134,7 +134,7 @@
             🎤 Tieni Premuto per Parlare
         </button>
         <div id="voice-message-status" style="margin-top: 10px; font-size: 12px; color: #666; min-height: 16px;">
-            Tieni premuto il pulsante per registrare
+            Tieni premuto il pulsante per registrare audio
         </div>
     </div>
 
@@ -411,205 +411,140 @@
             return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
         }
 
-        // Sistema messaggio vocale con pulsante tieni premuto
-        let voiceRecognition = null;
+        // Sistema registrazione audio con MediaRecorder API
+        let mediaRecorder = null;
+        let audioChunks = [];
         let isRecordingMessage = false;
-        let currentTranscript = '';
 
-        function startVoiceMessage() {
+        async function startVoiceMessage() {
             // Previeni avvio multiplo
             if (isRecordingMessage) return;
 
-            if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-                alert('Il riconoscimento vocale non è supportato in questo browser. Usa Chrome.');
-                return;
-            }
-
-            isRecordingMessage = true;
-            currentTranscript = '';
-            updateVoiceMessageUI(true);
-
-            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-            voiceRecognition = new SpeechRecognition();
-
-            voiceRecognition.lang = 'it-IT';
-            voiceRecognition.continuous = true;
-            voiceRecognition.interimResults = true;
-            voiceRecognition.maxAlternatives = 1;
-
-            voiceRecognition.onstart = () => {
-                console.log('🎤 Registrazione messaggio vocale avviata (tieni premuto)');
-                currentTranscript = ''; // ✅ Reset completo del transcript
-                console.log('🔄 Transcript resettato per nuova registrazione');
-                const statusDiv = document.getElementById('voice-message-status');
-                statusDiv.textContent = '🎤 Registrando... Continua a tenere premuto!';
-                statusDiv.style.color = '#dc3545';
-            };
-
-            voiceRecognition.onresult = (event) => {
-                if (!isRecordingMessage) return; // ✅ Ignora risultati se non stiamo più registrando
-                
-                let interimTranscript = '';
-                let newFinalTranscript = '';
-
-                // ✅ Processa SOLO i risultati nuovi per evitare duplicazioni
-                for (let i = event.resultIndex; i < event.results.length; ++i) {
-                    const transcript = event.results[i][0].transcript;
-                    const confidence = event.results[i][0].confidence;
-                    
-                    if (event.results[i].isFinal) {
-                        newFinalTranscript += transcript;
-                        console.log(`📝 Risultato FINALE nuovo: "${transcript}" (confidence: ${confidence})`);
-                    } else {
-                        interimTranscript += transcript;
-                        console.log(`📝 Risultato temporaneo: "${transcript}"`);
-                    }
-                }
-
-                // ✅ Accumula SOLO il nuovo testo finale per evitare duplicazioni
-                if (newFinalTranscript.trim()) {
-                    // ✅ Verifica che non sia già presente per evitare duplicazioni da tablet Android
-                    const trimmedNew = newFinalTranscript.trim();
-                    if (!currentTranscript.toLowerCase().includes(trimmedNew.toLowerCase())) {
-                        currentTranscript += (currentTranscript ? ' ' : '') + trimmedNew;
-                        console.log(`📝 Transcript aggiornato: "${currentTranscript}"`);
-                    } else {
-                        console.log(`🔄 Risultato già presente, ignorato: "${trimmedNew}"`);
-                    }
-                }
-                
-                // ✅ Mostra solo il contenuto accumulato + quello temporaneo più recente
-                const displayText = currentTranscript + (interimTranscript ? (currentTranscript ? ' ' : '') + interimTranscript : '');
-                
-                const statusDiv = document.getElementById('voice-message-status');
-                if (displayText.trim()) {
-                    statusDiv.textContent = `🎤 "${displayText.trim()}"`;
-                    statusDiv.style.color = '#007bff';
-                } else {
-                    statusDiv.textContent = '🎤 Registrando... Continua a tenere premuto!';
-                    statusDiv.style.color = '#dc3545';
-                }
-                
-                console.log(`📝 Display finale: "${displayText}" (lunghezza: ${displayText.length})`);
-            };
-
-            voiceRecognition.onerror = (event) => {
-                console.error('Errore riconoscimento vocale:', event.error);
-                const statusDiv = document.getElementById('voice-message-status');
-                statusDiv.textContent = `❌ Errore: ${event.error}`;
-                statusDiv.style.color = '#dc3545';
-                
-                // Non fermare automaticamente in caso di errore, lascia che l'utente rilasci
-                if (event.error === 'network' || event.error === 'aborted') {
-                    // Solo in caso di errori gravi
-                    setTimeout(() => stopVoiceMessage(), 100);
-                }
-            };
-
-            voiceRecognition.onend = () => {
-                console.log('🛑 Registrazione messaggio vocale terminata automaticamente');
-                if (isRecordingMessage) {
-                    // Se siamo ancora in modalità registrazione, prova a riavviare
-                    try {
-                        voiceRecognition.start();
-                    } catch (error) {
-                        console.log('Impossibile riavviare riconoscimento:', error);
-                        stopVoiceMessage();
-                    }
-                }
-            };
-
             try {
-                voiceRecognition.start();
+                // Richiedi accesso al microfono
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    }
+                });
+
+                isRecordingMessage = true;
+                audioChunks = [];
+                updateVoiceMessageUI(true);
+
+                // Configura MediaRecorder
+                mediaRecorder = new MediaRecorder(stream, {
+                    mimeType: 'audio/webm;codecs=opus'
+                });
+
+                mediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        audioChunks.push(event.data);
+                        console.log('📦 Chunk audio ricevuto:', event.data.size, 'bytes');
+                    }
+                };
+
+                mediaRecorder.onstop = () => {
+                    console.log('🛑 Registrazione audio completata');
+                    
+                    // Stop all microphone tracks
+                    stream.getTracks().forEach(track => track.stop());
+                    
+                    if (audioChunks.length > 0) {
+                        processRecordedAudio();
+                    } else {
+                        const statusDiv = document.getElementById('voice-message-status');
+                        statusDiv.textContent = '⚠️ Nessun audio registrato';
+                        statusDiv.style.color = '#ffc107';
+                        
+                        setTimeout(() => {
+                            statusDiv.textContent = 'Tieni premuto il pulsante per registrare';
+                            statusDiv.style.color = '#666';
+                        }, 2000);
+                    }
+                    
+                    updateVoiceMessageUI(false);
+                };
+
+                mediaRecorder.onerror = (event) => {
+                    console.error('❌ Errore MediaRecorder:', event.error);
+                    const statusDiv = document.getElementById('voice-message-status');
+                    statusDiv.textContent = `❌ Errore registrazione: ${event.error}`;
+                    statusDiv.style.color = '#dc3545';
+                    stopVoiceMessage();
+                };
+
+                // Avvia registrazione
+                mediaRecorder.start(100); // Raccogli chunk ogni 100ms
+                
+                const statusDiv = document.getElementById('voice-message-status');
+                statusDiv.textContent = '🎤 Registrando audio... Continua a tenere premuto!';
+                statusDiv.style.color = '#dc3545';
+                
+                console.log('🎤 Registrazione audio avviata');
+
             } catch (error) {
-                console.error('Errore avvio riconoscimento:', error);
-                stopVoiceMessage();
+                console.error('❌ Errore accesso microfono:', error);
+                const statusDiv = document.getElementById('voice-message-status');
+                statusDiv.textContent = '❌ Impossibile accedere al microfono. Verifica i permessi.';
+                statusDiv.style.color = '#dc3545';
+                isRecordingMessage = false;
+                updateVoiceMessageUI(false);
             }
         }
 
         function stopVoiceMessage() {
-            if (!isRecordingMessage) return;
+            if (!isRecordingMessage || !mediaRecorder) return;
 
             isRecordingMessage = false;
             
             const statusDiv = document.getElementById('voice-message-status');
-            statusDiv.textContent = '🔄 Elaborando messaggio finale...';
+            statusDiv.textContent = '🔄 Elaborando audio...';
             statusDiv.style.color = '#ffc107';
-            
-            updateVoiceMessageUI(false);
 
-            // ✅ Ferma immediatamente il riconoscimento per evitare ulteriori risultati
-            if (voiceRecognition) {
-                try {
-                    voiceRecognition.stop();
-                } catch (error) {
-                    console.log('Errore stop riconoscimento:', error);
+            try {
+                if (mediaRecorder.state === 'recording') {
+                    mediaRecorder.stop();
                 }
-                voiceRecognition = null;
+            } catch (error) {
+                console.error('❌ Errore stop registrazione:', error);
+                updateVoiceMessageUI(false);
             }
-
-            // ✅ Attendi solo il tempo necessario per processare l'ultimo risultato finale
-            setTimeout(() => {
-                // ✅ Pulisce e ottimizza il messaggio finale
-                let finalMessage = currentTranscript.trim();
-                
-                if (finalMessage.length > 0) {
-                    // ✅ NUOVO: Rimuove parole ripetute consecutive (problema tablet Android)
-                    finalMessage = cleanDuplicateWords(finalMessage);
-                    
-                    statusDiv.textContent = `✅ Messaggio pulito: "${finalMessage}"`;
-                    statusDiv.style.color = '#28a745';
-                    console.log(`📝 Messaggio finale pulito: "${finalMessage}" (era: "${currentTranscript.trim()}")`);
-                    sendVoiceMessage(finalMessage);
-                } else {
-                    statusDiv.textContent = '⚠️ Nessun messaggio registrato';
-                    statusDiv.style.color = '#ffc107';
-                    
-                    setTimeout(() => {
-                        statusDiv.textContent = 'Tieni premuto il pulsante per registrare';
-                        statusDiv.style.color = '#666';
-                    }, 2000);
-                }
-
-                currentTranscript = '';
-            }, 800); // Tempo ridotto ma sufficiente
         }
 
-        // ✅ NUOVA FUNZIONE: Pulisce le parole duplicate consecutive
-        function cleanDuplicateWords(text) {
-            if (!text || text.trim().length === 0) return '';
+        function processRecordedAudio() {
+            const audioBlob = new Blob(audioChunks, { type: 'audio/webm;codecs=opus' });
+            const audioSize = audioBlob.size;
             
-            console.log(`🧹 Pulizia testo originale: "${text}"`);
+            console.log(`🔊 Audio blob creato: ${audioSize} bytes, tipo: ${audioBlob.type}`);
             
-            // Divide in parole mantenendo spazi e punteggiatura
-            const words = text.toLowerCase().split(/(\s+)/);
-            const cleanedWords = [];
-            let lastWord = '';
-            
-            for (let i = 0; i < words.length; i++) {
-                const currentWord = words[i].trim();
+            if (audioSize < 1000) { // Meno di 1KB probabilmente è troppo breve
+                const statusDiv = document.getElementById('voice-message-status');
+                statusDiv.textContent = '⚠️ Messaggio troppo breve, riprova';
+                statusDiv.style.color = '#ffc107';
                 
-                // Mantieni spazi e caratteri non-parola
-                if (currentWord === '' || /^\s+$/.test(words[i])) {
-                    if (cleanedWords.length > 0) {
-                        cleanedWords.push(words[i]);
-                    }
-                    continue;
-                }
-                
-                // Aggiungi solo se diversa dalla parola precedente
-                if (currentWord !== lastWord) {
-                    cleanedWords.push(words[i]);
-                    lastWord = currentWord;
-                } else {
-                    console.log(`🗑️ Rimossa parola duplicata: "${currentWord}"`);
-                }
+                setTimeout(() => {
+                    statusDiv.textContent = 'Tieni premuto il pulsante per registrare';
+                    statusDiv.style.color = '#666';
+                }, 2000);
+                return;
             }
-            
-            const cleanedText = cleanedWords.join('');
-            console.log(`✅ Testo pulito: "${cleanedText}"`);
-            
-            return cleanedText;
+
+            // Converti in base64 per l'invio via WebSocket
+            const reader = new FileReader();
+            reader.onload = function() {
+                const base64Audio = reader.result.split(',')[1]; // Rimuovi il prefisso data:
+                sendAudioMessage(base64Audio, audioBlob.type);
+            };
+            reader.onerror = function() {
+                console.error('❌ Errore conversione audio in base64');
+                const statusDiv = document.getElementById('voice-message-status');
+                statusDiv.textContent = '❌ Errore elaborazione audio';
+                statusDiv.style.color = '#dc3545';
+            };
+            reader.readAsDataURL(audioBlob);
         }
 
         function updateVoiceMessageUI(isRecording) {
@@ -617,48 +552,56 @@
             const statusDiv = document.getElementById('voice-message-status');
 
             if (isRecording) {
-                button.textContent = '🔴 Registrando... (tieni premuto)';
+                button.textContent = '🔴 Registrando Audio... (tieni premuto)';
                 button.style.background = 'linear-gradient(135deg, #dc3545 0%, #c82333 100%)';
                 button.style.transform = 'scale(1.05)';
             } else {
-                button.textContent = '🎤 Tieni Premuto per Parlare';
+                button.textContent = '🎤 Tieni Premuto per Registrare Audio';
                 button.style.background = 'linear-gradient(135deg, #007bff 0%, #0056b3 100%)';
                 button.style.transform = 'scale(1)';
                 
                 setTimeout(() => {
                     if (!isRecordingMessage) {
-                        statusDiv.textContent = 'Tieni premuto il pulsante per registrare';
+                        statusDiv.textContent = 'Tieni premuto il pulsante per registrare audio';
                         statusDiv.style.color = '#666';
                     }
                 }, 3000);
             }
         }
 
-        function sendVoiceMessage(message) {
-            if (!message.trim()) {
-                console.log('Messaggio vuoto, non inviato');
+        function sendAudioMessage(audioBase64, mimeType) {
+            if (!audioBase64) {
+                console.log('❌ Audio vuoto, non inviato');
                 return;
             }
 
             const messageId = Date.now().toString();
             
             if (ws && ws.readyState === WebSocket.OPEN) {
-                const voiceMessageData = {
-                    action: 'voiceMessage',
-                    message: message.trim(),
+                const audioMessageData = {
+                    action: 'audioMessage',
+                    audioData: audioBase64,
+                    mimeType: mimeType,
                     messageId: messageId,
-                    from: 'Pizzeria'
+                    from: 'Pizzeria',
+                    timestamp: new Date().toLocaleTimeString('it-IT')
                 };
                 
-                ws.send(JSON.stringify(voiceMessageData));
-                console.log('📢 Messaggio vocale inviato:', message);
+                ws.send(JSON.stringify(audioMessageData));
+                console.log('🔊 Messaggio audio inviato - ID:', messageId, 'Dimensione:', audioBase64.length, 'caratteri');
                 
                 const statusDiv = document.getElementById('voice-message-status');
-                statusDiv.textContent = '✅ Messaggio inviato alla cucina!';
+                statusDiv.textContent = '✅ Messaggio audio inviato alla cucina!';
                 statusDiv.style.color = '#28a745';
+                
+                // Reset dopo 3 secondi
+                setTimeout(() => {
+                    statusDiv.textContent = 'Tieni premuto il pulsante per registrare audio';
+                    statusDiv.style.color = '#666';
+                }, 3000);
             } else {
-                console.error('❌ WebSocket non connesso per messaggio vocale');
-                alert('⚠️ Connessione persa. Impossibile inviare il messaggio.');
+                console.error('❌ WebSocket non connesso per messaggio audio');
+                alert('⚠️ Connessione persa. Impossibile inviare il messaggio audio.');
             }
         }
     </script>
