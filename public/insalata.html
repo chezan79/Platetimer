@@ -305,6 +305,10 @@
                     <div class="countdown-time">
                         <p>${formatTime(remainingTime)}</p>
                     </div>
+                    <button onclick="eliminaCountdown(${tableNumber})" 
+                            style="background: #dc3545; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.2s ease; margin-left: 10px;">
+                        🗑️ Elimina
+                    </button>
                 `;
             }, 1000);
 
@@ -832,6 +836,27 @@
                 statusDiv.textContent = '';
                 statusDiv.style.color = '#666';
             }, 3000);
+        }
+
+        // Funzione per eliminare countdown manualmente
+        function eliminaCountdown(tableNumber) {
+            console.log(`🗑️ Richiesta eliminazione countdown tavolo ${tableNumber} da insalata`);
+            
+            // Elimina localmente
+            deleteCountdown(tableNumber);
+            
+            // Invia eliminazione via WebSocket a tutti gli altri client
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                const deleteMessage = {
+                    action: 'deleteCountdown',
+                    tableNumber: tableNumber
+                };
+                ws.send(JSON.stringify(deleteMessage));
+                console.log(`📤 Eliminazione countdown inviata da insalata: Tavolo ${tableNumber}`);
+            } else {
+                console.error('❌ WebSocket non connesso per eliminazione countdown in insalata');
+                alert('❌ Connessione persa. Impossibile sincronizzare l\'eliminazione.');
+            }
         }
     </script>
     <script src="company-header.js"></script>
