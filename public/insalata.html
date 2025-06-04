@@ -96,6 +96,19 @@
             transform: translateY(-2px);
             box-shadow: 0 5px 15px rgba(108, 117, 125, 0.3);
         }
+
+        /* Stili per i messaggi audio */
+        .audio-message {
+            margin: 10px 0;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+        }
+
+        .audio-message audio {
+            width: 100%;
+        }
     </style>
 </head>
 <body>
@@ -103,19 +116,28 @@
     <div id="company-header" style="position: absolute; top: 20px; left: 20px; z-index: 1000; padding: 10px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; border-left: 4px solid #28a745;">
         <h4 id="company-name" style="margin: 0; color: #333; font-weight: 600;">Nome Azienda</h4>
     </div>
-    
+
     <!-- Logo posizionato in alto al centro -->
     <div style="position: absolute; top: 20px; left: 50%; transform: translateX(-50%); z-index: 1000;">
         <a href="https://imgbox.com/Bt6wfdF9" target="_blank">
             <img src="https://thumbs2.imgbox.com/3b/04/Bt6wfdF9_t.jpg" alt="MealMaster Logo" style="width: 120px; height: auto;">
         </a>
     </div>
-    
+
     <div class="countdown-container">
         <h1>🥗 Insalata</h1>
         <div id="tavoli">
             <!-- I countdown sincronizzati appariranno qui -->
         </div>
+        <div id="audio-messages-container">
+            <!-- I messaggi audio appariranno qui -->
+        </div>
+        <button id="recordButton">Registra Messaggio Audio</button>
+        <select id="destinationSelect">
+            <option value="cucina">Cucina</option>
+            <option value="insalata">Insalata</option>
+            <option value="all">Tutti</option>
+        </select>
     </div>
 
     <audio id="alertSound" src="alerte-346112.mp3" preload="auto"></audio>
@@ -131,6 +153,9 @@
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
         const countdowns = [];
+        let mediaRecorder;
+        let audioChunks = [];
+        let recording = false;
 
         ws.onopen = () => {
             // Unisciti alla room dell'azienda
@@ -155,12 +180,12 @@
         ws.onmessage = (event) => {
             try {
                 const data = JSON.parse(event.data);
-                
+
                 if (data.action === 'ping') {
                     ws.send(JSON.stringify({ action: 'pong' }));
                     return;
                 }
-                
+
                 if (data.action === 'startCountdown') {
                     console.log('📥 Countdown ricevuto in insalata:', data);
                     // Mostra solo i countdown destinati all'insalata
@@ -173,6 +198,15 @@
                 } else if (data.action === 'deleteCountdown') {
                     console.log(`🗑️ Eliminazione countdown in insalata: Tavolo ${data.tableNumber}`);
                     deleteCountdown(data.tableNumber);
+                } else if (data.action === 'audioMessage') {
+                    console.log('🔊 Messaggio audio ricevuto in insalata:', data);
+                    // Mostra solo i messaggi destinati a questa pagina o a tutti
+                    if (!data.destination || data.destination === 'insalata' || data.destination === 'all') {
+                        displayAudioMessage(data);
+                    }
+                } else if (data.action === 'deleteAudioMessage') {
+                    console.log('🗑️ Eliminazione messaggio audio ricevuta in insalata:', data);
+                    removeAudioMessage(data.messageId);
                 }
             } catch (error) {
                 console.error('Errore nel parsing del messaggio:', error);
@@ -282,6 +316,120 @@
             const minutes = Math.floor(seconds / 60);
             const remainingSeconds = seconds % 60;
             return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+        }
+
+        // Funzionalità messaggi audio
+        async function startRecording() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                audioChunks = [];
+
+                mediaRecorder.ondataavailable = event => {
+                    audioChunks.push(event.data);
+                };
+
+                mediaRecorder.onstop = () => {
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                    const audioUrl = URL.createObjectURL(audioBlob);
+                    sendAudioMessage(audioBlob); // Passa il Blob, non l'URL
+                };
+
+                mediaRecorder.start();
+                recording = true;
+                recordButton.textContent = 'Ferma Registrazione';
+            } catch (error) {
+                console.error('Errore durante l\'acquisizione del microfono:', error);
+            }
+        }
+
+        function stopRecording() {
+            if (recording) {
+                mediaRecorder.stop();
+                recording = false;
+                recordButton.textContent = 'Registra Messaggio Audio';
+            }
+        }
+
+        const recordButton = document.getElementById('recordButton');
+        recordButton.addEventListener('click', () => {
+            if (recording) {
+                stopRecording();
+            } else {
+                startRecording();
+            }
+        });
+
+        function sendAudioMessage(audioBlob) {
+            const destination = document.getElementById('destinationSelect').value;
+            const reader = new FileReader();
+
+            reader.onload = () => {
+                const base64Audio = reader.result.split(',')[1]; // Ottieni solo la parte dati
+                const message = {
+                    action: 'sendAudioMessage',
+                    audioData: base64Audio,
+                    destination: destination,
+                    contentType: 'audio/wav'
+                };
+                ws.send(JSON.stringify(message));
+            };
+            reader.readAsDataURL(audioBlob);
+        }
+
+        function displayAudioMessage(data) {
+            const audioData = data.audioData;
+            const contentType = data.contentType;
+            const messageId = data.messageId;
+
+            const audioBlob = base64ToBlob(audioData, contentType);
+            const audioUrl = URL.createObjectURL(audioBlob);
+
+            const messageContainer = document.createElement('div');
+            messageContainer.classList.add('audio-message');
+            messageContainer.id = `audio-message-${messageId}`;
+
+            const audio = document.createElement('audio');
+            audio.src = audioUrl;
+            audio.controls = true;
+
+            const deleteButton = document.createElement('button');
+            deleteButton.textContent = 'Elimina';
+            deleteButton.onclick = () => {
+                ws.send(JSON.stringify({
+                    action: 'deleteAudioMessage',
+                    messageId: messageId
+                }));
+            };
+
+            messageContainer.appendChild(audio);
+            messageContainer.appendChild(deleteButton);
+
+            const container = document.getElementById('audio-messages-container');
+            container.appendChild(messageContainer);
+        }
+
+        function removeAudioMessage(messageId) {
+            const messageElement = document.getElementById(`audio-message-${messageId}`);
+            if (messageElement) {
+                messageElement.parentNode.removeChild(messageElement);
+            }
+        }
+
+        function base64ToBlob(base64, contentType) {
+            const byteCharacters = atob(base64);
+            const byteArrays = [];
+
+            for (let offset = 0; offset < byteCharacters.length; offset += 512) {
+                const slice = byteCharacters.slice(offset, offset + 512);
+                const byteNumbers = new Array(slice.length);
+                for (let i = 0; i < slice.length; i++) {
+                    byteNumbers[i] = slice.charCodeAt(i);
+                }
+                const byteArray = new Uint8Array(byteNumbers);
+                byteArrays.push(byteArray);
+            }
+            return new Blob(byteArrays, { type: contentType });
         }
     </script>
     <script src="company-header.js"></script>

@@ -386,6 +386,14 @@ wss.on('connection', (ws) => {
                     return;
                 }
 
+                // Validazione destinazione
+                const validDestinations = ['cucina', 'pizzeria', 'insalata', 'all'];
+                const destination = data.destination || 'all';
+                if (!validDestinations.includes(destination)) {
+                    console.log('⚠️ Destinazione audio non valida:', destination);
+                    return;
+                }
+
                 // Invia messaggio audio a tutti i client della room
                 if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
                     const roomClients = companyRooms.get(ws.companyRoom);
@@ -395,7 +403,8 @@ wss.on('connection', (ws) => {
                         mimeType: data.mimeType || 'audio/webm;codecs=opus',
                         messageId: data.messageId,
                         timestamp: data.timestamp || new Date().toLocaleTimeString('it-IT'),
-                        from: data.from || 'Pizzeria'
+                        from: data.from || 'Sconosciuto',
+                        destination: destination // Includi la destinazione nel messaggio
                     });
 
                     let sentCount = 0;
@@ -406,7 +415,8 @@ wss.on('connection', (ws) => {
                         }
                     });
 
-                    console.log(`🔊 Messaggio audio inviato alla room "${ws.companyRoom}" (${sentCount}/${roomClients.size} client): ID ${data.messageId}, Dimensione: ${Math.round(data.audioData.length / 1024)}KB`);
+                    const destinationText = destination === 'all' ? 'Tutti' : destination.charAt(0).toUpperCase() + destination.slice(1);
+                    console.log(`🔊 Messaggio audio inviato alla room "${ws.companyRoom}" (${sentCount}/${roomClients.size} client): ID ${data.messageId}, Da: ${data.from}, Destinazione: ${destinationText}, Dimensione: ${Math.round(data.audioData.length / 1024)}KB`);
                 } else {
                     console.log('⚠️ Client non assegnato a nessuna room per messaggio audio');
                 }
