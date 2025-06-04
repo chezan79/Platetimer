@@ -630,6 +630,7 @@
                                 startCountdownVisual(data.tableNumber, data.timeRemaining, data.destination || 'cucina');
                             } else {
                                 console.log(`🚫 Countdown ignorato in cucina - Destinazione: ${data.destination || 'undefined'}, Tavolo: ${data.tableNumber}`);
+                                return; // Importante: esci dalla funzione se non è per cucina
                             }
                         } else if (data.action === 'deleteCountdown') {
                             console.log('📥 Eliminazione countdown ricevuta via WebSocket:', data);
