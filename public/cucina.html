@@ -74,8 +74,8 @@
             position: fixed;
             top: 20px;
             right: 20px;
-            width: 280px;
-            max-width: 280px;
+            width: 420px;
+            max-width: 420px;
             z-index: 500;
         }
 
@@ -315,7 +315,7 @@
     <div id="company-header" style="position: absolute; top: 20px; left: 20px; z-index: 1000; padding: 10px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; border-left: 4px solid #28a745;">
         <h4 id="company-name" style="margin: 0; color: #333; font-weight: 600;">Nome Azienda</h4>
     </div>
-    
+
     <!-- Sistema messaggio vocale con scelta destinazione -->
     <div style="position: absolute; top: 20px; left: 50%; transform: translateX(-50%); text-align: center; padding: 8px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; border-left: 4px solid #007bff; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); min-width: 280px; z-index: 500;">
         <div style="display: flex; justify-content: center; align-items: center; gap: 6px; flex-wrap: nowrap;">
@@ -336,8 +336,8 @@
         </div>
         <div id="selected-destinations-voice" style="margin-top: 2px; font-size: 10px; color: #007bff; font-weight: 600;">
         </div>
-    </div></old_str>
-    
+    </div>
+
     <div style="position: absolute; top: 20px; right: 20px; z-index: 1000; display: flex; gap: 10px;">
         <button onclick="window.location.href='home.html'" style="padding: 6px 12px; background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500; transition: transform 0.2s, box-shadow 0.2s;">🏠 Home</button>
         <button onclick="window.location.href='index.html'" style="padding: 6px 12px; background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500; transition: transform 0.2s, box-shadow 0.2s;">🚪 Esci</button>
@@ -416,7 +416,7 @@
     </div>
 
     <!-- Container dedicato per i messaggi della pizzeria - posizionato in alto a destra (inizialmente nascosto) -->
-    <div id="messagesContainer" style="background: white; padding: 15px; border-radius: 10px; box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15); display: none; flex-direction: column; max-height: 60vh; overflow-y: auto;">
+    <div id="messagesContainer" style="position: fixed; top: 20px; right: 20px; width: 420px; max-width: 420px; z-index: 500; background: white; padding: 15px; border-radius: 10px; box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15); display: none; flex-direction: column; max-height: 35vh; overflow-y: auto;">
         <div id="voice-messages-container" style="padding: 12px; background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-radius: 8px; border-left: 4px solid #2196f3;">
             <h3 style="margin: 0 0 12px 0; color: #1976d2; font-size: 16px;">📢 Messaggi Pizzeria</h3>
             <div id="voice-messages-list">
@@ -478,7 +478,7 @@
         destinationSelection.addEventListener('click', (event) => {
             if (event.target.classList.contains('destination-button')) {
                 const destination = event.target.getAttribute('data-destination');
-                
+
                 // Toggle della selezione
                 if (event.target.classList.contains('selected')) {
                     // Rimuovi dalla selezione
@@ -489,15 +489,15 @@
                     event.target.classList.add('selected');
                     selectedDestinations.push(destination);
                 }
-                
+
                 // Abilita i pulsanti durata solo se almeno una destinazione è selezionata
                 const hasDestinations = selectedDestinations.length > 0;
                 document.querySelectorAll('.duration-button').forEach(btn => {
                     btn.disabled = !hasDestinations;
                 });
-                
+
                 console.log('Destinazioni selezionate:', selectedDestinations);
-                
+
                 // Aggiorna il feedback visivo
                 updateDestinationFeedback();
             }
@@ -515,12 +515,12 @@
                         selectedDestinations.forEach(destination => {
                             startCountdown(minutes, tableNumber, destination);
                         });
-                        
+
                         numeroTavoloInput.value = '';
-                        
+
                         // Resetta la selezione dopo l'invio
                         resetSelection();
-                        
+
                         // Feedback di conferma
                         showConfirmationMessage(tableNumber, selectedDestinations, minutes);
                     } else {
@@ -562,10 +562,10 @@
             const statusDiv = document.getElementById('voice-status');
             const icons = {'cucina': '🍳', 'pizzeria': '🍕', 'insalata': '🥗'};
             const destList = destinations.map(d => `${icons[d]} ${d.charAt(0).toUpperCase() + d.slice(1)}`).join(', ');
-            
+
             statusDiv.textContent = `✅ Tavolo ${tableNumber}: ${minutes}min → ${destList}`;
             statusDiv.style.color = '#28a745';
-            
+
             setTimeout(() => {
                 if (!isContinuousListening) {
                     statusDiv.textContent = '"tavolo" seguito dal numero e minuti';
@@ -588,7 +588,7 @@
                 ws.onopen = () => {
                     console.log('🔗 WebSocket connesso');
                     isConnected = true;
-                    
+
                     // Pulisci eventuali tentativi di riconnessione
                     if (reconnectInterval) {
                         clearInterval(reconnectInterval);
@@ -614,13 +614,13 @@
                 ws.onmessage = (event) => {
                     try {
                         const data = JSON.parse(event.data);
-                        
+
                         // Gestisci ping/pong per heartbeat
                         if (data.action === 'ping') {
                             ws.send(JSON.stringify({ action: 'pong' }));
                             return;
                         }
-                        
+
                         if (data.action === 'startCountdown') {
                             console.log('📥 Countdown ricevuto via WebSocket:', data);
                             startCountdownVisual(data.tableNumber, data.timeRemaining, data.destination || 'cucina');
@@ -660,7 +660,7 @@
                     isConnected = false;
                     stopHeartbeat();
                     updateConnectionStatus(false);
-                    
+
                     // Avvia riconnessione automatica
                     if (!reconnectInterval) {
                         console.log('🔄 Avvio riconnessione automatica...');
@@ -716,8 +716,9 @@
                 `;
                 document.body.appendChild(status);
             }
-            
+
             const status = document.getElementById('connection-status');
+            ```
             if (connected) {
                 status.textContent = '🟢 Connesso';
                 status.style.backgroundColor = '#d4edda';
@@ -1197,7 +1198,7 @@
                         console.log(`✅ Comando riconosciuto: Tavolo ${tableNumber}, ${minutes} minuti`);
 
                         document.getElementById('numeroTavolo').value = tableNumber;
-                        
+
                         // Per il comando vocale, usa automaticamente "cucina" come destinazione di default
                         // Se ci sono destinazioni selezionate manualmente, usale; altrimenti usa cucina
                         if (selectedDestinations.length > 0) {
@@ -1549,7 +1550,7 @@
         function displayVoiceMessage(messageData) {
             const messagesList = document.getElementById('voice-messages-list');
             const messagesContainerElement = document.getElementById('messagesContainer');
-            
+
             // 🎯 Mostra il container dei messaggi quando arriva il primo messaggio
             if (messagesContainerElement.style.display === 'none') {
                 messagesContainerElement.style.display = 'flex';
@@ -1586,7 +1587,7 @@
                         </audio>
                         <div style="margin-top: 4px;">
                             <button onclick="playVoiceMessage('${audioId}')" 
-                                    style="background: #28a745; color: white; border: none; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-size: 11px; margin-right: 5px;">
+                                    style="background: #28a745; color: white; border: none; padding: 4px 8px; border-radius: 3px;cursor: pointer; font-size: 11px; margin-right: 5px;">
                                 🔊 Riproduci
                             </button>
                             <button onclick="replayVoiceMessage('${audioId}')" 
@@ -1636,7 +1637,7 @@
             if (messageAlert) {
                 messageAlert.play().catch(error => {
                     console.log('⚠️ Errore riproduzione allarme messaggio:', error);
-                    
+
                     // Fallback: suono generato se l'audio non funziona
                     try {
                         const audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -1678,7 +1679,7 @@
             const messagesContainer = document.getElementById('voice-messages-container');
             messagesContainer.style.border = '2px solid #ff6b6b';
             messagesContainer.style.animation = 'pulse 2s ease-in-out 3';
-            
+
             // Aggiungi CSS per l'animazione pulse se non esiste
             if (!document.getElementById('pulseAnimation')) {
                 const style = document.createElement('style');
@@ -1700,7 +1701,7 @@
             }, 6000);
 
             console.log(`📢 🔊 Messaggio vocale visualizzato con allarme: "${messageData.message}"`);
-            
+
             // 🔊 Auto-riproduzione se c'è audio
             if (messageData.hasAudio && messageData.audioData) {
                 setTimeout(() => {
@@ -1752,7 +1753,7 @@
             const messageElement = document.getElementById(`voice-message-${messageId}`);
             if (messageElement) {
                 messageElement.style.animation = 'slideOut 0.3s ease-out';
-                
+
                 // Aggiungi animazione di uscita se non esiste
                 if (!document.getElementById('slideOutAnimation')) {
                     const style = document.createElement('style');
@@ -1774,7 +1775,7 @@
                     // 🎯 Se non ci sono più messaggi, nascondi il container
                     const messagesList = document.getElementById('voice-messages-list');
                     const messagesContainerElement = document.getElementById('messagesContainer');
-                    
+
                     if (messagesList.children.length === 0) {
                         messagesContainerElement.style.display = 'none';
                         console.log('📦 Container messaggi nascosto (nessun messaggio)');
