@@ -185,8 +185,10 @@
                     deleteCountdown(data.tableNumber);
                 } else if (data.action === 'voiceMessage') {
                     console.log('📢 Messaggio vocale ricevuto in insalata:', data);
+                    console.log('📍 Destinazione del messaggio:', data.destination);
                     // Mostra solo i messaggi destinati all'insalata
                     if (data.destination === 'insalata') {
+                        console.log('✅ Messaggio vocale accettato per insalata');
                         displayVoiceMessage(data);
                     } else {
                         console.log(`🚫 Messaggio vocale ignorato - Destinazione: ${data.destination}`);

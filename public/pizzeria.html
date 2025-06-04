@@ -139,7 +139,6 @@
     </div>
 
     <audio id="alertSound" src="alerte-346112.mp3" preload="auto"></audio>
-    ```
     <audio id="zeroSound" src="costa-rica-eas-alarm-346194.mp3" preload="auto"></audio>
 
     <!-- Tasto Home in alto a destra -->
@@ -786,6 +785,13 @@
                         statusDiv.textContent = `✅ Messaggio vocale inviato a ${destText}!`;
                         statusDiv.style.color = '#28a745';
 
+                        // Reset delle destinazioni selezionate
+                        selectedDestinations = [];
+                        document.querySelectorAll('.destination-button').forEach(btn => {
+                            btn.classList.remove('selected');
+                        });
+                        updateDestinationDisplay();
+
                         setTimeout(() => {
                             statusDiv.textContent = 'Seleziona destinazione e tieni premuto per registrare';
                             statusDiv.style.color = '#666';
@@ -830,6 +836,13 @@
                 `${selectedDestinations.length} destinazioni`;
             statusDiv.textContent = `✅ Messaggio inviato a ${destText}!`;
             statusDiv.style.color = '#28a745';
+
+            // Reset delle destinazioni selezionate
+            selectedDestinations = [];
+            document.querySelectorAll('.destination-button').forEach(btn => {
+                btn.classList.remove('selected');
+            });
+            updateDestinationDisplay();
 
             setTimeout(() => {
                 statusDiv.textContent = 'Seleziona destinazione e tieni premuto per registrare';

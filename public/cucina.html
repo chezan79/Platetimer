@@ -622,9 +622,11 @@
                                 console.log(`🗑️ Countdown tavolo ${data.tableNumber} eliminato da altro client`);
                             }
                         } else if (data.action === 'voiceMessage') {
-                            console.log('📢 Messaggio vocale ricevuto:', data);
+                            console.log('📢 Messaggio vocale ricevuto in cucina:', data);
+                            console.log('📍 Destinazione del messaggio:', data.destination);
                             // Mostra solo i messaggi destinati alla cucina
                             if (data.destination === 'cucina') {
+                                console.log('✅ Messaggio vocale accettato per cucina');
                                 displayVoiceMessage(data);
                             } else {
                                 console.log(`🚫 Messaggio vocale ignorato - Destinazione: ${data.destination}`);
