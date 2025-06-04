@@ -107,20 +107,35 @@
             <h4 id="company-name" style="margin: 0; color: #333; font-weight: 600;">Nome Azienda</h4>
         </div>
         
-        <!-- Sistema messaggio vocale compatto -->
-        <div style="text-align: center; padding: 8px 12px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; border-left: 4px solid #007bff; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);">
-            <button 
-                onmousedown="startVoiceMessage()" 
-                onmouseup="stopVoiceMessage()" 
-                onmouseleave="stopVoiceMessage()"
-                ontouchstart="startVoiceMessage()" 
-                ontouchend="stopVoiceMessage()"
-                id="voice-message-button" 
-                style="padding: 6px 12px; background: linear-gradient(135deg, #007bff 0%, #0056b3 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;">
-                🎤 Audio
-            </button>
-            <div id="voice-message-status" style="margin-top: 4px; font-size: 10px; color: #666; min-height: 12px; max-width: 80px;">
-                Tieni premuto
+        <!-- Sistema messaggio audio standardizzato -->
+        <div style="padding: 12px; background: linear-gradient(135deg, #e8f5e8 0%, #c8e6c9 100%); border-radius: 8px; border-left: 4px solid #4caf50; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);">
+            <h4 style="margin: 0 0 12px 0; color: #2e7d32; font-size: 14px;">🎤 Invia Audio</h4>
+            
+            <!-- Selezione destinazione -->
+            <div style="margin-bottom: 12px;">
+                <label style="font-size: 11px; color: #666; display: block; margin-bottom: 4px;">Invia a:</label>
+                <select id="audioDestinationSelect" style="width: 100%; padding: 4px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px;">
+                    <option value="cucina">🍳 Cucina</option>
+                    <option value="insalata">🥗 Insalata</option>
+                    <option value="all">📢 Tutti (Cucina + Insalata)</option>
+                </select>
+            </div>
+            
+            <!-- Pulsante registrazione -->
+            <div style="text-align: center;">
+                <button 
+                    onmousedown="startAudioMessage()" 
+                    onmouseup="stopAudioMessage()" 
+                    onmouseleave="stopAudioMessage()"
+                    ontouchstart="startAudioMessage()" 
+                    ontouchend="stopAudioMessage()"
+                    id="audio-message-button" 
+                    style="width: 100%; padding: 8px; background: linear-gradient(135deg, #4caf50 0%, #45a049 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600; transition: all 0.3s ease; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;">
+                    🎤 Tieni Premuto
+                </button>
+                <div id="audio-message-status" style="margin-top: 6px; font-size: 10px; color: #666; min-height: 14px;">
+                    Premi e tieni premuto
+                </div>
             </div>
         </div>
     </div>
@@ -415,14 +430,14 @@
             return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
         }
 
-        // Sistema registrazione audio con MediaRecorder API
-        let mediaRecorder = null;
-        let audioChunks = [];
-        let isRecordingMessage = false;
+        // Sistema registrazione audio standardizzato
+        let audioMediaRecorder = null;
+        let audioAudioChunks = [];
+        let isRecordingAudio = false;
 
-        async function startVoiceMessage() {
+        async function startAudioMessage() {
             // Previeni avvio multiplo
-            if (isRecordingMessage) return;
+            if (isRecordingAudio) return;
 
             try {
                 // Richiedi accesso al microfono
@@ -434,103 +449,103 @@
                     }
                 });
 
-                isRecordingMessage = true;
-                audioChunks = [];
-                updateVoiceMessageUI(true);
+                isRecordingAudio = true;
+                audioAudioChunks = [];
+                updateAudioMessageUI(true);
 
                 // Configura MediaRecorder
-                mediaRecorder = new MediaRecorder(stream, {
+                audioMediaRecorder = new MediaRecorder(stream, {
                     mimeType: 'audio/webm;codecs=opus'
                 });
 
-                mediaRecorder.ondataavailable = (event) => {
+                audioMediaRecorder.ondataavailable = (event) => {
                     if (event.data.size > 0) {
-                        audioChunks.push(event.data);
+                        audioAudioChunks.push(event.data);
                         console.log('📦 Chunk audio ricevuto:', event.data.size, 'bytes');
                     }
                 };
 
-                mediaRecorder.onstop = () => {
+                audioMediaRecorder.onstop = () => {
                     console.log('🛑 Registrazione audio completata');
                     
                     // Stop all microphone tracks
                     stream.getTracks().forEach(track => track.stop());
                     
-                    if (audioChunks.length > 0) {
-                        processRecordedAudio();
+                    if (audioAudioChunks.length > 0) {
+                        processRecordedAudioMessage();
                     } else {
-                        const statusDiv = document.getElementById('voice-message-status');
+                        const statusDiv = document.getElementById('audio-message-status');
                         statusDiv.textContent = '⚠️ Nessun audio registrato';
                         statusDiv.style.color = '#ffc107';
                         
                         setTimeout(() => {
-                            statusDiv.textContent = 'Tieni premuto il pulsante per registrare';
+                            statusDiv.textContent = 'Premi e tieni premuto';
                             statusDiv.style.color = '#666';
                         }, 2000);
                     }
                     
-                    updateVoiceMessageUI(false);
+                    updateAudioMessageUI(false);
                 };
 
-                mediaRecorder.onerror = (event) => {
+                audioMediaRecorder.onerror = (event) => {
                     console.error('❌ Errore MediaRecorder:', event.error);
-                    const statusDiv = document.getElementById('voice-message-status');
+                    const statusDiv = document.getElementById('audio-message-status');
                     statusDiv.textContent = `❌ Errore registrazione: ${event.error}`;
                     statusDiv.style.color = '#dc3545';
-                    stopVoiceMessage();
+                    stopAudioMessage();
                 };
 
                 // Avvia registrazione
-                mediaRecorder.start(100); // Raccogli chunk ogni 100ms
+                audioMediaRecorder.start(100); // Raccogli chunk ogni 100ms
                 
-                const statusDiv = document.getElementById('voice-message-status');
-                statusDiv.textContent = 'Registrando...';
+                const statusDiv = document.getElementById('audio-message-status');
+                statusDiv.textContent = '🔴 Registrando...';
                 statusDiv.style.color = '#dc3545';
                 
                 console.log('🎤 Registrazione audio avviata');
 
             } catch (error) {
                 console.error('❌ Errore accesso microfono:', error);
-                const statusDiv = document.getElementById('voice-message-status');
+                const statusDiv = document.getElementById('audio-message-status');
                 statusDiv.textContent = '❌ Impossibile accedere al microfono. Verifica i permessi.';
                 statusDiv.style.color = '#dc3545';
-                isRecordingMessage = false;
-                updateVoiceMessageUI(false);
+                isRecordingAudio = false;
+                updateAudioMessageUI(false);
             }
         }
 
-        function stopVoiceMessage() {
-            if (!isRecordingMessage || !mediaRecorder) return;
+        function stopAudioMessage() {
+            if (!isRecordingAudio || !audioMediaRecorder) return;
 
-            isRecordingMessage = false;
+            isRecordingAudio = false;
             
-            const statusDiv = document.getElementById('voice-message-status');
+            const statusDiv = document.getElementById('audio-message-status');
             statusDiv.textContent = 'Elaborando...';
             statusDiv.style.color = '#ffc107';
 
             try {
-                if (mediaRecorder.state === 'recording') {
-                    mediaRecorder.stop();
+                if (audioMediaRecorder.state === 'recording') {
+                    audioMediaRecorder.stop();
                 }
             } catch (error) {
                 console.error('❌ Errore stop registrazione:', error);
-                updateVoiceMessageUI(false);
+                updateAudioMessageUI(false);
             }
         }
 
-        function processRecordedAudio() {
-            const audioBlob = new Blob(audioChunks, { type: 'audio/webm;codecs=opus' });
+        function processRecordedAudioMessage() {
+            const audioBlob = new Blob(audioAudioChunks, { type: 'audio/webm;codecs=opus' });
             const audioSize = audioBlob.size;
             
             console.log(`🔊 Audio blob creato: ${audioSize} bytes, tipo: ${audioBlob.type}`);
             
             if (audioSize < 1000) { // Meno di 1KB probabilmente è troppo breve
-                const statusDiv = document.getElementById('voice-message-status');
-                statusDiv.textContent = 'Troppo breve';
+                const statusDiv = document.getElementById('audio-message-status');
+                statusDiv.textContent = '⚠️ Messaggio troppo breve';
                 statusDiv.style.color = '#ffc107';
                 
                 setTimeout(() => {
-                    statusDiv.textContent = 'Tieni premuto';
+                    statusDiv.textContent = 'Premi e tieni premuto';
                     statusDiv.style.color = '#666';
                 }, 2000);
                 return;
@@ -540,46 +555,48 @@
             const reader = new FileReader();
             reader.onload = function() {
                 const base64Audio = reader.result.split(',')[1]; // Rimuovi il prefisso data:
-                sendAudioMessage(base64Audio, audioBlob.type);
+                sendAudioMessageToDestination(base64Audio, audioBlob.type);
             };
             reader.onerror = function() {
                 console.error('❌ Errore conversione audio in base64');
-                const statusDiv = document.getElementById('voice-message-status');
+                const statusDiv = document.getElementById('audio-message-status');
                 statusDiv.textContent = '❌ Errore elaborazione audio';
                 statusDiv.style.color = '#dc3545';
             };
             reader.readAsDataURL(audioBlob);
         }
 
-        function updateVoiceMessageUI(isRecording) {
-            const button = document.getElementById('voice-message-button');
-            const statusDiv = document.getElementById('voice-message-status');
+        function updateAudioMessageUI(isRecording) {
+            const button = document.getElementById('audio-message-button');
+            const statusDiv = document.getElementById('audio-message-status');
 
             if (isRecording) {
-                button.textContent = '🔴 Rec...';
+                button.textContent = '🔴 Registrando... Rilascia per inviare';
                 button.style.background = 'linear-gradient(135deg, #dc3545 0%, #c82333 100%)';
-                button.style.transform = 'scale(1.05)';
-                statusDiv.textContent = 'Registrando...';
+                button.style.transform = 'scale(1.02)';
+                statusDiv.textContent = '🔴 Registrando...';
+                statusDiv.style.color = '#dc3545';
             } else {
-                button.textContent = '🎤 Audio';
-                button.style.background = 'linear-gradient(135deg, #007bff 0%, #0056b3 100%)';
+                button.textContent = '🎤 Tieni Premuto';
+                button.style.background = 'linear-gradient(135deg, #4caf50 0%, #45a049 100%)';
                 button.style.transform = 'scale(1)';
                 
                 setTimeout(() => {
-                    if (!isRecordingMessage) {
-                        statusDiv.textContent = 'Tieni premuto';
+                    if (!isRecordingAudio) {
+                        statusDiv.textContent = 'Premi e tieni premuto';
                         statusDiv.style.color = '#666';
                     }
                 }, 3000);
             }
         }
 
-        function sendAudioMessage(audioBase64, mimeType) {
+        function sendAudioMessageToDestination(audioBase64, mimeType) {
             if (!audioBase64) {
                 console.log('❌ Audio vuoto, non inviato');
                 return;
             }
 
+            const destination = document.getElementById('audioDestinationSelect').value;
             const messageId = Date.now().toString();
             
             if (ws && ws.readyState === WebSocket.OPEN) {
@@ -589,19 +606,22 @@
                     mimeType: mimeType,
                     messageId: messageId,
                     from: 'Pizzeria',
-                    timestamp: new Date().toLocaleTimeString('it-IT')
+                    timestamp: new Date().toLocaleTimeString('it-IT'),
+                    destination: destination
                 };
                 
                 ws.send(JSON.stringify(audioMessageData));
-                console.log('🔊 Messaggio audio inviato - ID:', messageId, 'Dimensione:', audioBase64.length, 'caratteri');
+                console.log('🔊 Messaggio audio inviato - ID:', messageId, 'Destinazione:', destination, 'Dimensione:', audioBase64.length, 'caratteri');
                 
-                const statusDiv = document.getElementById('voice-message-status');
-                statusDiv.textContent = '✅ Inviato!';
+                const statusDiv = document.getElementById('audio-message-status');
+                const destinationText = destination === 'all' ? 'Cucina + Insalata' : 
+                                      destination === 'cucina' ? 'Cucina' : 'Insalata';
+                statusDiv.textContent = `✅ Inviato a ${destinationText}!`;
                 statusDiv.style.color = '#28a745';
                 
                 // Reset dopo 3 secondi
                 setTimeout(() => {
-                    statusDiv.textContent = 'Tieni premuto';
+                    statusDiv.textContent = 'Premi e tieni premuto';
                     statusDiv.style.color = '#666';
                 }, 3000);
             } else {
