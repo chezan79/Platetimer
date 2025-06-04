@@ -623,14 +623,7 @@
 
                         if (data.action === 'startCountdown') {
                             console.log('📥 Countdown ricevuto via WebSocket:', data);
-                            console.log('📍 Destinazione countdown:', data.destination);
-                            // Mostra solo i countdown destinati alla cucina
-                            if (data.destination === 'cucina') {
-                                console.log(`✅ Countdown accettato per cucina - Tavolo: ${data.tableNumber}, Destinazione: ${data.destination}`);
-                                startCountdownVisual(data.tableNumber, data.timeRemaining, data.destination);
-                            } else {
-                                console.log(`🚫 Countdown ignorato in cucina - Destinazione: ${data.destination}, Tavolo: ${data.tableNumber}`);
-                            }
+                            startCountdownVisual(data.tableNumber, data.timeRemaining, data.destination || 'cucina');
                         } else if (data.action === 'deleteCountdown') {
                             console.log('📥 Eliminazione countdown ricevuta via WebSocket:', data);
                             const countdownIndex = countdowns.findIndex(c => c.tableNumber == data.tableNumber);
@@ -1206,15 +1199,16 @@
 
                         document.getElementById('numeroTavolo').value = tableNumber;
 
-                        // Per il comando vocale, controlla se ci sono destinazioni selezionate
-                        // Se non ci sono destinazioni selezionate, usa "cucina" come default
-                        const destinationsToUse = selectedDestinations.length > 0 ? selectedDestinations : ['cucina'];
-                        
-                        destinationsToUse.forEach(destination => {
-                            startCountdown(minutes, tableNumber, destination);
-                        });
-                        
-                        showConfirmationMessage(tableNumber, destinationsToUse, minutes);
+                        // Per il comando vocale, usa automaticamente "cucina" come destinazione di default
+                        // Se ci sono destinazioni selezionate manualmente, usale; altrimenti usa cucina
+                        if (selectedDestinations.length > 0) {
+                            selectedDestinations.forEach(destination => {
+                                startCountdown(minutes, tableNumber, destination);
+                            });
+                            showConfirmationMessage(tableNumber, selectedDestinations, minutes);
+                        } else {
+                            startCountdown(minutes, tableNumber, 'cucina');
+                        }
 
                         // 🧹 Pulisce automaticamente l'input dopo il comando vocale
                         setTimeout(() => {

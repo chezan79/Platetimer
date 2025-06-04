@@ -210,10 +210,9 @@
 
                         if (data.action === 'startCountdown') {
                             console.log('📥 Countdown ricevuto in pizzeria:', data);
-                            console.log('📍 Destinazione countdown:', data.destination);
                             // Mostra solo i countdown destinati alla pizzeria
                             if (data.destination === 'pizzeria') {
-                                console.log(`✅ Countdown accettato per pizzeria - Tavolo: ${data.tableNumber}, Destinazione: ${data.destination}`);
+                                console.log(`✅ Countdown accettato per pizzeria - Tavolo: ${data.tableNumber}`);
                                 startCountdown(data.tableNumber, data.timeRemaining);
                             } else {
                                 console.log(`🚫 Countdown ignorato - Destinazione: ${data.destination || 'undefined'}, Tavolo: ${data.tableNumber}`);

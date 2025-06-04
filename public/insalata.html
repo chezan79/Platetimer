@@ -188,10 +188,9 @@
 
                 if (data.action === 'startCountdown') {
                     console.log('📥 Countdown ricevuto in insalata:', data);
-                    console.log('📍 Destinazione countdown:', data.destination);
                     // Mostra solo i countdown destinati all'insalata
                     if (data.destination === 'insalata') {
-                        console.log(`✅ Countdown accettato per insalata - Tavolo: ${data.tableNumber}, Destinazione: ${data.destination}`);
+                        console.log(`✅ Countdown accettato per insalata - Tavolo: ${data.tableNumber}`);
                         startCountdown(data.tableNumber, data.timeRemaining);
                     } else {
                         console.log(`🚫 Countdown ignorato - Destinazione: ${data.destination || 'undefined'}, Tavolo: ${data.tableNumber}`);
