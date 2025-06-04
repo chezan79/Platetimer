@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="it">
 <head>
@@ -16,7 +15,7 @@
             align-items: center;
             justify-content: center;
         }
-        
+
         .countdown-container {
             max-width: 800px;
             width: 100%;
@@ -25,7 +24,7 @@
             border-radius: 10px;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
         }
-        
+
         h1 {
             text-align: center;
             color: #333;
@@ -33,7 +32,7 @@
             font-size: 28px;
             font-weight: 300;
         }
-        
+
         .countdown-item {
             margin: 8px 0;
             padding: 12px 15px;
@@ -76,7 +75,7 @@
             color: #d9534f;
             font-weight: bold;
         }
-        
+
         button {
             padding: 15px 30px;
             background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%);
@@ -92,7 +91,7 @@
             margin-left: auto;
             margin-right: auto;
         }
-        
+
         button:hover {
             transform: translateY(-2px);
             box-shadow: 0 5px 15px rgba(108, 117, 125, 0.3);
@@ -101,40 +100,41 @@
 </head>
 <body>
     <!-- Nome Azienda fuori dal container in alto a sinistra -->
-    <div id="company-header" style="position: absolute; top: 20px; left: 20px; z-index: 1000; padding: 10px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; border-left: 4px solid #dc3545;">
+    <div id="company-header" style="position: absolute; top: 20px; left: 20px; z-index: 1000; padding: 10px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; border-left: 4px solid #dc3545; display:flex; align-items: center">
         <h4 id="company-name" style="margin: 0; color: #333; font-weight: 600;">Nome Azienda</h4>
+
+        <!-- Sistema messaggio vocale per cucina posizionato a fianco company header -->
+        <div style="margin-left: 20px; text-align: center; padding: 15px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 12px; border-left: 4px solid #007bff; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); min-width: 320px;">
+            <h3 style="margin: 0 0 10px 0; color: #333; font-size: 16px;">📢 Messaggio per la Cucina</h3>
+            <button 
+                onmousedown="startVoiceMessage()" 
+                onmouseup="stopVoiceMessage()" 
+                onmouseleave="stopVoiceMessage()"
+                ontouchstart="startVoiceMessage()" 
+                ontouchend="stopVoiceMessage()"
+                id="voice-message-button" 
+                style="padding: 12px 24px; background: linear-gradient(135deg, #007bff 0%, #0056b3 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: 600; margin: 5px; transition: all 0.3s ease; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;">
+                🎤 Tieni Premuto per Parlare
+            </button>
+            <div id="voice-message-status" style="margin-top: 10px; font-size: 12px; color: #666; min-height: 16px;">
+                Tieni premuto il pulsante per registrare
+            </div>
+        </div>
     </div>
 
-    
+
     <div class="countdown-container">
         <h1>🍕 Pizzeria</h1>
-        
+
         <div id="tavoli">
             <!-- I countdown sincronizzati appariranno qui -->
         </div>
     </div>
 
-    <!-- Sistema messaggio vocale per cucina posizionato in basso -->
-    <div style="position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 1000; text-align: center; padding: 15px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 12px; border-left: 4px solid #007bff; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); min-width: 320px;">
-        <h3 style="margin: 0 0 10px 0; color: #333; font-size: 16px;">📢 Messaggio per la Cucina</h3>
-        <button 
-            onmousedown="startVoiceMessage()" 
-            onmouseup="stopVoiceMessage()" 
-            onmouseleave="stopVoiceMessage()"
-            ontouchstart="startVoiceMessage()" 
-            ontouchend="stopVoiceMessage()"
-            id="voice-message-button" 
-            style="padding: 12px 24px; background: linear-gradient(135deg, #007bff 0%, #0056b3 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: 600; margin: 5px; transition: all 0.3s ease; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;">
-            🎤 Tieni Premuto per Parlare
-        </button>
-        <div id="voice-message-status" style="margin-top: 10px; font-size: 12px; color: #666; min-height: 16px;">
-            Tieni premuto il pulsante per registrare
-        </div>
-    </div>
-
     <audio id="alertSound" src="alerte-346112.mp3" preload="auto"></audio>
+    ```
     <audio id="zeroSound" src="costa-rica-eas-alarm-346194.mp3" preload="auto"></audio>
-    
+
     <!-- Tasto Home in alto a destra -->
     <div style="position: absolute; top: 20px; right: 20px; z-index: 1000; display: flex; gap: 10px;">
         <button onclick="window.location.href='home.html'" style="padding: 6px 12px; background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500; transition: transform 0.2s, box-shadow 0.2s;">🏠 Home</button>
@@ -158,7 +158,7 @@
         let isConnected = false;
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const countdowns = [];
-        
+
         // ✅ Evita dichiarazione duplicata di messagesContainer
         let messagesContainer;
 
@@ -169,7 +169,7 @@
                 ws.onopen = () => {
                     console.log('🔗 Pizzeria WebSocket connesso');
                     isConnected = true;
-                    
+
                     if (reconnectInterval) {
                         clearInterval(reconnectInterval);
                         reconnectInterval = null;
@@ -190,12 +190,12 @@
                 ws.onmessage = (event) => {
                     try {
                         const data = JSON.parse(event.data);
-                        
+
                         if (data.action === 'ping') {
                             ws.send(JSON.stringify({ action: 'pong' }));
                             return;
                         }
-                        
+
                         if (data.action === 'startCountdown') {
                             console.log('📥 Countdown ricevuto in pizzeria:', data);
                             // Mostra solo i countdown destinati alla pizzeria
@@ -222,7 +222,7 @@
                     isConnected = false;
                     stopHeartbeat();
                     updateConnectionStatus(false);
-                    
+
                     if (!reconnectInterval) {
                         console.log('🔄 Avvio riconnessione pizzeria...');
                         reconnectInterval = setInterval(() => {
@@ -270,7 +270,7 @@
                 `;
                 document.body.appendChild(status);
             }
-            
+
             if (connected) {
                 status.textContent = '🟢 Connesso';
                 status.style.backgroundColor = '#d4edda';
@@ -296,7 +296,7 @@
             });
         }
 
-        
+
 
         function startCountdown(tableNumber, timeRemaining) {
             // Rimuovi il vecchio countdown se esiste
@@ -315,7 +315,7 @@
             countdownElement.classList.add('countdown-item');
 
             let remainingTime = parseInt(timeRemaining);
-            
+
             const countdown = {
                 tableNumber: tableNumber,
                 timeRemaining: remainingTime,
@@ -326,7 +326,7 @@
                 // Decrementa PRIMA come negli altri file
                 remainingTime--;
                 countdown.timeRemaining = remainingTime;
-                
+
                 if (remainingTime <= 0) {
                     clearInterval(countdown.interval);
                     countdownElement.style.backgroundColor = '#ff4444';
@@ -338,13 +338,13 @@
                             <p>Tempo scaduto!</p>
                         </div>
                     `;
-                    
+
                     // Riproduce il suono personalizzato per countdown a zero
                     const zeroAudio = document.getElementById('zeroSound');
                     if (zeroAudio) {
                         zeroAudio.play().catch(e => console.log('Errore audio countdown zero:', e));
                     }
-                    
+
                     setTimeout(() => {
                         const index = countdowns.indexOf(countdown);
                         if (index > -1) {
@@ -442,7 +442,7 @@
 
             voiceRecognition.onresult = (event) => {
                 if (!isRecordingMessage) return; // ✅ Ignora risultati se non stiamo più registrando
-                
+
                 let interimTranscript = '';
                 let newFinalTranscript = '';
 
@@ -450,7 +450,7 @@
                 for (let i = event.resultIndex; i < event.results.length; ++i) {
                     const transcript = event.results[i][0].transcript;
                     const confidence = event.results[i][0].confidence;
-                    
+
                     if (event.results[i].isFinal) {
                         newFinalTranscript += transcript;
                         console.log(`📝 Risultato FINALE nuovo: "${transcript}" (confidence: ${confidence})`);
@@ -471,10 +471,10 @@
                         console.log(`🔄 Risultato già presente, ignorato: "${trimmedNew}"`);
                     }
                 }
-                
+
                 // ✅ Mostra solo il contenuto accumulato + quello temporaneo più recente
                 const displayText = currentTranscript + (interimTranscript ? (currentTranscript ? ' ' : '') + interimTranscript : '');
-                
+
                 const statusDiv = document.getElementById('voice-message-status');
                 if (displayText.trim()) {
                     statusDiv.textContent = `🎤 "${displayText.trim()}"`;
@@ -483,7 +483,7 @@
                     statusDiv.textContent = '🎤 Registrando... Continua a tenere premuto!';
                     statusDiv.style.color = '#dc3545';
                 }
-                
+
                 console.log(`📝 Display finale: "${displayText}" (lunghezza: ${displayText.length})`);
             };
 
@@ -492,7 +492,7 @@
                 const statusDiv = document.getElementById('voice-message-status');
                 statusDiv.textContent = `❌ Errore: ${event.error}`;
                 statusDiv.style.color = '#dc3545';
-                
+
                 // Non fermare automaticamente in caso di errore, lascia che l'utente rilasci
                 if (event.error === 'network' || event.error === 'aborted') {
                     // Solo in caso di errori gravi
@@ -525,11 +525,11 @@
             if (!isRecordingMessage) return;
 
             isRecordingMessage = false;
-            
+
             const statusDiv = document.getElementById('voice-message-status');
             statusDiv.textContent = '🔄 Elaborando messaggio finale...';
             statusDiv.style.color = '#ffc107';
-            
+
             updateVoiceMessageUI(false);
 
             // ✅ Ferma immediatamente il riconoscimento per evitare ulteriori risultati
@@ -546,11 +546,11 @@
             setTimeout(() => {
                 // ✅ Pulisce e ottimizza il messaggio finale
                 let finalMessage = currentTranscript.trim();
-                
+
                 if (finalMessage.length > 0) {
                     // ✅ NUOVO: Rimuove parole ripetute consecutive (problema tablet Android)
                     finalMessage = cleanDuplicateWords(finalMessage);
-                    
+
                     statusDiv.textContent = `✅ Messaggio pulito: "${finalMessage}"`;
                     statusDiv.style.color = '#28a745';
                     console.log(`📝 Messaggio finale pulito: "${finalMessage}" (era: "${currentTranscript.trim()}")`);
@@ -558,7 +558,7 @@
                 } else {
                     statusDiv.textContent = '⚠️ Nessun messaggio registrato';
                     statusDiv.style.color = '#ffc107';
-                    
+
                     setTimeout(() => {
                         statusDiv.textContent = 'Tieni premuto il pulsante per registrare';
                         statusDiv.style.color = '#666';
@@ -572,17 +572,17 @@
         // ✅ NUOVA FUNZIONE: Pulisce le parole duplicate consecutive
         function cleanDuplicateWords(text) {
             if (!text || text.trim().length === 0) return '';
-            
+
             console.log(`🧹 Pulizia testo originale: "${text}"`);
-            
+
             // Divide in parole mantenendo spazi e punteggiatura
             const words = text.toLowerCase().split(/(\s+)/);
             const cleanedWords = [];
             let lastWord = '';
-            
+
             for (let i = 0; i < words.length; i++) {
                 const currentWord = words[i].trim();
-                
+
                 // Mantieni spazi e caratteri non-parola
                 if (currentWord === '' || /^\s+$/.test(words[i])) {
                     if (cleanedWords.length > 0) {
@@ -590,7 +590,7 @@
                     }
                     continue;
                 }
-                
+
                 // Aggiungi solo se diversa dalla parola precedente
                 if (currentWord !== lastWord) {
                     cleanedWords.push(words[i]);
@@ -599,10 +599,10 @@
                     console.log(`🗑️ Rimossa parola duplicata: "${currentWord}"`);
                 }
             }
-            
+
             const cleanedText = cleanedWords.join('');
             console.log(`✅ Testo pulito: "${cleanedText}"`);
-            
+
             return cleanedText;
         }
 
@@ -618,7 +618,7 @@
                 button.textContent = '🎤 Tieni Premuto per Parlare';
                 button.style.background = 'linear-gradient(135deg, #007bff 0%, #0056b3 100%)';
                 button.style.transform = 'scale(1)';
-                
+
                 setTimeout(() => {
                     if (!isRecordingMessage) {
                         statusDiv.textContent = 'Tieni premuto il pulsante per registrare';
@@ -635,7 +635,7 @@
             }
 
             const messageId = Date.now().toString();
-            
+
             if (ws && ws.readyState === WebSocket.OPEN) {
                 const voiceMessageData = {
                     action: 'voiceMessage',
@@ -643,10 +643,10 @@
                     messageId: messageId,
                     from: 'Pizzeria'
                 };
-                
+
                 ws.send(JSON.stringify(voiceMessageData));
                 console.log('📢 Messaggio vocale inviato:', message);
-                
+
                 const statusDiv = document.getElementById('voice-message-status');
                 statusDiv.textContent = '✅ Messaggio inviato alla cucina!';
                 statusDiv.style.color = '#28a745';
@@ -658,6 +658,6 @@
     </script>
     <script src="company-header.js"></script>
 
-    
+
 </body>
 </html>
