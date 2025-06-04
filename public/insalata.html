@@ -121,34 +121,35 @@
         
         <!-- Sistema messaggio audio standardizzato -->
         <div style="padding: 12px; background: linear-gradient(135deg, #e8f5e8 0%, #c8e6c9 100%); border-radius: 8px; border-left: 4px solid #4caf50; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);">
-            <h4 style="margin: 0 0 12px 0; color: #2e7d32; font-size: 14px;">🎤 Invia Audio</h4>
+
             
-            <!-- Selezione destinazione -->
-            <div style="margin-bottom: 12px;">
-                <label style="font-size: 11px; color: #666; display: block; margin-bottom: 4px;">Invia a:</label>
-                <select id="audioDestinationSelect" style="width: 100%; padding: 4px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px;">
-                    <option value="cucina">🍳 Cucina</option>
-                    <option value="pizzeria">🍕 Pizzeria</option>
-                    <option value="all">📢 Tutti (Cucina + Pizzeria)</option>
-                </select>
-            </div>
-            
-            <!-- Pulsante registrazione -->
-            <div style="text-align: center;">
-                <button 
-                    onmousedown="startAudioMessage()" 
-                    onmouseup="stopAudioMessage()" 
-                    onmouseleave="stopAudioMessage()"
-                    ontouchstart="startAudioMessage()" 
-                    ontouchend="stopAudioMessage()"
-                    id="audio-message-button" 
-                    style="width: 100%; padding: 8px; background: linear-gradient(135deg, #4caf50 0%, #45a049 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600; transition: all 0.3s ease; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;">
-                    🎤 Tieni Premuto
-                </button>
-                <div id="audio-message-status" style="margin-top: 6px; font-size: 10px; color: #666; min-height: 14px;">
-                    Premi e tieni premuto
+            <!-- Container orizzontale per selezione destinazione e pulsante -->
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <!-- Selezione destinazione -->
+                <div style="flex: 1;">
+                    <label style="font-size: 11px; color: #666; display: block; margin-bottom: 4px;"></label>
+                    <select id="audioDestinationSelect" style="width: 100%; padding: 4px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px;">
+                        <option value="cucina">🍳 Cucina</option>
+                        <option value="pizzeria">🍕 Pizzeria</option>
+                        <option value="all">📢 Tutti (Cucina + Pizzeria)</option>
+                    </select>
+                </div>
+                
+                <!-- Pulsante registrazione -->
+                <div style="flex: 1;">
+                    <button 
+                        onmousedown="startAudioMessage()" 
+                        onmouseup="stopAudioMessage()" 
+                        onmouseleave="stopAudioMessage()"
+                        ontouchstart="startAudioMessage()" 
+                        ontouchend="stopAudioMessage()"
+                        id="audio-message-button" 
+                        style="width: 100%; padding: 8px; background: linear-gradient(135deg, #4caf50 0%, #45a049 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600; transition: all 0.3s ease; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;">
+                        🎤 Invia messaggio
+                    </button>
                 </div>
             </div>
+            
         </div>
     </div>
 
@@ -485,7 +486,7 @@
                 statusDiv.textContent = '🔴 Registrando...';
                 statusDiv.style.color = '#dc3545';
             } else {
-                button.textContent = '🎤 Tieni Premuto';
+                button.textContent = '🎤 Invia messaggio';
                 button.style.background = 'linear-gradient(135deg, #4caf50 0%, #45a049 100%)';
                 button.style.transform = 'scale(1)';
                 
