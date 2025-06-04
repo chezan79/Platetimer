@@ -311,12 +311,49 @@
     </style>
 </head>
 <body>
-    <!-- Nome Azienda centralizzato -->
-    <div id="company-header" style="position: absolute; top: 20px; left: 20px; z-index: 1000; padding: 10px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; border-left: 4px solid #28a745;">
-        <h4 id="company-name" style="margin: 0; color: #333; font-weight: 600;">Nome Azienda</h4>
+    <!-- Container per nome azienda e messaggio audio in alto a sinistra -->
+    <div style="position: absolute; top: 20px; left: 20px; z-index: 1000; display: flex; gap: 15px; align-items: center;">
+        <!-- Nome Azienda -->
+        <div id="company-header" style="padding: 10px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; border-left: 4px solid #28a745;">
+            <h4 id="company-name" style="margin: 0; color: #333; font-weight: 600;">Nome Azienda</h4>
+        </div>
+        
+        <!-- Sistema messaggio audio standardizzato -->
+        <div style="padding: 12px; background: linear-gradient(135deg, #e8f5e8 0%, #c8e6c9 100%); border-radius: 8px; border-left: 4px solid #4caf50; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);">
+            <h4 style="margin: 0 0 12px 0; color: #2e7d32; font-size: 14px;">🎤 Invia Audio</h4>
+            
+            <!-- Container orizzontale per selezione destinazione e pulsante -->
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <!-- Selezione destinazione -->
+                <div style="flex: 1;">
+                    <label style="font-size: 11px; color: #666; display: block; margin-bottom: 4px;">Invia a:</label>
+                    <select id="audioDestinationSelect" style="width: 100%; padding: 4px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px;">
+                        <option value="pizzeria">🍕 Pizzeria</option>
+                        <option value="insalata">🥗 Insalata</option>
+                        <option value="all">📢 Tutti (Pizzeria + Insalata)</option>
+                    </select>
+                </div>
+                
+                <!-- Pulsante registrazione -->
+                <div style="flex: 1;">
+                    <button 
+                        onmousedown="startAudioMessage()" 
+                        onmouseup="stopAudioMessage()" 
+                        onmouseleave="stopAudioMessage()"
+                        ontouchstart="startAudioMessage()" 
+                        ontouchend="stopAudioMessage()"
+                        id="audio-message-button" 
+                        style="width: 100%; padding: 8px; background: linear-gradient(135deg, #4caf50 0%, #45a049 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600; transition: all 0.3s ease; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;">
+                        🎤 Tieni Premuto
+                    </button>
+                </div>
+            </div>
+            
+            <div id="audio-message-status" style="margin-top: 6px; font-size: 10px; color: #666; min-height: 14px; text-align: center;">
+                Premi e tieni premuto
+            </div>
+        </div>
     </div>
-
-
 
     <div style="position: absolute; top: 20px; right: 20px; z-index: 1000; display: flex; gap: 10px;">
         <button onclick="window.location.href='home.html'" style="padding: 6px 12px; background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500; transition: transform 0.2s, box-shadow 0.2s;">🏠 Home</button>
@@ -405,39 +442,7 @@
         </div>
     </div>
 
-    <!-- Container per invio messaggi audio - posizionato sotto il container dei messaggi ricevuti -->
-    <div id="sendAudioContainer" style="position: fixed; top: 20px; right: 300px; z-index: 500; background: white; padding: 15px; border-radius: 10px; box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15); width: 250px;">
-        <div style="padding: 12px; background: linear-gradient(135deg, #e8f5e8 0%, #c8e6c9 100%); border-radius: 8px; border-left: 4px solid #4caf50;">
-            <h3 style="margin: 0 0 12px 0; color: #2e7d32; font-size: 16px;">🎤 Invia Audio</h3>
-
-            <!-- Selezione destinazione -->
-            <div style="margin-bottom: 12px;">
-                <label style="font-size: 12px; color: #666; display: block; margin-bottom: 4px;">Invia a:</label>
-                <select id="audioDestinationSelect" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;">
-                    <option value="pizzeria">🍕 Pizzeria</option>
-                    <option value="insalata">🥗 Insalata</option>
-                    <option value="all">📢 Tutti (Pizzeria + Insalata)</option>
-                </select>
-            </div>
-
-            <!-- Pulsante registrazione -->
-            <div style="text-align: center;">
-                <button 
-                    onmousedown="startAudioMessage()" 
-                    onmouseup="stopAudioMessage()" 
-                    onmouseleave="stopAudioMessage()"
-                    ontouchstart="startAudioMessage()" 
-                    ontouchend="stopAudioMessage()"
-                    id="audio-message-button" 
-                    style="width: 100%; padding: 12px; background: linear-gradient(135deg, #4caf50 0%, #45a049 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600; transition: all 0.3s ease; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;">
-                    🎤 Tieni Premuto per Registrare
-                </button>
-                <div id="audio-message-status" style="margin-top: 8px; font-size: 11px; color: #666; min-height: 16px;">
-                    Premi e tieni premuto per registrare
-                </div>
-            </div>
-        </div>
-    </div>
+    
 
     <audio id="alertSound" src="alerte-346112.mp3" preload="auto"></audio>
     <audio id="zeroSound" src="costa-rica-eas-alarm-346194.mp3" preload="auto"></audio>
