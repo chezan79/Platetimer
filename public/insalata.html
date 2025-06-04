@@ -103,7 +103,7 @@
     <div id="company-header" style="position: absolute; top: 20px; left: 20px; z-index: 1000; padding: 10px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; border-left: 4px solid #28a745;">
         <h4 id="company-name" style="margin: 0; color: #333; font-weight: 600;">Nome Azienda</h4>
     </div>
-    
+
     <!-- Sistema messaggio vocale con scelta destinazione -->
     <div style="position: absolute; top: 20px; left: 50%; transform: translateX(-50%); text-align: center; padding: 8px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; border-left: 4px solid #007bff; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); min-width: 280px; z-index: 500;">
         <div style="display: flex; justify-content: center; align-items: center; gap: 6px; flex-wrap: nowrap;">
@@ -125,7 +125,7 @@
         <div id="selected-destinations" style="margin-top: 2px; font-size: 10px; color: #007bff; font-weight: 600;">
         </div>
     </div>
-    
+
     <!-- Container dedicato per i messaggi della pizzeria - posizionato in alto a destra (inizialmente nascosto) -->
     <div id="messagesContainer" style="position: fixed; top: 100px; right: 20px; width: 280px; max-width: 280px; z-index: 500; background: white; padding: 15px; border-radius: 10px; box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15); display: none; flex-direction: column; max-height: 60vh; overflow-y: auto;">
         <div id="voice-messages-container" style="padding: 12px; background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-radius: 8px; border-left: 4px solid #2196f3;">
@@ -180,12 +180,12 @@
         ws.onmessage = (event) => {
             try {
                 const data = JSON.parse(event.data);
-                
+
                 if (data.action === 'ping') {
                     ws.send(JSON.stringify({ action: 'pong' }));
                     return;
                 }
-                
+
                 if (data.action === 'startCountdown') {
                     console.log('📥 Countdown ricevuto in insalata:', data);
                     // Mostra solo i countdown destinati all'insalata
@@ -326,7 +326,7 @@
         function displayVoiceMessage(messageData) {
             const messagesList = document.getElementById('voice-messages-list');
             const messagesContainerElement = document.getElementById('messagesContainer');
-            
+
             // Mostra il container dei messaggi quando arriva il primo messaggio
             if (messagesContainerElement.style.display === 'none') {
                 messagesContainerElement.style.display = 'flex';
@@ -418,7 +418,7 @@
             if (messageAlert) {
                 messageAlert.play().catch(error => {
                     console.log('⚠️ Errore riproduzione allarme messaggio in insalata:', error);
-                    
+
                     // Fallback: suono generato se l'audio non funziona
                     try {
                         const audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -468,7 +468,7 @@
             }, 6000);
 
             console.log(`📢 🔊 Messaggio vocale visualizzato in insalata con allarme: "${messageData.message}"`);
-            
+
             // 🔊 Auto-riproduzione se c'è audio
             if (messageData.hasAudio && messageData.audioData) {
                 setTimeout(() => {
@@ -524,7 +524,7 @@
                 // Se non ci sono più messaggi, nascondi il container
                 const messagesList = document.getElementById('voice-messages-list');
                 const messagesContainerElement = document.getElementById('messagesContainer');
-                
+
                 if (messagesList.children.length === 0) {
                     messagesContainerElement.style.display = 'none';
                     console.log('📦 Container messaggi nascosto in insalata (nessun messaggio)');
@@ -607,12 +607,12 @@
 
         function updateDestinationDisplay() {
             const displayDiv = document.getElementById('selected-destinations');
-
             if (selectedDestinations.length === 0) {
                 displayDiv.textContent = '';
             } else {
-                const icons = { 'cucina': '🍳', 'pizzeria': '🍕' };
-                const destName = selectedDestinations[0].charAt(0).toUpperCase() + selectedDestinations[0].slice(1);
+                const icons = { 'cucina': '🍕', 'insalata': '🥗' };
+                const destNames = { 'cucina': 'Pizzeria', 'insalata': 'Insalata' };
+                const destName = destNames[selectedDestinations[0]] || selectedDestinations[0];
                 displayDiv.textContent = `${icons[selectedDestinations[0]]} ${destName}`;
             }
         }
