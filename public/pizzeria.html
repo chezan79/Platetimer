@@ -126,6 +126,16 @@
     </div>
 
 
+    <!-- Container dedicato per i messaggi vocali - posizionato in alto a destra (inizialmente nascosto) -->
+    <div id="messagesContainer" style="position: fixed; top: 100px; right: 20px; width: 280px; max-width: 280px; z-index: 500; background: white; padding: 15px; border-radius: 10px; box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15); display: none; flex-direction: column; max-height: 60vh; overflow-y: auto;">
+        <div id="voice-messages-container" style="padding: 12px; background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%); border-radius: 8px; border-left: 4px solid #ffc107;">
+            <h3 style="margin: 0 0 12px 0; color: #856404; font-size: 16px;">📢 Messaggi Ricevuti</h3>
+            <div id="voice-messages-list">
+                <!-- I messaggi appariranno qui dinamicamente -->
+            </div>
+        </div>
+    </div>
+
     <div class="countdown-container">
         <h1>🍕 Pizzeria</h1>
 
@@ -211,8 +221,18 @@
                             console.log('📥 Eliminazione countdown ricevuta in pizzeria:', data);
                             deleteCountdown(data.tableNumber);
                         } else if (data.action === 'voiceMessage') {
-                            // Gestione messaggi vocali se necessario
                             console.log('📢 Messaggio vocale ricevuto in pizzeria:', data);
+                            console.log('📍 Destinazione del messaggio:', data.destination);
+                            // Mostra solo i messaggi destinati alla pizzeria
+                            if (data.destination === 'pizzeria') {
+                                console.log('✅ Messaggio vocale accettato per pizzeria');
+                                displayVoiceMessage(data);
+                            } else {
+                                console.log(`🚫 Messaggio vocale ignorato - Destinazione: ${data.destination}`);
+                            }
+                        } else if (data.action === 'deleteVoiceMessage') {
+                            console.log('🗑️ Eliminazione messaggio vocale ricevuta in pizzeria:', data);
+                            removeVoiceMessage(data.messageId);
                         }
                     } catch (error) {
                         console.error('Errore parsing messaggio pizzeria:', error);
@@ -699,6 +719,218 @@
                 statusDiv.textContent = '';
                 statusDiv.style.color = '#666';
             }, 3000);
+        }
+
+        // Gestione messaggi vocali ricevuti
+        function displayVoiceMessage(messageData) {
+            const messagesList = document.getElementById('voice-messages-list');
+            const messagesContainerElement = document.getElementById('messagesContainer');
+
+            // Mostra il container dei messaggi quando arriva il primo messaggio
+            if (messagesContainerElement.style.display === 'none') {
+                messagesContainerElement.style.display = 'flex';
+                console.log('📦 Container messaggi mostrato in pizzeria');
+            }
+
+            // Crea elemento messaggio
+            const messageElement = document.createElement('div');
+            messageElement.id = `voice-message-${messageData.messageId}`;
+            messageElement.style.cssText = `
+                background: white;
+                padding: 12px;
+                margin: 8px 0;
+                border-radius: 6px;
+                border-left: 3px solid #ffc107;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                display: flex;
+                flex-direction: column;
+                animation: slideIn 0.3s ease-out;
+            `;
+
+            // Aggiungi animazione CSS se non esiste
+            if (!document.getElementById('messageAnimations')) {
+                const style = document.createElement('style');
+                style.id = 'messageAnimations';
+                style.textContent = `
+                    @keyframes slideIn {
+                        from { opacity: 0; transform: translateX(-20px); }
+                        to { opacity: 1; transform: translateX(0); }
+                    }
+                    @keyframes pulse {
+                        0% { box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.7); }
+                        70% { box-shadow: 0 0 0 10px rgba(255, 193, 7, 0); }
+                        100% { box-shadow: 0 0 0 0 rgba(255, 193, 7, 0); }
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+
+            // Crea contenuto con audio se disponibile
+            let audioControls = '';
+            if (messageData.hasAudio && messageData.audioData) {
+                const audioId = `audio-${messageData.messageId}`;
+                const audioSize = messageData.audioSize ? `(${Math.round(messageData.audioSize/1024)}KB)` : '';
+                audioControls = `
+                    <div style="margin: 8px 0; background: #fff3cd; padding: 8px; border-radius: 4px; border: 1px solid #ffc107;">
+                        <div style="font-size: 12px; color: #856404; margin-bottom: 4px;">🎤 Messaggio Audio ${audioSize}</div>
+                        <audio id="${audioId}" controls style="width: 100%; height: 35px;">
+                            <source src="data:audio/webm;base64,${messageData.audioData}" type="audio/webm">
+                            <source src="data:audio/wav;base64,${messageData.audioData}" type="audio/wav">
+                            Il tuo browser non supporta l'audio.
+                        </audio>
+                        <div style="margin-top: 4px;">
+                            <button onclick="playVoiceMessage('${audioId}')" 
+                                    style="background: #28a745; color: white; border: none; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-size: 11px; margin-right: 5px;">
+                                🔊 Riproduci
+                            </button>
+                            <button onclick="replayVoiceMessage('${audioId}')" 
+                                    style="background: #17a2b8; color: white; border: none; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-size: 11px;">
+                                🔄 Ripeti
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }
+
+            messageElement.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                    <div style="flex: 1;">
+                        <div style="font-weight: 600; color: #856404; font-size: 14px; margin-bottom: 4px;">
+                            ${messageData.from} - ${messageData.timestamp}
+                        </div>
+                        <div style="color: #333; font-size: 16px; line-height: 1.4; margin-bottom: 8px;">
+                            ${messageData.message}
+                        </div>
+                        ${audioControls}
+                    </div>
+                    <button onclick="deleteVoiceMessage('${messageData.messageId}')" 
+                            style="background: #f44336; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; margin-left: 10px; transition: background 0.2s; align-self: flex-start;">
+                        🗑️ Elimina
+                    </button>
+                </div>
+            `;
+
+            messagesList.appendChild(messageElement);
+
+            // 🔊 Riproduci allarme per nuovo messaggio
+            const messageAlert = document.getElementById('alertSound');
+            if (messageAlert) {
+                messageAlert.play().catch(error => {
+                    console.log('⚠️ Errore riproduzione allarme messaggio in pizzeria:', error);
+
+                    // Fallback: suono generato se l'audio non funziona
+                    try {
+                        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                        const oscillator = audioContext.createOscillator();
+                        const gain = audioContext.createGain();
+
+                        oscillator.connect(gain);
+                        gain.connect(audioContext.destination);
+
+                        // Due beep per distinguere dai countdown
+                        oscillator.frequency.value = 1000;
+                        gain.gain.setValueAtTime(0.1, audioContext.currentTime);
+                        gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+
+                        oscillator.start(audioContext.currentTime);
+                        oscillator.stop(audioContext.currentTime + 0.2);
+
+                        // Secondo beep
+                        setTimeout(() => {
+                            const oscillator2 = audioContext.createOscillator();
+                            const gain2 = audioContext.createGain();
+                            oscillator2.connect(gain2);
+                            gain2.connect(audioContext.destination);
+                            oscillator2.frequency.value = 1200;
+                            gain2.gain.setValueAtTime(0.1, audioContext.currentTime);
+                            gain2.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+                            oscillator2.start(audioContext.currentTime);
+                            oscillator2.stop(audioContext.currentTime + 0.2);
+                        }, 300);
+                    } catch (synthError) {
+                        console.log('Impossibile riprodurre allarme sintetico in pizzeria:', synthError);
+                    }
+                });
+            } else {
+                console.log('⚠️ File audio alerte-346112.mp3 non trovato in pizzeria');
+            }
+
+            // Animazione visiva per attirare l'attenzione
+            const messagesContainer = document.getElementById('voice-messages-container');
+            messagesContainer.style.border = '2px solid #ffc107';
+            messagesContainer.style.animation = 'pulse 2s ease-in-out 3';
+
+            // Rimuovi l'effetto visivo dopo qualche secondo
+            setTimeout(() => {
+                messagesContainer.style.border = 'none';
+                messagesContainer.style.animation = '';
+            }, 6000);
+
+            console.log(`📢 🔊 Messaggio vocale visualizzato in pizzeria con allarme: "${messageData.message}"`);
+
+            // 🔊 Auto-riproduzione se c'è audio
+            if (messageData.hasAudio && messageData.audioData) {
+                setTimeout(() => {
+                    const audioId = `audio-${messageData.messageId}`;
+                    playVoiceMessage(audioId);
+                }, 1000);
+            }
+        }
+
+        function playVoiceMessage(audioId) {
+            const audioElement = document.getElementById(audioId);
+            if (audioElement) {
+                audioElement.currentTime = 0; // Riavvolgi all'inizio
+                audioElement.play().catch(error => {
+                    console.log('⚠️ Errore riproduzione audio messaggio in pizzeria:', error);
+                    alert('⚠️ Impossibile riprodurre l\'audio. Clicca sui controlli audio.');
+                });
+            }
+        }
+
+        function replayVoiceMessage(audioId) {
+            const audioElement = document.getElementById(audioId);
+            if (audioElement) {
+                audioElement.currentTime = 0;
+                audioElement.play().catch(error => {
+                    console.log('⚠️ Errore riproduzione audio messaggio in pizzeria:', error);
+                });
+            }
+        }
+
+        function deleteVoiceMessage(messageId) {
+            // Invia eliminazione via WebSocket
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                const deleteMessage = {
+                    action: 'deleteVoiceMessage',
+                    messageId: messageId
+                };
+                ws.send(JSON.stringify(deleteMessage));
+                console.log(`📤 Eliminazione messaggio vocale inviata da pizzeria: ID ${messageId}`);
+            } else {
+                console.error('❌ WebSocket non connesso per eliminazione messaggio vocale in pizzeria');
+            }
+
+            // Rimuovi localmente
+            removeVoiceMessage(messageId);
+        }
+
+        function removeVoiceMessage(messageId) {
+            const messageElement = document.getElementById(`voice-message-${messageId}`);
+            if (messageElement) {
+                messageElement.remove();
+
+                // Se non ci sono più messaggi, nascondi il container
+                const messagesList = document.getElementById('voice-messages-list');
+                const messagesContainerElement = document.getElementById('messagesContainer');
+
+                if (messagesList.children.length === 0) {
+                    messagesContainerElement.style.display = 'none';
+                    console.log('📦 Container messaggi nascosto in pizzeria (nessun messaggio)');
+                }
+
+                console.log(`🗑️ Messaggio vocale eliminato in pizzeria: ID ${messageId}`);
+            }
         }
 
 
