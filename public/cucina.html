@@ -624,14 +624,17 @@
 
                         if (data.action === 'startCountdown') {
                             console.log('📥 Countdown ricevuto via WebSocket:', data);
-                            // Mostra il countdown in cucina solo se "cucina" è tra le destinazioni
-                            if (data.destination === 'cucina') {
-                                console.log(`✅ Countdown accettato per cucina - Tavolo: ${data.tableNumber}`);
-                                startCountdownVisual(data.tableNumber, data.timeRemaining, data.destination || 'cucina');
-                            } else {
-                                console.log(`🚫 Countdown ignorato in cucina - Destinazione: ${data.destination || 'undefined'}, Tavolo: ${data.tableNumber}`);
-                                return; // Importante: esci dalla funzione se non è per cucina
+                            console.log(`🔍 Destinazione ricevuta: "${data.destination}", Tavolo: ${data.tableNumber}`);
+
+                            // Controllo RIGOROSO: mostra SOLO se destinazione è esplicitamente "cucina"
+                            if (data.destination !== 'cucina') {
+                                console.log(`🚫 Countdown IGNORATO in cucina - Destinazione: "${data.destination || 'undefined'}", Tavolo: ${data.tableNumber}`);
+                                return; // STOP: non elaborare se non è per cucina
                             }
+
+                            // Se arriviamo qui, la destinazione è sicuramente "cucina"
+                            console.log(`✅ Countdown accettato per cucina - Tavolo: ${data.tableNumber}`);
+                            startCountdownVisual(data.tableNumber, data.timeRemaining, data.destination);
                         } else if (data.action === 'deleteCountdown') {
                             console.log('📥 Eliminazione countdown ricevuta via WebSocket:', data);
                             const countdownIndex = countdowns.findIndex(c => c.tableNumber == data.tableNumber);
