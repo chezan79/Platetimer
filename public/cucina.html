@@ -633,7 +633,7 @@
                                 console.log(`   ❌ Tipo destinazione: ${typeof data.destination}`);
                                 console.log(`   ❌ Tavolo: ${data.tableNumber}`);
                                 console.log(`   ❌ QUESTO COUNTDOWN NON VERRÀ MOSTRATO IN CUCINA`);
-                                
+
                                 // BLOCCO ASSOLUTO - nessuna elaborazione
                                 return false;
                             }
@@ -643,7 +643,7 @@
                             console.log(`   ✅ Destinazione verificata: "${data.destination}"`);
                             console.log(`   ✅ Tavolo: ${data.tableNumber}`);
                             console.log(`   ✅ Durata: ${data.timeRemaining}s`);
-                            
+
                             startCountdownVisual(data.tableNumber, data.timeRemaining, data.destination);
                         } else if (data.action === 'deleteCountdown') {
                             console.log('📥 Eliminazione countdown ricevuta via WebSocket:', data);
@@ -782,9 +782,9 @@
                 console.log(`🛑 BLOCCO ASSOLUTO - questo countdown NON verrà creato`);
                 return; // Blocca completamente la creazione del countdown
             }
-            
+
             console.log(`🎯 CUCINA - Creazione countdown AUTORIZZATA per tavolo ${tableNumber}, destinazione: "${destination}"`);
-            
+
             const existingCountdownIndex = countdowns.findIndex(c => c.tableNumber == tableNumber);
             if (existingCountdownIndex !== -1) {
                 const existingCountdown = countdowns[existingCountdownIndex];
@@ -1159,8 +1159,16 @@
                 voiceButton.classList.remove('voice-inactive');
                 voiceButton.classList.add('voice-active');
                 voiceButton.textContent = '🎤 Voce Attiva - STOP';
-                statusDiv.textContent = 'Dì "tavolo" seguito dal numero e minuti (es: "tavolo 5 otto minuti")';
-                statusDiv.style.color = '#666';
+
+                // Controlla se ci sono destinazioni selezionate per il messaggio appropriato
+                if (selectedDestinations.length > 0) {
+                    statusDiv.textContent = 'Dì "tavolo" seguito dal numero e minuti (es: "tavolo 5 otto minuti")';
+                    statusDiv.style.color = '#666';
+                } else {
+                    statusDiv.textContent = '⚠️ Seleziona prima una destinazione';
+                    statusDiv.style.color = '#ffc107';
+                }
+
                 indicatorDiv.textContent = '🟢 In ascolto continuo...';
                 indicatorDiv.style.color = '#28a745';
             } else {
@@ -1227,6 +1235,14 @@
                         console.log(`✅ Comando riconosciuto: Tavolo ${tableNumber}, ${minutes} minuti`);
 
                         document.getElementById('numeroTavolo').value = tableNumber;
+
+                         // Verifica se è stata selezionata una destinazione
+                        if (selectedDestinations.length === 0) {
+                            const statusDiv = document.getElementById('voice-status');
+                            statusDiv.textContent = '⚠️ Seleziona prima una destinazione';
+                            statusDiv.style.color = '#ffc107';
+                            return false;
+                        }
 
                         // Per il comando vocale, usa automaticamente "cucina" come destinazione di default
                         // Se ci sono destinazioni selezionate manualmente, usale; altrimenti usa cucina
