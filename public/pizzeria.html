@@ -96,6 +96,17 @@
             transform: translateY(-2px);
             box-shadow: 0 5px 15px rgba(108, 117, 125, 0.3);
         }
+
+        /* Container messaggi - più largo e meno alto */
+        #messagesContainer {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: 400px;
+            max-width: 400px;
+            max-height: 300px;
+            z-index: 500;
+        }
     </style>
 </head>
 <body>
@@ -772,7 +783,7 @@
                 const audioSize = messageData.audioSize ? `(${Math.round(messageData.audioSize/1024)}KB)` : '';
                 audioControls = `
                     <div style="margin: 8px 0; background: #fff3cd; padding: 8px; border-radius: 4px; border: 1px solid #ffc107;">
-                        <div style="font-size: 12px; color: #856404; margin-bottom: 4px;">🎤 Messaggio Audio ${audioSize}</div>
+                        <div style="font-size: 12px; color:#856404; margin-bottom: 4px;">🎤 Messaggio Audio ${audioSize}</div>
                         <audio id="${audioId}" controls style="width: 100%; height: 35px;">
                             <source src="data:audio/webm;base64,${messageData.audioData}" type="audio/webm">
                             <source src="data:audio/wav;base64,${messageData.audioData}" type="audio/wav">
