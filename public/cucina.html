@@ -308,6 +308,13 @@
             background-color: #A9A9A9 !important;
             transform: translateY(-1px);
         }
+        
+        /* Animazione shake per errori */
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
     </style>
 </head>
 <body>
@@ -475,43 +482,91 @@
         // Array per memorizzare i countdown
         const countdowns = [];
 
-        // Gestione tastiera virtuale
+        // Gestione tastiera virtuale con debugging migliorato
         keyboard.addEventListener('click', (event) => {
-            event.preventDefault(); // Previene comportamenti indesiderati
+            console.log('🖱️ Click rilevato sulla tastiera');
+            console.log('🎯 Target dell\'evento:', event.target);
+            console.log('🏷️ Classi del target:', event.target.classList.toString());
+            
+            event.preventDefault();
+            event.stopPropagation();
             
             if (event.target.classList.contains('key')) {
                 const key = event.target.textContent.trim();
                 console.log('🔢 Tasto premuto:', key);
+                console.log('📋 Valore attuale input prima della modifica:', numeroTavoloInput.value);
                 
                 // Aggiungi feedback visivo al tasto premuto
                 event.target.style.transform = 'scale(0.95)';
+                event.target.style.backgroundColor = '#4CAF50';
                 setTimeout(() => {
                     event.target.style.transform = 'scale(1)';
-                }, 150);
+                    event.target.style.backgroundColor = '';
+                }, 200);
                 
                 if (key === 'C') {
                     numeroTavoloInput.value = '';
-                    numeroTavoloInput.focus(); // Mantieni il focus
-                    console.log('🧹 Campo tavolo pulito');
+                    numeroTavoloInput.focus();
+                    console.log('🧹 Campo tavolo pulito - nuovo valore:', numeroTavoloInput.value);
                 } else if (/^\d$/.test(key)) {
-                    // Controlla che sia un numero e che non superi 3 cifre
+                    console.log('🔍 Numero valido rilevato:', key);
+                    console.log('📏 Lunghezza attuale:', numeroTavoloInput.value.length);
+                    
                     if (numeroTavoloInput.value.length < 3) {
-                        numeroTavoloInput.value += key;
-                        numeroTavoloInput.focus(); // Mantieni il focus
-                        console.log(`🔢 Aggiunto numero: ${key}, valore attuale: ${numeroTavoloInput.value}`);
+                        // Forza l'aggiornamento del valore
+                        const nuovoValore = numeroTavoloInput.value + key;
+                        numeroTavoloInput.value = nuovoValore;
                         
-                        // Trigger dell'evento input per eventuali listener
+                        // Assicurati che il focus sia sull'input
+                        numeroTavoloInput.focus();
+                        
+                        // Trigger eventi
                         numeroTavoloInput.dispatchEvent(new Event('input', { bubbles: true }));
+                        numeroTavoloInput.dispatchEvent(new Event('change', { bubbles: true }));
+                        
+                        console.log(`✅ Numero aggiunto con successo: ${key}`);
+                        console.log(`📋 Nuovo valore input: "${numeroTavoloInput.value}"`);
+                        console.log(`📏 Nuova lunghezza: ${numeroTavoloInput.value.length}`);
+                        
+                        // Feedback visivo di successo
+                        numeroTavoloInput.style.borderColor = '#28a745';
+                        numeroTavoloInput.style.backgroundColor = '#f8fff8';
+                        setTimeout(() => {
+                            numeroTavoloInput.style.borderColor = '#ddd';
+                            numeroTavoloInput.style.backgroundColor = '';
+                        }, 500);
+                        
                     } else {
-                        console.log('⚠️ Numero tavolo troppo lungo (massimo 3 cifre)');
+                        console.log('⚠️ Limite massimo raggiunto (3 cifre)');
                         
                         // Feedback visivo per errore
                         numeroTavoloInput.style.borderColor = '#dc3545';
+                        numeroTavoloInput.style.backgroundColor = '#fff8f8';
                         setTimeout(() => {
                             numeroTavoloInput.style.borderColor = '#ddd';
+                            numeroTavoloInput.style.backgroundColor = '';
                         }, 1000);
+                        
+                        // Shake animation per errore
+                        numeroTavoloInput.style.animation = 'shake 0.5s';
+                        setTimeout(() => {
+                            numeroTavoloInput.style.animation = '';
+                        }, 500);
                     }
                 }
+            } else {
+                console.log('❌ Elemento cliccato non ha la classe "key"');
+            }
+        });
+        
+        // Aggiungi anche gestione touch per dispositivi mobili
+        keyboard.addEventListener('touchend', (event) => {
+            console.log('📱 Touch rilevato sulla tastiera');
+            event.preventDefault();
+            
+            if (event.target.classList.contains('key')) {
+                // Simula un click
+                event.target.click();
             }
         });
 
@@ -1280,7 +1335,7 @@
         document.addEventListener('DOMContentLoaded', function() {
             console.log('🎤 Pagina caricata - Riconoscimento vocale continuo disponibile');
             
-            // Test della tastiera virtuale
+            // Test della tastiera virtuale con debugging completo
             console.log('🔢 Testando tastiera virtuale...');
             const keyboardElement = document.getElementById('keyboard');
             const inputElement = document.getElementById('numeroTavolo');
@@ -1288,8 +1343,39 @@
             if (keyboardElement && inputElement) {
                 console.log('✅ Elementi tastiera trovati correttamente');
                 console.log('🔢 Numero di tasti:', keyboardElement.querySelectorAll('.key').length);
+                console.log('📋 Input element:', inputElement);
+                console.log('🎯 Input type:', inputElement.type);
+                console.log('📏 Input maxlength:', inputElement.maxLength);
+                console.log('🔒 Input readonly:', inputElement.readOnly);
+                console.log('🚫 Input disabled:', inputElement.disabled);
+                
+                // Assicurati che l'input sia focusabile
+                inputElement.focus();
+                console.log('🎯 Focus impostato sull\'input');
+                
+                // Test di scrittura diretta
+                setTimeout(() => {
+                    console.log('🧪 Test di scrittura diretta nell\'input...');
+                    inputElement.value = 'TEST';
+                    console.log('📝 Test completato, valore input:', inputElement.value);
+                    
+                    // Pulisci il test
+                    setTimeout(() => {
+                        inputElement.value = '';
+                        console.log('🧹 Test pulito');
+                    }, 1000);
+                }, 500);
+                
+                // Test dei tasti della tastiera
+                const keys = keyboardElement.querySelectorAll('.key');
+                keys.forEach((key, index) => {
+                    console.log(`🔑 Tasto ${index}: "${key.textContent}" - classi: ${key.classList.toString()}`);
+                });
+                
             } else {
                 console.error('❌ Elementi tastiera non trovati!');
+                console.error('🔍 Keyboard element:', keyboardElement);
+                console.error('🔍 Input element:', inputElement);
             }
 
             setInterval(() => {
