@@ -383,12 +383,13 @@
                 <div class="key">3</div>
                 <div class="key">4</div>
                 <div class="key">5</div>
-                <div class="key">C</div>
                 <div class="key">6</div>
                 <div class="key">7</div>
                 <div class="key">8</div>
                 <div class="key">9</div>
                 <div class="key">0</div>
+                <div class="key">C</div>
+                <div class="key" style="visibility: hidden;"></div>
             </div>
         </div>
 
@@ -477,11 +478,20 @@
         // Gestione tastiera virtuale
         keyboard.addEventListener('click', (event) => {
             if (event.target.classList.contains('key')) {
-                const key = event.target.textContent;
+                const key = event.target.textContent.trim();
+                console.log('🔢 Tasto premuto:', key);
+                
                 if (key === 'C') {
                     numeroTavoloInput.value = '';
-                } else {
-                    numeroTavoloInput.value += key;
+                    console.log('🧹 Campo tavolo pulito');
+                } else if (/^\d$/.test(key)) {
+                    // Controlla che sia un numero e che non superi 3 cifre
+                    if (numeroTavoloInput.value.length < 3) {
+                        numeroTavoloInput.value += key;
+                        console.log(`🔢 Aggiunto numero: ${key}, valore attuale: ${numeroTavoloInput.value}`);
+                    } else {
+                        console.log('⚠️ Numero tavolo troppo lungo (massimo 3 cifre)');
+                    }
                 }
             }
         });
