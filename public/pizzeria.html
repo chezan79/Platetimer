@@ -104,27 +104,24 @@
         <h4 id="company-name" style="margin: 0; color: #333; font-weight: 600;">Nome Azienda</h4>
         </div>
     <!-- Sistema messaggio vocale con scelta destinazione -->
-    <div style="position: absolute; top: 20px; left: 50%; transform: translateX(-50%); text-align: center; padding: 20px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 12px; border-left: 4px solid #007bff; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); min-width: 400px; z-index: 500;">
-        
-        <!-- Tutti i pulsanti sulla stessa riga -->
-        <div style="display: flex; justify-content: center; align-items: center; gap: 12px; flex-wrap: nowrap;">
-            <button class="destination-button" data-destination="cucina" style="padding: 8px 16px; background: linear-gradient(135deg, #28a745 0%, #98FB98 100%); color: #212529; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
+    <div style="position: absolute; top: 20px; left: 50%; transform: translateX(-50%); text-align: center; padding: 8px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; border-left: 4px solid #007bff; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); min-width: 280px; z-index: 500;">
+        <div style="display: flex; justify-content: center; align-items: center; gap: 6px; flex-wrap: nowrap;">
+            <button class="destination-button" data-destination="cucina" style="padding: 6px 12px; background: linear-gradient(135deg, #28a745 0%, #98FB98 100%); color: #212529; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
                 🍳 Cucina
             </button>
-            <button class="destination-button" data-destination="insalata" style="padding: 8px 16px; background: linear-gradient(135deg, #17a2b8 0%, #B0E0E6 100%); color: #212529; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
+            <button class="destination-button" data-destination="insalata" style="padding: 6px 12px; background: linear-gradient(135deg, #17a2b8 0%, #B0E0E6 100%); color: #212529; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
                 🥗 Insalata
             </button>
             <button 
                 onclick="toggleVoiceRecording()" 
                 id="voice-message-button" 
-                style="padding: 8px 16px; background: linear-gradient(135deg, #007bff 0%, #0056b3 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600; transition: all 0.3s ease; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; white-space: nowrap;">
-                🎤 Registra (5s)
+                style="padding: 6px 12px; background: linear-gradient(135deg, #007bff 0%, #0056b3 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; white-space: nowrap;">
+                🎤 5s
             </button>
         </div>
-        <div id="voice-message-status" style="margin-top: 12px; font-size: 14px; color: #666; min-height: 20px;">
+        <div id="voice-message-status" style="margin-top: 4px; font-size: 10px; color: #666; min-height: 12px;">
         </div>
-        <div id="selected-destinations" style="margin-top: 8px; font-size: 12px; color: #007bff; font-weight: 600;">
-            Nessuna destinazione selezionata
+        <div id="selected-destinations" style="margin-top: 2px; font-size: 10px; color: #007bff; font-weight: 600;">
         </div>
     </div>
 
@@ -421,11 +418,11 @@
         // Gestione selezione destinazioni con stile cucina.html
         document.addEventListener('DOMContentLoaded', function() {
             const destinationButtons = document.querySelectorAll('.destination-button');
-            
+
             destinationButtons.forEach(button => {
                 button.addEventListener('click', function() {
                     const destination = this.getAttribute('data-destination');
-                    
+
                     // Toggle singola destinazione
                     if (selectedDestinations.includes(destination)) {
                         selectedDestinations = selectedDestinations.filter(d => d !== destination);
@@ -434,7 +431,7 @@
                         selectedDestinations.push(destination);
                         this.classList.add('selected');
                     }
-                    
+
                     updateDestinationDisplay();
                     console.log('Destinazioni selezionate:', selectedDestinations);
                 });
@@ -447,19 +444,19 @@
                     transition: transform 0.2s, background-color 0.3s, box-shadow 0.2s;
                     min-width: 60px;
                 }
-                
+
                 .destination-button:hover {
                     transform: translateY(-2px);
                     box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
                 }
-                
+
                 .destination-button.selected {
                     transform: translateY(-2px);
                     box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
                     border: 3px solid #333 !important;
                     position: relative;
                 }
-                
+
                 .destination-button.selected::after {
                     content: '✓';
                     position: absolute;
@@ -484,21 +481,13 @@
         function updateDestinationDisplay() {
             const displayDiv = document.getElementById('selected-destinations');
             const titleDiv = document.querySelector('h3');
-            
+
             if (selectedDestinations.length === 0) {
-                displayDiv.textContent = 'Nessuna destinazione selezionata';
-                displayDiv.style.color = '#dc3545';
-                titleDiv.textContent = '🎯 Seleziona Destinazione';
-            } else if (selectedDestinations.length === 1) {
+                displayDiv.textContent = '';
+            } else {
                 const icons = { 'cucina': '🍳', 'insalata': '🥗' };
                 const destName = selectedDestinations[0].charAt(0).toUpperCase() + selectedDestinations[0].slice(1);
-                displayDiv.textContent = `${icons[selectedDestinations[0]]} ${destName} selezionata`;
-                displayDiv.style.color = '#28a745';
-                titleDiv.textContent = `🎯 ${icons[selectedDestinations[0]]} ${destName}`;
-            } else {
-                displayDiv.textContent = '🍳🥗 Cucina e Insalata selezionate';
-                displayDiv.style.color = '#6f42c1';
-                titleDiv.textContent = '🎯 Entrambe le Destinazioni';
+                displayDiv.textContent = `${icons[selectedDestinations[0]]} ${destName}`;
             }
         }
 
@@ -530,7 +519,7 @@
                 mediaRecorder.onstop = () => {
                     // Ferma tutti i track del microfono
                     stream.getTracks().forEach(track => track.stop());
-                    
+
                     // Elabora l'audio registrato
                     processRecordedAudio();
                 };
@@ -542,9 +531,9 @@
                 updateVoiceMessageUI(true);
 
                 const statusDiv = document.getElementById('voice-message-status');
-                statusDiv.textContent = '🎤 Registrando messaggio vocale...';
+                statusDiv.textContent = '🎤 Registrando...';
                 statusDiv.style.color = '#dc3545';
-                
+
                 startCountdownRecording(5);
 
                 // Auto-stop dopo 5 secondi
@@ -566,11 +555,11 @@
         function startCountdownRecording(seconds) {
             let remaining = seconds;
             const statusDiv = document.getElementById('voice-message-status');
-            
+
             const countdownInterval = setInterval(() => {
                 remaining--;
                 if (remaining > 0) {
-                    statusDiv.textContent = `🎤 Registrando... ${remaining}s rimanenti`;
+                    statusDiv.textContent = `🎤 ${remaining}s`;
                 } else {
                     clearInterval(countdownInterval);
                 }
@@ -582,15 +571,15 @@
             updateVoiceMessageUI(false);
 
             const statusDiv = document.getElementById('voice-message-status');
-            statusDiv.textContent = '🔄 Elaborando audio e invio...';
+            statusDiv.textContent = '🔄 Elaborando...';
             statusDiv.style.color = '#ffc107';
 
             if (audioChunks.length === 0) {
-                statusDiv.textContent = '⚠️ Nessun audio registrato - Riprova';
+                statusDiv.textContent = '⚠️ Riprova';
                 statusDiv.style.color = '#ffc107';
-                
+
                 setTimeout(() => {
-                    statusDiv.textContent = 'Seleziona destinazione e registra messaggio';
+                    statusDiv.textContent = '';
                     statusDiv.style.color = '#666';
                 }, 3000);
                 return;
@@ -598,61 +587,61 @@
 
             // Crea blob audio
             const audioBlob = new Blob(audioChunks, { type: 'audio/webm;codecs=opus' });
-            
+
             // Verifica dimensione audio
             if (audioBlob.size < 1000) { // Meno di 1KB probabilmente è silenzio
-                statusDiv.textContent = '⚠️ Audio troppo breve - Riprova parlando più forte';
+                statusDiv.textContent = '⚠️ Parla più forte';
                 statusDiv.style.color = '#ffc107';
-                
+
                 setTimeout(() => {
-                    statusDiv.textContent = 'Seleziona destinazione e registra messaggio';
+                    statusDiv.textContent = '';
                     statusDiv.style.color = '#666';
                 }, 3000);
                 return;
             }
 
-            console.log(`🎤 Audio registrato: ${audioBlob.size} bytes, tipo: ${audioBlob.type}`);
+            console.log(`🎤 Audio: ${audioBlob.size} bytes, tipo: ${audioBlob.type}`);
 
             // Converti in base64 e invia
             const reader = new FileReader();
             reader.onloadend = () => {
                 const audioDataBase64 = reader.result.split(',')[1]; // Rimuovi prefisso data:audio/webm;base64,
-                
-                statusDiv.textContent = '✅ Invio messaggio vocale...';
+
+                statusDiv.textContent = '✅ Invio...';
                 statusDiv.style.color = '#28a745';
-                
+
                 sendVoiceAudioMessage(audioDataBase64, audioBlob.size);
             };
-            
+
             reader.onerror = () => {
-                console.error('❌ Errore conversione audio');
-                statusDiv.textContent = '❌ Errore elaborazione audio';
+                console.error('❌ Errore audio');
+                statusDiv.textContent = '❌ Errore';
                 statusDiv.style.color = '#dc3545';
             };
-            
+
             reader.readAsDataURL(audioBlob);
         }
 
-        
+
 
         function updateVoiceMessageUI(isRecording) {
             const button = document.getElementById('voice-message-button');
             const statusDiv = document.getElementById('voice-message-status');
 
             if (isRecording) {
-                button.textContent = '🔴 Registrando... (5s)';
+                button.textContent = '🔴 Registrando...';
                 button.style.background = 'linear-gradient(135deg, #dc3545 0%, #c82333 100%)';
                 button.style.transform = 'scale(1.05)';
                 button.disabled = true;
             } else {
-                button.textContent = '🎤 Registra Audio (5s)';
+                button.textContent = '🎤 5s';
                 button.style.background = 'linear-gradient(135deg, #007bff 0%, #0056b3 100%)';
                 button.style.transform = 'scale(1)';
                 button.disabled = false;
 
                 setTimeout(() => {
                     if (!isRecordingMessage) {
-                        statusDiv.textContent = 'Seleziona destinazione e registra messaggio vocale';
+                        statusDiv.textContent = '';
                         statusDiv.style.color = '#666';
                     }
                 }, 3000);
@@ -679,10 +668,10 @@
                     };
 
                     ws.send(JSON.stringify(voiceMessageData));
-                    console.log(`📢 🎤 Messaggio vocale puro inviato a ${destination}: ${Math.round(audioSize/1024)}KB`);
+                    console.log(`📢 🎤 Inviato a ${destination}: ${Math.round(audioSize/1024)}KB`);
                 } else {
-                    console.error('❌ WebSocket non connesso');
-                    alert('❌ Connessione persa. Impossibile inviare il messaggio.');
+                    console.error('❌ WebSocket');
+                    alert('❌ Connessione persa.');
                     return;
                 }
             });
@@ -691,8 +680,8 @@
             const destText = selectedDestinations.length === 1 ? 
                 selectedDestinations[0] : 
                 `${selectedDestinations.length} destinazioni`;
-            
-            statusDiv.textContent = `✅ Audio inviato a ${destText}! (${Math.round(audioSize/1024)}KB)`;
+
+            statusDiv.textContent = `✅ A ${destText}! (${Math.round(audioSize/1024)}KB)`;
             statusDiv.style.color = '#28a745';
 
             // Reset delle destinazioni selezionate
@@ -707,12 +696,12 @@
             mediaRecorder = null;
 
             setTimeout(() => {
-                statusDiv.textContent = 'Seleziona destinazione e registra messaggio';
+                statusDiv.textContent = '';
                 statusDiv.style.color = '#666';
             }, 3000);
         }
 
-        
+
     </script>
     <script src="company-header.js"></script>
 
