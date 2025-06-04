@@ -368,71 +368,18 @@ wss.on('connection', (ws) => {
                     console.log('⚠️ Client non assegnato a nessuna room per messaggio vocale');
                 }
 
-            } else if (data.action === 'audioMessage') {
-                // Validazione messaggio audio
-                if (!data.audioData || typeof data.audioData !== 'string') {
-                    console.log('⚠️ Dati audio non validi');
-                    return;
-                }
-
-                if (!data.messageId || typeof data.messageId !== 'string') {
-                    console.log('⚠️ ID messaggio audio mancante');
-                    return;
-                }
-
-                // Validazione dimensione audio (max 10MB in base64)
-                if (data.audioData.length > 13333333) { // ~10MB in base64
-                    console.log('⚠️ Messaggio audio troppo grande');
-                    return;
-                }
-
-                // Validazione destinazione
-                const validDestinations = ['cucina', 'pizzeria', 'insalata', 'all'];
-                const destination = data.destination || 'all';
-                if (!validDestinations.includes(destination)) {
-                    console.log('⚠️ Destinazione audio non valida:', destination);
-                    return;
-                }
-
-                // Invia messaggio audio a tutti i client della room
-                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
-                    const roomClients = companyRooms.get(ws.companyRoom);
-                    const audioMessage = JSON.stringify({
-                        action: 'audioMessage',
-                        audioData: data.audioData,
-                        mimeType: data.mimeType || 'audio/webm;codecs=opus',
-                        messageId: data.messageId,
-                        timestamp: data.timestamp || new Date().toLocaleTimeString('it-IT'),
-                        from: data.from || 'Sconosciuto',
-                        destination: destination // Includi la destinazione nel messaggio
-                    });
-
-                    let sentCount = 0;
-                    roomClients.forEach((client) => {
-                        if (client.readyState === WebSocket.OPEN) {
-                            client.send(audioMessage);
-                            sentCount++;
-                        }
-                    });
-
-                    const destinationText = destination === 'all' ? 'Tutti' : destination.charAt(0).toUpperCase() + destination.slice(1);
-                    console.log(`🔊 Messaggio audio inviato alla room "${ws.companyRoom}" (${sentCount}/${roomClients.size} client): ID ${data.messageId}, Da: ${data.from}, Destinazione: ${destinationText}, Dimensione: ${Math.round(data.audioData.length / 1024)}KB`);
-                } else {
-                    console.log('⚠️ Client non assegnato a nessuna room per messaggio audio');
-                }
-
-            } else if (data.action === 'deleteVoiceMessage' || data.action === 'deleteAudioMessage') {
-                // Validazione eliminazione messaggio vocale/audio
+            } else if (data.action === 'deleteVoiceMessage') {
+                // Validazione eliminazione messaggio vocale
                 if (!data.messageId) {
-                    console.log('⚠️ ID messaggio mancante per eliminazione');
+                    console.log('⚠️ ID messaggio vocale mancante per eliminazione');
                     return;
                 }
 
-                // Invia eliminazione messaggio a tutti i client della room
+                // Invia eliminazione messaggio vocale a tutti i client della room
                 if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
                     const roomClients = companyRooms.get(ws.companyRoom);
                     const deleteMessage = JSON.stringify({
-                        action: data.action, // Mantieni l'azione originale
+                        action: 'deleteVoiceMessage',
                         messageId: data.messageId
                     });
 
@@ -444,9 +391,9 @@ wss.on('connection', (ws) => {
                         }
                     });
 
-                    console.log(`🗑️ Eliminazione messaggio inviata alla room "${ws.companyRoom}" (${sentCount}/${roomClients.size} client): ID ${data.messageId}`);
+                    console.log(`🗑️ Eliminazione messaggio vocale inviata alla room "${ws.companyRoom}" (${sentCount}/${roomClients.size} client): ID ${data.messageId}`);
                 } else {
-                    console.log('⚠️ Client non assegnato a nessuna room per eliminazione messaggio');
+                    console.log('⚠️ Client non assegnato a nessuna room per eliminazione messaggio vocale');
                 }
             }
         } catch (error) {

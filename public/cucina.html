@@ -9,7 +9,7 @@
             min-height: 100vh;
             margin: 0;
             padding: 20px;
-            padding-top: 80px;
+            padding-top: 120px;
             display: flex;
             flex-direction: column;
             gap: 20px;
@@ -21,14 +21,14 @@
             width: 90%;
             margin: 0 auto;
             background: white;
-            padding: 15px;
+            padding: 20px;
             border-radius: 10px;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
             display: flex;
             flex-direction: row;
             align-items: flex-start;
             justify-content: space-between;
-            gap: 20px;
+            gap: 30px;
         }
 
         /* Sezione riconoscimento vocale */
@@ -60,13 +60,13 @@
             width: 90%;
             margin: 0 auto;
             background: white;
-            padding: 20px;
+            padding: 25px;
             border-radius: 10px;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
             display: flex;
             flex-direction: column;
             overflow-y: auto;
-            max-height: 60vh;
+            max-height: 50vh;
         }
 
         /* Container messaggi - più stretto e posizionato in alto a destra */
@@ -311,48 +311,19 @@
     </style>
 </head>
 <body>
-    <!-- Container per nome azienda e messaggio audio in alto a sinistra -->
-    <div style="position: absolute; top: 20px; left: 20px; z-index: 1000; display: flex; gap: 15px; align-items: center;">
-        <!-- Nome Azienda -->
-        <div id="company-header" style="padding: 10px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; border-left: 4px solid #28a745;">
-            <h4 id="company-name" style="margin: 0; color: #333; font-weight: 600;">Nome Azienda</h4>
-        </div>
-        
-        <!-- Sistema messaggio audio standardizzato -->
-        <div style="padding: 12px; background: linear-gradient(135deg, #e8f5e8 0%, #c8e6c9 100%); border-radius: 8px; border-left: 4px solid #4caf50; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);">
-
-            
-            <!-- Container orizzontale per selezione destinazione e pulsante -->
-            <div style="display: flex; gap: 10px; align-items: center;">
-                <!-- Selezione destinazione -->
-                <div style="flex: 1;">
-                    <label style="font-size: 11px; color: #666; display: block; margin-bottom: 4px;"></label>
-                    <select id="audioDestinationSelect" style="width: 100%; padding: 4px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px;">
-                        <option value="pizzeria">🍕 Pizzeria</option>
-                        <option value="insalata">🥗 Insalata</option>
-                        <option value="all">📢 Tutti (Pizzeria + Insalata)</option>
-                    </select>
-                </div>
-                
-                <!-- Pulsante registrazione -->
-                <div style="flex: 1;">
-                    <button 
-                        onmousedown="startAudioMessage()" 
-                        onmouseup="stopAudioMessage()" 
-                        onmouseleave="stopAudioMessage()"
-                        ontouchstart="startAudioMessage()" 
-                        ontouchend="stopAudioMessage()"
-                        id="audio-message-button" 
-                        style="width: 100%; padding: 8px; background: linear-gradient(135deg, #4caf50 0%, #45a049 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600; transition: all 0.3s ease; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;">
-                        🎤 Invia messaggio
-                    </button>
-                </div>
-            </div>
-            
-        </div>
+    <!-- Nome Azienda centralizzato -->
+    <div id="company-header" style="position: absolute; top: 20px; left: 20px; z-index: 1000; padding: 10px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; border-left: 4px solid #28a745;">
+        <h4 id="company-name" style="margin: 0; color: #333; font-weight: 600;">Nome Azienda</h4>
     </div>
-
-    <div style="position: absolute; top: 10px; right: 20px; z-index: 1000; display: flex; gap: 20px;">
+    
+    <!-- Logo posizionato in alto al centro -->
+    <div style="position: absolute; top: 20px; left: 50%; transform: translateX(-50%); z-index: 1000;">
+        <a href="https://imgbox.com/Bt6wfdF9" target="_blank">
+            <img src="https://thumbs2.imgbox.com/3b/04/Bt6wfdF9_t.jpg" alt="MealMaster Logo" style="width: 80px; height: auto;">
+        </a>
+    </div>
+    
+    <div style="position: absolute; top: 20px; right: 20px; z-index: 1000; display: flex; gap: 10px;">
         <button onclick="window.location.href='home.html'" style="padding: 6px 12px; background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500; transition: transform 0.2s, box-shadow 0.2s;">🏠 Home</button>
         <button onclick="window.location.href='index.html'" style="padding: 6px 12px; background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500; transition: transform 0.2s, box-shadow 0.2s;">🚪 Esci</button>
     </div>
@@ -376,20 +347,19 @@
         <!-- Sezione tastiera e input -->
         <div id="keyboardSection">
             <h2 style="color: #333; text-align: center; margin-bottom: 15px; font-size: 18px;">🔢 Tastiera</h2>
-            <input type="text" id="numeroTavolo" pattern="[0-9]*" inputmode="numeric" placeholder="Numero Tavolo" style="width: 80%; margin-bottom: 15px;" maxlength="3">
+            <input type="text" id="numeroTavolo" pattern="[0-9]*" inputmode="numeric" placeholder="Numero Tavolo" readonly style="width: 80%; margin-bottom: 15px;">
             <div id="keyboard">
                 <div class="key">1</div>
                 <div class="key">2</div>
                 <div class="key">3</div>
                 <div class="key">4</div>
                 <div class="key">5</div>
+                <div class="key">C</div>
                 <div class="key">6</div>
                 <div class="key">7</div>
                 <div class="key">8</div>
                 <div class="key">9</div>
                 <div class="key">0</div>
-                <div class="key">C</div>
-                <div class="key" style="visibility: hidden;"></div>
             </div>
         </div>
 
@@ -433,14 +403,12 @@
     <!-- Container dedicato per i messaggi della pizzeria - posizionato in alto a destra (inizialmente nascosto) -->
     <div id="messagesContainer" style="background: white; padding: 15px; border-radius: 10px; box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15); display: none; flex-direction: column; max-height: 60vh; overflow-y: auto;">
         <div id="voice-messages-container" style="padding: 12px; background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-radius: 8px; border-left: 4px solid #2196f3;">
-            <h3 style="margin: 0 0 12px 0; color: #1976d2; font-size: 16px;">📢🔊 Messaggi Audio Ricevuti</h3>
+            <h3 style="margin: 0 0 12px 0; color: #1976d2; font-size: 16px;">📢 Messaggi Pizzeria</h3>
             <div id="voice-messages-list">
                 <!-- I messaggi appariranno qui dinamicamente -->
             </div>
         </div>
     </div>
-
-    
 
     <audio id="alertSound" src="alerte-346112.mp3" preload="auto"></audio>
     <audio id="zeroSound" src="costa-rica-eas-alarm-346194.mp3" preload="auto"></audio>
@@ -477,43 +445,13 @@
 
         // Gestione tastiera virtuale
         keyboard.addEventListener('click', (event) => {
-            event.preventDefault();
-            console.log('🔢 Click tastiera rilevato su:', event.target);
-            
             if (event.target.classList.contains('key')) {
-                const key = event.target.textContent.trim();
-                console.log('🔢 Tasto premuto:', key);
-                
-                // Feedback visivo
-                event.target.style.transform = 'scale(0.95)';
-                setTimeout(() => {
-                    event.target.style.transform = 'scale(1)';
-                }, 150);
-                
+                const key = event.target.textContent;
                 if (key === 'C') {
                     numeroTavoloInput.value = '';
-                    numeroTavoloInput.focus();
-                    console.log('🧹 Campo tavolo pulito');
-                } else if (/^\d$/.test(key)) {
-                    if (numeroTavoloInput.value.length < 3) {
-                        numeroTavoloInput.value += key;
-                        numeroTavoloInput.focus();
-                        console.log(`🔢 Aggiunto numero: ${key}, valore attuale: ${numeroTavoloInput.value}`);
-                        
-                        // Trigger evento input
-                        numeroTavoloInput.dispatchEvent(new Event('input', { bubbles: true }));
-                    } else {
-                        console.log('⚠️ Numero tavolo troppo lungo (massimo 3 cifre)');
-                        
-                        // Feedback visivo errore
-                        numeroTavoloInput.style.borderColor = '#dc3545';
-                        setTimeout(() => {
-                            numeroTavoloInput.style.borderColor = '#ddd';
-                        }, 1000);
-                    }
+                } else {
+                    numeroTavoloInput.value += key;
                 }
-            } else {
-                console.log('⚠️ Click non su un tasto valido');
             }
         });
 
@@ -525,7 +463,7 @@
         destinationSelection.addEventListener('click', (event) => {
             if (event.target.classList.contains('destination-button')) {
                 const destination = event.target.getAttribute('data-destination');
-
+                
                 // Toggle della selezione
                 if (event.target.classList.contains('selected')) {
                     // Rimuovi dalla selezione
@@ -536,15 +474,15 @@
                     event.target.classList.add('selected');
                     selectedDestinations.push(destination);
                 }
-
+                
                 // Abilita i pulsanti durata solo se almeno una destinazione è selezionata
                 const hasDestinations = selectedDestinations.length > 0;
                 document.querySelectorAll('.duration-button').forEach(btn => {
                     btn.disabled = !hasDestinations;
                 });
-
+                
                 console.log('Destinazioni selezionate:', selectedDestinations);
-
+                
                 // Aggiorna il feedback visivo
                 updateDestinationFeedback();
             }
@@ -562,12 +500,12 @@
                         selectedDestinations.forEach(destination => {
                             startCountdown(minutes, tableNumber, destination);
                         });
-
+                        
                         numeroTavoloInput.value = '';
-
+                        
                         // Resetta la selezione dopo l'invio
                         resetSelection();
-
+                        
                         // Feedback di conferma
                         showConfirmationMessage(tableNumber, selectedDestinations, minutes);
                     } else {
@@ -609,10 +547,10 @@
             const statusDiv = document.getElementById('voice-status');
             const icons = {'cucina': '🍳', 'pizzeria': '🍕', 'insalata': '🥗'};
             const destList = destinations.map(d => `${icons[d]} ${d.charAt(0).toUpperCase() + d.slice(1)}`).join(', ');
-
+            
             statusDiv.textContent = `✅ Tavolo ${tableNumber}: ${minutes}min → ${destList}`;
             statusDiv.style.color = '#28a745';
-
+            
             setTimeout(() => {
                 if (!isContinuousListening) {
                     statusDiv.textContent = '"tavolo" seguito dal numero e minuti';
@@ -635,7 +573,7 @@
                 ws.onopen = () => {
                     console.log('🔗 WebSocket connesso');
                     isConnected = true;
-
+                    
                     // Pulisci eventuali tentativi di riconnessione
                     if (reconnectInterval) {
                         clearInterval(reconnectInterval);
@@ -661,13 +599,13 @@
                 ws.onmessage = (event) => {
                     try {
                         const data = JSON.parse(event.data);
-
+                        
                         // Gestisci ping/pong per heartbeat
                         if (data.action === 'ping') {
                             ws.send(JSON.stringify({ action: 'pong' }));
                             return;
                         }
-
+                        
                         if (data.action === 'startCountdown') {
                             console.log('📥 Countdown ricevuto via WebSocket:', data);
                             startCountdownVisual(data.tableNumber, data.timeRemaining, data.destination || 'cucina');
@@ -686,15 +624,9 @@
                         } else if (data.action === 'voiceMessage') {
                             console.log('📢 Messaggio vocale ricevuto:', data);
                             displayVoiceMessage(data);
-                        } else if (data.action === 'audioMessage') {
-                            console.log('🔊 Messaggio audio ricevuto:', data);
-                            displayAudioMessage(data);
                         } else if (data.action === 'deleteVoiceMessage') {
                             console.log('🗑️ Eliminazione messaggio vocale ricevuta:', data);
                             removeVoiceMessage(data.messageId);
-                        } else if (data.action === 'deleteAudioMessage') {
-                            console.log('🗑️ Eliminazione messaggio audio ricevuta:', data);
-                            removeAudioMessage(data.messageId);
                         }
                     } catch (error) {
                         console.error('Errore nel parsing del messaggio WebSocket:', error);
@@ -706,7 +638,7 @@
                     isConnected = false;
                     stopHeartbeat();
                     updateConnectionStatus(false);
-
+                    
                     // Avvia riconnessione automatica
                     if (!reconnectInterval) {
                         console.log('🔄 Avvio riconnessione automatica...');
@@ -762,7 +694,7 @@
                 `;
                 document.body.appendChild(status);
             }
-
+            
             const status = document.getElementById('connection-status');
             if (connected) {
                 status.textContent = '🟢 Connesso';
@@ -770,7 +702,6 @@
                 status.style.color = '#155724';
                 status.style.border = '1px solid #c3e6cb';
             } else {
-```text
                 status.textContent = '🔴 Disconnesso - Riconnessione...';
                 status.style.backgroundColor = '#f8d7da';
                 status.style.color = '#721c24';
@@ -1244,7 +1175,7 @@
                         console.log(`✅ Comando riconosciuto: Tavolo ${tableNumber}, ${minutes} minuti`);
 
                         document.getElementById('numeroTavolo').value = tableNumber;
-
+                        
                         // Per il comando vocale, usa automaticamente "cucina" come destinazione di default
                         // Se ci sono destinazioni selezionate manualmente, usale; altrimenti usa cucina
                         if (selectedDestinations.length > 0) {
@@ -1281,32 +1212,6 @@
 
         document.addEventListener('DOMContentLoaded', function() {
             console.log('🎤 Pagina caricata - Riconoscimento vocale continuo disponibile');
-            
-            // Test elementi tastiera
-            const keyboardElement = document.getElementById('keyboard');
-            const inputElement = document.getElementById('numeroTavolo');
-            
-            console.log('🔢 Test tastiera virtuale:');
-            console.log('- Keyboard element:', keyboardElement);
-            console.log('- Input element:', inputElement);
-            console.log('- Numero tasti:', keyboardElement ? keyboardElement.querySelectorAll('.key').length : 'N/A');
-            
-            if (!keyboardElement) {
-                console.error('❌ Elemento keyboard non trovato!');
-            }
-            if (!inputElement) {
-                console.error('❌ Elemento numeroTavolo non trovato!');
-            }
-            
-            // Test click su primo tasto
-            if (keyboardElement && inputElement) {
-                const firstKey = keyboardElement.querySelector('.key');
-                if (firstKey) {
-                    console.log('✅ Primo tasto trovato:', firstKey.textContent);
-                } else {
-                    console.error('❌ Nessun tasto .key trovato nella tastiera!');
-                }
-            }
 
             setInterval(() => {
                 if (isContinuousListening && continuousRecognition) {
@@ -1332,7 +1237,7 @@
         function displayVoiceMessage(messageData) {
             const messagesList = document.getElementById('voice-messages-list');
             const messagesContainerElement = document.getElementById('messagesContainer');
-
+            
             // 🎯 Mostra il container dei messaggi quando arriva il primo messaggio
             if (messagesContainerElement.style.display === 'none') {
                 messagesContainerElement.style.display = 'flex';
@@ -1390,7 +1295,7 @@
             if (messageAlert) {
                 messageAlert.play().catch(error => {
                     console.log('⚠️ Errore riproduzione allarme messaggio:', error);
-
+                    
                     // Fallback: suono generato se l'audio non funziona
                     try {
                         const audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -1432,7 +1337,7 @@
             const messagesContainer = document.getElementById('voice-messages-container');
             messagesContainer.style.border = '2px solid #ff6b6b';
             messagesContainer.style.animation = 'pulse 2s ease-in-out 3';
-
+            
             // Aggiungi CSS per l'animazione pulse se non esiste
             if (!document.getElementById('pulseAnimation')) {
                 const style = document.createElement('style');
@@ -1477,7 +1382,7 @@
             const messageElement = document.getElementById(`voice-message-${messageId}`);
             if (messageElement) {
                 messageElement.style.animation = 'slideOut 0.3s ease-out';
-
+                
                 // Aggiungi animazione di uscita se non esiste
                 if (!document.getElementById('slideOutAnimation')) {
                     const style = document.createElement('style');
@@ -1499,7 +1404,7 @@
                     // 🎯 Se non ci sono più messaggi, nascondi il container
                     const messagesList = document.getElementById('voice-messages-list');
                     const messagesContainerElement = document.getElementById('messagesContainer');
-
+                    
                     if (messagesList.children.length === 0) {
                         messagesContainerElement.style.display = 'none';
                         console.log('📦 Container messaggi nascosto (nessun messaggio)');
@@ -1507,399 +1412,6 @@
                 }, 300);
 
                 console.log(`🗑️ Messaggio vocale eliminato: ID ${messageId}`);
-            }
-        }
-
-        // Funzioni per la gestione dei messaggi audio
-        function displayAudioMessage(messageData) {
-            const messagesList = document.getElementById('voice-messages-list');
-            const messagesContainerElement = document.getElementById('messagesContainer');
-
-            // 🎯 Mostra il container dei messaggi quando arriva il primo messaggio
-            if (messagesContainerElement.style.display === 'none') {
-                messagesContainerElement.style.display = 'flex';
-                console.log('📦 Container messaggi mostrato per audio');
-            }
-
-            // Converti base64 in blob per riproduzione
-            const audioBlob = base64ToBlob(messageData.audioData, messageData.mimeType);
-            const audioUrl = URL.createObjectURL(audioBlob);
-
-            // Crea elemento messaggio audio
-            const messageElement = document.createElement('div');
-            messageElement.id = `audio-message-${messageData.messageId}`;
-            messageElement.style.cssText = `
-                background: white;
-                padding: 12px;
-                margin: 8px 0;
-                border-radius: 6px;
-                border-left: 3px solid #ff6b35;
-                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-                display: flex;
-                flex-direction: column;
-                animation: slideIn 0.3s ease-out;
-            `;
-
-            messageElement.innerHTML = `
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                    <div style="font-weight: 600; color: #ff6b35; font-size: 14px;">
-                        🔊 ${messageData.from} - ${messageData.timestamp}
-                    </div>
-                    <button onclick="deleteAudioMessage('${messageData.messageId}')" 
-                            style="background: #f44336; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 10px; transition: background 0.2s;">
-                        🗑️ Elimina
-                    </button>
-                </div>
-                <div style="display: flex; align-items: center; gap: 10px;">
-                    <audio controls style="flex: 1; height: 32px;">
-                        <source src="${audioUrl}" type="${messageData.mimeType}">
-                        Il tuo browser non supporta l'elemento audio.
-                    </audio>
-                    <button onclick="playAudio('${messageData.messageId}')" 
-                            style="background: #28a745; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; transition: background 0.2s;">
-                        ▶️ Riproduci
-                    </button>
-                </div>
-            `;
-
-            // Aggiungi animazione CSS se non esiste
-            if (!document.getElementById('messageAnimations')) {
-                const style = document.createElement('style');
-                style.id = 'messageAnimations';
-                style.textContent = `
-                    @keyframes slideIn {
-                        from { opacity: 0; transform: translateX(-20px); }
-                        to { opacity: 1; transform: translateX(0); }
-                    }
-                `;
-                document.head.appendChild(style);
-            }
-
-            messagesList.appendChild(messageElement);
-
-            // Memorizza l'URL per la pulizia successiva
-            messageElement.audioUrl = audioUrl;
-
-            // 🔊 Riproduci allarme per nuovo messaggio audio
-            const messageAlert = document.getElementById('alertSound');
-            if (messageAlert) {
-                messageAlert.play().catch(error => {
-                    console.log('⚠️ Errore riproduzione allarme messaggio audio:', error);
-                });
-            }
-
-            // Animazione visiva per attirare l'attenzione
-            const messagesContainer = document.getElementById('voice-messages-container');
-            messagesContainer.style.border = '2px solid #ff6b35';
-            messagesContainer.style.animation = 'pulse 2s ease-in-out 3';
-
-            // Aggiungi CSS per l'animazione pulse se non esiste
-            if (!document.getElementById('pulseAnimation')) {
-                const style = document.createElement('style');
-                style.id = 'pulseAnimation';
-                style.textContent = `
-                    @keyframes pulse {
-                        0% { box-shadow: 0 0 0 0 rgba(255, 107, 53, 0.7); }
-                        70% { box-shadow: 0 0 0 10px rgba(255, 107, 53, 0); }
-                        100% { box-shadow: 0 0 0 0 rgba(255, 107, 53, 0); }
-                    }
-                `;
-                document.head.appendChild(style);
-            }
-
-            // Rimuovi l'effetto visivo dopo qualche secondo
-            setTimeout(() => {
-                messagesContainer.style.border = 'none';
-                messagesContainer.style.animation = '';
-            }, 6000);
-
-            console.log(`🔊 Messaggio audio visualizzato con allarme: ID ${messageData.messageId}`);
-        }
-
-        function playAudio(messageId) {
-            const messageElement = document.getElementById(`audio-message-${messageId}`);
-            if (messageElement) {
-                const audioElement = messageElement.querySelector('audio');
-                if (audioElement) {
-                    audioElement.currentTime = 0; // Riavvolgi all'inizio
-                    audioElement.play().catch(error => {
-                        console.error('❌ Errore riproduzione audio:', error);
-                        alert('Errore nella riproduzione audio. Prova a usare i controlli audio standard.');
-                    });
-                    console.log(`▶️ Riproduzione audio avviata: ID ${messageId}`);
-                }
-            }
-        }
-
-        function deleteAudioMessage(messageId) {
-            // Invia eliminazione via WebSocket
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                const deleteMessage = {
-                    action: 'deleteAudioMessage',
-                    messageId: messageId
-                };
-                ws.send(JSON.stringify(deleteMessage));
-                console.log(`📤 Eliminazione messaggio audio inviata: ID ${messageId}`);
-            } else {
-                console.error('❌ WebSocket non connesso per eliminazione messaggio audio');
-            }
-
-            // Rimuovi localmente
-            removeAudioMessage(messageId);
-        }
-
-        function removeAudioMessage(messageId) {
-            const messageElement = document.getElementById(`audio-message-${messageId}`);
-            if (messageElement) {
-                // Rilascia l'URL dell'audio per liberare memoria
-                if (messageElement.audioUrl) {
-                    URL.revokeObjectURL(messageElement.audioUrl);
-                }
-
-                messageElement.style.animation = 'slideOut 0.3s ease-out';
-
-                // Aggiungi animazione di uscita se non esiste
-                if (!document.getElementById('slideOutAnimation')) {
-                    const style = document.createElement('style');
-                    style.id = 'slideOutAnimation';
-                    style.textContent = `
-                        @keyframes slideOut {
-                            from { opacity: 1; transform: translateX(0); }
-                            to { opacity: 0; transform: translateX(20px); }
-                        }
-                    `;
-                    document.head.appendChild(style);
-                }
-
-                setTimeout(() => {
-                    if (messageElement && messageElement.parentNode) {
-                        messageElement.parentNode.removeChild(messageElement);
-                    }
-
-                    // 🎯 Se non ci sono più messaggi, nascondi il container
-                    const messagesList = document.getElementById('voice-messages-list');
-                    const messagesContainerElement = document.getElementById('messagesContainer');
-
-                    if (messagesList.children.length === 0) {
-                        messagesContainerElement.style.display = 'none';
-                        console.log('📦 Container messaggi nascosto (nessun messaggio audio)');
-                    }
-                }, 300);
-
-                console.log(`🗑️ Messaggio audio eliminato: ID ${messageId}`);
-            }
-        }
-
-        // Funzione utility per convertire base64 in blob
-        function base64ToBlob(base64Data, mimeType) {
-            const byteCharacters = atob(base64Data);
-            const byteNumbers = new Array(byteCharacters.length);
-
-            for (let i = 0; i < byteCharacters.length; i++) {
-                byteNumbers[i] = byteCharacters.charCodeAt(i);
-            }
-
-            const byteArray = new Uint8Array(byteNumbers);
-            return new Blob([byteArray], { type: mimeType });
-        }
-
-        // Sistema registrazione audio per cucina
-        let audioMediaRecorder = null;
-        let audioAudioChunks = [];
-        let isRecordingAudio = false;
-
-        async function startAudioMessage() {
-            // Previeni avvio multiplo
-            if (isRecordingAudio) return;
-
-            try {
-                // Richiedi accesso al microfono
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    audio: {
-                        echoCancellation: true,
-                        noiseSuppression: true,
-                        autoGainControl: true
-                    }
-                });
-
-                isRecordingAudio = true;
-                audioAudioChunks = [];
-                updateAudioMessageUI(true);
-
-                // Configura MediaRecorder
-                audioMediaRecorder = new MediaRecorder(stream, {
-                    mimeType: 'audio/webm;codecs=opus'
-                });
-
-                audioMediaRecorder.ondataavailable = (event) => {
-                    if (event.data.size > 0) {
-                        audioAudioChunks.push(event.data);
-                        console.log('📦 Chunk audio ricevuto:', event.data.size, 'bytes');
-                    }
-                };
-
-                audioMediaRecorder.onstop = () => {
-                    console.log('🛑 Registrazione audio completata');
-
-                    // Stop all microphone tracks
-                    stream.getTracks().forEach(track => track.stop());
-
-                    if (audioAudioChunks.length > 0) {
-                        processRecordedAudioMessage();
-                    } else {
-                        const statusDiv = document.getElementById('audio-message-status');
-                        statusDiv.textContent = '⚠️ Nessun audio';
-                        statusDiv.style.color = '#ffc107';
-
-                        setTimeout(() => {
-                            statusDiv.textContent = 'Premi e tieni premuto';
-                            statusDiv.style.color = '#666';
-                        }, 2000);
-                    }
-
-                    updateAudioMessageUI(false);
-                };
-
-                audioMediaRecorder.onerror = (event) => {
-                    console.error('❌ Errore MediaRecorder:', event.error);
-                    const statusDiv = document.getElementById('audio-message-status');
-                    statusDiv.textContent = `❌ Errore registrazione: ${event.error}`;
-                    statusDiv.style.color = '#dc3545';
-                    stopAudioMessage();
-                };
-
-                // Avvia registrazione
-                audioMediaRecorder.start(100); // Raccogli chunk ogni 100ms
-
-                const statusDiv = document.getElementById('audio-message-status');
-                statusDiv.textContent = '🔴 Registrando...';
-                statusDiv.style.color = '#dc3545';
-
-                console.log('🎤 Registrazione audio avviata');
-
-            } catch (error) {
-                console.error('❌ Errore accesso microfono:', error);
-                const statusDiv = document.getElementById('audio-message-status');
-                statusDiv.textContent = '❌ Impossibile accedere al microfono. Verifica i permessi.';
-                statusDiv.style.color = '#dc3545';
-                isRecordingAudio = false;
-                updateAudioMessageUI(false);
-            }
-        }
-
-        function stopAudioMessage() {
-            if (!isRecordingAudio || !audioMediaRecorder) return;
-
-            isRecordingAudio = false;
-
-            const statusDiv = document.getElementById('audio-message-status');
-            statusDiv.textContent = 'Elaborando...';
-            statusDiv.style.color = '#ffc107';
-
-            try {
-                if (audioMediaRecorder.state === 'recording') {
-                    audioMediaRecorder.stop();
-                }
-            } catch (error) {
-                console.error('❌ Errore stop registrazione:', error);
-                updateAudioMessageUI(false);
-            }
-        }
-
-        function processRecordedAudioMessage() {
-            const audioBlob = new Blob(audioAudioChunks, { type: 'audio/webm;codecs=opus' });
-            const audioSize = audioBlob.size;
-
-            console.log(`🔊 Audio blob creato: ${audioSize} bytes, tipo: ${audioBlob.type}`);
-
-            const statusDiv = document.getElementById('audio-message-status');
-            if (audioSize < 1000) { // Meno di 1KB probabilmente è troppo breve
-                statusDiv.textContent = '⚠️ Troppo breve';
-                statusDiv.style.color = '#ffc107';
-
-                setTimeout(() => {
-                    statusDiv.textContent = 'Premi e tieni premuto';
-                    statusDiv.style.color = '#666';
-                }, 2000);
-                return;
-            }
-
-            // Converti in base64 per l'invio via WebSocket
-            const reader = new FileReader();
-            reader.onload = function() {
-                const base64Audio = reader.result.split(',')[1]; // Rimuovi il prefisso data:
-                sendAudioMessageToDestination(base64Audio, audioBlob.type);
-            };
-            reader.onerror = function() {
-                console.error('❌ Errore conversione audio in base64');
-                const statusDiv = document.getElementById('audio-message-status');
-                statusDiv.textContent = '❌ Errore elaborazione audio';
-                statusDiv.style.color = '#dc3545';
-            };
-            reader.readAsDataURL(audioBlob);
-        }
-
-        function updateAudioMessageUI(isRecording) {
-            const button = document.getElementById('audio-message-button');
-            const statusDiv = document.getElementById('audio-message-status');
-
-            if (isRecording) {
-                button.textContent = '🔴 Registrando... Rilascia per inviare';
-                button.style.background = 'linear-gradient(135deg, #dc3545 0%, #c82333 100%)';
-                button.style.transform = 'scale(1.02)';
-                statusDiv.textContent = '🔴 Registrando...';
-                statusDiv.style.color = '#dc3545';
-            } else {
-                button.textContent = '🎤 Tieni Premuto per Registrare';
-                button.style.background = 'linear-gradient(135deg, #4caf50 0%, #45a049 100%)';
-                button.style.transform = 'scale(1)';
-
-                setTimeout(() => {
-                    if (!isRecordingAudio) {
-                        statusDiv.textContent = 'Premi e tieni premuto';
-                        statusDiv.style.color = '#666';
-                    }
-                }, 3000);
-            }
-        }
-
-        function sendAudioMessageToDestination(audioBase64, mimeType) {
-            if (!audioBase64) {
-                console.log('❌ Audio vuoto, non inviato');
-                return;
-            }
-
-            const destination = document.getElementById('audioDestinationSelect').value;
-            const messageId = Date.now().toString();
-
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                const audioMessageData = {
-                    action: 'audioMessage',
-                    audioData: audioBase64,
-                    mimeType: mimeType,
-                    messageId: messageId,
-                    from: 'Cucina',
-                    timestamp: new Date().toLocaleTimeString('it-IT'),
-                    destination: destination // Aggiungi destinazione
-                };
-
-                ws.send(JSON.stringify(audioMessageData));
-                console.log('🔊 Messaggio audio inviato - ID:', messageId, 'Destinazione:', destination, 'Dimensione:', audioBase64.length, 'caratteri');
-
-                const statusDiv = document.getElementById('audio-message-status');
-                const destinationText = destination === 'all' ? 'Pizzeria + Insalata' : 
-                                      destination === 'pizzeria' ? 'Pizzeria' : 'Insalata';
-                statusDiv.textContent = `✅ Inviato a ${destinationText}!`;
-                statusDiv.style.color = '#28a745';
-
-                // Reset dopo 3 secondi
-                setTimeout(() => {
-                    statusDiv.textContent = 'Premi e tieni premuto';
-                    statusDiv.style.color = '#666';
-                }, 3000);
-            } else {
-                console.error('❌ WebSocket non connesso per messaggio audio');
-                alert('⚠️ Connessione persa. Impossibile inviare il messaggio audio.');
             }
         }
     </script>

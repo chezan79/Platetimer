@@ -96,70 +96,25 @@
             transform: translateY(-2px);
             box-shadow: 0 5px 15px rgba(108, 117, 125, 0.3);
         }
-
-        /* Stili per i messaggi audio */
-        .audio-message {
-            margin: 10px 0;
-            padding: 10px;
-            border: 1px solid #ccc;
-            border-radius: 5px;
-            background-color: #f9f9f9;
-        }
-
-        .audio-message audio {
-            width: 100%;
-        }
     </style>
 </head>
 <body>
-    <!-- Container per nome azienda e messaggio audio in alto a sinistra -->
-    <div style="position: absolute; top: 20px; left: 20px; z-index: 1000; display: flex; gap: 15px; align-items: center;">
-        <!-- Nome Azienda -->
-        <div id="company-header" style="padding: 10px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; border-left: 4px solid #28a745;">
-            <h4 id="company-name" style="margin: 0; color: #333; font-weight: 600;">Nome Azienda</h4>
-        </div>
-        
-        <!-- Sistema messaggio audio standardizzato -->
-        <div style="padding: 12px; background: linear-gradient(135deg, #e8f5e8 0%, #c8e6c9 100%); border-radius: 8px; border-left: 4px solid #4caf50; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);">
-
-            
-            <!-- Container orizzontale per selezione destinazione e pulsante -->
-            <div style="display: flex; gap: 10px; align-items: center;">
-                <!-- Selezione destinazione -->
-                <div style="flex: 1;">
-                    <label style="font-size: 11px; color: #666; display: block; margin-bottom: 4px;"></label>
-                    <select id="audioDestinationSelect" style="width: 100%; padding: 4px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px;">
-                        <option value="cucina">🍳 Cucina</option>
-                        <option value="pizzeria">🍕 Pizzeria</option>
-                        <option value="all">📢 Tutti (Cucina + Pizzeria)</option>
-                    </select>
-                </div>
-                
-                <!-- Pulsante registrazione -->
-                <div style="flex: 1;">
-                    <button 
-                        onmousedown="startAudioMessage()" 
-                        onmouseup="stopAudioMessage()" 
-                        onmouseleave="stopAudioMessage()"
-                        ontouchstart="startAudioMessage()" 
-                        ontouchend="stopAudioMessage()"
-                        id="audio-message-button" 
-                        style="width: 100%; padding: 8px; background: linear-gradient(135deg, #4caf50 0%, #45a049 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600; transition: all 0.3s ease; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;">
-                        🎤 Invia messaggio
-                    </button>
-                </div>
-            </div>
-            
-        </div>
+    <!-- Nome Azienda fuori dal container in alto a sinistra -->
+    <div id="company-header" style="position: absolute; top: 20px; left: 20px; z-index: 1000; padding: 10px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; border-left: 4px solid #28a745;">
+        <h4 id="company-name" style="margin: 0; color: #333; font-weight: 600;">Nome Azienda</h4>
     </div>
-
+    
+    <!-- Logo posizionato in alto al centro -->
+    <div style="position: absolute; top: 20px; left: 50%; transform: translateX(-50%); z-index: 1000;">
+        <a href="https://imgbox.com/Bt6wfdF9" target="_blank">
+            <img src="https://thumbs2.imgbox.com/3b/04/Bt6wfdF9_t.jpg" alt="MealMaster Logo" style="width: 120px; height: auto;">
+        </a>
+    </div>
+    
     <div class="countdown-container">
         <h1>🥗 Insalata</h1>
         <div id="tavoli">
             <!-- I countdown sincronizzati appariranno qui -->
-        </div>
-        <div id="audio-messages-container">
-            <!-- I messaggi audio appariranno qui -->
         </div>
     </div>
 
@@ -176,11 +131,6 @@
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
         const countdowns = [];
-        
-        // Sistema registrazione audio standardizzato
-        let audioMediaRecorder = null;
-        let audioAudioChunks = [];
-        let isRecordingAudio = false;
 
         ws.onopen = () => {
             // Unisciti alla room dell'azienda
@@ -205,12 +155,12 @@
         ws.onmessage = (event) => {
             try {
                 const data = JSON.parse(event.data);
-
+                
                 if (data.action === 'ping') {
                     ws.send(JSON.stringify({ action: 'pong' }));
                     return;
                 }
-
+                
                 if (data.action === 'startCountdown') {
                     console.log('📥 Countdown ricevuto in insalata:', data);
                     // Mostra solo i countdown destinati all'insalata
@@ -223,15 +173,6 @@
                 } else if (data.action === 'deleteCountdown') {
                     console.log(`🗑️ Eliminazione countdown in insalata: Tavolo ${data.tableNumber}`);
                     deleteCountdown(data.tableNumber);
-                } else if (data.action === 'audioMessage') {
-                    console.log('🔊 Messaggio audio ricevuto in insalata:', data);
-                    // Mostra solo i messaggi destinati a questa pagina o a tutti
-                    if (!data.destination || data.destination === 'insalata' || data.destination === 'all') {
-                        displayAudioMessage(data);
-                    }
-                } else if (data.action === 'deleteAudioMessage') {
-                    console.log('🗑️ Eliminazione messaggio audio ricevuta in insalata:', data);
-                    removeAudioMessage(data.messageId);
                 }
             } catch (error) {
                 console.error('Errore nel parsing del messaggio:', error);
@@ -341,257 +282,6 @@
             const minutes = Math.floor(seconds / 60);
             const remainingSeconds = seconds % 60;
             return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
-        }
-
-        // Sistema registrazione audio standardizzato
-        async function startAudioMessage() {
-            // Previeni avvio multiplo
-            if (isRecordingAudio) return;
-
-            try {
-                // Richiedi accesso al microfono
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    audio: {
-                        echoCancellation: true,
-                        noiseSuppression: true,
-                        autoGainControl: true
-                    }
-                });
-
-                isRecordingAudio = true;
-                audioAudioChunks = [];
-                updateAudioMessageUI(true);
-
-                // Configura MediaRecorder
-                audioMediaRecorder = new MediaRecorder(stream, {
-                    mimeType: 'audio/webm;codecs=opus'
-                });
-
-                audioMediaRecorder.ondataavailable = (event) => {
-                    if (event.data.size > 0) {
-                        audioAudioChunks.push(event.data);
-                        console.log('📦 Chunk audio ricevuto:', event.data.size, 'bytes');
-                    }
-                };
-
-                audioMediaRecorder.onstop = () => {
-                    console.log('🛑 Registrazione audio completata');
-                    
-                    // Stop all microphone tracks
-                    stream.getTracks().forEach(track => track.stop());
-                    
-                    if (audioAudioChunks.length > 0) {
-                        processRecordedAudioMessage();
-                    } else {
-                        const statusDiv = document.getElementById('audio-message-status');
-                        statusDiv.textContent = '⚠️ Nessun audio registrato';
-                        statusDiv.style.color = '#ffc107';
-                        
-                        setTimeout(() => {
-                            statusDiv.textContent = 'Premi e tieni premuto';
-                            statusDiv.style.color = '#666';
-                        }, 2000);
-                    }
-                    
-                    updateAudioMessageUI(false);
-                };
-
-                audioMediaRecorder.onerror = (event) => {
-                    console.error('❌ Errore MediaRecorder:', event.error);
-                    const statusDiv = document.getElementById('audio-message-status');
-                    statusDiv.textContent = `❌ Errore registrazione: ${event.error}`;
-                    statusDiv.style.color = '#dc3545';
-                    stopAudioMessage();
-                };
-
-                // Avvia registrazione
-                audioMediaRecorder.start(100); // Raccogli chunk ogni 100ms
-                
-                const statusDiv = document.getElementById('audio-message-status');
-                statusDiv.textContent = '🔴 Registrando...';
-                statusDiv.style.color = '#dc3545';
-                
-                console.log('🎤 Registrazione audio avviata');
-
-            } catch (error) {
-                console.error('❌ Errore accesso microfono:', error);
-                const statusDiv = document.getElementById('audio-message-status');
-                statusDiv.textContent = '❌ Impossibile accedere al microfono. Verifica i permessi.';
-                statusDiv.style.color = '#dc3545';
-                isRecordingAudio = false;
-                updateAudioMessageUI(false);
-            }
-        }
-
-        function stopAudioMessage() {
-            if (!isRecordingAudio || !audioMediaRecorder) return;
-
-            isRecordingAudio = false;
-            
-            const statusDiv = document.getElementById('audio-message-status');
-            statusDiv.textContent = 'Elaborando...';
-            statusDiv.style.color = '#ffc107';
-
-            try {
-                if (audioMediaRecorder.state === 'recording') {
-                    audioMediaRecorder.stop();
-                }
-            } catch (error) {
-                console.error('❌ Errore stop registrazione:', error);
-                updateAudioMessageUI(false);
-            }
-        }
-
-        function processRecordedAudioMessage() {
-            const audioBlob = new Blob(audioAudioChunks, { type: 'audio/webm;codecs=opus' });
-            const audioSize = audioBlob.size;
-            
-            console.log(`🔊 Audio blob creato: ${audioSize} bytes, tipo: ${audioBlob.type}`);
-            
-            if (audioSize < 1000) { // Meno di 1KB probabilmente è troppo breve
-                const statusDiv = document.getElementById('audio-message-status');
-                statusDiv.textContent = '⚠️ Messaggio troppo breve';
-                statusDiv.style.color = '#ffc107';
-                
-                setTimeout(() => {
-                    statusDiv.textContent = 'Premi e tieni premuto';
-                    statusDiv.style.color = '#666';
-                }, 2000);
-                return;
-            }
-
-            // Converti in base64 per l'invio via WebSocket
-            const reader = new FileReader();
-            reader.onload = function() {
-                const base64Audio = reader.result.split(',')[1]; // Rimuovi il prefisso data:
-                sendAudioMessageToDestination(base64Audio, audioBlob.type);
-            };
-            reader.onerror = function() {
-                console.error('❌ Errore conversione audio in base64');
-                const statusDiv = document.getElementById('audio-message-status');
-                statusDiv.textContent = '❌ Errore elaborazione audio';
-                statusDiv.style.color = '#dc3545';
-            };
-            reader.readAsDataURL(audioBlob);
-        }
-
-        function updateAudioMessageUI(isRecording) {
-            const button = document.getElementById('audio-message-button');
-            const statusDiv = document.getElementById('audio-message-status');
-
-            if (isRecording) {
-                button.textContent = '🔴 Registrando... Rilascia per inviare';
-                button.style.background = 'linear-gradient(135deg, #dc3545 0%, #c82333 100%)';
-                button.style.transform = 'scale(1.02)';
-                statusDiv.textContent = '🔴 Registrando...';
-                statusDiv.style.color = '#dc3545';
-            } else {
-                button.textContent = '🎤 Invia messaggio';
-                button.style.background = 'linear-gradient(135deg, #4caf50 0%, #45a049 100%)';
-                button.style.transform = 'scale(1)';
-                
-                setTimeout(() => {
-                    if (!isRecordingAudio) {
-                        statusDiv.textContent = 'Premi e tieni premuto';
-                        statusDiv.style.color = '#666';
-                    }
-                }, 3000);
-            }
-        }
-
-        function sendAudioMessageToDestination(audioBase64, mimeType) {
-            if (!audioBase64) {
-                console.log('❌ Audio vuoto, non inviato');
-                return;
-            }
-
-            const destination = document.getElementById('audioDestinationSelect').value;
-            const messageId = Date.now().toString();
-            
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                const audioMessageData = {
-                    action: 'audioMessage',
-                    audioData: audioBase64,
-                    mimeType: mimeType,
-                    messageId: messageId,
-                    from: 'Insalata',
-                    timestamp: new Date().toLocaleTimeString('it-IT'),
-                    destination: destination
-                };
-                
-                ws.send(JSON.stringify(audioMessageData));
-                console.log('🔊 Messaggio audio inviato - ID:', messageId, 'Destinazione:', destination, 'Dimensione:', audioBase64.length, 'caratteri');
-                
-                const statusDiv = document.getElementById('audio-message-status');
-                const destinationText = destination === 'all' ? 'Cucina + Pizzeria' : 
-                                      destination === 'cucina' ? 'Cucina' : 'Pizzeria';
-                statusDiv.textContent = `✅ Inviato a ${destinationText}!`;
-                statusDiv.style.color = '#28a745';
-                
-                // Reset dopo 3 secondi
-                setTimeout(() => {
-                    statusDiv.textContent = 'Premi e tieni premuto';
-                    statusDiv.style.color = '#666';
-                }, 3000);
-            } else {
-                console.error('❌ WebSocket non connesso per messaggio audio');
-                alert('⚠️ Connessione persa. Impossibile inviare il messaggio audio.');
-            }
-        }
-
-        function displayAudioMessage(data) {
-            const audioData = data.audioData;
-            const contentType = data.contentType;
-            const messageId = data.messageId;
-
-            const audioBlob = base64ToBlob(audioData, contentType);
-            const audioUrl = URL.createObjectURL(audioBlob);
-
-            const messageContainer = document.createElement('div');
-            messageContainer.classList.add('audio-message');
-            messageContainer.id = `audio-message-${messageId}`;
-
-            const audio = document.createElement('audio');
-            audio.src = audioUrl;
-            audio.controls = true;
-
-            const deleteButton = document.createElement('button');
-            deleteButton.textContent = 'Elimina';
-            deleteButton.onclick = () => {
-                ws.send(JSON.stringify({
-                    action: 'deleteAudioMessage',
-                    messageId: messageId
-                }));
-            };
-
-            messageContainer.appendChild(audio);
-            messageContainer.appendChild(deleteButton);
-
-            const container = document.getElementById('audio-messages-container');
-            container.appendChild(messageContainer);
-        }
-
-        function removeAudioMessage(messageId) {
-            const messageElement = document.getElementById(`audio-message-${messageId}`);
-            if (messageElement) {
-                messageElement.parentNode.removeChild(messageElement);
-            }
-        }
-
-        function base64ToBlob(base64, contentType) {
-            const byteCharacters = atob(base64);
-            const byteArrays = [];
-
-            for (let offset = 0; offset < byteCharacters.length; offset += 512) {
-                const slice = byteCharacters.slice(offset, offset + 512);
-                const byteNumbers = new Array(slice.length);
-                for (let i = 0; i < slice.length; i++) {
-                    byteNumbers[i] = slice.charCodeAt(i);
-                }
-                const byteArray = new Uint8Array(byteNumbers);
-                byteArrays.push(byteArray);
-            }
-            return new Blob(byteArrays, { type: contentType });
         }
     </script>
     <script src="company-header.js"></script>
