@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Insalata</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        body {
+            background: linear-gradient(135deg, #F0FFFF 0%, #E6E6FA 100%);
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .countdown-container {
+            max-width: 800px;
+            width: 100%;
+            background: white;
+            padding: 40px;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 28px;
+            font-weight: 300;
+        }
+
+        .countdown-item {
+            margin: 8px 0;
+            padding: 12px 15px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background-color: #f8f9fa;
+            transition: background-color 0.3s, transform 0.2s, box-shadow 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            min-height: 50px;
+        }
+
+        .countdown-item:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .countdown-table {
+            flex: 0 0 auto;
+            margin-right: 15px;
+        }
+
+        .countdown-table h3 {
+            margin: 0;
+            color: #333;
+            font-size: 22px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .countdown-time {
+            flex: 1;
+            text-align: center;
+        }
+
+        .countdown-time p {
+            margin: 0;
+            font-size: 22px;
+            color: #d9534f;
+            font-weight: bold;
+        }
+
+        button {
+            padding: 15px 30px;
+            background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin-top: 20px;
+            display: block;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(108, 117, 125, 0.3);
+        }
+    </style>
+</head>
+<body>
+    <!-- Nome Azienda fuori dal container in alto a sinistra -->
+    <div id="company-header" style="position: absolute; top: 20px; left: 20px; z-index: 1000; padding: 10px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; border-left: 4px solid #28a745;">
+        <h4 id="company-name" style="margin: 0; color: #333; font-weight: 600;">Nome Azienda</h4>
+    </div>
+    
+    <!-- Logo posizionato in alto al centro -->
+    <div style="position: absolute; top: 20px; left: 50%; transform: translateX(-50%); z-index: 1000;">
+        <a href="https://imgbox.com/Bt6wfdF9" target="_blank">
+            <img src="https://thumbs2.imgbox.com/3b/04/Bt6wfdF9_t.jpg" alt="MealMaster Logo" style="width: 120px; height: auto;">
+        </a>
+    </div>
+    
+    <!-- Container dedicato per i messaggi della pizzeria - posizionato in alto a destra (inizialmente nascosto) -->
+    <div id="messagesContainer" style="position: fixed; top: 100px; right: 20px; width: 280px; max-width: 280px; z-index: 500; background: white; padding: 15px; border-radius: 10px; box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15); display: none; flex-direction: column; max-height: 60vh; overflow-y: auto;">
+        <div id="voice-messages-container" style="padding: 12px; background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-radius: 8px; border-left: 4px solid #2196f3;">
+            <h3 style="margin: 0 0 12px 0; color: #1976d2; font-size: 16px;">📢 Messaggi Pizzeria</h3>
+            <div id="voice-messages-list">
+                <!-- I messaggi appariranno qui dinamicamente -->
+            </div>
+        </div>
+    </div>
+
+    <div class="countdown-container">
+        <h1>🥗 Insalata</h1>
+        <div id="tavoli">
+            <!-- I countdown sincronizzati appariranno qui -->
+        </div>
+    </div>
+
+    <audio id="alertSound" src="alerte-346112.mp3" preload="auto"></audio>
+    <audio id="zeroSound" src="costa-rica-eas-alarm-346194.mp3" preload="auto"></audio>
+
+    <!-- Tasto Home in alto a destra -->
+    <div style="position: absolute; top: 20px; right: 20px; z-index: 1000; display: flex; gap: 10px;">
+        <button onclick="window.location.href='home.html'" style="padding: 6px 12px; background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500; transition: transform 0.2s, box-shadow 0.2s;">🏠 Home</button>
+        <button onclick="window.location.href='index.html'" style="padding: 6px 12px; background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500; transition: transform 0.2s, box-shadow 0.2s;">🚪 Esci</button>
+    </div>
+
+    <script>
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+        const countdowns = [];
+
+        ws.onopen = () => {
+            // Unisciti alla room dell'azienda
+            const companyName = localStorage.getItem('userCompany') || 'Nome Azienda';
+            const joinMessage = {
+                action: 'joinRoom',
+                companyName: companyName
+            };
+            ws.send(JSON.stringify(joinMessage));
+            console.log(`Insalata connessa alla room: ${companyName}`);
+        };
+
+        function sortCountdowns() {
+            countdowns.sort((a, b) => a.timeRemaining - b.timeRemaining);
+            const container = document.getElementById('tavoli');
+            container.innerHTML = '';
+            countdowns.forEach(countdown => {
+                container.appendChild(countdown.element);
+            });
+        }
+
+        ws.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                
+                if (data.action === 'ping') {
+                    ws.send(JSON.stringify({ action: 'pong' }));
+                    return;
+                }
+                
+                if (data.action === 'startCountdown') {
+                    console.log('📥 Countdown ricevuto in insalata:', data);
+                    // Mostra solo i countdown destinati all'insalata
+                    if (data.destination === 'insalata') {
+                        console.log(`✅ Countdown accettato per insalata - Tavolo: ${data.tableNumber}`);
+                        startCountdown(data.tableNumber, data.timeRemaining);
+                    } else {
+                        console.log(`🚫 Countdown ignorato - Destinazione: ${data.destination || 'undefined'}, Tavolo: ${data.tableNumber}`);
+                    }
+                } else if (data.action === 'deleteCountdown') {
+                    console.log(`🗑️ Eliminazione countdown in insalata: Tavolo ${data.tableNumber}`);
+                    deleteCountdown(data.tableNumber);
+                } else if (data.action === 'voiceMessage') {
+                    console.log('📢 Messaggio vocale ricevuto in insalata:', data);
+                    console.log('📍 Destinazione del messaggio:', data.destination);
+                    // Mostra solo i messaggi destinati all'insalata
+                    if (data.destination === 'insalata') {
+                        console.log('✅ Messaggio vocale accettato per insalata');
+                        displayVoiceMessage(data);
+                    } else {
+                        console.log(`🚫 Messaggio vocale ignorato - Destinazione: ${data.destination}`);
+                    }
+                } else if (data.action === 'deleteVoiceMessage') {
+                    console.log('🗑️ Eliminazione messaggio vocale ricevuta in insalata:', data);
+                    removeVoiceMessage(data.messageId);
+                }
+            } catch (error) {
+                console.error('Errore nel parsing del messaggio:', error);
+            }
+        };
+
+        function startCountdown(tableNumber, timeRemaining) {
+            // Rimuovi il vecchio countdown se esiste
+            const existingIndex = countdowns.findIndex(c => c.tableNumber == tableNumber);
+            if (existingIndex !== -1) {
+                clearInterval(countdowns[existingIndex].interval);
+                if (countdowns[existingIndex].element && countdowns[existingIndex].element.parentNode) {
+                    countdowns[existingIndex].element.parentNode.removeChild(countdowns[existingIndex].element);
+                }
+                countdowns.splice(existingIndex, 1);
+                console.log(`🔄 Countdown esistente per tavolo ${tableNumber} sostituito in insalata`);
+            }
+
+            const countdownElement = document.createElement('div');
+            countdownElement.id = `countdown-${tableNumber}`;
+            countdownElement.classList.add('countdown-item');
+
+            let remainingTime = parseInt(timeRemaining);
+
+            const countdown = {
+                tableNumber: tableNumber,
+                timeRemaining: remainingTime,
+                element: countdownElement,
+                interval: null
+            };
+            countdown.interval = setInterval(() => {
+                // Decrementa PRIMA come in cucina.html
+                remainingTime--;
+                countdown.timeRemaining = remainingTime;
+
+                if (remainingTime <= 0) {
+                    clearInterval(countdown.interval);
+                    countdownElement.style.backgroundColor = '#ff4444';
+                    countdownElement.innerHTML = `
+                        <div class="countdown-table">
+                            <h3>Tavolo ${tableNumber}</h3>
+                        </div>
+                        <div class="countdown-time">
+                            <p>Tempo scaduto!</p>
+                        </div>
+                    `;
+
+                    // Riproduce il suono personalizzato per countdown a zero
+                    const zeroAudio = document.getElementById('zeroSound');
+                    if (zeroAudio) {
+                        zeroAudio.play().catch(e => console.log('Errore audio countdown zero:', e));
+                    }
+
+                    setTimeout(() => {
+                        const index = countdowns.indexOf(countdown);
+                        if (index > -1) {
+                            if (countdownElement && countdownElement.parentNode) {
+                                countdownElement.parentNode.removeChild(countdownElement);
+                            }
+                            countdowns.splice(index, 1);
+                            sortCountdowns();
+                        }
+                    }, 45000);
+                    return;
+                }
+
+                // Riordina ogni 5 secondi come in cucina.html
+                if (remainingTime % 5 === 0) {
+                    sortCountdowns();
+                }
+
+                if (remainingTime === 60) {
+                    countdownElement.style.backgroundColor = '#ffeb3b';
+                    const audio = document.getElementById('alertSound');
+                    if (audio) audio.play().catch(e => console.log('Errore audio:', e));
+                }
+
+                countdownElement.innerHTML = `
+                    <div class="countdown-table">
+                        <h3>Tavolo ${tableNumber}</h3>
+                    </div>
+                    <div class="countdown-time">
+                        <p>${formatTime(remainingTime)}</p>
+                    </div>
+                `;
+            }, 1000);
+
+            countdowns.push(countdown);
+            sortCountdowns();
+        }
+
+        function deleteCountdown(tableNumber) {
+            const countdownIndex = countdowns.findIndex(c => c.tableNumber == tableNumber);
+            if (countdownIndex !== -1) {
+                const countdown = countdowns[countdownIndex];
+                clearInterval(countdown.interval);
+                if (countdown.element && countdown.element.parentNode) {
+                    countdown.element.parentNode.removeChild(countdown.element);
+                }
+                countdowns.splice(countdownIndex, 1);
+                console.log(`🗑️ Countdown tavolo ${tableNumber} eliminato in insalata via WebSocket`);
+                sortCountdowns();
+            }
+        }
+
+        function formatTime(seconds) {
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = seconds % 60;
+            return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+        }
+
+        // Gestione messaggi vocali
+        function displayVoiceMessage(messageData) {
+            const messagesList = document.getElementById('voice-messages-list');
+            const messagesContainerElement = document.getElementById('messagesContainer');
+            
+            // Mostra il container dei messaggi quando arriva il primo messaggio
+            if (messagesContainerElement.style.display === 'none') {
+                messagesContainerElement.style.display = 'flex';
+                console.log('📦 Container messaggi mostrato in insalata');
+            }
+
+            // Crea elemento messaggio
+            const messageElement = document.createElement('div');
+            messageElement.id = `voice-message-${messageData.messageId}`;
+            messageElement.style.cssText = `
+                background: white;
+                padding: 12px;
+                margin: 8px 0;
+                border-radius: 6px;
+                border-left: 3px solid #28a745;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                display: flex;
+                flex-direction: column;
+                animation: slideIn 0.3s ease-out;
+            `;
+
+            // Crea contenuto con audio se disponibile
+            let audioControls = '';
+            if (messageData.hasAudio && messageData.audioData) {
+                const audioId = `audio-${messageData.messageId}`;
+                const audioSize = messageData.audioSize ? `(${Math.round(messageData.audioSize/1024)}KB)` : '';
+                audioControls = `
+                    <div style="margin: 8px 0; background: #f0f8ff; padding: 8px; border-radius: 4px; border: 1px solid #28a745;">
+                        <div style="font-size: 12px; color: #28a745; margin-bottom: 4px;">🎤 Messaggio Audio ${audioSize}</div>
+                        <audio id="${audioId}" controls style="width: 100%; height: 35px;">
+                            <source src="data:audio/webm;base64,${messageData.audioData}" type="audio/webm">
+                            <source src="data:audio/wav;base64,${messageData.audioData}" type="audio/wav">
+                            Il tuo browser non supporta l'audio.
+                        </audio>
+                        <div style="margin-top: 4px;">
+                            <button onclick="playVoiceMessage('${audioId}')" 
+                                    style="background: #28a745; color: white; border: none; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-size: 11px; margin-right: 5px;">
+                                🔊 Riproduci
+                            </button>
+                            <button onclick="replayVoiceMessage('${audioId}')" 
+                                    style="background: #17a2b8; color: white; border: none; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-size: 11px;">
+                                🔄 Ripeti
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }
+
+            messageElement.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                    <div style="flex: 1;">
+                        <div style="font-weight: 600; color: #1976d2; font-size: 14px; margin-bottom: 4px;">
+                            ${messageData.from} - ${messageData.timestamp}
+                        </div>
+                        <div style="color: #333; font-size: 16px; line-height: 1.4; margin-bottom: 8px;">
+                            ${messageData.message}
+                        </div>
+                        ${audioControls}
+                    </div>
+                    <button onclick="deleteVoiceMessage('${messageData.messageId}')" 
+                            style="background: #f44336; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; margin-left: 10px; transition: background 0.2s; align-self: flex-start;">
+                        🗑️ Elimina
+                    </button>
+                </div>
+            `;
+
+            messagesList.appendChild(messageElement);
+
+            // Riproduci allarme per nuovo messaggio
+            const messageAlert = document.getElementById('alertSound');
+            if (messageAlert) {
+                messageAlert.play().catch(error => {
+                    console.log('⚠️ Errore riproduzione allarme messaggio in insalata:', error);
+                });
+            }
+
+            console.log(`📢 🔊 Messaggio vocale visualizzato in insalata: "${messageData.message}"`);
+            
+            // Auto-riproduzione se c'è audio
+            if (messageData.hasAudio && messageData.audioData) {
+                setTimeout(() => {
+                    const audioId = `audio-${messageData.messageId}`;
+                    playVoiceMessage(audioId);
+                }, 1000);
+            }
+        }
+
+        function playVoiceMessage(audioId) {
+            const audioElement = document.getElementById(audioId);
+            if (audioElement) {
+                audioElement.currentTime = 0; // Riavvolgi all'inizio
+                audioElement.play().catch(error => {
+                    console.log('⚠️ Errore riproduzione audio messaggio in insalata:', error);
+                    alert('⚠️ Impossibile riprodurre l\'audio. Clicca sui controlli audio.');
+                });
+            }
+        }
+
+        function replayVoiceMessage(audioId) {
+            const audioElement = document.getElementById(audioId);
+            if (audioElement) {
+                audioElement.currentTime = 0;
+                audioElement.play().catch(error => {
+                    console.log('⚠️ Errore riproduzione audio messaggio in insalata:', error);
+                });
+            }
+        }
+
+        function deleteVoiceMessage(messageId) {
+            // Invia eliminazione via WebSocket
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                const deleteMessage = {
+                    action: 'deleteVoiceMessage',
+                    messageId: messageId
+                };
+                ws.send(JSON.stringify(deleteMessage));
+                console.log(`📤 Eliminazione messaggio vocale inviata da insalata: ID ${messageId}`);
+            } else {
+                console.error('❌ WebSocket non connesso per eliminazione messaggio vocale in insalata');
+            }
+
+            // Rimuovi localmente
+            removeVoiceMessage(messageId);
+        }
+
+        function removeVoiceMessage(messageId) {
+            const messageElement = document.getElementById(`voice-message-${messageId}`);
+            if (messageElement) {
+                messageElement.remove();
+
+                // Se non ci sono più messaggi, nascondi il container
+                const messagesList = document.getElementById('voice-messages-list');
+                const messagesContainerElement = document.getElementById('messagesContainer');
+                
+                if (messagesList.children.length === 0) {
+                    messagesContainerElement.style.display = 'none';
+                    console.log('📦 Container messaggi nascosto in insalata (nessun messaggio)');
+                }
+
+                console.log(`🗑️ Messaggio vocale eliminato in insalata: ID ${messageId}`);
+            }
+        }
+    </script>
+    <script src="company-header.js"></script>
+
+</body>
+</html>
