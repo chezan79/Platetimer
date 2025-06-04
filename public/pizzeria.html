@@ -103,9 +103,26 @@
     <div id="company-header" style="position: absolute; top: 20px; left: 20px; z-index: 1000; padding: 10px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; border-left: 4px solid #dc3545; display:flex; align-items: center">
         <h4 id="company-name" style="margin: 0; color: #333; font-weight: 600;">Nome Azienda</h4>
         </div>
-    <!-- Sistema messaggio vocale per cucina posizionato a fianco company header -->
-    <div style="position: absolute; top: 20px; text-align: center; padding: 15px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 12px; border-left: 4px solid #007bff; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); min-width: 320px;">
-        <h3 style="margin: 0 0 10px 0; color: #333; font-size: 16px;">📢 Messaggio per la Cucina</h3>
+    <!-- Sistema messaggio vocale con scelta destinazione -->
+    <div style="position: absolute; top: 20px; left: 50%; transform: translateX(-50%); text-align: center; padding: 20px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 12px; border-left: 4px solid #007bff; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); min-width: 400px; z-index: 500;">
+        <h3 style="margin: 0 0 15px 0; color: #333; font-size: 18px;">📢 Messaggio Vocale</h3>
+        
+        <!-- Selezione destinazione -->
+        <div style="margin-bottom: 15px;">
+            <h4 style="margin: 0 0 8px 0; color: #555; font-size: 14px;">Invia a:</h4>
+            <div style="display: flex; justify-content: center; gap: 10px; flex-wrap: wrap;">
+                <button class="destination-btn" data-destination="cucina" style="padding: 8px 16px; background: linear-gradient(135deg, #28a745 0%, #20c997 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600; transition: all 0.3s ease;">
+                    🍳 Cucina
+                </button>
+                <button class="destination-btn" data-destination="insalata" style="padding: 8px 16px; background: linear-gradient(135deg, #17a2b8 0%, #20c997 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600; transition: all 0.3s ease;">
+                    🥗 Insalata
+                </button>
+                <button class="destination-btn" data-destination="both" style="padding: 8px 16px; background: linear-gradient(135deg, #6f42c1 0%, #e83e8c 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600; transition: all 0.3s ease;">
+                    📡 Entrambi
+                </button>
+            </div>
+        </div>
+
         <button 
             onmousedown="startVoiceMessage()" 
             onmouseup="stopVoiceMessage()" 
@@ -113,11 +130,14 @@
             ontouchstart="startVoiceMessage()" 
             ontouchend="stopVoiceMessage()"
             id="voice-message-button" 
-            style="padding: 12px 24px; background: linear-gradient(135deg, #007bff 0%, #0056b3 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: 600; margin: 5px; transition: all 0.3s ease; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;">
+            style="padding: 15px 30px; background: linear-gradient(135deg, #007bff 0%, #0056b3 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 18px; font-weight: 600; margin: 10px; transition: all 0.3s ease; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;">
             🎤 Tieni Premuto per Parlare
         </button>
-        <div id="voice-message-status" style="margin-top: 10px; font-size: 12px; color: #666; min-height: 16px;">
-            Tieni premuto il pulsante per registrare
+        <div id="voice-message-status" style="margin-top: 12px; font-size: 14px; color: #666; min-height: 20px;">
+            Seleziona destinazione e tieni premuto per registrare
+        </div>
+        <div id="selected-destinations" style="margin-top: 8px; font-size: 12px; color: #007bff; font-weight: 600;">
+            Nessuna destinazione selezionata
         </div>
     </div>
 
@@ -404,17 +424,112 @@
             return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
         }
 
-        // Sistema messaggio vocale con pulsante tieni premuto
+        // Sistema messaggio vocale con pulsante tieni premuto e audio
         let voiceRecognition = null;
         let isRecordingMessage = false;
         let currentTranscript = '';
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let selectedDestinations = [];
 
-        function startVoiceMessage() {
+        // Gestione selezione destinazioni
+        document.addEventListener('DOMContentLoaded', function() {
+            const destinationButtons = document.querySelectorAll('.destination-btn');
+            
+            destinationButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    const destination = this.getAttribute('data-destination');
+                    
+                    if (destination === 'both') {
+                        // Seleziona/deseleziona tutto
+                        if (selectedDestinations.includes('cucina') && selectedDestinations.includes('insalata')) {
+                            selectedDestinations = [];
+                            destinationButtons.forEach(btn => btn.classList.remove('selected'));
+                        } else {
+                            selectedDestinations = ['cucina', 'insalata'];
+                            destinationButtons.forEach(btn => btn.classList.add('selected'));
+                        }
+                    } else {
+                        // Toggle singola destinazione
+                        if (selectedDestinations.includes(destination)) {
+                            selectedDestinations = selectedDestinations.filter(d => d !== destination);
+                            this.classList.remove('selected');
+                        } else {
+                            selectedDestinations.push(destination);
+                            this.classList.add('selected');
+                        }
+                        
+                        // Aggiorna stato pulsante "Entrambi"
+                        const bothBtn = document.querySelector('[data-destination="both"]');
+                        if (selectedDestinations.includes('cucina') && selectedDestinations.includes('insalata')) {
+                            bothBtn.classList.add('selected');
+                        } else {
+                            bothBtn.classList.remove('selected');
+                        }
+                    }
+                    
+                    updateDestinationDisplay();
+                });
+            });
+
+            // Stile per pulsanti selezionati
+            const style = document.createElement('style');
+            style.textContent = `
+                .destination-btn.selected {
+                    transform: scale(1.05);
+                    box-shadow: 0 4px 12px rgba(0,123,255,0.4);
+                    border: 2px solid #fff;
+                }
+            `;
+            document.head.appendChild(style);
+        });
+
+        function updateDestinationDisplay() {
+            const displayDiv = document.getElementById('selected-destinations');
+            if (selectedDestinations.length === 0) {
+                displayDiv.textContent = 'Nessuna destinazione selezionata';
+                displayDiv.style.color = '#dc3545';
+            } else if (selectedDestinations.length === 1) {
+                const icons = { 'cucina': '🍳', 'insalata': '🥗' };
+                displayDiv.textContent = `${icons[selectedDestinations[0]]} ${selectedDestinations[0].charAt(0).toUpperCase() + selectedDestinations[0].slice(1)}`;
+                displayDiv.style.color = '#28a745';
+            } else {
+                displayDiv.textContent = '📡 Cucina e Insalata';
+                displayDiv.style.color = '#6f42c1';
+            }
+        }
+
+        async function startVoiceMessage() {
             // Previeni avvio multiplo
             if (isRecordingMessage) return;
 
+            // Verifica destinazioni selezionate
+            if (selectedDestinations.length === 0) {
+                alert('⚠️ Seleziona almeno una destinazione prima di registrare!');
+                return;
+            }
+
             if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
                 alert('Il riconoscimento vocale non è supportato in questo browser. Usa Chrome.');
+                return;
+            }
+
+            try {
+                // Avvia registrazione audio
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                audioChunks = [];
+
+                mediaRecorder.ondataavailable = event => {
+                    audioChunks.push(event.data);
+                };
+
+                mediaRecorder.start();
+                console.log('🎤 Registrazione audio avviata');
+
+            } catch (error) {
+                console.error('❌ Errore accesso microfono:', error);
+                alert('❌ Impossibile accedere al microfono. Verifica i permessi.');
                 return;
             }
 
@@ -531,6 +646,12 @@
 
             updateVoiceMessageUI(false);
 
+            // Ferma registrazione audio
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                mediaRecorder.stop();
+                mediaRecorder.stream.getTracks().forEach(track => track.stop());
+            }
+
             // ✅ Ferma immediatamente il riconoscimento per evitare ulteriori risultati
             if (voiceRecognition) {
                 try {
@@ -553,13 +674,15 @@
                     statusDiv.textContent = `✅ Messaggio pulito: "${finalMessage}"`;
                     statusDiv.style.color = '#28a745';
                     console.log(`📝 Messaggio finale pulito: "${finalMessage}" (era: "${currentTranscript.trim()}")`);
-                    sendVoiceMessage(finalMessage);
+                    
+                    // Invia sia testo che audio
+                    sendVoiceMessageWithAudio(finalMessage);
                 } else {
                     statusDiv.textContent = '⚠️ Nessun messaggio registrato';
                     statusDiv.style.color = '#ffc107';
 
                     setTimeout(() => {
-                        statusDiv.textContent = 'Tieni premuto il pulsante per registrare';
+                        statusDiv.textContent = 'Seleziona destinazione e tieni premuto per registrare';
                         statusDiv.style.color = '#666';
                     }, 2000);
                 }
@@ -627,6 +750,62 @@
             }
         }
 
+        function sendVoiceMessageWithAudio(message) {
+            if (!message.trim()) {
+                console.log('Messaggio vuoto, non inviato');
+                return;
+            }
+
+            // Aspetta che la registrazione audio sia completata
+            if (mediaRecorder) {
+                mediaRecorder.onstop = () => {
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                    const reader = new FileReader();
+                    
+                    reader.onloadend = () => {
+                        const audioData = reader.result.split(',')[1]; // Rimuovi prefisso data:audio/wav;base64,
+                        
+                        const messageId = Date.now().toString();
+
+                        // Invia a tutte le destinazioni selezionate
+                        selectedDestinations.forEach(destination => {
+                            if (ws && ws.readyState === WebSocket.OPEN) {
+                                const voiceMessageData = {
+                                    action: 'voiceMessage',
+                                    message: message.trim(),
+                                    messageId: `${messageId}_${destination}`,
+                                    from: 'Pizzeria',
+                                    destination: destination,
+                                    audioData: audioData,
+                                    hasAudio: true
+                                };
+
+                                ws.send(JSON.stringify(voiceMessageData));
+                                console.log(`📢 Messaggio vocale con audio inviato a ${destination}:`, message);
+                            }
+                        });
+
+                        const statusDiv = document.getElementById('voice-message-status');
+                        const destText = selectedDestinations.length === 1 ? 
+                            selectedDestinations[0] : 
+                            `${selectedDestinations.length} destinazioni`;
+                        statusDiv.textContent = `✅ Messaggio vocale inviato a ${destText}!`;
+                        statusDiv.style.color = '#28a745';
+
+                        setTimeout(() => {
+                            statusDiv.textContent = 'Seleziona destinazione e tieni premuto per registrare';
+                            statusDiv.style.color = '#666';
+                        }, 3000);
+                    };
+                    
+                    reader.readAsDataURL(audioBlob);
+                };
+            } else {
+                // Fallback: invia solo testo
+                sendVoiceMessage(message);
+            }
+        }
+
         function sendVoiceMessage(message) {
             if (!message.trim()) {
                 console.log('Messaggio vuoto, non inviato');
@@ -635,24 +814,33 @@
 
             const messageId = Date.now().toString();
 
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                const voiceMessageData = {
-                    action: 'voiceMessage',
-                    message: message.trim(),
-                    messageId: messageId,
-                    from: 'Pizzeria'
-                };
+            selectedDestinations.forEach(destination => {
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    const voiceMessageData = {
+                        action: 'voiceMessage',
+                        message: message.trim(),
+                        messageId: `${messageId}_${destination}`,
+                        from: 'Pizzeria',
+                        destination: destination,
+                        hasAudio: false
+                    };
 
-                ws.send(JSON.stringify(voiceMessageData));
-                console.log('📢 Messaggio vocale inviato:', message);
+                    ws.send(JSON.stringify(voiceMessageData));
+                    console.log(`📢 Messaggio testuale inviato a ${destination}:`, message);
+                }
+            });
 
-                const statusDiv = document.getElementById('voice-message-status');
-                statusDiv.textContent = '✅ Messaggio inviato alla cucina!';
-                statusDiv.style.color = '#28a745';
-            } else {
-                console.error('❌ WebSocket non connesso per messaggio vocale');
-                alert('⚠️ Connessione persa. Impossibile inviare il messaggio.');
-            }
+            const statusDiv = document.getElementById('voice-message-status');
+            const destText = selectedDestinations.length === 1 ? 
+                selectedDestinations[0] : 
+                `${selectedDestinations.length} destinazioni`;
+            statusDiv.textContent = `✅ Messaggio inviato a ${destText}!`;
+            statusDiv.style.color = '#28a745';
+
+            setTimeout(() => {
+                statusDiv.textContent = 'Seleziona destinazione e tieni premuto per registrare';
+                statusDiv.style.color = '#666';
+            }, 3000);
         }
     </script>
     <script src="company-header.js"></script>

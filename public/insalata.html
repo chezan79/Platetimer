@@ -111,6 +111,16 @@
         </a>
     </div>
     
+    <!-- Container dedicato per i messaggi della pizzeria - posizionato in alto a destra (inizialmente nascosto) -->
+    <div id="messagesContainer" style="position: fixed; top: 100px; right: 20px; width: 280px; max-width: 280px; z-index: 500; background: white; padding: 15px; border-radius: 10px; box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15); display: none; flex-direction: column; max-height: 60vh; overflow-y: auto;">
+        <div id="voice-messages-container" style="padding: 12px; background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-radius: 8px; border-left: 4px solid #2196f3;">
+            <h3 style="margin: 0 0 12px 0; color: #1976d2; font-size: 16px;">📢 Messaggi Pizzeria</h3>
+            <div id="voice-messages-list">
+                <!-- I messaggi appariranno qui dinamicamente -->
+            </div>
+        </div>
+    </div>
+
     <div class="countdown-container">
         <h1>🥗 Insalata</h1>
         <div id="tavoli">
@@ -173,6 +183,17 @@
                 } else if (data.action === 'deleteCountdown') {
                     console.log(`🗑️ Eliminazione countdown in insalata: Tavolo ${data.tableNumber}`);
                     deleteCountdown(data.tableNumber);
+                } else if (data.action === 'voiceMessage') {
+                    console.log('📢 Messaggio vocale ricevuto in insalata:', data);
+                    // Mostra solo i messaggi destinati all'insalata
+                    if (data.destination === 'insalata') {
+                        displayVoiceMessage(data);
+                    } else {
+                        console.log(`🚫 Messaggio vocale ignorato - Destinazione: ${data.destination}`);
+                    }
+                } else if (data.action === 'deleteVoiceMessage') {
+                    console.log('🗑️ Eliminazione messaggio vocale ricevuta in insalata:', data);
+                    removeVoiceMessage(data.messageId);
                 }
             } catch (error) {
                 console.error('Errore nel parsing del messaggio:', error);
@@ -282,6 +303,134 @@
             const minutes = Math.floor(seconds / 60);
             const remainingSeconds = seconds % 60;
             return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+        }
+
+        // Gestione messaggi vocali
+        function displayVoiceMessage(messageData) {
+            const messagesList = document.getElementById('voice-messages-list');
+            const messagesContainerElement = document.getElementById('messagesContainer');
+            
+            // Mostra il container dei messaggi quando arriva il primo messaggio
+            if (messagesContainerElement.style.display === 'none') {
+                messagesContainerElement.style.display = 'flex';
+                console.log('📦 Container messaggi mostrato in insalata');
+            }
+
+            // Crea elemento messaggio
+            const messageElement = document.createElement('div');
+            messageElement.id = `voice-message-${messageData.messageId}`;
+            messageElement.style.cssText = `
+                background: white;
+                padding: 12px;
+                margin: 8px 0;
+                border-radius: 6px;
+                border-left: 3px solid #28a745;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                display: flex;
+                flex-direction: column;
+                animation: slideIn 0.3s ease-out;
+            `;
+
+            // Crea contenuto con audio se disponibile
+            let audioControls = '';
+            if (messageData.hasAudio && messageData.audioData) {
+                const audioId = `audio-${messageData.messageId}`;
+                audioControls = `
+                    <div style="margin: 8px 0;">
+                        <audio id="${audioId}" controls style="width: 100%; height: 40px;">
+                            <source src="data:audio/wav;base64,${messageData.audioData}" type="audio/wav">
+                            Il tuo browser non supporta l'audio.
+                        </audio>
+                        <button onclick="playVoiceMessage('${audioId}')" 
+                                style="background: #28a745; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; margin-left: 5px;">
+                            🔊 Riproduci
+                        </button>
+                    </div>
+                `;
+            }
+
+            messageElement.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                    <div style="flex: 1;">
+                        <div style="font-weight: 600; color: #1976d2; font-size: 14px; margin-bottom: 4px;">
+                            ${messageData.from} - ${messageData.timestamp}
+                        </div>
+                        <div style="color: #333; font-size: 16px; line-height: 1.4; margin-bottom: 8px;">
+                            ${messageData.message}
+                        </div>
+                        ${audioControls}
+                    </div>
+                    <button onclick="deleteVoiceMessage('${messageData.messageId}')" 
+                            style="background: #f44336; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; margin-left: 10px; transition: background 0.2s; align-self: flex-start;">
+                        🗑️ Elimina
+                    </button>
+                </div>
+            `;
+
+            messagesList.appendChild(messageElement);
+
+            // Riproduci allarme per nuovo messaggio
+            const messageAlert = document.getElementById('alertSound');
+            if (messageAlert) {
+                messageAlert.play().catch(error => {
+                    console.log('⚠️ Errore riproduzione allarme messaggio in insalata:', error);
+                });
+            }
+
+            console.log(`📢 🔊 Messaggio vocale visualizzato in insalata: "${messageData.message}"`);
+            
+            // Auto-riproduzione se c'è audio
+            if (messageData.hasAudio && messageData.audioData) {
+                setTimeout(() => {
+                    const audioId = `audio-${messageData.messageId}`;
+                    playVoiceMessage(audioId);
+                }, 1000);
+            }
+        }
+
+        function playVoiceMessage(audioId) {
+            const audioElement = document.getElementById(audioId);
+            if (audioElement) {
+                audioElement.play().catch(error => {
+                    console.log('⚠️ Errore riproduzione audio messaggio in insalata:', error);
+                    alert('⚠️ Impossibile riprodurre l\'audio. Clicca sui controlli audio.');
+                });
+            }
+        }
+
+        function deleteVoiceMessage(messageId) {
+            // Invia eliminazione via WebSocket
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                const deleteMessage = {
+                    action: 'deleteVoiceMessage',
+                    messageId: messageId
+                };
+                ws.send(JSON.stringify(deleteMessage));
+                console.log(`📤 Eliminazione messaggio vocale inviata da insalata: ID ${messageId}`);
+            } else {
+                console.error('❌ WebSocket non connesso per eliminazione messaggio vocale in insalata');
+            }
+
+            // Rimuovi localmente
+            removeVoiceMessage(messageId);
+        }
+
+        function removeVoiceMessage(messageId) {
+            const messageElement = document.getElementById(`voice-message-${messageId}`);
+            if (messageElement) {
+                messageElement.remove();
+
+                // Se non ci sono più messaggi, nascondi il container
+                const messagesList = document.getElementById('voice-messages-list');
+                const messagesContainerElement = document.getElementById('messagesContainer');
+                
+                if (messagesList.children.length === 0) {
+                    messagesContainerElement.style.display = 'none';
+                    console.log('📦 Container messaggi nascosto in insalata (nessun messaggio)');
+                }
+
+                console.log(`🗑️ Messaggio vocale eliminato in insalata: ID ${messageId}`);
+            }
         }
     </script>
     <script src="company-header.js"></script>

@@ -36,6 +36,31 @@ try {
     console.error('❌ Errore configurazione Google Cloud Speech:', error.message);
 }
 
+// Endpoint per salvare messaggi vocali
+app.post('/api/voice-message', (req, res) => {
+    try {
+        const { audioData, messageId, destination, from } = req.body;
+        
+        if (!audioData || !messageId || !destination) {
+            return res.status(400).json({ error: 'Dati mancanti' });
+        }
+
+        // Salva temporaneamente i dati audio in memoria
+        // In produzione si potrebbe usare un database o storage
+        console.log(`🎤 Messaggio vocale ricevuto: ID ${messageId}, Da: ${from}, Per: ${destination}`);
+        
+        res.json({ 
+            success: true, 
+            messageId: messageId,
+            destination: destination 
+        });
+
+    } catch (error) {
+        console.error('❌ Errore salvataggio messaggio vocale:', error);
+        res.status(500).json({ error: 'Errore interno server' });
+    }
+});
+
 // Endpoint per il riconoscimento vocale
 app.post('/api/speech-to-text', async (req, res) => {
     try {
@@ -344,7 +369,15 @@ wss.on('connection', (ws) => {
                     return;
                 }
 
-                // Invia messaggio vocale a tutti i client della room
+                // Validazione destinazione
+                const validDestinations = ['cucina', 'insalata'];
+                const destination = data.destination;
+                if (!destination || !validDestinations.includes(destination)) {
+                    console.log('⚠️ Destinazione messaggio vocale non valida:', destination);
+                    return;
+                }
+
+                // Invia messaggio vocale solo ai client della destinazione specificata
                 if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
                     const roomClients = companyRooms.get(ws.companyRoom);
                     const voiceMessage = JSON.stringify({
@@ -352,7 +385,10 @@ wss.on('connection', (ws) => {
                         message: data.message,
                         messageId: data.messageId,
                         timestamp: new Date().toLocaleTimeString('it-IT'),
-                        from: data.from || 'Pizzeria'
+                        from: data.from || 'Pizzeria',
+                        destination: destination,
+                        audioData: data.audioData || null,
+                        hasAudio: data.hasAudio || false
                     });
 
                     let sentCount = 0;
@@ -363,7 +399,7 @@ wss.on('connection', (ws) => {
                         }
                     });
 
-                    console.log(`📢 Messaggio vocale inviato alla room "${ws.companyRoom}" (${sentCount}/${roomClients.size} client): "${data.message}"`);
+                    console.log(`📢 Messaggio vocale inviato alla room "${ws.companyRoom}" per destinazione "${destination}" (${sentCount}/${roomClients.size} client): "${data.message}"`);
                 } else {
                     console.log('⚠️ Client non assegnato a nessuna room per messaggio vocale');
                 }

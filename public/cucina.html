@@ -623,7 +623,12 @@
                             }
                         } else if (data.action === 'voiceMessage') {
                             console.log('📢 Messaggio vocale ricevuto:', data);
-                            displayVoiceMessage(data);
+                            // Mostra solo i messaggi destinati alla cucina
+                            if (data.destination === 'cucina') {
+                                displayVoiceMessage(data);
+                            } else {
+                                console.log(`🚫 Messaggio vocale ignorato - Destinazione: ${data.destination}`);
+                            }
                         } else if (data.action === 'deleteVoiceMessage') {
                             console.log('🗑️ Eliminazione messaggio vocale ricevuta:', data);
                             removeVoiceMessage(data.messageId);
@@ -1255,24 +1260,44 @@
                 border-left: 3px solid #2196f3;
                 box-shadow: 0 2px 4px rgba(0,0,0,0.1);
                 display: flex;
-                justify-content: space-between;
-                align-items: center;
+                flex-direction: column;
                 animation: slideIn 0.3s ease-out;
             `;
 
+            // Crea contenuto con audio se disponibile
+            let audioControls = '';
+            if (messageData.hasAudio && messageData.audioData) {
+                const audioId = `audio-${messageData.messageId}`;
+                audioControls = `
+                    <div style="margin: 8px 0;">
+                        <audio id="${audioId}" controls style="width: 100%; height: 40px;">
+                            <source src="data:audio/wav;base64,${messageData.audioData}" type="audio/wav">
+                            Il tuo browser non supporta l'audio.
+                        </audio>
+                        <button onclick="playVoiceMessage('${audioId}')" 
+                                style="background: #28a745; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; margin-left: 5px;">
+                            🔊 Riproduci
+                        </button>
+                    </div>
+                `;
+            }
+
             messageElement.innerHTML = `
-                <div style="flex: 1;">
-                    <div style="font-weight: 600; color: #1976d2; font-size: 14px; margin-bottom: 4px;">
-                        ${messageData.from} - ${messageData.timestamp}
+                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                    <div style="flex: 1;">
+                        <div style="font-weight: 600; color: #1976d2; font-size: 14px; margin-bottom: 4px;">
+                            ${messageData.from} - ${messageData.timestamp}
+                        </div>
+                        <div style="color: #333; font-size: 16px; line-height: 1.4; margin-bottom: 8px;">
+                            ${messageData.message}
+                        </div>
+                        ${audioControls}
                     </div>
-                    <div style="color: #333; font-size: 16px; line-height: 1.4;">
-                        ${messageData.message}
-                    </div>
+                    <button onclick="deleteVoiceMessage('${messageData.messageId}')" 
+                            style="background: #f44336; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; margin-left: 10px; transition: background 0.2s; align-self: flex-start;">
+                        🗑️ Elimina
+                    </button>
                 </div>
-                <button onclick="deleteVoiceMessage('${messageData.messageId}')" 
-                        style="background: #f44336; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; margin-left: 10px; transition: background 0.2s;">
-                    🗑️ Elimina
-                </button>
             `;
 
             // Aggiungi animazione CSS se non esiste
@@ -1359,6 +1384,24 @@
             }, 6000);
 
             console.log(`📢 🔊 Messaggio vocale visualizzato con allarme: "${messageData.message}"`);
+            
+            // 🔊 Auto-riproduzione se c'è audio
+            if (messageData.hasAudio && messageData.audioData) {
+                setTimeout(() => {
+                    const audioId = `audio-${messageData.messageId}`;
+                    playVoiceMessage(audioId);
+                }, 1000);
+            }
+        }
+
+        function playVoiceMessage(audioId) {
+            const audioElement = document.getElementById(audioId);
+            if (audioElement) {
+                audioElement.play().catch(error => {
+                    console.log('⚠️ Errore riproduzione audio messaggio:', error);
+                    alert('⚠️ Impossibile riprodurre l\'audio. Clicca sui controlli audio.');
+                });
+            }
         }
 
         function deleteVoiceMessage(messageId) {
