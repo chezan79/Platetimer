@@ -100,9 +100,29 @@
     </style>
 </head>
 <body>
-    <!-- Nome Azienda fuori dal container in alto a sinistra -->
-    <div id="company-header" style="position: absolute; top: 20px; left: 20px; z-index: 1000; padding: 10px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; border-left: 4px solid #dc3545;">
-        <h4 id="company-name" style="margin: 0; color: #333; font-weight: 600;">Nome Azienda</h4>
+    <!-- Container per nome azienda e messaggio vocale in alto a sinistra -->
+    <div style="position: absolute; top: 20px; left: 20px; z-index: 1000; display: flex; gap: 15px; align-items: center;">
+        <!-- Nome Azienda -->
+        <div id="company-header" style="padding: 10px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; border-left: 4px solid #dc3545;">
+            <h4 id="company-name" style="margin: 0; color: #333; font-weight: 600;">Nome Azienda</h4>
+        </div>
+        
+        <!-- Sistema messaggio vocale compatto -->
+        <div style="text-align: center; padding: 8px 12px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; border-left: 4px solid #007bff; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);">
+            <button 
+                onmousedown="startVoiceMessage()" 
+                onmouseup="stopVoiceMessage()" 
+                onmouseleave="stopVoiceMessage()"
+                ontouchstart="startVoiceMessage()" 
+                ontouchend="stopVoiceMessage()"
+                id="voice-message-button" 
+                style="padding: 6px 12px; background: linear-gradient(135deg, #007bff 0%, #0056b3 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;">
+                🎤 Audio
+            </button>
+            <div id="voice-message-status" style="margin-top: 4px; font-size: 10px; color: #666; min-height: 12px; max-width: 80px;">
+                Tieni premuto
+            </div>
+        </div>
     </div>
 
     <!-- Logo posizionato in alto al centro -->
@@ -120,23 +140,7 @@
         </div>
     </div>
 
-    <!-- Sistema messaggio vocale per cucina posizionato in basso -->
-    <div style="position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 1000; text-align: center; padding: 15px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 12px; border-left: 4px solid #007bff; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); min-width: 320px;">
-        <h3 style="margin: 0 0 10px 0; color: #333; font-size: 16px;">🔊 Messaggio Audio per la Cucina</h3>
-        <button 
-            onmousedown="startVoiceMessage()" 
-            onmouseup="stopVoiceMessage()" 
-            onmouseleave="stopVoiceMessage()"
-            ontouchstart="startVoiceMessage()" 
-            ontouchend="stopVoiceMessage()"
-            id="voice-message-button" 
-            style="padding: 12px 24px; background: linear-gradient(135deg, #007bff 0%, #0056b3 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: 600; margin: 5px; transition: all 0.3s ease; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;">
-            🎤 Tieni Premuto per Parlare
-        </button>
-        <div id="voice-message-status" style="margin-top: 10px; font-size: 12px; color: #666; min-height: 16px;">
-            Tieni premuto il pulsante per registrare audio
-        </div>
-    </div>
+    
 
     <audio id="alertSound" src="alerte-346112.mp3" preload="auto"></audio>
     <audio id="zeroSound" src="costa-rica-eas-alarm-346194.mp3" preload="auto"></audio>
@@ -480,7 +484,7 @@
                 mediaRecorder.start(100); // Raccogli chunk ogni 100ms
                 
                 const statusDiv = document.getElementById('voice-message-status');
-                statusDiv.textContent = '🎤 Registrando audio... Continua a tenere premuto!';
+                statusDiv.textContent = 'Registrando...';
                 statusDiv.style.color = '#dc3545';
                 
                 console.log('🎤 Registrazione audio avviata');
@@ -501,7 +505,7 @@
             isRecordingMessage = false;
             
             const statusDiv = document.getElementById('voice-message-status');
-            statusDiv.textContent = '🔄 Elaborando audio...';
+            statusDiv.textContent = 'Elaborando...';
             statusDiv.style.color = '#ffc107';
 
             try {
@@ -522,11 +526,11 @@
             
             if (audioSize < 1000) { // Meno di 1KB probabilmente è troppo breve
                 const statusDiv = document.getElementById('voice-message-status');
-                statusDiv.textContent = '⚠️ Messaggio troppo breve, riprova';
+                statusDiv.textContent = 'Troppo breve';
                 statusDiv.style.color = '#ffc107';
                 
                 setTimeout(() => {
-                    statusDiv.textContent = 'Tieni premuto il pulsante per registrare';
+                    statusDiv.textContent = 'Tieni premuto';
                     statusDiv.style.color = '#666';
                 }, 2000);
                 return;
@@ -552,17 +556,18 @@
             const statusDiv = document.getElementById('voice-message-status');
 
             if (isRecording) {
-                button.textContent = '🔴 Registrando Audio... (tieni premuto)';
+                button.textContent = '🔴 Rec...';
                 button.style.background = 'linear-gradient(135deg, #dc3545 0%, #c82333 100%)';
                 button.style.transform = 'scale(1.05)';
+                statusDiv.textContent = 'Registrando...';
             } else {
-                button.textContent = '🎤 Tieni Premuto per Registrare Audio';
+                button.textContent = '🎤 Audio';
                 button.style.background = 'linear-gradient(135deg, #007bff 0%, #0056b3 100%)';
                 button.style.transform = 'scale(1)';
                 
                 setTimeout(() => {
                     if (!isRecordingMessage) {
-                        statusDiv.textContent = 'Tieni premuto il pulsante per registrare audio';
+                        statusDiv.textContent = 'Tieni premuto';
                         statusDiv.style.color = '#666';
                     }
                 }, 3000);
@@ -591,12 +596,12 @@
                 console.log('🔊 Messaggio audio inviato - ID:', messageId, 'Dimensione:', audioBase64.length, 'caratteri');
                 
                 const statusDiv = document.getElementById('voice-message-status');
-                statusDiv.textContent = '✅ Messaggio audio inviato alla cucina!';
+                statusDiv.textContent = '✅ Inviato!';
                 statusDiv.style.color = '#28a745';
                 
                 // Reset dopo 3 secondi
                 setTimeout(() => {
-                    statusDiv.textContent = 'Tieni premuto il pulsante per registrare audio';
+                    statusDiv.textContent = 'Tieni premuto';
                     statusDiv.style.color = '#666';
                 }, 3000);
             } else {
