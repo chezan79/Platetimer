@@ -623,17 +623,27 @@
                         }
 
                         if (data.action === 'startCountdown') {
-                            console.log('📥 Countdown ricevuto via WebSocket:', data);
-                            console.log(`🔍 Destinazione ricevuta: "${data.destination}", Tavolo: ${data.tableNumber}`);
+                            console.log('📥 Countdown ricevuto via WebSocket in CUCINA:', JSON.stringify(data, null, 2));
+                            console.log(`🔍 Debug cucina - Destinazione: "${data.destination}" (tipo: ${typeof data.destination}), Tavolo: ${data.tableNumber}`);
 
-                            // Controllo RIGOROSO: mostra SOLO se destinazione è esplicitamente "cucina"
-                            if (data.destination !== 'cucina') {
-                                console.log(`🚫 Countdown IGNORATO in cucina - Destinazione: "${data.destination || 'undefined'}", Tavolo: ${data.tableNumber}`);
-                                return; // STOP: non elaborare se non è per cucina
+                            // CONTROLLO ULTRA-RIGOROSO: accetta SOLO se destinazione è ESATTAMENTE "cucina"
+                            if (!data.destination || data.destination.toString().toLowerCase().trim() !== 'cucina') {
+                                console.log(`🚫 CUCINA - Countdown RIFIUTATO COMPLETAMENTE`);
+                                console.log(`   ❌ Destinazione ricevuta: "${data.destination}"`);
+                                console.log(`   ❌ Tipo destinazione: ${typeof data.destination}`);
+                                console.log(`   ❌ Tavolo: ${data.tableNumber}`);
+                                console.log(`   ❌ QUESTO COUNTDOWN NON VERRÀ MOSTRATO IN CUCINA`);
+                                
+                                // BLOCCO ASSOLUTO - nessuna elaborazione
+                                return false;
                             }
 
-                            // Se arriviamo qui, la destinazione è sicuramente "cucina"
-                            console.log(`✅ Countdown accettato per cucina - Tavolo: ${data.tableNumber}`);
+                            // Solo se arriviamo qui, la destinazione è "cucina"
+                            console.log(`✅ CUCINA - Countdown ACCETTATO e MOSTRATO`);
+                            console.log(`   ✅ Destinazione verificata: "${data.destination}"`);
+                            console.log(`   ✅ Tavolo: ${data.tableNumber}`);
+                            console.log(`   ✅ Durata: ${data.timeRemaining}s`);
+                            
                             startCountdownVisual(data.tableNumber, data.timeRemaining, data.destination);
                         } else if (data.action === 'deleteCountdown') {
                             console.log('📥 Eliminazione countdown ricevuta via WebSocket:', data);
@@ -766,6 +776,15 @@
         }
 
         function startCountdownVisual(tableNumber, timeRemaining, destination) {
+            // CONTROLLO DI SICUREZZA AGGIUNTIVO
+            if (!destination || destination.toString().toLowerCase().trim() !== 'cucina') {
+                console.log(`🛑 SICUREZZA - startCountdownVisual in cucina ha ricevuto destinazione NON valida: "${destination}"`);
+                console.log(`🛑 BLOCCO ASSOLUTO - questo countdown NON verrà creato`);
+                return; // Blocca completamente la creazione del countdown
+            }
+            
+            console.log(`🎯 CUCINA - Creazione countdown AUTORIZZATA per tavolo ${tableNumber}, destinazione: "${destination}"`);
+            
             const existingCountdownIndex = countdowns.findIndex(c => c.tableNumber == tableNumber);
             if (existingCountdownIndex !== -1) {
                 const existingCountdown = countdowns[existingCountdownIndex];
