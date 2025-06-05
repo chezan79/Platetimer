@@ -114,25 +114,46 @@
     <div id="company-header" style="position: absolute; top: 20px; left: 20px; z-index: 1000; padding: 10px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; border-left: 4px solid #dc3545; display:flex; align-items: center">
         <h4 id="company-name" style="margin: 0; color: #333; font-weight: 600;">Nome Azienda</h4>
         </div>
-    <!-- Sistema messaggio vocale con scelta destinazione -->
-    <div style="position: absolute; top: 20px; left: 50%; transform: translateX(-50%); text-align: center; padding: 8px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; border-left: 4px solid #007bff; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); min-width: 280px; z-index: 500;">
-        <div style="display: flex; justify-content: center; align-items: center; gap: 6px; flex-wrap: nowrap;">
-            <button class="destination-button" data-destination="cucina" style="padding: 6px 12px; background: linear-gradient(135deg, #28a745 0%, #98FB98 100%); color: #212529; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
-                🍳 Cucina
-            </button>
-            <button class="destination-button" data-destination="insalata" style="padding: 6px 12px; background: linear-gradient(135deg, #17a2b8 0%, #B0E0E6 100%); color: #212529; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
-                🥗 Insalata
-            </button>
-            <button 
-                onclick="toggleVoiceRecording()" 
-                id="voice-message-button" 
-                style="padding: 6px 12px; background: linear-gradient(135deg, #007bff 0%, #0056b3 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; white-space: nowrap;">
-                🎤 5s
-            </button>
+    <!-- Container superiore con messaggi vocali e controlli pausa -->
+    <div style="position: absolute; top: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 15px; z-index: 500;">
+        
+        <!-- Sistema messaggio vocale con scelta destinazione -->
+        <div style="text-align: center; padding: 8px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; border-left: 4px solid #007bff; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); min-width: 280px;">
+            <div style="display: flex; justify-content: center; align-items: center; gap: 6px; flex-wrap: nowrap;">
+                <button class="destination-button" data-destination="cucina" style="padding: 6px 12px; background: linear-gradient(135deg, #28a745 0%, #98FB98 100%); color: #212529; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
+                    🍳 Cucina
+                </button>
+                <button class="destination-button" data-destination="insalata" style="padding: 6px 12px; background: linear-gradient(135deg, #17a2b8 0%, #B0E0E6 100%); color: #212529; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
+                    🥗 Insalata
+                </button>
+                <button 
+                    onclick="toggleVoiceRecording()" 
+                    id="voice-message-button" 
+                    style="padding: 6px 12px; background: linear-gradient(135deg, #007bff 0%, #0056b3 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; white-space: nowrap;">
+                    🎤 5s
+                </button>
+            </div>
+            <div id="voice-message-status" style="margin-top: 4px; font-size: 10px; color: #666; min-height: 12px;">
+            </div>
+            <div id="selected-destinations" style="margin-top: 2px; font-size: 10px; color: #007bff; font-weight: 600;">
+            </div>
         </div>
-        <div id="voice-message-status" style="margin-top: 4px; font-size: 10px; color: #666; min-height: 12px;">
-        </div>
-        <div id="selected-destinations" style="margin-top: 2px; font-size: 10px; color: #007bff; font-weight: 600;">
+
+        <!-- Container controllo pausa cucina -->
+        <div style="text-align: center; padding: 8px; background: linear-gradient(135deg, #ffe6e6 0%, #ffcccc 100%); border-radius: 8px; border-left: 4px solid #dc3545; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); min-width: 200px;">
+            <div style="margin-bottom: 4px; color: #721c24; font-size: 12px; font-weight: 600;">⏸️ Pausa Cucina</div>
+            <div style="display: flex; justify-content: center; align-items: center; gap: 6px; flex-wrap: nowrap;">
+                <button id="pause-10-btn" onclick="inviaMessaggioPausa(10)" 
+                        style="padding: 6px 12px; background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%); color: #212529; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
+                    ⏸️ 10min
+                </button>
+                <button id="pause-15-btn" onclick="inviaMessaggioPausa(15)" 
+                        style="padding: 6px 12px; background: linear-gradient(135deg, #fd7e14 0%, #e8690c 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
+                    ⏸️ 15min
+                </button>
+            </div>
+            <div id="pause-status" style="margin-top: 4px; font-size: 10px; color: #721c24; min-height: 12px; text-align: center;">
+            </div>
         </div>
     </div>
 
@@ -146,22 +167,7 @@
             </div>
         </div>
         
-        <!-- Sezione controllo pausa cucina -->
-        <div id="pause-control-container" style="margin-top: 15px; padding: 12px; background: linear-gradient(135deg, #ffe6e6 0%, #ffcccc 100%); border-radius: 8px; border-left: 4px solid #dc3545;">
-            <h4 style="margin: 0 0 10px 0; color: #721c24; font-size: 14px;">⏸️ Controllo Cucina</h4>
-            <div style="display: flex; flex-direction: column; gap: 8px;">
-                <button id="pause-10-btn" onclick="inviaMessaggioPausa(10)" 
-                        style="background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%); color: #212529; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.2s ease;">
-                    ⏸️ Pausa 10 minuti
-                </button>
-                <button id="pause-15-btn" onclick="inviaMessaggioPausa(15)" 
-                        style="background: linear-gradient(135deg, #fd7e14 0%, #e8690c 100%); color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.2s ease;">
-                    ⏸️ Pausa 15 minuti
-                </button>
-                <div id="pause-status" style="font-size: 11px; color: #721c24; text-align: center; min-height: 14px; margin-top: 4px;">
-                </div>
-            </div>
-        </div>
+        
     </div>
 
     <div class="countdown-container">
@@ -1083,15 +1089,7 @@
             console.log('✅ Pausa locale terminata');
         }
 
-        // Mostra sempre il container di controllo pausa quando si apre la pagina
-        document.addEventListener('DOMContentLoaded', function() {
-            // Mostra il container messaggi per rendere visibile il controllo pausa
-            const messagesContainerElement = document.getElementById('messagesContainer');
-            if (messagesContainerElement.style.display === 'none') {
-                messagesContainerElement.style.display = 'flex';
-                console.log('📦 Container messaggi mostrato per controllo pausa');
-            }
-        });
+        
 
 
     </script>
