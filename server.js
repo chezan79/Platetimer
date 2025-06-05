@@ -3,6 +3,7 @@ const http = require('http');
 const WebSocket = require('ws');
 const crypto = require('crypto');
 const speech = require('@google-cloud/speech');
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY); // Aggiungi la tua chiave segreta nei Secrets
 
 const app = express();
 const server = http.createServer(app);
@@ -59,6 +60,72 @@ app.post('/api/voice-message', (req, res) => {
         console.error('❌ Errore salvataggio messaggio vocale:', error);
         res.status(500).json({ error: 'Errore interno server' });
     }
+});
+
+// Endpoint per creare sessione di checkout Stripe
+app.post('/api/create-checkout-session', async (req, res) => {
+    try {
+        const { plan, userId, userEmail } = req.body;
+
+        // Definisci i prezzi per i piani
+        const planPrices = {
+            premium: 'price_1234...', // Crea questi prezzi in Stripe Dashboard
+            business: 'price_5678...'
+        };
+
+        if (!planPrices[plan]) {
+            return res.status(400).json({ error: 'Piano non valido' });
+        }
+
+        const session = await stripe.checkout.sessions.create({
+            payment_method_types: ['card'],
+            line_items: [
+                {
+                    price: planPrices[plan],
+                    quantity: 1,
+                },
+            ],
+            mode: 'subscription',
+            success_url: `${req.headers.origin}/home.html?session_id={CHECKOUT_SESSION_ID}`,
+            cancel_url: `${req.headers.origin}/subscription.html`,
+            customer_email: userEmail,
+            metadata: {
+                userId: userId,
+                plan: plan
+            }
+        });
+
+        res.json({ url: session.url });
+    } catch (error) {
+        console.error('Errore creazione sessione Stripe:', error);
+        res.status(500).json({ error: 'Errore interno server' });
+    }
+});
+
+// Webhook Stripe per conferma pagamento
+app.post('/api/stripe-webhook', express.raw({type: 'application/json'}), (req, res) => {
+    const sig = req.headers['stripe-signature'];
+    let event;
+
+    try {
+        event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
+    } catch (err) {
+        console.error('Errore webhook Stripe:', err.message);
+        return res.status(400).send(`Webhook Error: ${err.message}`);
+    }
+
+    // Gestisci eventi Stripe
+    if (event.type === 'checkout.session.completed') {
+        const session = event.data.object;
+        const userId = session.metadata.userId;
+        const plan = session.metadata.plan;
+        
+        // Aggiorna il database utente con il nuovo piano
+        // Qui dovresti aggiornare Firebase Firestore
+        console.log(`✅ Pagamento completato: User ${userId}, Plan ${plan}`);
+    }
+
+    res.json({received: true});
 });
 
 // Endpoint per il riconoscimento vocale

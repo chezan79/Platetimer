@@ -1,0 +1,241 @@
+
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Abbonamento - Sistema Gestione Ordini</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://js.stripe.com/v3/"></script>
+    <style>
+        .subscription-container {
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 30px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+        .plan-card {
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 15px 0;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .plan-card:hover {
+            border-color: #007bff;
+            box-shadow: 0 2px 10px rgba(0,123,255,0.2);
+        }
+        .plan-card.selected {
+            border-color: #007bff;
+            background: #f8f9ff;
+        }
+        .plan-price {
+            font-size: 24px;
+            font-weight: bold;
+            color: #007bff;
+        }
+        .features-list {
+            list-style: none;
+            padding: 0;
+        }
+        .features-list li {
+            padding: 5px 0;
+            color: #666;
+        }
+        .features-list li::before {
+            content: "✅ ";
+            margin-right: 8px;
+        }
+        .subscribe-btn {
+            background: linear-gradient(135deg, #007bff, #0056b3);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 20px;
+        }
+        .subscribe-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <div class="subscription-container">
+        <h1>🎯 Scegli il tuo Piano</h1>
+        <p>Seleziona il piano più adatto per la tua attività</p>
+
+        <!-- Piano Base Gratuito -->
+        <div class="plan-card" data-plan="free">
+            <h3>📱 Piano Base</h3>
+            <div class="plan-price">Gratuito</div>
+            <ul class="features-list">
+                <li>Fino a 10 tavoli</li>
+                <li>Countdown base</li>
+                <li>1 destinazione</li>
+                <li>Supporto email</li>
+            </ul>
+        </div>
+
+        <!-- Piano Premium -->
+        <div class="plan-card" data-plan="premium">
+            <h3>⭐ Piano Premium</h3>
+            <div class="plan-price">€29.99/mese</div>
+            <ul class="features-list">
+                <li>Tavoli illimitati</li>
+                <li>Messaggi vocali</li>
+                <li>Tutte le destinazioni (cucina, pizzeria, insalata)</li>
+                <li>Riconoscimento vocale</li>
+                <li>Funzione pausa</li>
+                <li>Statistiche avanzate</li>
+                <li>Supporto prioritario</li>
+            </ul>
+        </div>
+
+        <!-- Piano Business -->
+        <div class="plan-card" data-plan="business">
+            <h3>🏢 Piano Business</h3>
+            <div class="plan-price">€79.99/mese</div>
+            <ul class="features-list">
+                <li>Tutto del Piano Premium</li>
+                <li>Multi-location</li>
+                <li>API personalizzate</li>
+                <li>Integrazione POS</li>
+                <li>Analytics dettagliati</li>
+                <li>Supporto telefonico 24/7</li>
+            </ul>
+        </div>
+
+        <button id="subscribe-btn" class="subscribe-btn" disabled>
+            Seleziona un Piano
+        </button>
+
+        <div id="user-info" style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+            <p><strong>Utente:</strong> <span id="user-name">-</span></p>
+            <p><strong>Email:</strong> <span id="user-email">-</span></p>
+            <p><strong>Azienda:</strong> <span id="user-company">-</span></p>
+            <p><strong>Piano Attuale:</strong> <span id="current-plan">Base Gratuito</span></p>
+        </div>
+    </div>
+
+    <!-- Firebase -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+        import { getFirestore, doc, getDoc, updateDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+        // Configurazione Firebase
+        const firebaseConfig = {
+            apiKey: "AIzaSyDZ0FdjenO-ngblcuXKdwWwvRV5liiR18I",
+            authDomain: "app-dati-tavoli.firebaseapp.com",
+            projectId: "app-dati-tavoli",
+            storageBucket: "app-dati-tavoli.appspot.com",
+            messagingSenderId: "267339065819",
+            appId: "1:267339065819:web:1e74647f740bdf1d725ffe"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        let currentUser = null;
+        let selectedPlan = null;
+
+        // Stripe
+        const stripe = Stripe('pk_test_51234...'); // Inserisci la tua chiave pubblica Stripe
+
+        // Verifica autenticazione
+        onAuthStateChanged(auth, async (user) => {
+            if (!user) {
+                window.location.href = 'index.html';
+                return;
+            }
+
+            currentUser = user;
+            
+            // Carica dati utente
+            const userDoc = await getDoc(doc(db, "users", user.uid));
+            if (userDoc.exists()) {
+                const userData = userDoc.data();
+                document.getElementById('user-name').textContent = userData.firstName + ' ' + userData.lastName;
+                document.getElementById('user-email').textContent = userData.email;
+                document.getElementById('user-company').textContent = userData.company || 'Non specificata';
+                document.getElementById('current-plan').textContent = userData.subscriptionPlan || 'Base Gratuito';
+            }
+        });
+
+        // Gestione selezione piano
+        document.querySelectorAll('.plan-card').forEach(card => {
+            card.addEventListener('click', () => {
+                // Rimuovi selezione precedente
+                document.querySelectorAll('.plan-card').forEach(c => c.classList.remove('selected'));
+                
+                // Seleziona nuovo piano
+                card.classList.add('selected');
+                selectedPlan = card.dataset.plan;
+                
+                // Aggiorna pulsante
+                const btn = document.getElementById('subscribe-btn');
+                if (selectedPlan === 'free') {
+                    btn.textContent = 'Piano Gratuito Attivo';
+                    btn.disabled = false;
+                } else {
+                    btn.textContent = `Sottoscrivi Piano ${selectedPlan.charAt(0).toUpperCase() + selectedPlan.slice(1)}`;
+                    btn.disabled = false;
+                }
+            });
+        });
+
+        // Gestione sottoscrizione
+        document.getElementById('subscribe-btn').addEventListener('click', async () => {
+            if (!selectedPlan || !currentUser) return;
+
+            if (selectedPlan === 'free') {
+                // Attiva piano gratuito
+                await updateDoc(doc(db, "users", currentUser.uid), {
+                    subscriptionPlan: 'free',
+                    subscriptionStatus: 'active',
+                    updatedAt: new Date()
+                });
+                
+                alert('Piano Gratuito attivato!');
+                window.location.href = 'home.html';
+                return;
+            }
+
+            // Per piani a pagamento, crea sessione Stripe
+            try {
+                const response = await fetch('/api/create-checkout-session', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        plan: selectedPlan,
+                        userId: currentUser.uid,
+                        userEmail: currentUser.email
+                    })
+                });
+
+                const session = await response.json();
+                
+                if (session.url) {
+                    window.location.href = session.url;
+                } else {
+                    alert('Errore nella creazione della sessione di pagamento');
+                }
+            } catch (error) {
+                console.error('Errore:', error);
+                alert('Errore nel processo di pagamento');
+            }
+        });
+    </script>
+</body>
+</html>
