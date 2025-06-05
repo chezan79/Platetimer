@@ -197,12 +197,12 @@ wss.on('connection', (ws, req) => {
                     return;
                 }
 
-                // Rate limiting: max 10 messaggi al secondo
+                // Rate limiting più rigoroso: max 5 messaggi per 2 secondi
                 const now = Date.now();
-                if (now - ws.lastMessageTime < 100) { // 100ms tra messaggi
+                if (now - ws.lastMessageTime < 400) { // 400ms tra messaggi
                     ws.messageCount++;
-                    if (ws.messageCount > 10) {
-                        console.log('⚠️ Rate limit superato, connessione ignorata');
+                    if (ws.messageCount > 5) {
+                        console.log('⚠️ Rate limit superato, messaggio scartato');
                         return;
                     }
                 } else {
@@ -592,42 +592,44 @@ wss.on('connection', (ws, req) => {
             }
         });
 
-// Heartbeat automatico più frequente per mantenere connessioni attive
+// Heartbeat ottimizzato - meno frequente per ridurre carico
 setInterval(() => {
     const now = Date.now();
+    let activeClients = 0;
 
     wss.clients.forEach((ws) => {
         if (ws.readyState === WebSocket.OPEN) {
-            // Invia ping ogni 20 secondi
-            ws.send(JSON.stringify({ action: 'ping', timestamp: now }));
-            ws.lastPing = now;
+            // Solo se non ha fatto pong negli ultimi 45 secondi
+            if (now - ws.lastPong > 45000) {
+                ws.send(JSON.stringify({ action: 'ping', timestamp: now }));
+                ws.lastPing = now;
+            }
+            activeClients++;
         }
     });
 
-    console.log(`💓 Heartbeat inviato a ${wss.clients.size} client connessi`);
-}, 20000); // Ogni 20 secondi
+    if (activeClients > 0) {
+        console.log(`💓 Heartbeat per ${activeClients} client attivi`);
+    }
+}, 30000); // Ogni 30 secondi
 
-// Pulizia periodica delle risorse e connessioni morte
+// Pulizia periodica ottimizzata - più frequente per evitare accumulo
 setInterval(() => {
     const now = Date.now();
 
-    // Pulisci connessioni WebSocket morte (nessun pong per più di 40 secondi)
+    // Pulisci connessioni WebSocket morte (nessun pong per più di 60 secondi)
     let deadConnections = 0;
     wss.clients.forEach((ws) => {
-        if (now - ws.lastPong > 40000) { // 40 secondi senza pong
+        if (now - ws.lastPong > 60000) { // 60 secondi senza pong
             console.log(`🗑️ Connessione morta rilevata, terminazione...`);
             ws.terminate();
             deadConnections++;
         }
     });
 
-    if (deadConnections > 0) {
-        console.log(`🧹 Rimosse ${deadConnections} connessioni morte`);
-    }
-
     // Pulisci rate limiter scaduti
     for (const [clientId, limit] of rateLimiter.entries()) {
-        if (now > limit.resetTime + 300000) { // 5 minuti di grazia
+        if (now > limit.resetTime + 120000) { // 2 minuti di grazia
             rateLimiter.delete(clientId);
         }
     }
@@ -639,7 +641,7 @@ setInterval(() => {
             const elapsed = Math.floor((now - countdown.startTime) / 1000);
             const remainingTime = countdown.initialDuration - elapsed;
 
-            if (remainingTime <= -45) { // 45 secondi dopo la scadenza
+            if (remainingTime <= -30) { // 30 secondi dopo la scadenza
                 companyCountdowns.delete(tableNumber);
                 console.log(`🗑️ Countdown scaduto rimosso: Azienda "${companyName}", Tavolo ${tableNumber}`);
             } else {
@@ -647,14 +649,15 @@ setInterval(() => {
             }
         });
 
-        // Rimuovi aziende senza countdown attivi
         if (companyCountdowns.size === 0) {
             activeCountdowns.delete(companyName);
         }
     });
 
-    console.log(`🧹 Risorse pulite - Rate limiter: ${rateLimiter.size}, Rooms: ${companyRooms.size}, Countdown attivi: ${totalActiveCountdowns}, Client: ${wss.clients.size}`);
-}, 120000); // Ogni 2 minuti
+    if (deadConnections > 0 || totalActiveCountdowns > 20) {
+        console.log(`🧹 Cleanup: ${deadConnections} conn. morte, ${rateLimiter.size} rate limits, ${totalActiveCountdowns} countdown, ${wss.clients.size} client`);
+    }
+}, 60000); // Ogni 1 minuto
 
 // Gestione errori globali per prevenire crash
 process.on('uncaughtException', (error) => {
@@ -665,13 +668,31 @@ process.on('unhandledRejection', (reason, promise) => {
     console.error('❌ Promise rifiutata non gestita:', reason);
 });
 
+// Monitoraggio carico ogni 5 minuti
+setInterval(() => {
+    const stats = {
+        clients: wss.clients.size,
+        rooms: companyRooms.size,
+        countdowns: Array.from(activeCountdowns.values()).reduce((sum, map) => sum + map.size, 0),
+        rateLimits: rateLimiter.size,
+        memoryUsage: Math.round(process.memoryUsage().heapUsed / 1024 / 1024)
+    };
+    
+    console.log(`📊 Stats: ${stats.clients} client, ${stats.rooms} rooms, ${stats.countdowns} countdown, ${stats.memoryUsage}MB RAM`);
+    
+    // Alert se troppo carico
+    if (stats.clients > 50 || stats.memoryUsage > 100) {
+        console.warn(`⚠️ SOVRACCARICO: ${stats.clients} client, ${stats.memoryUsage}MB RAM`);
+    }
+}, 300000); // Ogni 5 minuti
+
 // Avvia il server
 const PORT = 5000;
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`🛡️ Server sicuro avviato su http://0.0.0.0:${PORT}`);
     console.log('✅ Autenticazione WebSocket attiva');
     console.log('✅ Validazione dati attiva');
-    console.log('✅ Rate limiting attivo');
+    console.log('✅ Rate limiting ottimizzato');
 }).on('error', (error) => {
     console.error('❌ Errore avvio server:', error);
 });
