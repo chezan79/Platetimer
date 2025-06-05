@@ -166,10 +166,20 @@ function checkRateLimit(clientId) {
 wss.on('connection', (ws) => {
     console.log('🔗 Nuova connessione WebSocket');
     ws.companyRoom = null; // Inizialmente non assegnato a nessuna room
+    ws.lastPing = Date.now();
+    ws.lastPong = Date.now();
+    ws.isAlive = true;
 
     // Rate limiting per prevenire spam
     ws.messageCount = 0;
     ws.lastMessageTime = Date.now();
+
+    // Invia un ping iniziale per testare la connessione
+    setTimeout(() => {
+        if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ action: 'ping', timestamp: Date.now() }));
+        }
+    }, 1000);
 
     ws.on('message', (message) => {
         try {
@@ -197,14 +207,16 @@ wss.on('connection', (ws) => {
 
             // Gestisci ping/pong per heartbeat
             if (data.action === 'ping') {
+                ws.lastPing = Date.now();
                 if (ws.readyState === WebSocket.OPEN) {
-                    ws.send(JSON.stringify({ action: 'pong' }));
+                    ws.send(JSON.stringify({ action: 'pong', timestamp: ws.lastPing }));
                 }
                 return;
             }
             
             if (data.action === 'pong') {
                 // Pong ricevuto, connessione attiva
+                ws.lastPong = Date.now();
                 return;
             }
 
@@ -457,9 +469,29 @@ wss.on('connection', (ws) => {
     });
 });
 
-// Pulizia periodica delle risorse
+// Pulizia periodica delle risorse e connessioni morte
 setInterval(() => {
     const now = Date.now();
+
+    // Pulisci connessioni WebSocket morte (nessun pong per più di 60 secondi)
+    let deadConnections = 0;
+    wss.clients.forEach((ws) => {
+        if (now - ws.lastPong > 60000) { // 60 secondi senza pong
+            console.log(`🗑️ Connessione morta rilevata, terminazione...`);
+            ws.terminate();
+            deadConnections++;
+        } else if (now - ws.lastPing > 45000) { // 45 secondi dall'ultimo ping
+            // Invia un ping di controllo
+            if (ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ action: 'ping', timestamp: now }));
+                ws.lastPing = now;
+            }
+        }
+    });
+
+    if (deadConnections > 0) {
+        console.log(`🧹 Rimosse ${deadConnections} connessioni morte`);
+    }
 
     // Pulisci rate limiter scaduti
     for (const [clientId, limit] of rateLimiter.entries()) {

@@ -581,6 +581,7 @@
         let heartbeatInterval = null;
         let isConnected = false;
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        let lastPong = 0;
 
         function connectWebSocket() {
             try {
@@ -616,35 +617,32 @@
                     try {
                         const data = JSON.parse(event.data);
 
-                        // Gestisci ping/pong per heartbeat
-                        if (data.action === 'ping') {
-                            ws.send(JSON.stringify({ action: 'pong' }));
-                            return;
-                        }
-
-                        if (data.action === 'startCountdown') {
-                            console.log('📥 Countdown ricevuto via WebSocket in CUCINA:', JSON.stringify(data, null, 2));
-                            console.log(`🔍 Debug cucina - Destinazione: "${data.destination}" (tipo: ${typeof data.destination}), Tavolo: ${data.tableNumber}`);
-
-                            // CONTROLLO ULTRA-RIGOROSO: accetta SOLO se destinazione è ESATTAMENTE "cucina"
-                            if (!data.destination || data.destination.toString().toLowerCase().trim() !== 'cucina') {
-                                console.log(`🚫 CUCINA - Countdown RIFIUTATO COMPLETAMENTE`);
-                                console.log(`   ❌ Destinazione ricevuta: "${data.destination}"`);
-                                console.log(`   ❌ Tipo destinazione: ${typeof data.destination}`);
-                                console.log(`   ❌ Tavolo: ${data.tableNumber}`);
-                                console.log(`   ❌ QUESTO COUNTDOWN NON VERRÀ MOSTRATO IN CUCINA`);
-
-                                // BLOCCO ASSOLUTO - nessuna elaborazione
-                                return false;
+                        if (data.action === 'pong') {
+                            console.log('💓 Pong ricevuto dal server');
+                            // Reset del timeout di riconnessione se presente
+                            if (reconnectInterval) {
+                                clearInterval(reconnectInterval);
+                                reconnectInterval = null;
                             }
+                            return;
+                        } else if (data.action === 'ping') {
+                            // Rispondi al ping del server
+                            if (ws && ws.readyState === WebSocket.OPEN) {
+                                ws.send(JSON.stringify({ action: 'pong', timestamp: Date.now() }));
+                            }
+                            return;
+                        } else if (data.action === 'startCountdown') {
+                            console.log('📥 Countdown ricevuto via WebSocket:', data);
+                            console.log(`🔍 Destinazione ricevuta: "${data.destination}", Tavolo: ${data.tableNumber}`);
 
-                            // Solo se arriviamo qui, la destinazione è "cucina"
-                            console.log(`✅ CUCINA - Countdown ACCETTATO e MOSTRATO`);
-                            console.log(`   ✅ Destinazione verificata: "${data.destination}"`);
-                            console.log(`   ✅ Tavolo: ${data.tableNumber}`);
-                            console.log(`   ✅ Durata: ${data.timeRemaining}s`);
-
-                            startCountdownVisual(data.tableNumber, data.timeRemaining, data.destination);
+                            // Mostra il countdown in cucina SOLO se la destinazione è esplicitamente "cucina"
+                            if (data.destination && data.destination === 'cucina') {
+                                console.log(`✅ Countdown accettato per cucina - Tavolo: ${data.tableNumber}`);
+                                startCountdownVisual(data.tableNumber, data.timeRemaining, data.destination);
+                            } else {
+                                console.log(`🚫 Countdown RIFIUTATO in cucina - Destinazione: "${data.destination || 'undefined'}", Tavolo: ${data.tableNumber}`);
+                                return; // Importante: esci dalla funzione se non è per cucina
+                            }
                         } else if (data.action === 'deleteCountdown') {
                             console.log('📥 Eliminazione countdown ricevuta via WebSocket:', data);
                             const countdownIndex = countdowns.findIndex(c => c.tableNumber == data.tableNumber);
@@ -1259,7 +1257,7 @@
                         setTimeout(() => {
                             document.getElementById('numeroTavolo').value = '';
                             console.log('🧹 Input tavolo pulito automaticamente dopo comando vocale');
-                            
+
                             // Reset selezione destinazioni anche per comando vocale
                             resetSelection();
                             console.log('🧹 Destinazioni resettate automaticamente dopo comando vocale');
