@@ -641,7 +641,6 @@
                                 startCountdownVisual(data.tableNumber, data.timeRemaining, data.destination);
                             } else {
                                 console.log(`🚫 Countdown RIFIUTATO in cucina - Destinazione: "${data.destination || 'undefined'}", Tavolo: ${data.tableNumber}`);
-                                return; // Importante: esci dalla funzione se non è per cucina
                             }
                         } else if (data.action === 'deleteCountdown') {
                             console.log('📥 Eliminazione countdown ricevuta via WebSocket:', data);
@@ -669,7 +668,8 @@
                             console.log('🗑️ Eliminazione messaggio vocale ricevuta:', data);
                             removeVoiceMessage(data.messageId);
                         } else if (data.action === 'pausaCucina') {
-                            console.log('⏸️ Messaggio pausa cucina ricevuto:', data);
+                            console.log('⏸️ Messaggio pausa cucina ricevuto in CUCINA:', data);
+                            console.log(`⏸️ Dettagli pausa: ${data.durataMinuti} minuti da ${data.from}`);
                             gestisciPausaCucina(data);
                         }
                     } catch (error) {
@@ -1841,21 +1841,27 @@
         let pausaCucinaTimer = null;
 
         function gestisciPausaCucina(pausaData) {
-            console.log('⏸️ Gestione pausa cucina:', pausaData);
+            console.log('🎯 CUCINA - Inizio gestione pausa cucina:', pausaData);
+            console.log(`⏸️ Dati ricevuti: ${pausaData.durataMinuti}min da ${pausaData.from} alle ${pausaData.timestamp}`);
 
             if (pausaCucinaAttiva) {
                 console.log('⚠️ Pausa cucina già attiva, ignorato');
+                alert('⚠️ Una pausa è già attiva!');
                 return;
             }
 
             const durataMinuti = pausaData.durataMinuti;
             const from = pausaData.from || 'Pizzeria';
 
+            console.log(`✅ CUCINA - Avvio pausa per ${durataMinuti} minuti da ${from}`);
+
             // Avvia pausa locale
             avviaPausaCucina(durataMinuti, from);
 
             // Mostra messaggio di allarme con countdown
             mostraMessaggioPausaCucina(pausaData);
+
+            console.log('🎯 CUCINA - Gestione pausa completata');
         }
 
         function avviaPausaCucina(durataMinuti, from) {
