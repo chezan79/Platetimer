@@ -145,6 +145,23 @@
                 <!-- I messaggi appariranno qui dinamicamente -->
             </div>
         </div>
+        
+        <!-- Sezione controllo pausa cucina -->
+        <div id="pause-control-container" style="margin-top: 15px; padding: 12px; background: linear-gradient(135deg, #ffe6e6 0%, #ffcccc 100%); border-radius: 8px; border-left: 4px solid #dc3545;">
+            <h4 style="margin: 0 0 10px 0; color: #721c24; font-size: 14px;">⏸️ Controllo Cucina</h4>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+                <button id="pause-10-btn" onclick="inviaMessaggioPausa(10)" 
+                        style="background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%); color: #212529; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.2s ease;">
+                    ⏸️ Pausa 10 minuti
+                </button>
+                <button id="pause-15-btn" onclick="inviaMessaggioPausa(15)" 
+                        style="background: linear-gradient(135deg, #fd7e14 0%, #e8690c 100%); color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.2s ease;">
+                    ⏸️ Pausa 15 minuti
+                </button>
+                <div id="pause-status" style="font-size: 11px; color: #721c24; text-align: center; min-height: 14px; margin-top: 4px;">
+                </div>
+            </div>
+        </div>
     </div>
 
     <div class="countdown-container">
@@ -968,6 +985,113 @@
                 alert('❌ Connessione persa. Impossibile sincronizzare l\'eliminazione.');
             }
         }
+
+        // Sistema pausa cucina
+        let pausaAttiva = false;
+        let pausaTimer = null;
+
+        function inviaMessaggioPausa(minuti) {
+            if (pausaAttiva) {
+                alert('⚠️ Una pausa è già attiva!');
+                return;
+            }
+
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                alert('❌ Connessione persa. Impossibile inviare pausa.');
+                return;
+            }
+
+            const conferma = confirm(`⏸️ Vuoi mettere in pausa la cucina per ${minuti} minuti?\n\nQuesto bloccherà temporaneamente i nuovi countdown per la pizzeria.`);
+            
+            if (!conferma) return;
+
+            console.log(`⏸️ Invio richiesta pausa cucina: ${minuti} minuti`);
+
+            // Invia messaggio di pausa alla cucina
+            const messageId = Date.now().toString();
+            const pausaMessage = {
+                action: 'pausaCucina',
+                messageId: messageId,
+                durataMinuti: minuti,
+                from: 'Pizzeria',
+                timestamp: new Date().toLocaleTimeString('it-IT')
+            };
+
+            ws.send(JSON.stringify(pausaMessage));
+            console.log(`📤 Messaggio pausa inviato alla cucina: ${minuti} minuti`);
+
+            // Avvia stato di pausa locale
+            avviaPausaLocale(minuti);
+        }
+
+        function avviaPausaLocale(minuti) {
+            pausaAttiva = true;
+            let secondiRimasti = minuti * 60;
+
+            // Disabilita i pulsanti pausa
+            document.getElementById('pause-10-btn').disabled = true;
+            document.getElementById('pause-15-btn').disabled = true;
+            document.getElementById('pause-10-btn').style.opacity = '0.5';
+            document.getElementById('pause-15-btn').style.opacity = '0.5';
+
+            const statusDiv = document.getElementById('pause-status');
+
+            // Aggiorna il countdown della pausa
+            pausaTimer = setInterval(() => {
+                const minutiRim = Math.floor(secondiRimasti / 60);
+                const secondiRim = secondiRimasti % 60;
+                
+                statusDiv.textContent = `⏸️ Pausa attiva: ${minutiRim}:${secondiRim.toString().padStart(2, '0')}`;
+                statusDiv.style.color = '#dc3545';
+                statusDiv.style.fontWeight = 'bold';
+
+                secondiRimasti--;
+
+                if (secondiRimasti < 0) {
+                    clearInterval(pausaTimer);
+                    terminaPausaLocale();
+                }
+            }, 1000);
+
+            console.log(`⏸️ Pausa locale avviata per ${minuti} minuti`);
+        }
+
+        function terminaPausaLocale() {
+            pausaAttiva = false;
+            
+            if (pausaTimer) {
+                clearInterval(pausaTimer);
+                pausaTimer = null;
+            }
+
+            // Riabilita i pulsanti pausa
+            document.getElementById('pause-10-btn').disabled = false;
+            document.getElementById('pause-15-btn').disabled = false;
+            document.getElementById('pause-10-btn').style.opacity = '1';
+            document.getElementById('pause-15-btn').style.opacity = '1';
+
+            const statusDiv = document.getElementById('pause-status');
+            statusDiv.textContent = '✅ Pausa terminata';
+            statusDiv.style.color = '#28a745';
+            statusDiv.style.fontWeight = 'normal';
+
+            // Pulisci il messaggio dopo 5 secondi
+            setTimeout(() => {
+                statusDiv.textContent = '';
+            }, 5000);
+
+            console.log('✅ Pausa locale terminata');
+        }
+
+        // Mostra sempre il container di controllo pausa quando si apre la pagina
+        document.addEventListener('DOMContentLoaded', function() {
+            // Mostra il container messaggi per rendere visibile il controllo pausa
+            const messagesContainerElement = document.getElementById('messagesContainer');
+            if (messagesContainerElement.style.display === 'none') {
+                messagesContainerElement.style.display = 'flex';
+                console.log('📦 Container messaggi mostrato per controllo pausa');
+            }
+        });
 
 
     </script>

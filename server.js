@@ -443,6 +443,47 @@ wss.on('connection', (ws) => {
                 } else {
                     console.log('⚠️ Client non assegnato a nessuna room per eliminazione messaggio vocale');
                 }
+
+            } else if (data.action === 'pausaCucina') {
+                // Validazione richiesta pausa cucina
+                if (!data.durataMinuti || typeof data.durataMinuti !== 'number') {
+                    console.log('⚠️ Durata pausa non valida');
+                    return;
+                }
+
+                if (data.durataMinuti < 1 || data.durataMinuti > 30) {
+                    console.log('⚠️ Durata pausa fuori range (1-30 minuti)');
+                    return;
+                }
+
+                if (!data.messageId || typeof data.messageId !== 'string') {
+                    console.log('⚠️ ID messaggio pausa mancante');
+                    return;
+                }
+
+                // Invia messaggio di pausa a tutti i client della room
+                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    const pausaMessage = JSON.stringify({
+                        action: 'pausaCucina',
+                        messageId: data.messageId,
+                        durataMinuti: data.durataMinuti,
+                        from: data.from || 'Pizzeria',
+                        timestamp: data.timestamp || new Date().toLocaleTimeString('it-IT')
+                    });
+
+                    let sentCount = 0;
+                    roomClients.forEach((client) => {
+                        if (client.readyState === WebSocket.OPEN) {
+                            client.send(pausaMessage);
+                            sentCount++;
+                        }
+                    });
+
+                    console.log(`⏸️ Messaggio pausa cucina inviato alla room "${ws.companyRoom}" (${sentCount}/${roomClients.size} client): ${data.durataMinuti} minuti`);
+                } else {
+                    console.log('⚠️ Client non assegnato a nessuna room per pausa cucina');
+                }
             }
         } catch (error) {
             console.error('❌ Errore nel parsing del messaggio:', error);
