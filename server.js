@@ -40,7 +40,7 @@ try {
 app.post('/api/voice-message', (req, res) => {
     try {
         const { audioData, messageId, destination, from } = req.body;
-        
+
         if (!audioData || !messageId || !destination) {
             return res.status(400).json({ error: 'Dati mancanti' });
         }
@@ -48,7 +48,7 @@ app.post('/api/voice-message', (req, res) => {
         // Salva temporaneamente i dati audio in memoria
         // In produzione si potrebbe usare un database o storage
         console.log(`🎤 Messaggio vocale ricevuto: ID ${messageId}, Da: ${from}, Per: ${destination}`);
-        
+
         res.json({ 
             success: true, 
             messageId: messageId,
@@ -72,7 +72,7 @@ app.post('/api/speech-to-text', async (req, res) => {
         }
 
         const { audioData, config = {} } = req.body;
-        
+
         if (!audioData) {
             return res.status(400).json({ error: 'Audio data richiesto' });
         }
@@ -166,7 +166,7 @@ function checkRateLimit(clientId) {
 wss.on('connection', (ws, req) => {
     const clientIp = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
     console.log(`🔗 Nuova connessione WebSocket da IP: ${clientIp}`);
-    
+
     ws.companyRoom = null; // Inizialmente non assegnato a nessuna room
     ws.lastPing = Date.now();
     ws.lastPong = Date.now();
@@ -190,22 +190,40 @@ wss.on('connection', (ws, req) => {
     }, 500);
 
     ws.on('message', (message) => {
-        try {
-            // Rate limiting: max 10 messaggi al secondo
-            const now = Date.now();
-            if (now - ws.lastMessageTime < 100) { // 100ms tra messaggi
-                ws.messageCount++;
-                if (ws.messageCount > 10) {
-                    console.log('⚠️ Rate limit superato, connessione ignorata');
+            try {
+                // Validazione messaggio base
+                if (!message || message.length === 0) {
+                    console.log('⚠️ Messaggio vuoto ignorato');
                     return;
                 }
-            } else {
-                ws.messageCount = 0;
-                ws.lastMessageTime = now;
-            }
 
-            const data = JSON.parse(message);
-            console.log('📨 Messaggio ricevuto:', data);
+                // Rate limiting: max 10 messaggi al secondo
+                const now = Date.now();
+                if (now - ws.lastMessageTime < 100) { // 100ms tra messaggi
+                    ws.messageCount++;
+                    if (ws.messageCount > 10) {
+                        console.log('⚠️ Rate limit superato, connessione ignorata');
+                        return;
+                    }
+                } else {
+                    ws.messageCount = 0;
+                    ws.lastMessageTime = now;
+                }
+
+                let data;
+                try {
+                    data = JSON.parse(message);
+                } catch (parseError) {
+                    console.error('❌ Errore parsing JSON:', parseError.message);
+                    return;
+                }
+
+                if (!data || typeof data !== 'object') {
+                    console.log('⚠️ Dati messaggio non validi');
+                    return;
+                }
+
+                console.log('📨 Messaggio ricevuto:', data);
 
             // Validazione dati rigorosa
             if (!data.action) {
@@ -221,7 +239,7 @@ wss.on('connection', (ws, req) => {
                 }
                 return;
             }
-            
+
             if (data.action === 'pong') {
                 // Pong ricevuto, connessione attiva
                 ws.lastPong = Date.now();
@@ -263,7 +281,7 @@ wss.on('connection', (ws, req) => {
                         const currentTime = Date.now();
                         const elapsed = Math.floor((currentTime - countdown.startTime) / 1000);
                         const remainingTime = Math.max(0, countdown.initialDuration - elapsed);
-                        
+
                         if (remainingTime > 0) {
                             const syncMessage = {
                                 action: 'startCountdown',
@@ -310,7 +328,7 @@ wss.on('connection', (ws, req) => {
                     if (!activeCountdowns.has(ws.companyRoom)) {
                         activeCountdowns.set(ws.companyRoom, new Map());
                     }
-                    
+
                     const companyCountdowns = activeCountdowns.get(ws.companyRoom);
                     companyCountdowns.set(data.tableNumber, {
                         startTime: Date.now(),
@@ -318,7 +336,7 @@ wss.on('connection', (ws, req) => {
                         tableNumber: data.tableNumber,
                         destination: destination
                     });
-                    
+
                     console.log(`💾 Countdown memorizzato per azienda "${ws.companyRoom}": Tavolo ${data.tableNumber}, Destinazione: ${destination}`);
                 }
 
@@ -528,30 +546,56 @@ wss.on('connection', (ws, req) => {
         }
     });
 
-    ws.on('close', () => {
-        // Rimuovi il client dalla room quando si disconnette
-        if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
-            const room = companyRooms.get(ws.companyRoom);
-            room.delete(ws);
-            if (room.size === 0) {
-                companyRooms.delete(ws.companyRoom);
-                console.log(`🗑️ Room "${ws.companyRoom}" eliminata (vuota)`);
-            } else {
-                console.log(`👋 Client disconnesso dalla room "${ws.companyRoom}" (${room.size} client rimanenti)`);
-            }
-        }
-        console.log('🔌 Connessione WebSocket chiusa');
-    });
+    ws.on('close', (code, reason) => {
+            try {
+                // Rimuovi il client dalla room quando si disconnette
+                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                    const room = companyRooms.get(ws.companyRoom);
+                    if (room) {
+                        room.delete(ws);
+                        if (room.size === 0) {
+                            companyRooms.delete(ws.companyRoom);
+                            console.log(`🗑️ Room "${ws.companyRoom}" eliminata (vuota)`);
+                        } else {
+                            console.log(`👋 Client disconnesso dalla room "${ws.companyRoom}" (${room.size} client rimanenti)`);
+                        }
+                    }
+                }
 
-    ws.on('error', (error) => {
-        console.error('❌ Errore WebSocket:', error);
-    });
-});
+                // Cleanup delle risorse del client
+                ws.companyRoom = null;
+                ws.isAlive = false;
+
+                console.log(`🔌 Connessione WebSocket chiusa - Code: ${code}, Reason: ${reason || 'Non specificato'}`);
+            } catch (closeError) {
+                console.error('❌ Errore durante cleanup connessione:', closeError.message);
+            }
+        });
+
+        ws.on('error', (error) => {
+            console.error('❌ Errore WebSocket:', error.message || error);
+
+            // Cleanup in caso di errore
+            try {
+                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                    const room = companyRooms.get(ws.companyRoom);
+                    if (room) {
+                        room.delete(ws);
+                        if (room.size === 0) {
+                            companyRooms.delete(ws.companyRoom);
+                        }
+                    }
+                }
+                ws.isAlive = false;
+            } catch (cleanupError) {
+                console.error('❌ Errore cleanup dopo errore WebSocket:', cleanupError.message);
+            }
+        });
 
 // Heartbeat automatico più frequente per mantenere connessioni attive
 setInterval(() => {
     const now = Date.now();
-    
+
     wss.clients.forEach((ws) => {
         if (ws.readyState === WebSocket.OPEN) {
             // Invia ping ogni 20 secondi
@@ -559,7 +603,7 @@ setInterval(() => {
             ws.lastPing = now;
         }
     });
-    
+
     console.log(`💓 Heartbeat inviato a ${wss.clients.size} client connessi`);
 }, 20000); // Ogni 20 secondi
 
@@ -594,7 +638,7 @@ setInterval(() => {
         companyCountdowns.forEach((countdown, tableNumber) => {
             const elapsed = Math.floor((now - countdown.startTime) / 1000);
             const remainingTime = countdown.initialDuration - elapsed;
-            
+
             if (remainingTime <= -45) { // 45 secondi dopo la scadenza
                 companyCountdowns.delete(tableNumber);
                 console.log(`🗑️ Countdown scaduto rimosso: Azienda "${companyName}", Tavolo ${tableNumber}`);
@@ -602,7 +646,7 @@ setInterval(() => {
                 totalActiveCountdowns++;
             }
         });
-        
+
         // Rimuovi aziende senza countdown attivi
         if (companyCountdowns.size === 0) {
             activeCountdowns.delete(companyName);
