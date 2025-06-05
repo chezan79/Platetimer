@@ -591,6 +591,7 @@ wss.on('connection', (ws, req) => {
                 console.error('❌ Errore cleanup dopo errore WebSocket:', cleanupError.message);
             }
         });
+    });
 
 // Heartbeat ottimizzato - meno frequente per ridurre carico
 setInterval(() => {
