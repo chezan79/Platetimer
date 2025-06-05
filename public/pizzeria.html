@@ -1040,6 +1040,27 @@
             document.getElementById('pause-10-btn').style.opacity = '0.5';
             document.getElementById('pause-15-btn').style.opacity = '0.5';
 
+            // Crea e mostra il pulsante annulla pausa
+            const pauseContainer = document.getElementById('pause-10-btn').parentNode;
+            const annullaPausaBtn = document.createElement('button');
+            annullaPausaBtn.id = 'annulla-pausa-btn';
+            annullaPausaBtn.innerHTML = '❌ Annulla';
+            annullaPausaBtn.style.cssText = `
+                padding: 6px 12px; 
+                background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); 
+                color: white; 
+                border: none; 
+                border-radius: 6px; 
+                cursor: pointer; 
+                font-size: 12px; 
+                font-weight: 600; 
+                transition: all 0.3s ease; 
+                white-space: nowrap;
+                margin-top: 4px;
+            `;
+            annullaPausaBtn.onclick = annullaPausa;
+            pauseContainer.appendChild(annullaPausaBtn);
+
             const statusDiv = document.getElementById('pause-status');
 
             // Aggiorna il countdown della pausa
@@ -1076,6 +1097,12 @@
             document.getElementById('pause-10-btn').style.opacity = '1';
             document.getElementById('pause-15-btn').style.opacity = '1';
 
+            // Rimuovi il pulsante annulla pausa se esiste
+            const annullaPausaBtn = document.getElementById('annulla-pausa-btn');
+            if (annullaPausaBtn) {
+                annullaPausaBtn.remove();
+            }
+
             const statusDiv = document.getElementById('pause-status');
             statusDiv.textContent = '✅ Pausa terminata';
             statusDiv.style.color = '#28a745';
@@ -1087,6 +1114,44 @@
             }, 5000);
 
             console.log('✅ Pausa locale terminata');
+        }
+
+        function annullaPausa() {
+            if (!pausaAttiva) {
+                return;
+            }
+
+            const conferma = confirm('❌ Vuoi davvero annullare la pausa?\n\nLa cucina tornerà immediatamente operativa.');
+            
+            if (!conferma) return;
+
+            console.log('❌ Annullamento pausa richiesto da pizzeria');
+
+            // Invia messaggio di annullamento pausa alla cucina
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                const annullaPausaMessage = {
+                    action: 'annullaPausaCucina',
+                    messageId: Date.now().toString(),
+                    from: 'Pizzeria',
+                    timestamp: new Date().toLocaleTimeString('it-IT')
+                };
+
+                ws.send(JSON.stringify(annullaPausaMessage));
+                console.log('📤 Messaggio annullamento pausa inviato alla cucina');
+            }
+
+            // Termina pausa locale immediatamente
+            terminaPausaLocale();
+
+            const statusDiv = document.getElementById('pause-status');
+            statusDiv.textContent = '❌ Pausa annullata';
+            statusDiv.style.color = '#dc3545';
+            statusDiv.style.fontWeight = 'bold';
+
+            // Pulisci il messaggio dopo 3 secondi
+            setTimeout(() => {
+                statusDiv.textContent = '';
+            }, 3000);
         }
 
         

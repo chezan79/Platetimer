@@ -484,6 +484,36 @@ wss.on('connection', (ws) => {
                 } else {
                     console.log('⚠️ Client non assegnato a nessuna room per pausa cucina');
                 }
+
+            } else if (data.action === 'annullaPausaCucina') {
+                // Validazione richiesta annullamento pausa cucina
+                if (!data.messageId || typeof data.messageId !== 'string') {
+                    console.log('⚠️ ID messaggio annullamento pausa mancante');
+                    return;
+                }
+
+                // Invia messaggio di annullamento pausa a tutti i client della room
+                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    const annullaPausaMessage = JSON.stringify({
+                        action: 'annullaPausaCucina',
+                        messageId: data.messageId,
+                        from: data.from || 'Pizzeria',
+                        timestamp: data.timestamp || new Date().toLocaleTimeString('it-IT')
+                    });
+
+                    let sentCount = 0;
+                    roomClients.forEach((client) => {
+                        if (client.readyState === WebSocket.OPEN) {
+                            client.send(annullaPausaMessage);
+                            sentCount++;
+                        }
+                    });
+
+                    console.log(`❌ Messaggio annullamento pausa cucina inviato alla room "${ws.companyRoom}" (${sentCount}/${roomClients.size} client)`);
+                } else {
+                    console.log('⚠️ Client non assegnato a nessuna room per annullamento pausa cucina');
+                }
             }
         } catch (error) {
             console.error('❌ Errore nel parsing del messaggio:', error);
