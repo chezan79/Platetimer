@@ -238,7 +238,15 @@
                         const data = JSON.parse(event.data);
 
                         if (data.action === 'ping') {
-                            ws.send(JSON.stringify({ action: 'pong' }));
+                            if (ws && ws.readyState === WebSocket.OPEN) {
+                                ws.send(JSON.stringify({ action: 'pong', timestamp: Date.now() }));
+                            }
+                            return;
+                        } else if (data.action === 'pong') {
+                            console.log('💓 Pizzeria: Pong ricevuto dal server');
+                            return;
+                        } else if (data.action === 'connectionConfirmed') {
+                            console.log('✅ Pizzeria: Conferma connessione ricevuta:', data.message);
                             return;
                         }
 
@@ -302,9 +310,12 @@
         function startHeartbeat() {
             heartbeatInterval = setInterval(() => {
                 if (ws && ws.readyState === WebSocket.OPEN) {
-                    ws.send(JSON.stringify({ action: 'ping' }));
+                    ws.send(JSON.stringify({ action: 'pong', timestamp: Date.now() }));
+                } else if (ws && ws.readyState !== WebSocket.CONNECTING) {
+                    console.log('🔄 Pizzeria: Connessione persa durante heartbeat, riconnetto...');
+                    connectWebSocket();
                 }
-            }, 30000);
+            }, 15000); // Pong ogni 15 secondi
         }
 
         function stopHeartbeat() {

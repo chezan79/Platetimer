@@ -163,12 +163,15 @@ function checkRateLimit(clientId) {
 }
 
 // Gestisci le connessioni WebSocket
-wss.on('connection', (ws) => {
-    console.log('🔗 Nuova connessione WebSocket');
+wss.on('connection', (ws, req) => {
+    const clientIp = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+    console.log(`🔗 Nuova connessione WebSocket da IP: ${clientIp}`);
+    
     ws.companyRoom = null; // Inizialmente non assegnato a nessuna room
     ws.lastPing = Date.now();
     ws.lastPong = Date.now();
     ws.isAlive = true;
+    ws.clientIp = clientIp;
 
     // Rate limiting per prevenire spam
     ws.messageCount = 0;
@@ -177,9 +180,14 @@ wss.on('connection', (ws) => {
     // Invia un ping iniziale per testare la connessione
     setTimeout(() => {
         if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ 
+                action: 'connectionConfirmed', 
+                timestamp: Date.now(),
+                message: 'Connessione WebSocket stabilita con successo'
+            }));
             ws.send(JSON.stringify({ action: 'ping', timestamp: Date.now() }));
         }
-    }, 1000);
+    }, 500);
 
     ws.on('message', (message) => {
         try {
@@ -540,23 +548,32 @@ wss.on('connection', (ws) => {
     });
 });
 
+// Heartbeat automatico più frequente per mantenere connessioni attive
+setInterval(() => {
+    const now = Date.now();
+    
+    wss.clients.forEach((ws) => {
+        if (ws.readyState === WebSocket.OPEN) {
+            // Invia ping ogni 20 secondi
+            ws.send(JSON.stringify({ action: 'ping', timestamp: now }));
+            ws.lastPing = now;
+        }
+    });
+    
+    console.log(`💓 Heartbeat inviato a ${wss.clients.size} client connessi`);
+}, 20000); // Ogni 20 secondi
+
 // Pulizia periodica delle risorse e connessioni morte
 setInterval(() => {
     const now = Date.now();
 
-    // Pulisci connessioni WebSocket morte (nessun pong per più di 60 secondi)
+    // Pulisci connessioni WebSocket morte (nessun pong per più di 40 secondi)
     let deadConnections = 0;
     wss.clients.forEach((ws) => {
-        if (now - ws.lastPong > 60000) { // 60 secondi senza pong
+        if (now - ws.lastPong > 40000) { // 40 secondi senza pong
             console.log(`🗑️ Connessione morta rilevata, terminazione...`);
             ws.terminate();
             deadConnections++;
-        } else if (now - ws.lastPing > 45000) { // 45 secondi dall'ultimo ping
-            // Invia un ping di controllo
-            if (ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ action: 'ping', timestamp: now }));
-                ws.lastPing = now;
-            }
         }
     });
 
@@ -592,8 +609,8 @@ setInterval(() => {
         }
     });
 
-    console.log(`🧹 Risorse pulite - Rate limiter: ${rateLimiter.size}, Rooms: ${companyRooms.size}, Countdown attivi: ${totalActiveCountdowns}`);
-}, 300000); // Ogni 5 minuti
+    console.log(`🧹 Risorse pulite - Rate limiter: ${rateLimiter.size}, Rooms: ${companyRooms.size}, Countdown attivi: ${totalActiveCountdowns}, Client: ${wss.clients.size}`);
+}, 120000); // Ogni 2 minuti
 
 // Gestione errori globali per prevenire crash
 process.on('uncaughtException', (error) => {

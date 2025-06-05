@@ -600,14 +600,19 @@
                     // Avvia heartbeat
                     startHeartbeat();
 
-                    // Unisciti alla room
-                    const companyName = localStorage.getItem('userCompany') || 'Nome Azienda';
-                    const joinMessage = {
-                        action: 'joinRoom',
-                        companyName: companyName
-                    };
-                    ws.send(JSON.stringify(joinMessage));
-                    console.log(`✅ Connesso alla room: ${companyName}`);
+                    // Unisciti alla room con un piccolo delay per stabilizzare la connessione
+                    setTimeout(() => {
+                        const companyName = localStorage.getItem('userCompany') || 'Nome Azienda';
+                        const joinMessage = {
+                            action: 'joinRoom',
+                            companyName: companyName
+                        };
+                        
+                        if (ws.readyState === WebSocket.OPEN) {
+                            ws.send(JSON.stringify(joinMessage));
+                            console.log(`✅ Connesso alla room: ${companyName}`);
+                        }
+                    }, 100);
 
                     // Mostra stato connessione
                     updateConnectionStatus(true);
@@ -630,6 +635,9 @@
                             if (ws && ws.readyState === WebSocket.OPEN) {
                                 ws.send(JSON.stringify({ action: 'pong', timestamp: Date.now() }));
                             }
+                            return;
+                        } else if (data.action === 'connectionConfirmed') {
+                            console.log('✅ Conferma connessione ricevuta:', data.message);
                             return;
                         } else if (data.action === 'startCountdown') {
                             console.log('📥 Countdown ricevuto via WebSocket:', data);
@@ -710,9 +718,12 @@
         function startHeartbeat() {
             heartbeatInterval = setInterval(() => {
                 if (ws && ws.readyState === WebSocket.OPEN) {
-                    ws.send(JSON.stringify({ action: 'ping' }));
+                    ws.send(JSON.stringify({ action: 'pong', timestamp: Date.now() }));
+                } else if (ws && ws.readyState !== WebSocket.CONNECTING) {
+                    console.log('🔄 Connessione persa durante heartbeat, riconnetto...');
+                    connectWebSocket();
                 }
-            }, 30000); // Ping ogni 30 secondi
+            }, 15000); // Pong ogni 15 secondi
         }
 
         function stopHeartbeat() {
