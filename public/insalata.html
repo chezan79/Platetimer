@@ -221,6 +221,13 @@
                 } else if (data.action === 'deleteVoiceMessage') {
                     console.log('🗑️ Eliminazione messaggio vocale ricevuta in insalata:', data);
                     removeVoiceMessage(data.messageId);
+                } else if (data.action === 'pausaCucina') {
+                    console.log('⏸️ Messaggio pausa cucina ricevuto in INSALATA:', data);
+                    console.log(`⏸️ Dettagli pausa: ${data.durataMinuti} minuti da ${data.from}`);
+                    gestisciPausaCucina(data);
+                } else if (data.action === 'annullaPausaCucina') {
+                    console.log('❌ Messaggio annullamento pausa ricevuto in INSALATA:', data);
+                    annullaPausaCucina();
                 }
             } catch (error) {
                 console.error('Errore nel parsing del messaggio:', error);
@@ -546,6 +553,149 @@
 
                 console.log(`🗑️ Messaggio vocale eliminato in insalata: ID ${messageId}`);
             }
+        }
+
+        // Sistema pausa cucina per insalata
+        let pausaCucinaAttiva = false;
+        let pausaCucinaTimer = null;
+
+        function gestisciPausaCucina(pausaData) {
+            console.log('🎯 INSALATA - Inizio gestione pausa cucina:', pausaData);
+            console.log(`⏸️ Dati ricevuti: ${pausaData.durataMinuti}min da ${pausaData.from} alle ${pausaData.timestamp}`);
+
+            if (pausaCucinaAttiva) {
+                console.log('⚠️ Pausa cucina già attiva in insalata, ignorato');
+                return;
+            }
+
+            const durataMinuti = pausaData.durataMinuti;
+            const from = pausaData.from || 'Pizzeria';
+
+            console.log(`✅ INSALATA - Avvio pausa per ${durataMinuti} minuti da ${from}`);
+
+            // Avvia pausa locale
+            avviaPausaCucina(durataMinuti, from);
+
+            // Mostra messaggio di allarme con countdown
+            mostraMessaggioPausaCucina(pausaData);
+
+            console.log('🎯 INSALATA - Gestione pausa completata');
+        }
+
+        function avviaPausaCucina(durataMinuti, from) {
+            pausaCucinaAttiva = true;
+            console.log(`⏸️ INSALATA - Pausa cucina attivata per ${durataMinuti} minuti`);
+
+            // Timer per fine pausa automatica
+            pausaCucinaTimer = setTimeout(() => {
+                annullaPausaCucina();
+                console.log('⏰ INSALATA - Pausa cucina terminata automaticamente');
+            }, durataMinuti * 60 * 1000);
+        }
+
+        function annullaPausaCucina() {
+            if (!pausaCucinaAttiva) {
+                console.log('⚠️ INSALATA - Nessuna pausa attiva da annullare');
+                return;
+            }
+
+            pausaCucinaAttiva = false;
+
+            // Pulisci timer se esiste
+            if (pausaCucinaTimer) {
+                clearTimeout(pausaCucinaTimer);
+                pausaCucinaTimer = null;
+            }
+
+            // Rimuovi messaggio pausa se presente
+            const pausaElement = document.getElementById('pausa-cucina-message');
+            if (pausaElement) {
+                pausaElement.remove();
+            }
+
+            console.log('❌ INSALATA - Pausa cucina annullata');
+        }
+
+        function mostraMessaggioPausaCucina(pausaData) {
+            // Rimuovi messaggio precedente se esiste
+            const existingMessage = document.getElementById('pausa-cucina-message');
+            if (existingMessage) {
+                existingMessage.remove();
+            }
+
+            // Crea elemento messaggio pausa
+            const pausaElement = document.createElement('div');
+            pausaElement.id = 'pausa-cucina-message';
+            pausaElement.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);
+                color: white;
+                padding: 25px;
+                border-radius: 15px;
+                box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3);
+                z-index: 2000;
+                text-align: center;
+                border: 3px solid #e65100;
+                min-width: 350px;
+                font-family: Arial, sans-serif;
+                animation: pausaPulse 2s ease-in-out infinite;
+            `;
+
+            // Aggiungi animazione CSS
+            if (!document.getElementById('pausaAnimations')) {
+                const style = document.createElement('style');
+                style.id = 'pausaAnimations';
+                style.textContent = `
+                    @keyframes pausaPulse {
+                        0%, 100% { transform: translate(-50%, -50%) scale(1); }
+                        50% { transform: translate(-50%, -50%) scale(1.05); }
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+
+            let tempoRimanente = pausaData.durataMinuti * 60;
+
+            function aggiornaPausaDisplay() {
+                const minuti = Math.floor(tempoRimanente / 60);
+                const secondi = tempoRimanente % 60;
+                
+                pausaElement.innerHTML = `
+                    <div style="font-size: 20px; font-weight: bold; margin-bottom: 10px;">
+                        ⏸️ PAUSA CUCINA ATTIVA
+                    </div>
+                    <div style="font-size: 16px; margin-bottom: 8px;">
+                        Richiesta da: ${pausaData.from}
+                    </div>
+                    <div style="font-size: 24px; font-weight: bold; color: #fff3e0;">
+                        ${minuti}:${secondi.toString().padStart(2, '0')}
+                    </div>
+                    <div style="font-size: 14px; margin-top: 8px; opacity: 0.9;">
+                        Servizio temporaneamente sospeso
+                    </div>
+                `;
+
+                if (tempoRimanente > 0) {
+                    tempoRimanente--;
+                    setTimeout(aggiornaPausaDisplay, 1000);
+                } else {
+                    annullaPausaCucina();
+                }
+            }
+
+            document.body.appendChild(pausaElement);
+            aggiornaPausaDisplay();
+
+            // Riproduci allarme per pausa
+            const alertAudio = document.getElementById('alertSound');
+            if (alertAudio) {
+                alertAudio.play().catch(e => console.log('Errore audio pausa insalata:', e));
+            }
+
+            console.log('🚨 INSALATA - Messaggio pausa cucina visualizzato');
         }
 
         // Sistema messaggio vocale con registrazione audio per insalata
