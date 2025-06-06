@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="it">
 <head>
@@ -133,7 +132,7 @@
     <script type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
         import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
-        import { getFirestore, doc, getDoc, updateDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+        import { getFirestore, doc, getDoc, updateDoc, setDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
         // Configurazione Firebase
         const firebaseConfig = {
@@ -149,11 +148,8 @@
         const auth = getAuth(app);
         const db = getFirestore(app);
 
+        // Abbonamenti temporaneamente disabilitati
         let currentUser = null;
-        let selectedPlan = null;
-
-        // Stripe
-        const stripe = Stripe('pk_test_51234...'); // Inserisci la tua chiave pubblica Stripe
 
         // Verifica autenticazione
         onAuthStateChanged(auth, async (user) => {
@@ -163,83 +159,53 @@
             }
 
             currentUser = user;
-            
-            // Carica dati utente
+
+            // Verifica se l'utente ha già accesso
             const userDoc = await getDoc(doc(db, "users", user.uid));
             if (userDoc.exists()) {
                 const userData = userDoc.data();
-                document.getElementById('user-name').textContent = userData.firstName + ' ' + userData.lastName;
+                 document.getElementById('user-name').textContent = userData.firstName + ' ' + userData.lastName;
                 document.getElementById('user-email').textContent = userData.email;
                 document.getElementById('user-company').textContent = userData.company || 'Non specificata';
                 document.getElementById('current-plan').textContent = userData.subscriptionPlan || 'Base Gratuito';
+
+
+                // Se ha già dati, vai direttamente alla home
+                if (userData.companyName) {
+                    window.location.href = 'home.html';
+                    return;
+                }
             }
         });
 
-        // Gestione selezione piano
-        document.querySelectorAll('.plan-card').forEach(card => {
-            card.addEventListener('click', () => {
-                // Rimuovi selezione precedente
-                document.querySelectorAll('.plan-card').forEach(c => c.classList.remove('selected'));
-                
-                // Seleziona nuovo piano
-                card.classList.add('selected');
-                selectedPlan = card.dataset.plan;
-                
-                // Aggiorna pulsante
-                const btn = document.getElementById('subscribe-btn');
-                if (selectedPlan === 'free') {
-                    btn.textContent = 'Piano Gratuito Attivo';
-                    btn.disabled = false;
-                } else {
-                    btn.textContent = `Sottoscrivi Piano ${selectedPlan.charAt(0).toUpperCase() + selectedPlan.slice(1)}`;
-                    btn.disabled = false;
-                }
-            });
-        });
-
-        // Gestione sottoscrizione
-        document.getElementById('subscribe-btn').addEventListener('click', async () => {
-            if (!selectedPlan || !currentUser) return;
-
-            if (selectedPlan === 'free') {
-                // Attiva piano gratuito
-                await updateDoc(doc(db, "users", currentUser.uid), {
-                    subscriptionPlan: 'free',
-                    subscriptionStatus: 'active',
-                    updatedAt: new Date()
-                });
-                
-                alert('Piano Gratuito attivato!');
-                window.location.href = 'home.html';
+        // Funzione per accesso diretto all'app
+        function accessApp() {
+            if (!currentUser) {
+                alert('Errore: utente non autenticato');
                 return;
             }
 
-            // Per piani a pagamento, crea sessione Stripe
-            try {
-                const response = await fetch('/api/create-checkout-session', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        plan: selectedPlan,
-                        userId: currentUser.uid,
-                        userEmail: currentUser.email
-                    })
-                });
-
-                const session = await response.json();
-                
-                if (session.url) {
-                    window.location.href = session.url;
-                } else {
-                    alert('Errore nella creazione della sessione di pagamento');
-                }
-            } catch (error) {
+            // Crea/aggiorna dati utente con accesso completo
+            setDoc(doc(db, "users", currentUser.uid), {
+                email: currentUser.email,
+                firstName: currentUser.email.split('@')[0],
+                lastName: "user",
+                company:  currentUser.email.split('@')[0],
+                subscriptionPlan: 'test',
+                subscriptionStatus: 'active', // Temporaneamente attivo
+                createdAt: new Date(),
+                updatedAt: new Date()
+            }).then(() => {
+                alert('✅ Accesso concesso! Benvenuto in MealMaster');
+                window.location.href = 'home.html';
+            }).catch((error) => {
                 console.error('Errore:', error);
-                alert('Errore nel processo di pagamento');
-            }
-        });
+                alert('Errore durante l\'attivazione. Riprova.');
+            });
+        }
+         document.getElementById('subscribe-btn').addEventListener('click',  () => {
+             accessApp();
+         });
     </script>
 </body>
 </html>
