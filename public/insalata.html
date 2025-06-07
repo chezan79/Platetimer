@@ -189,15 +189,22 @@
         const countdowns = [];
 
         ws.onopen = () => {
-            // Unisciti alla room dell'azienda
-            const companyName = localStorage.getItem('userCompany') || 'Nome Azienda';
-            const joinMessage = {
-                action: 'joinRoom',
-                companyName: companyName
-            };
-            ws.send(JSON.stringify(joinMessage));
-            console.log(`Insalata connessa alla room: ${companyName}`);
-        };
+                    console.log('🔗 Insalata WebSocket connesso');
+
+                    // Unisciti alla room con un piccolo delay per stabilizzare la connessione
+                    setTimeout(() => {
+                        const companyName = localStorage.getItem('userCompany') || 'Nome Azienda';
+                        const joinMessage = {
+                            action: 'joinRoom',
+                            companyName: companyName
+                        };
+
+                        if (ws.readyState === WebSocket.OPEN) {
+                            ws.send(JSON.stringify(joinMessage));
+                            console.log(`✅ Insalata connessa alla room: ${companyName}`);
+                        }
+                    }, 100);
+                };
 
         function sortCountdowns() {
             countdowns.sort((a, b) => a.timeRemaining - b.timeRemaining);
@@ -217,15 +224,17 @@
                     return;
                 }
 
-                if (data.action === 'startCountdown') {
-                    console.log('📥 Countdown ricevuto in insalata:', data);
-                    // Mostra solo i countdown destinati all'insalata
-                    if (data.destination === 'insalata') {
-                        console.log(`✅ Countdown accettato per insalata - Tavolo: ${data.tableNumber}`);
-                        startCountdown(data.tableNumber, data.timeRemaining);
-                    } else {
-                        console.log(`🚫 Countdown ignorato - Destinazione: ${data.destination || 'undefined'}, Tavolo: ${data.tableNumber}`);
-                    }
+                } else if (data.action === 'startCountdown') {
+                            console.log('📥 Countdown ricevuto in insalata:', data);
+                            console.log(`🔍 Destinazione ricevuta: "${data.destination}", Tavolo: ${data.tableNumber}`);
+
+                            // Mostra solo i countdown destinati all'insalata
+                            if (data.destination && data.destination === 'insalata') {
+                                console.log(`✅ Countdown accettato per insalata - Tavolo: ${data.tableNumber}`);
+                                startCountdown(data.tableNumber, data.timeRemaining);
+                            } else {
+                                console.log(`🚫 Countdown RIFIUTATO in insalata - Destinazione: "${data.destination || 'undefined'}", Tavolo: ${data.tableNumber}`);
+                            }
                 } else if (data.action === 'deleteCountdown') {
                     console.log(`🗑️ Eliminazione countdown in insalata: Tavolo ${data.tableNumber}`);
                     deleteCountdown(data.tableNumber);
@@ -622,8 +631,7 @@
 
             if (pausaCucinaAttiva) {
                 console.log('⚠️ Pausa cucina già attiva in insalata, ignorato');
-                return;
-            }
+                return;            }
 
             const durataMinuti = pausaData.durataMinuti;
             const from = pausaData.from || 'Pizzeria';
