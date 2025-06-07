@@ -854,6 +854,21 @@ wss.on('connection', (ws, req) => {
                 }
 
             } else if (data.action === 'callAudio') {
+                // Rate limiting specifico per audio chiamate (più permissivo - max 30 al minuto)
+                const callAudioLimit = audioRateLimiter.get(ws.clientIp) || { count: 0, resetTime: now + 60000 };
+                if (now > callAudioLimit.resetTime) {
+                    callAudioLimit.count = 1;
+                    callAudioLimit.resetTime = now + 60000;
+                } else {
+                    callAudioLimit.count++;
+                }
+                audioRateLimiter.set(ws.clientIp, callAudioLimit);
+                
+                if (callAudioLimit.count > 30) {
+                    console.log('⚠️ Rate limit audio chiamate superato');
+                    return;
+                }
+
                 // Gestione audio durante chiamata
                 if (!data.callId || typeof data.callId !== 'string') {
                     console.log('⚠️ ID chiamata mancante per audio');

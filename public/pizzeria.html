@@ -388,6 +388,12 @@
 
         function startHeartbeat() {
             heartbeatInterval = setInterval(() => {
+                // Non inviare heartbeat durante chiamate attive per evitare interferenze
+                if (isInCall) {
+                    console.log('📞 Heartbeat sospeso durante chiamata');
+                    return;
+                }
+                
                 if (ws && ws.readyState === WebSocket.OPEN) {
                     ws.send(JSON.stringify({ action: 'pong', timestamp: Date.now() }));
                 } else if (ws && ws.readyState !== WebSocket.CONNECTING) {
@@ -1811,7 +1817,16 @@
 
                 callAudioRecorder.onerror = (error) => {
                     console.error('❌ Pizzeria - Errore MediaRecorder:', error);
-                    // Non terminare immediatamente, può essere un errore temporaneo
+                    
+                    // Riavvia il MediaRecorder in caso di errore
+                    setTimeout(() => {
+                        if (isInCall && currentCall) {
+                            console.log('🔄 Pizzeria - Tentativo riavvio MediaRecorder...');
+                            avviaAudioChiamata().catch(restartError => {
+                                console.error('❌ Pizzeria - Impossibile riavviare audio:', restartError);
+                            });
+                        }
+                    }, 1000);
                 };
 
                 callAudioRecorder.onstart = () => {
@@ -1822,8 +1837,8 @@
                     console.log('🛑 Pizzeria - MediaRecorder fermato');
                 };
 
-                // Avvia registrazione con intervallo ottimizzato per ridurre carico
-                callAudioRecorder.start(2000); // Ogni 2 secondi
+                // Intervallo ottimizzato per qualità e stabilità
+                callAudioRecorder.start(1500); // Ogni 1.5 secondi
                 console.log('🎤 Pizzeria - Audio chiamata avviato correttamente con intervallo 2s');
 
             } catch (error) {
@@ -2051,10 +2066,12 @@
                         timerElement.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
                     }
 
-                    // Auto-disconnect dopo 5 minuti
-                    if (elapsed >= 300) { // 5 minuti
-                        console.log('⏰ Pizzeria - Chiamata terminata automaticamente dopo 5 minuti');
+                    // Auto-disconnect dopo 10 minuti con logging  
+                    if (elapsed >= 600) { // 10 minuti
+                        console.log('⏰ Pizzeria - Chiamata terminata automaticamente dopo 10 minuti');
                         terminaChiamata();
+                    } else if (elapsed % 30 === 0) { // Log ogni 30 secondi
+                        console.log(`📞 Chiamata attiva: ${Math.floor(elapsed/60)}:${String(elapsed%60).padStart(2,'0')}`);
                     }
                 }, 1000);
                 
