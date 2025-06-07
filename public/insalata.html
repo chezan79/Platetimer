@@ -47,34 +47,6 @@
         }
 
         .countdown-item:hover {
-
-        
-        function updateConnectionStatus(connected) {
-            let status = document.getElementById('connection-status');
-            if (!status) {
-                status = document.createElement('div');
-                status.id = 'connection-status';
-                status.style.cssText = `
-                    position: fixed; bottom: 20px; right: 20px; z-index: 1001;
-                    padding: 8px 12px; border-radius: 6px; font-size: 12px;
-                    font-weight: 600; transition: all 0.3s ease;
-                `;
-                document.body.appendChild(status);
-            }
-
-            if (connected) {
-                status.textContent = '🟢 Connesso';
-                status.style.backgroundColor = '#d4edda';
-                status.style.color = '#155724';
-                status.style.border = '1px solid #c3e6cb';
-            } else {
-                status.textContent = '🔴 Disconnesso - Riconnessione...';
-                status.style.backgroundColor = '#f8d7da';
-                status.style.color = '#721c24';
-                status.style.border = '1px solid #f5c6cb';
-            }
-        }
-
             transform: translateY(-1px);
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
@@ -215,6 +187,32 @@
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
         const countdowns = [];
+
+        function updateConnectionStatus(connected) {
+            let status = document.getElementById('connection-status');
+            if (!status) {
+                status = document.createElement('div');
+                status.id = 'connection-status';
+                status.style.cssText = `
+                    position: fixed; bottom: 20px; right: 20px; z-index: 1001;
+                    padding: 8px 12px; border-radius: 6px; font-size: 12px;
+                    font-weight: 600; transition: all 0.3s ease;
+                `;
+                document.body.appendChild(status);
+            }
+
+            if (connected) {
+                status.textContent = '🟢 Connesso';
+                status.style.backgroundColor = '#d4edda';
+                status.style.color = '#155724';
+                status.style.border = '1px solid #c3e6cb';
+            } else {
+                status.textContent = '🔴 Disconnesso - Riconnessione...';
+                status.style.backgroundColor = '#f8d7da';
+                status.style.color = '#721c24';
+                status.style.border = '1px solid #f5c6cb';
+            }
+        }
 
         ws.onopen = () => {
                     console.log('🔗 Insalata WebSocket connesso');
