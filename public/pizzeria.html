@@ -404,10 +404,6 @@
                 interval: null
             };
             countdown.interval = setInterval(() => {
-                // Decrementa PRIMA come negli altri file
-                remainingTime--;
-                countdown.timeRemaining = remainingTime;
-
                 if (remainingTime <= 0) {
                     clearInterval(countdown.interval);
                     countdownElement.style.backgroundColor = '#ff4444';
@@ -438,6 +434,10 @@
                     }, 45000);
                     return;
                 }
+
+                // Decrementa PRIMA come in cucina.html
+                remainingTime--;
+                countdown.timeRemaining = remainingTime;
 
                 // Riordina ogni 5 secondi come negli altri file
                 if (remainingTime % 5 === 0) {
