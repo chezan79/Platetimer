@@ -222,8 +222,6 @@
                 if (data.action === 'ping') {
                     ws.send(JSON.stringify({ action: 'pong' }));
                     return;
-                }
-
                 } else if (data.action === 'startCountdown') {
                             console.log('📥 Countdown ricevuto in insalata:', data);
                             console.log(`🔍 Destinazione ricevuta: "${data.destination}", Tavolo: ${data.tableNumber}`);
@@ -1057,12 +1055,7 @@
         let pausaAttiva = false;
         let pausaTimer = null;
 
-        // Alias per compatibilità con i pulsanti
         function inviaMessaggioPausaInsalata(minuti) {
-            return inviaMessaggioPausa(minuti);
-        }
-
-        function inviaMessaggioPausa(minuti) {
             if (pausaAttiva) {
                 alert('⚠️ Una pausa è già attiva!');
                 return;
@@ -1094,6 +1087,11 @@
 
             // Avvia stato di pausa locale
             avviaPausaLocale(minuti);
+        }
+
+        // Alias per compatibilità (se necessario)
+        function inviaMessaggioPausa(minuti) {
+            return inviaMessaggioPausaInsalata(minuti);
         }
 
         function avviaPausaLocale(minuti) {
