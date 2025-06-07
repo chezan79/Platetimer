@@ -681,6 +681,175 @@ wss.on('connection', (ws, req) => {
                 } else {
                     console.log('⚠️ Client non assegnato a nessuna room per annullamento pausa insalata');
                 }
+
+            } else if (data.action === 'startCall') {
+                // Validazione richiesta avvio chiamata
+                if (!data.callId || typeof data.callId !== 'string') {
+                    console.log('⚠️ ID chiamata mancante');
+                    return;
+                }
+
+                if (!data.targetPage || typeof data.targetPage !== 'string') {
+                    console.log('⚠️ Pagina destinazione chiamata mancante');
+                    return;
+                }
+
+                const validPages = ['cucina', 'pizzeria', 'insalata'];
+                if (!validPages.includes(data.targetPage)) {
+                    console.log('⚠️ Pagina destinazione chiamata non valida');
+                    return;
+                }
+
+                // Invia richiesta chiamata ai client della pagina target
+                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    const callMessage = JSON.stringify({
+                        action: 'incomingCall',
+                        callId: data.callId,
+                        from: data.from || ws.pageType || 'Sconosciuto',
+                        fromPage: ws.pageType,
+                        targetPage: data.targetPage,
+                        timestamp: new Date().toLocaleTimeString('it-IT')
+                    });
+
+                    let sentCount = 0;
+                    roomClients.forEach((client) => {
+                        if (client.readyState === WebSocket.OPEN && client.pageType === data.targetPage && client !== ws) {
+                            client.send(callMessage);
+                            sentCount++;
+                        }
+                    });
+
+                    console.log(`📞 Richiesta chiamata inviata da ${ws.pageType} a ${data.targetPage}: ${sentCount} client notificati`);
+                } else {
+                    console.log('⚠️ Client non assegnato a nessuna room per chiamata');
+                }
+
+            } else if (data.action === 'acceptCall') {
+                // Validazione accettazione chiamata
+                if (!data.callId || typeof data.callId !== 'string') {
+                    console.log('⚠️ ID chiamata mancante per accettazione');
+                    return;
+                }
+
+                // Invia conferma accettazione chiamata
+                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    const acceptMessage = JSON.stringify({
+                        action: 'callAccepted',
+                        callId: data.callId,
+                        from: ws.pageType,
+                        timestamp: new Date().toLocaleTimeString('it-IT')
+                    });
+
+                    let sentCount = 0;
+                    roomClients.forEach((client) => {
+                        if (client.readyState === WebSocket.OPEN) {
+                            client.send(acceptMessage);
+                            sentCount++;
+                        }
+                    });
+
+                    console.log(`✅ Chiamata ${data.callId} accettata da ${ws.pageType}`);
+                } else {
+                    console.log('⚠️ Client non assegnato a nessuna room per accettazione chiamata');
+                }
+
+            } else if (data.action === 'rejectCall') {
+                // Validazione rifiuto chiamata
+                if (!data.callId || typeof data.callId !== 'string') {
+                    console.log('⚠️ ID chiamata mancante per rifiuto');
+                    return;
+                }
+
+                // Invia conferma rifiuto chiamata
+                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    const rejectMessage = JSON.stringify({
+                        action: 'callRejected',
+                        callId: data.callId,
+                        from: ws.pageType,
+                        timestamp: new Date().toLocaleTimeString('it-IT')
+                    });
+
+                    let sentCount = 0;
+                    roomClients.forEach((client) => {
+                        if (client.readyState === WebSocket.OPEN) {
+                            client.send(rejectMessage);
+                            sentCount++;
+                        }
+                    });
+
+                    console.log(`❌ Chiamata ${data.callId} rifiutata da ${ws.pageType}`);
+                } else {
+                    console.log('⚠️ Client non assegnato a nessuna room per rifiuto chiamata');
+                }
+
+            } else if (data.action === 'endCall') {
+                // Validazione fine chiamata
+                if (!data.callId || typeof data.callId !== 'string') {
+                    console.log('⚠️ ID chiamata mancante per termine');
+                    return;
+                }
+
+                // Invia messaggio fine chiamata a tutti i client
+                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    const endMessage = JSON.stringify({
+                        action: 'callEnded',
+                        callId: data.callId,
+                        from: ws.pageType,
+                        timestamp: new Date().toLocaleTimeString('it-IT')
+                    });
+
+                    let sentCount = 0;
+                    roomClients.forEach((client) => {
+                        if (client.readyState === WebSocket.OPEN) {
+                            client.send(endMessage);
+                            sentCount++;
+                        }
+                    });
+
+                    console.log(`📞 Chiamata ${data.callId} terminata da ${ws.pageType}`);
+                } else {
+                    console.log('⚠️ Client non assegnato a nessuna room per termine chiamata');
+                }
+
+            } else if (data.action === 'callAudio') {
+                // Gestione audio durante chiamata
+                if (!data.callId || typeof data.callId !== 'string') {
+                    console.log('⚠️ ID chiamata mancante per audio');
+                    return;
+                }
+
+                if (!data.audioData || typeof data.audioData !== 'string') {
+                    console.log('⚠️ Dati audio mancanti per chiamata');
+                    return;
+                }
+
+                // Invia audio agli altri partecipanti della chiamata
+                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    const audioMessage = JSON.stringify({
+                        action: 'callAudio',
+                        callId: data.callId,
+                        audioData: data.audioData,
+                        from: ws.pageType,
+                        timestamp: new Date().toLocaleTimeString('it-IT')
+                    });
+
+                    let sentCount = 0;
+                    roomClients.forEach((client) => {
+                        if (client.readyState === WebSocket.OPEN && client !== ws) {
+                            client.send(audioMessage);
+                            sentCount++;
+                        }
+                    });
+
+                    console.log(`🔊 Audio chiamata ${data.callId} inviato da ${ws.pageType} a ${sentCount} client`);
+                } else {
+                    console.log('⚠️ Client non assegnato a nessuna room per audio chiamata');
+                }
             }
         } catch (error) {
             console.error('❌ Errore nel parsing del messaggio:', error);
