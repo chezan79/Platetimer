@@ -668,7 +668,7 @@
                     // Ferma tutti i track del microfono
                     stream.getTracks().forEach(track => track.stop());
 
-                    // Elabora l'audio registrato
+                    // Elabora l'audioregistrato
                     processRecordedAudio();
                 };
 
@@ -1476,8 +1476,7 @@
                         ${minuti}:${secondi.toString().padStart(2, '0')}
                     </div>
                     <div style="font-size: 14px; margin-top: 8px; opacity: 0.9;">
-                        Servizio temporaneamente sospeso
-                    </div>
+                        Servizio temporaneamente sospeso                    </div>
                 `;
 
                 if (tempoRimanente > 0) {
@@ -1601,7 +1600,7 @@
             }
 
             const callId = `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-            
+
             if (ws && ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({
                     action: 'startCall',
@@ -1733,6 +1732,12 @@
                 </div>
             `;
             document.body.appendChild(callDiv);
+
+            const alertAudio = document.getElementById('alertSound');
+            if (alertAudio) {
+                alertAudio.loop = true;
+                alertAudio.play().catch(e => console.log('Errore audio chiamata:', e));
+            }
         }
 
         function mostraInterfacciaChiamataAttiva(targetPage) {
@@ -1760,7 +1765,12 @@
         function rimuoviInterfacciaChiamata() {
             const incomingCall = document.getElementById('incoming-call-interface');
             const activeCall = document.getElementById('active-call-interface');
-            if (incomingCall) incomingCall.remove();
+            if (incomingCall) {
+                alertAudio.loop = false;
+                alertAudio.pause();
+                alertAudio.currentTime = 0;
+                incomingCall.remove();
+            }
             if (activeCall) activeCall.remove();
         }
 

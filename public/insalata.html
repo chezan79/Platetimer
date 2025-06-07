@@ -1537,7 +1537,7 @@ function mostraAvvisoPaginaOccupata(data) {
             }
 
             const callId = `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-            
+
             if (ws && ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({
                     action: 'startCall',
@@ -1716,7 +1716,7 @@ function mostraAvvisoPaginaOccupata(data) {
             const activeCall = document.getElementById('active-call-interface');
             if (incomingCall) incomingCall.remove();
             if (activeCall) activeCall.remove();
-            
+
             const alertAudio = document.getElementById('alertSound');
             if (alertAudio) {
                 alertAudio.loop = false;
