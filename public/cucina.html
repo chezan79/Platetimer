@@ -2701,6 +2701,14 @@
 
             // Creo una funzione separata per gestire l'accettazione
             window.accettaChiamataAttuale = function() {
+                // Ferma l'allarme prima di accettare
+                const alertAudio = document.getElementById('alertSound');
+                if (alertAudio) {
+                    alertAudio.pause();
+                    alertAudio.currentTime = 0;
+                    alertAudio.loop = false;
+                }
+                
                 accettaChiamata(data.callId);
                 rimuoviInterfacciaChiamata();
                 mostraInterfacciaChiamataAttiva(data.from);
@@ -2708,6 +2716,14 @@
 
             // Creo una funzione separata per gestire il rifiuto
             window.rifiutaChiamataAttuale = function() {
+                // Ferma l'allarme quando si rifiuta
+                const alertAudio = document.getElementById('alertSound');
+                if (alertAudio) {
+                    alertAudio.pause();
+                    alertAudio.currentTime = 0;
+                    alertAudio.loop = false;
+                }
+                
                 rifiutaChiamata(data.callId);
             };
 
@@ -2728,11 +2744,27 @@
 
             document.body.appendChild(callDiv);
 
-            // Riproduci suono di chiamata
+            // Riproduci suono di chiamata con gestione errori migliorata
             const alertAudio = document.getElementById('alertSound');
             if (alertAudio) {
                 alertAudio.loop = true;
-                alertAudio.play().catch(e => console.log('Errore audio chiamata:', e));
+                alertAudio.currentTime = 0;
+                
+                // Prova prima con interazione utente
+                const playPromise = alertAudio.play();
+                if (playPromise !== undefined) {
+                    playPromise.catch(error => {
+                        console.log('⚠️ Errore riproduzione audio chiamata (richiede interazione utente):', error);
+                        // Fallback: mostra allarme visivo più prominente
+                        callDiv.style.background = 'linear-gradient(135deg, #dc3545 0%, #c82333 100%)';
+                        callDiv.style.animation = 'callPulse 0.5s ease-in-out infinite';
+                    });
+                }
+            } else {
+                console.log('⚠️ Audio elemento non trovato per chiamata');
+                // Fallback visivo
+                callDiv.style.background = 'linear-gradient(135deg, #dc3545 0%, #c82333 100%)';
+                callDiv.style.animation = 'callPulse 0.5s ease-in-out infinite';
             }
 
             console.log(`📞 Chiamata in arrivo da ${data.from}, ID: ${data.callId}`);
@@ -2807,12 +2839,16 @@
                 activeCall.remove();
             }
 
-            // Ferma suono di chiamata
+            // Ferma suono di chiamata in modo più robusto
             const alertAudio = document.getElementById('alertSound');
             if (alertAudio) {
-                alertAudio.loop = false;
-                alertAudio.pause();
-                alertAudio.currentTime = 0;
+                try {
+                    alertAudio.pause();
+                    alertAudio.currentTime = 0;
+                    alertAudio.loop = false;
+                } catch (error) {
+                    console.log('⚠️ Errore stopping audio:', error);
+                }
             }
         }
 

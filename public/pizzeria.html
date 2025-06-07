@@ -1716,6 +1716,7 @@
 
         function mostraChiamataInArrivo(data) {
             rimuoviInterfacciaChiamata();
+            
             const callDiv = document.createElement('div');
             callDiv.id = 'incoming-call-interface';
             callDiv.style.cssText = `
@@ -1727,21 +1728,84 @@
                 animation: callPulse 1s ease-in-out infinite;
             `;
 
+            // Aggiungi animazione CSS se non esiste
+            if (!document.getElementById('callAnimations')) {
+                const style = document.createElement('style');
+                style.id = 'callAnimations';
+                style.textContent = `
+                    @keyframes callPulse {
+                        0%, 100% { transform: translate(-50%, -50%) scale(1); }
+                        50% { transform: translate(-50%, -50%) scale(1.05); }
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+
+            // Crea funzioni globali per gestire la chiamata
+            window.accettaChiamataInPizzeria = function() {
+                // Ferma l'allarme
+                const alertAudio = document.getElementById('alertSound');
+                if (alertAudio) {
+                    alertAudio.pause();
+                    alertAudio.currentTime = 0;
+                    alertAudio.loop = false;
+                }
+                
+                accettaChiamata(data.callId);
+                rimuoviInterfacciaChiamata();
+                mostraInterfacciaChiamataAttiva(data.from);
+            };
+
+            window.rifiutaChiamataInPizzeria = function() {
+                // Ferma l'allarme
+                const alertAudio = document.getElementById('alertSound');
+                if (alertAudio) {
+                    alertAudio.pause();
+                    alertAudio.currentTime = 0;
+                    alertAudio.loop = false;
+                }
+                
+                rifiutaChiamata(data.callId);
+            };
+
             callDiv.innerHTML = `
                 <div style="font-size: 20px; margin-bottom: 15px;">📞 CHIAMATA IN ARRIVO</div>
                 <div style="font-size: 16px; margin-bottom: 20px;">da <strong>${data.from}</strong></div>
                 <div style="display: flex; gap: 15px; justify-content: center;">
-                    <button onclick="accettaChiamata('${data.callId}')" 
-                            style="background: #28a745; color: white; border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer;">
+                    <button onclick="accettaChiamataInPizzeria()" 
+                            style="background: #28a745; color: white; border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600;">
                         ✅ Accetta
                     </button>
-                    <button onclick="rifiutaChiamata('${data.callId}')" 
-                            style="background: #dc3545; color: white; border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer;">
+                    <button onclick="rifiutaChiamataInPizzeria()" 
+                            style="background: #dc3545; color: white; border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600;">
                         ❌ Rifiuta
                     </button>
                 </div>
             `;
+            
             document.body.appendChild(callDiv);
+
+            // Riproduci allarme chiamata con gestione errori
+            const alertAudio = document.getElementById('alertSound');
+            if (alertAudio) {
+                alertAudio.loop = true;
+                alertAudio.currentTime = 0;
+                
+                const playPromise = alertAudio.play();
+                if (playPromise !== undefined) {
+                    playPromise.catch(error => {
+                        console.log('⚠️ Errore audio chiamata in pizzeria:', error);
+                        // Fallback visivo più prominente
+                        callDiv.style.background = 'linear-gradient(135deg, #dc3545 0%, #c82333 100%)';
+                        callDiv.style.animation = 'callPulse 0.5s ease-in-out infinite';
+                    });
+                }
+            } else {
+                console.log('⚠️ Audio elemento non trovato in pizzeria');
+                callDiv.style.background = 'linear-gradient(135deg, #dc3545 0%, #c82333 100%)';
+            }
+
+            console.log(`📞 Chiamata in arrivo da ${data.from} in pizzeria, ID: ${data.callId}`);
         }
 
         function mostraInterfacciaChiamataAttiva(targetPage) {
