@@ -143,11 +143,11 @@
         <div style="text-align: center; padding: 8px; background: linear-gradient(135deg, #e6ffe6 0%, #ccffcc 100%); border-radius: 8px; border-left: 4px solid #28a745; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); min-width: 200px;">
             <div style="margin-bottom: 4px; color: #155724; font-size: 12px; font-weight: 600;">⏸️ Pausa Insalata</div>
             <div style="display: flex; justify-content: center; align-items: center; gap: 6px; flex-wrap: nowrap;">
-                <button id="pause-10-btn" onclick="inviaMessaggioPausa(10)" 
+                <button id="pause-10-btn" onclick="inviaMessaggioPausaInsalata(10)" 
                         style="padding: 6px 12px; background: linear-gradient(135deg, #17a2b8 0%, #138496 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
                     ⏸️ 10min
                 </button>
-                <button id="pause-15-btn" onclick="inviaMessaggioPausa(15)" 
+                <button id="pause-15-btn" onclick="inviaMessaggioPausaInsalata(15)" 
                         style="padding: 6px 12px; background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
                     ⏸️ 15min
                 </button>
@@ -1056,6 +1056,11 @@
         // Sistema pausa insalata - funzioni per inviare pause dall'insalata
         let pausaAttiva = false;
         let pausaTimer = null;
+
+        // Alias per compatibilità con i pulsanti
+        function inviaMessaggioPausaInsalata(minuti) {
+            return inviaMessaggioPausa(minuti);
+        }
 
         function inviaMessaggioPausa(minuti) {
             if (pausaAttiva) {
