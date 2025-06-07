@@ -616,7 +616,7 @@
         // Funzione per resettare la selezione
         function resetSelection() {
             selectedDestinations = [];
-            document.querySelectorAll('.destination-button').forEach(btn =>{
+            document.querySelectorAll('.destination-button').forEach(btn => {
                 btn.classList.remove('selected');
             });
             document.querySelectorAll('.duration-button').forEach(btn => {
@@ -2265,7 +2265,8 @@
             statusDiv.style.color = '#28a745';
             statusDiv.style.fontWeight = 'normal';
 
-            // Pulisci il messaggio dopo 5 secondi            setTimeout(() => {
+            // Pulisci il messaggio dopo 5 secondi
+            setTimeout(() => {
                 statusDiv.textContent = '';
             }, 5000);
 
