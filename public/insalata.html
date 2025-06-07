@@ -143,11 +143,11 @@
         <div style="text-align: center; padding: 8px; background: linear-gradient(135deg, #e6ffe6 0%, #ccffcc 100%); border-radius: 8px; border-left: 4px solid #28a745; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); min-width: 200px;">
             <div style="margin-bottom: 4px; color: #155724; font-size: 12px; font-weight: 600;">⏸️ Pausa Insalata</div>
             <div style="display: flex; justify-content: center; align-items: center; gap: 6px; flex-wrap: nowrap;">
-                <button id="pause-10-btn" onclick="inviaMessaggioPausaInsalata(10)" 
+                <button id="pause-10-btn" onclick="inviaMessaggioPausa(10)" 
                         style="padding: 6px 12px; background: linear-gradient(135deg, #17a2b8 0%, #138496 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
                     ⏸️ 10min
                 </button>
-                <button id="pause-15-btn" onclick="inviaMessaggioPausaInsalata(15)" 
+                <button id="pause-15-btn" onclick="inviaMessaggioPausa(15)" 
                         style="padding: 6px 12px; background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
                     ⏸️ 15min
                 </button>
@@ -1470,31 +1470,52 @@ function mostraAvvisoPaginaOccupata(data) {
             }, 5000);
         }
 
-        // Inizializza WebSocket
-        initializeWebSocket();
-const companyName = localStorage.getItem('companyName');
+        // Inizializza la pagina quando il DOM è caricato
+        document.addEventListener('DOMContentLoaded', function() {
+            const companyName = localStorage.getItem('userCompany');
             if (companyName) {
                 console.log('Nome azienda dal localStorage:', companyName);
 
-                // Unisciti alla room aziendale
-                ws.send(JSON.stringify({
-                    action: 'joinRoom',
-                    companyName: companyName
-                }));
-                console.log(`Insalata connessa alla room: ${companyName}`);
+                // Imposta il nome dell'azienda nell'header
+                document.getElementById('company-name').textContent = companyName;
 
-                // Informa il server che stiamo entrando nella pagina insalata
-                ```text
-ws.send(JSON.stringify({
-                    action: 'joinPage',
-                    pageType: 'insalata'
-                }));
-                console.log('📄 Entrato nella pagina INSALATA');
+                // Attendi che la connessione WebSocket sia stabilita
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    // Unisciti alla room aziendale
+                    ws.send(JSON.stringify({
+                        action: 'joinRoom',
+                        companyName: companyName
+                    }));
+                    console.log(`Insalata connessa alla room: ${companyName}`);
+
+                    // Informa il server che stiamo entrando nella pagina insalata
+                    ws.send(JSON.stringify({
+                        action: 'joinPage',
+                        pageType: 'insalata'
+                    }));
+                    console.log('📄 Entrato nella pagina INSALATA');
+                } else {
+                    // Se la connessione non è ancora pronta, aspetta
+                    setTimeout(() => {
+                        if (ws && ws.readyState === WebSocket.OPEN) {
+                            ws.send(JSON.stringify({
+                                action: 'joinRoom',
+                                companyName: companyName
+                            }));
+                            ws.send(JSON.stringify({
+                                action: 'joinPage',
+                                pageType: 'insalata'
+                            }));
+                            console.log(`Insalata connessa alla room: ${companyName}`);
+                        }
+                    }, 500);
+                }
             } else {
                 console.error('❌ Nome azienda non trovato nel localStorage');
                 alert('❌ Errore: Nome azienda non trovato. Effettua nuovamente il login.');
-                window.location.href = '/';
+                window.location.href = 'index.html';
             }
+        });
     </script>
     <script src="company-header.js"></script>
 
