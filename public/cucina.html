@@ -2625,7 +2625,12 @@
 
                 callAudioRecorder.ondataavailable = event => {
                     if (event.data.size > 0 && currentCall && isInCall) {
-                        // Invia audio in tempo reale
+                        // Limita la dimensione dei chunk audio
+                        if (event.data.size > 50000) { // Max 50KB per chunk
+                            console.log('🔇 Chunk audio troppo grande, saltato');
+                            return;
+                        }
+
                         const reader = new FileReader();
                         reader.onloadend = () => {
                             const audioData = reader.result.split(',')[1];
@@ -2641,9 +2646,9 @@
                     }
                 };
 
-                // Registra audio in chunk da 1 secondo
-                callAudioRecorder.start(1000);
-                console.log('🎤 Audio chiamata avviato');
+                // Aumenta l'intervallo di registrazione per ridurre il carico
+                callAudioRecorder.start(2000); // Ogni 2 secondi invece di 1
+                console.log('🎤 Audio chiamata avviato con intervallo ottimizzato');
 
             } catch (error) {
                 console.error('❌ Errore avvio audio chiamata:', error);
@@ -2778,6 +2783,13 @@
                 const timerElement = document.getElementById('call-timer');
                 if (timerElement) {
                     timerElement.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                }
+
+                // Auto-disconnect dopo 5 minuti
+                if (elapsed >= 300) { // 5 minuti
+                    console.log('⏰ Chiamata terminata automaticamente dopo 5 minuti');
+                    terminaChiamata();
+                    clearInterval(timerInterval);
                 }
             }, 1000);
 

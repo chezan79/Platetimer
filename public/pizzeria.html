@@ -1676,6 +1676,12 @@
 
                 callAudioRecorder.ondataavailable = event => {
                     if (event.data.size > 0 && currentCall && isInCall) {
+                        // Limita la dimensione dei chunk audio
+                        if (event.data.size > 50000) { // Max 50KB per chunk
+                            console.log('🔇 Chunk audio troppo grande, saltato');
+                            return;
+                        }
+
                         const reader = new FileReader();
                         reader.onloadend = () => {
                             const audioData = reader.result.split(',')[1];
@@ -1691,9 +1697,12 @@
                     }
                 };
 
-                callAudioRecorder.start(1000);
+                // Aumenta l'intervallo di registrazione per ridurre il carico
+                callAudioRecorder.start(2000); // Ogni 2 secondi invece di 1
+                console.log('🎤 Audio chiamata avviato con intervallo ottimizzato');
             } catch (error) {
                 console.error('❌ Errore avvio audio chiamata:', error);
+                alert('❌ Impossibile accedere al microfono per la chiamata.');
             }
         }
 
@@ -1747,14 +1756,39 @@
                 text-align: center; min-width: 250px;
             `;
 
+            const startTime = Date.now();
             callDiv.innerHTML = `
                 <div style="font-size: 16px; margin-bottom: 10px;">📞 In chiamata con ${targetPage}</div>
+                <div id="call-timer-pizzeria" style="font-size: 12px; margin-bottom: 8px;">00:00</div>
                 <button onclick="terminaChiamata()" 
                         style="background: #dc3545; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer;">
                     📞 Termina
                 </button>
             `;
             document.body.appendChild(callDiv);
+
+            // Timer per chiamata e auto-disconnect dopo 5 minuti
+            const timerInterval = setInterval(() => {
+                if (!isInCall || !currentCall) {
+                    clearInterval(timerInterval);
+                    return;
+                }
+
+                const elapsed = Math.floor((Date.now() - startTime) / 1000);
+                const minutes = Math.floor(elapsed / 60);
+                const seconds = elapsed % 60;
+                const timerElement = document.getElementById('call-timer-pizzeria');
+                if (timerElement) {
+                    timerElement.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                }
+
+                // Auto-disconnect dopo 5 minuti
+                if (elapsed >= 300) { // 5 minuti
+                    console.log('⏰ Chiamata terminata automaticamente dopo 5 minuti');
+                    terminaChiamata();
+                    clearInterval(timerInterval);
+                }
+            }, 1000);
         }
 
         function rimuoviInterfacciaChiamata() {
