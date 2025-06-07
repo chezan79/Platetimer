@@ -2079,89 +2079,9 @@
         }
 
         function mostraMessaggioPausaCucina(pausaData) {
-            const messagesList = document.getElementById('voice-messages-list');
-            const messagesContainerElement = document.getElementById('messagesContainer');
-
-            // Mostra il container dei messaggi
-            if (messagesContainerElement.style.display === 'none') {
-                messagesContainerElement.style.display = 'flex';
-            }
-
-            // Crea elemento messaggio di pausa
-            const messageElement = document.createElement('div');
-            messageElement.id = `pause-message-${pausaData.messageId}`;
-            messageElement.style.cssText = `
-                background: linear-gradient(135deg, #ffe6e6 0%, #ffcccc 100%);
-                padding: 15px;
-                margin: 8px 0;
-                border-radius: 8px;
-                border: 2px solid #dc3545;
-                box-shadow: 0 4px 8px rgba(220, 53, 69, 0.3);
-                display: flex;
-                flex-direction: column;
-                animation: slideIn 0.3s ease-out, urgentPulse 3s ease-in-out;
-            `;
-
-            messageElement.innerHTML = `
-                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                    <div style="flex: 1;">
-                        <div style="font-weight: bold; color: #721c24; font-size: 16px; margin-bottom: 8px;">
-                            ⏸️ PAUSA RICHIESTA DA ${pausaData.from.toUpperCase()}
-                        </div>
-                        <div style="color: #721c24; font-size: 14px; line-height: 1.4; margin-bottom: 8px;">
-                            🚫 Countdown pizzeria bloccati per <strong>${pausaData.durataMinuti} minuti</strong>
-                        </div>
-                        <div style="font-size: 12px; color: #856404; background: #fff3cd; padding: 6px; border-radius: 4px; border-left: 3px solid #ffc107;">
-                            ⏰ Richiesto alle ${pausaData.timestamp}
-                        </div>
-                    </div>
-                </div>
-            `;
-
-            // Aggiungi animazione urgente se non esiste
-            if (!document.getElementById('urgentPulseAnimation')) {
-                const style = document.createElement('style');
-                style.id = 'urgentPulseAnimation';
-                style.textContent = `
-                    @keyframes urgentPulse {
-                        0%, 100% { border-color: #dc3545; box-shadow: 0 4px 8px rgba(220, 53, 69, 0.3); }
-                        25% { border-color: #ff6b6b; box-shadow: 0 6px 20px rgba(255, 107, 107, 0.6); }
-                        50% { border-color: #dc3545; box-shadow: 0 4px 8px rgba(220, 53, 69, 0.3); }
-                        75% { border-color: #ff6b6b; box-shadow: 0 6px 20px rgba(255, 107, 107, 0.6); }
-                    }
-                `;
-                document.head.appendChild(style);
-            }
-
-            messagesList.appendChild(messageElement);
-
-            // 🚨 Allarme audio per pausa cucina
-            const pauseAlert = document.getElementById('alertSound');
-            if (pauseAlert) {
-                // Riproduci 3 volte per enfatizzare l'urgenza
-                pauseAlert.play().catch(e => console.log('Errore audio pausa:', e));
-                setTimeout(() => pauseAlert.play().catch(e => {}), 800);
-                setTimeout(() => pauseAlert.play().catch(e => {}), 1600);
-            }
-
-            // Auto-rimozione del messaggio dopo 30 secondi
-            setTimeout(() => {
-                if (messageElement && messageElement.parentNode) {
-                    messageElement.style.animation = 'slideOut 0.5s ease-out';
-                    setTimeout(() => {
-                        if (messageElement && messageElement.parentNode) {
-                            messageElement.parentNode.removeChild(messageElement);
-
-                            // Nascondi container se non ci sono altri messaggi
-                            if (messagesList.children.length === 0) {
-                                messagesContainerElement.style.display = 'none';
-                            }
-                        }
-                    }, 500);
-                }
-            }, 30000);
-
-            console.log(`⏸️ 🚨 Messaggio pausa cucina mostrato con allarme: ${pausaData.durataMinuti} minuti`);
+            // Rimossa la creazione di messaggi laterali per le pause pizzeria
+            // Il messaggio centrale dell'indicatore pausa è sufficiente
+            console.log(`⏸️ Pausa cucina ricevuta: ${pausaData.durataMinuti} minuti da ${pausaData.from} - Solo indicatore centrale`);
         }
 
         function annullaPausaCucina() {
@@ -2175,58 +2095,7 @@
             // Termina immediatamente la pausa
             terminaPausaCucina();
 
-            // Mostra messaggio di annullamento
-            const messagesList = document.getElementById('voice-messages-list');
-            const messagesContainerElement = document.getElementById('messagesContainer');
-
-            // Mostra il container dei messaggi se nascosto
-            if (messagesContainerElement.style.display === 'none') {
-                messagesContainerElement.style.display = 'flex';
-            }
-
-            // Crea elemento messaggio di annullamento
-            const messageElement = document.createElement('div');
-            messageElement.style.cssText = `
-                background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
-                padding: 12px;
-                margin: 8px 0;
-                border-radius: 8px;
-                border: 2px solid #28a745;
-                box-shadow: 0 4px 8px rgba(40, 167, 69, 0.3);
-                display: flex;
-                flex-direction: column;
-                animation: slideIn 0.3s ease-out;
-            `;
-
-            messageElement.innerHTML = `
-                <div style="font-weight: bold; color: #155724; font-size: 16px; margin-bottom: 8px;">
-                    ❌ PAUSA ANNULLATA DALLA PIZZERIA
-                </div>
-                <div style="color: #155724; font-size: 14px; line-height: 1.4;">
-                    ✅ La cucina è di nuovo operativa - Countdown pizzeria riattivati
-                </div>
-            `;
-
-            messagesList.appendChild(messageElement);
-
-            // Auto-rimozione del messaggio dopo 10 secondi
-            setTimeout(() => {
-                if (messageElement && messageElement.parentNode) {
-                    messageElement.style.animation = 'slideOut 0.5s ease-out';
-                    setTimeout(() => {
-                        if (messageElement && messageElement.parentNode) {
-                            messageElement.parentNode.removeChild(messageElement);
-
-                            // Nascondi container se non ci sono altri messaggi
-                            if (messagesList.children.length === 0) {
-                                messagesContainerElement.style.display = 'none';
-                            }
-                        }
-                    }, 500);
-                }
-            }, 10000);
-
-            console.log('❌ ✅ Messaggio annullamento pausa mostrato in cucina');
+            console.log('❌ ✅ Pausa cucina annullata - Solo indicatore centrale rimosso');
         }
 
         // Sistema pausa cucina - funzioni per inviare pause dalla cucina
