@@ -1085,13 +1085,41 @@ setInterval(() => {
     }
 }, 300000); // Ogni 5 minuti
 
-// Avvia il server
-const PORT = 5000;
-server.listen(PORT, '0.0.0.0', () => {
-    console.log(`🛡️ Server sicuro avviato su http://0.0.0.0:${PORT}`);
-    console.log('✅ Autenticazione WebSocket attiva');
-    console.log('✅ Validazione dati attiva');
-    console.log('✅ Rate limiting ottimizzato');
-}).on('error', (error) => {
-    console.error('❌ Errore avvio server:', error);
+// Gestione graceful shutdown
+process.on('SIGTERM', () => {
+    console.log('📴 SIGTERM ricevuto, chiusura server...');
+    server.close(() => {
+        console.log('✅ Server chiuso correttamente');
+        process.exit(0);
+    });
 });
+
+process.on('SIGINT', () => {
+    console.log('📴 SIGINT ricevuto, chiusura server...');
+    server.close(() => {
+        console.log('✅ Server chiuso correttamente');
+        process.exit(0);
+    });
+});
+
+// Avvia il server con gestione errori robusta
+const PORT = process.env.PORT || 5000;
+
+function startServer(port) {
+    server.listen(port, '0.0.0.0', () => {
+        console.log(`🛡️ Server sicuro avviato su http://0.0.0.0:${port}`);
+        console.log('✅ Autenticazione WebSocket attiva');
+        console.log('✅ Validazione dati attiva');
+        console.log('✅ Rate limiting ottimizzato');
+    }).on('error', (error) => {
+        if (error.code === 'EADDRINUSE') {
+            console.log(`❌ Porta ${port} già in uso. Provo con la porta ${port + 1}...`);
+            startServer(port + 1);
+        } else {
+            console.error('❌ Errore avvio server:', error);
+            process.exit(1);
+        }
+    });
+}
+
+startServer(PORT);
