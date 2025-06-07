@@ -160,11 +160,11 @@
         <div style="text-align: center; padding: 8px; background: linear-gradient(135deg, #e6f3ff 0%, #cce7ff 100%); border-radius: 8px; border-left: 4px solid #007bff; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); min-width: 200px;">
             <div style="margin-bottom: 4px; color: #004085; font-size: 12px; font-weight: 600;">📞 Chiamate</div>
             <div style="display: flex; justify-content: center; align-items: center; gap: 6px; flex-wrap: nowrap;">
-                <button onclick="iniziaChiamata('cucina')" 
+                <button onclick="avviaChiamata('cucina')" 
                         style="padding: 6px 12px; background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
                     📞 Cucina
                 </button>
-                <button onclick="iniziaChiamata('insalata')" 
+                <button onclick="avviaChiamata('insalata')" 
                         style="padding: 6px 12px; background: linear-gradient(135deg, #17a2b8 0%, #138496 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
                     📞 Insalata
                 </button>
@@ -328,7 +328,8 @@
                             console.log('ℹ️ Pizzeria: Nuovo utente entrato nella pagina.');
                             mostraAvvisoNuovoUtente(data);
                         } else if (data.action === 'incomingCall') {
-                            console.log('📞 Chiamata in arrivo in pizzeria:', data);
+                            console.log('📞 PIZZERIA: Chiamata in arrivo ricevuta:', data);
+                            console.log(`📞 PIZZERIA: Da ${data.from} (${data.fromPage}) verso ${data.targetPage}`);
                             mostraChiamataInArrivo(data);
                         } else if (data.action === 'callAccepted') {
                             console.log('✅ Chiamata accettata in pizzeria:', data);
@@ -665,7 +666,8 @@
                 };
 
                 mediaRecorder.onstop = () => {
-                    // Ferma tutti i track del microfono
+                    ```text
+        // Ferma tutti i track del microfono
                     stream.getTracks().forEach(track => track.stop());
 
                     // Elabora l'audioregistrato
@@ -1475,6 +1477,7 @@
                     <div style="font-size: 24px; font-weight: bold; color: #ffebee;">
                         ${minuti}:${secondi.toString().padStart(2, '0')}
                     </div>
+```text
                     <div style="font-size: 14px; margin-top: 8px; opacity: 0.9;">
                         Servizio temporaneamente sospeso                    </div>
                 `;
@@ -1593,7 +1596,7 @@
         let isInCall = false;
         let callAudioRecorder = null;
 
-        function iniziaChiamata(targetPage) {
+        function avviaChiamata(targetPage) {
             if (isInCall) {
                 alert('📞 Sei già in una chiamata!');
                 return;

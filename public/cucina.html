@@ -789,6 +789,7 @@
                         } else if (data.action === 'incomingCall') {
                             console.log('📞 CUCINA: Chiamata in arrivo ricevuta:', data);
                             console.log(`📞 CUCINA: Da ${data.from} (${data.fromPage}) verso ${data.targetPage}`);
+                            console.log(`📞 CUCINA: Target page match: ${data.targetPage === 'cucina'}`);
                             mostraChiamataInArrivo(data);
                         } else if (data.action === 'callAccepted') {
                             console.log('✅ Chiamata accettata:', data);

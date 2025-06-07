@@ -324,7 +324,9 @@
                             console.log('👥 Nuovo utente collegato:', data);
                             mostraAvvisoNuovoUtente(data);
                         } else if (data.action === 'incomingCall') {
-                            console.log('📞 Chiamata in arrivo in insalata:', data);
+                            console.log('📞 INSALATA: Chiamata in arrivo ricevuta:', data);
+                            console.log(`📞 INSALATA: Da ${data.from} (${data.fromPage}) verso ${data.targetPage}`);
+                            console.log(`📞 INSALATA: Target page match: ${data.targetPage === 'insalata'}`);
                             mostraChiamataInArrivo(data);
                         } else if (data.action === 'callAccepted') {
                             console.log('✅ Chiamata accettata in insalata:', data);
