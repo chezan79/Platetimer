@@ -888,6 +888,16 @@ wss.on('connection', (ws, req) => {
                 } else {
                     console.log('⚠️ Client non assegnato a nessuna room per audio chiamata');
                 }
+
+            } else if (data.action === 'keepAlive') {
+                // Mantieni viva la connessione durante le chiamate
+                if (data.callId && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({
+                        action: 'keepAliveResponse',
+                        callId: data.callId,
+                        timestamp: Date.now()
+                    }));
+                }
             }
         } catch (error) {
             console.error('❌ Errore nel parsing del messaggio:', error);
