@@ -55,18 +55,31 @@
             align-items: center;
         }
 
-        /* Container per i countdown - ora occupa tutta la larghezza sotto */
+        /* Container per i countdown - ora occupa tutta la larghezza e altezza disponibile */
         #bottomContainer {
-            width: 90%;
-            margin: 0 auto;
+            width: 95%;
+            margin: 20px auto;
             background: white;
-            padding: 25px;
+            padding: 20px;
             border-radius: 10px;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
             display: flex;
             flex-direction: column;
             overflow-y: auto;
-            max-height: 50vh;
+            max-height: calc(100vh - 200px);
+            min-height: calc(100vh - 250px);
+        }
+
+        /* Stile per la transizione del container controlli */
+        #topContainer {
+            transition: all 0.5s ease-in-out;
+            transform-origin: top center;
+        }
+
+        #topContainer.hidden {
+            opacity: 0;
+            transform: translateY(-20px) scale(0.95);
+            pointer-events: none;
         }
 
         /* Container messaggi - più largo e meno alto */
@@ -365,8 +378,16 @@
         <button onclick="window.location.href='index.html'" style="padding: 6px 12px; background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500; transition: transform 0.2s, box-shadow 0.2s;">🚪 Esci</button>
     </div>
 
-    <!-- Container principale in alto - riconoscimento vocale, tastiera e durata in orizzontale -->
-    <div id="topContainer">
+    <!-- Pulsante toggle per mostrare/nascondere i controlli -->
+    <div style="position: fixed; top: 120px; left: 50%; transform: translateX(-50%); z-index: 600;">
+        <button id="toggleControlsBtn" onclick="toggleControls()" 
+                style="padding: 8px 16px; background: linear-gradient(135deg, #007bff 0%, #0056b3 100%); color: white; border: none; border-radius: 20px; cursor: pointer; font-size: 14px; font-weight: 600; box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3); transition: all 0.3s ease;">
+            📱 Mostra Controlli
+        </button>
+    </div>
+
+    <!-- Container principale in alto - riconoscimento vocale, tastiera e durata in orizzontale (ora collassabile) -->
+    <div id="topContainer" style="display: none; margin-top: 60px;">
         <!-- Sezione riconoscimento vocale -->
         <div id="voiceSection">
             <h2 style="color: #333; text-align: center; margin-bottom: 15px; font-size: 18px;">🎤 Comando Vocale</h2>
@@ -428,6 +449,14 @@
                     <button class="duration-button" data-minutes="15" disabled>15 Min</button>
                 </div>
             </div>
+        </div>
+
+        <!-- Pulsante per nascondere i controlli -->
+        <div style="text-align: center; margin-top: 20px;">
+            <button onclick="toggleControls()" 
+                    style="padding: 8px 16px; background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%); color: white; border: none; border-radius: 15px; cursor: pointer; font-size: 12px; font-weight: 600;">
+                ⬆️ Nascondi Controlli
+            </button>
         </div>
     </div>
 
@@ -2470,6 +2499,57 @@
             }
             console.log('❌ Messaggio pausa insalata nascosto in cucina');
         }
+
+        // Sistema toggle controlli
+        let controlsVisible = false;
+
+        function toggleControls() {
+            const topContainer = document.getElementById('topContainer');
+            const toggleBtn = document.getElementById('toggleControlsBtn');
+            const bottomContainer = document.getElementById('bottomContainer');
+
+            if (!controlsVisible) {
+                // Mostra i controlli
+                topContainer.style.display = 'flex';
+                setTimeout(() => {
+                    topContainer.classList.remove('hidden');
+                }, 10);
+                
+                toggleBtn.textContent = '📱 Controlli Aperti';
+                toggleBtn.style.background = 'linear-gradient(135deg, #28a745 0%, #20c997 100%)';
+                
+                // Riduce lo spazio per i countdown
+                bottomContainer.style.maxHeight = 'calc(100vh - 450px)';
+                bottomContainer.style.minHeight = 'calc(100vh - 500px)';
+                
+                controlsVisible = true;
+                console.log('📱 Controlli mostrati');
+            } else {
+                // Nascondi i controlli
+                topContainer.classList.add('hidden');
+                setTimeout(() => {
+                    topContainer.style.display = 'none';
+                }, 500);
+                
+                toggleBtn.textContent = '📱 Mostra Controlli';
+                toggleBtn.style.background = 'linear-gradient(135deg, #007bff 0%, #0056b3 100%)';
+                
+                // Aumenta lo spazio per i countdown
+                bottomContainer.style.maxHeight = 'calc(100vh - 200px)';
+                bottomContainer.style.minHeight = 'calc(100vh - 250px)';
+                
+                controlsVisible = false;
+                console.log('📱 Controlli nascosti');
+            }
+        }
+
+        // Scorciatoia da tastiera per toggle controlli (Ctrl + Spazio)
+        document.addEventListener('keydown', function(event) {
+            if (event.ctrlKey && event.code === 'Space') {
+                event.preventDefault();
+                toggleControls();
+            }
+        });
     </script>
     <script src="company-header.js"></script>
 </body>
