@@ -324,9 +324,7 @@
                             console.log('👥 Nuovo utente collegato:', data);
                             mostraAvvisoNuovoUtente(data);
                         } else if (data.action === 'incomingCall') {
-                            console.log('📞 INSALATA: Chiamata in arrivo ricevuta:', data);
-                            console.log(`📞 INSALATA: Da ${data.from} (${data.fromPage}) verso ${data.targetPage}`);
-                            console.log(`📞 INSALATA: Target page match: ${data.targetPage === 'insalata'}`);
+                            console.log('📞 Chiamata in arrivo in insalata:', data);
                             mostraChiamataInArrivo(data);
                         } else if (data.action === 'callAccepted') {
                             console.log('✅ Chiamata accettata in insalata:', data);
@@ -1539,7 +1537,7 @@ function mostraAvvisoPaginaOccupata(data) {
             }
 
             const callId = `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
+            
             if (ws && ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({
                     action: 'startCall',
@@ -1718,7 +1716,7 @@ function mostraAvvisoPaginaOccupata(data) {
             const activeCall = document.getElementById('active-call-interface');
             if (incomingCall) incomingCall.remove();
             if (activeCall) activeCall.remove();
-
+            
             const alertAudio = document.getElementById('alertSound');
             if (alertAudio) {
                 alertAudio.loop = false;

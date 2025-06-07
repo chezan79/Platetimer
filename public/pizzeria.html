@@ -160,11 +160,11 @@
         <div style="text-align: center; padding: 8px; background: linear-gradient(135deg, #e6f3ff 0%, #cce7ff 100%); border-radius: 8px; border-left: 4px solid #007bff; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); min-width: 200px;">
             <div style="margin-bottom: 4px; color: #004085; font-size: 12px; font-weight: 600;">📞 Chiamate</div>
             <div style="display: flex; justify-content: center; align-items: center; gap: 6px; flex-wrap: nowrap;">
-                <button onclick="avviaChiamata('cucina')" 
+                <button onclick="iniziaChiamata('cucina')" 
                         style="padding: 6px 12px; background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
                     📞 Cucina
                 </button>
-                <button onclick="avviaChiamata('insalata')" 
+                <button onclick="iniziaChiamata('insalata')" 
                         style="padding: 6px 12px; background: linear-gradient(135deg, #17a2b8 0%, #138496 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
                     📞 Insalata
                 </button>
@@ -328,8 +328,7 @@
                             console.log('ℹ️ Pizzeria: Nuovo utente entrato nella pagina.');
                             mostraAvvisoNuovoUtente(data);
                         } else if (data.action === 'incomingCall') {
-                            console.log('📞 PIZZERIA: Chiamata in arrivo ricevuta:', data);
-                            console.log(`📞 PIZZERIA: Da ${data.from} (${data.fromPage}) verso ${data.targetPage}`);
+                            console.log('📞 Chiamata in arrivo in pizzeria:', data);
                             mostraChiamataInArrivo(data);
                         } else if (data.action === 'callAccepted') {
                             console.log('✅ Chiamata accettata in pizzeria:', data);
@@ -1476,9 +1475,9 @@
                     <div style="font-size: 24px; font-weight: bold; color: #ffebee;">
                         ${minuti}:${secondi.toString().padStart(2, '0')}
                     </div>
-```text
                     <div style="font-size: 14px; margin-top: 8px; opacity: 0.9;">
-                        Servizio temporaneamente sospeso                    </div>
+                        Servizio temporaneamente sospeso
+                    </div>
                 `;
 
                 if (tempoRimanente > 0) {
@@ -1595,26 +1594,21 @@
         let isInCall = false;
         let callAudioRecorder = null;
 
-        function avviaChiamata(targetPage) {
+        function iniziaChiamata(targetPage) {
             if (isInCall) {
                 alert('📞 Sei già in una chiamata!');
                 return;
             }
 
             const callId = `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
-            console.log(`📞 PIZZERIA: Avvio chiamata verso ${targetPage}, ID: ${callId}`);
-
+            
             if (ws && ws.readyState === WebSocket.OPEN) {
-                const callMessage = {
+                ws.send(JSON.stringify({
                     action: 'startCall',
                     callId: callId,
                     targetPage: targetPage,
                     from: 'Pizzeria'
-                };
-
-                console.log(`📤 PIZZERIA: Invio messaggio chiamata:`, callMessage);
-                ws.send(JSON.stringify(callMessage));
+                }));
 
                 currentCall = {
                     id: callId,
@@ -1626,11 +1620,8 @@
                 document.getElementById('call-status').textContent = `📞 Chiamando ${targetPage}...`;
                 document.getElementById('call-status').style.color = '#007bff';
 
-                console.log(`⏰ PIZZERIA: Timeout di 30s impostato per chiamata ${callId}`);
-
                 setTimeout(() => {
                     if (currentCall && currentCall.id === callId && !isInCall) {
-                        console.log(`⏰ PIZZERIA: Timeout scaduto per chiamata ${callId}`);
                         terminaChiamata();
                         document.getElementById('call-status').textContent = '❌ Nessuna risposta';
                         setTimeout(() => {
@@ -1638,9 +1629,6 @@
                         }, 3000);
                     }
                 }, 30000);
-            } else {
-                console.error('❌ PIZZERIA: WebSocket non connesso per chiamata');
-                alert('❌ Connessione persa. Impossibile avviare chiamata.');
             }
         }
 
@@ -1745,12 +1733,6 @@
                 </div>
             `;
             document.body.appendChild(callDiv);
-
-            const alertAudio = document.getElementById('alertSound');
-            if (alertAudio) {
-                alertAudio.loop = true;
-                alertAudio.play().catch(e => console.log('Errore audio chiamata:', e));
-            }
         }
 
         function mostraInterfacciaChiamataAttiva(targetPage) {
@@ -1778,12 +1760,7 @@
         function rimuoviInterfacciaChiamata() {
             const incomingCall = document.getElementById('incoming-call-interface');
             const activeCall = document.getElementById('active-call-interface');
-            if (incomingCall) {
-                alertAudio.loop = false;
-                alertAudio.pause();
-                alertAudio.currentTime = 0;
-                incomingCall.remove();
-            }
+            if (incomingCall) incomingCall.remove();
             if (activeCall) activeCall.remove();
         }
 

@@ -331,7 +331,6 @@ wss.on('connection', (ws, req) => {
                 }
 
                 ws.pageType = data.pageType;
-                console.log(`📄 DEBUG: Client registrato come "${data.pageType}" nella room "${ws.companyRoom}"`);
 
                 // Conta quanti utenti sono attualmente sulla stessa pagina
                 if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
@@ -340,14 +339,7 @@ wss.on('connection', (ws, req) => {
                         client.pageType === data.pageType && client !== ws
                     );
 
-                    // Stampa stato completo della room con più dettagli
-                    const allClients = Array.from(roomClients).map((client, index) => {
-                        const isCurrent = client === ws;
-                        return `${index}:${client.pageType || 'undefined'}${isCurrent ? '*' : ''}`;
-                    });
-                    console.log(`📄 DEBUG: Stato room "${ws.companyRoom}": [${allClients.join(', ')}] (* = current client)`);
-
-                    console.log(`📄 Client entrato in pagina "${data.pageType}": ${samePageClients.length} altri utenti già presenti`);
+                    console.log(`📄 Client entrato in pagina ${data.pageType}: ${samePageClients.length} altri utenti già presenti`);
 
                     // Se ci sono altri utenti sulla stessa pagina, invia un avviso
                     if (samePageClients.length > 0) {
@@ -694,56 +686,23 @@ wss.on('connection', (ws, req) => {
                 // Validazione richiesta avvio chiamata
                 if (!data.callId || typeof data.callId !== 'string') {
                     console.log('⚠️ ID chiamata mancante');
-                    ws.send(JSON.stringify({
-                        action: 'callError',
-                        message: 'ID chiamata mancante'
-                    }));
                     return;
                 }
 
                 if (!data.targetPage || typeof data.targetPage !== 'string') {
                     console.log('⚠️ Pagina destinazione chiamata mancante');
-                    ws.send(JSON.stringify({
-                        action: 'callError',
-                        message: 'Destinazione chiamata mancante'
-                    }));
                     return;
                 }
 
                 const validPages = ['cucina', 'pizzeria', 'insalata'];
                 if (!validPages.includes(data.targetPage)) {
                     console.log('⚠️ Pagina destinazione chiamata non valida');
-                    ws.send(JSON.stringify({
-                        action: 'callError',
-                        message: 'Destinazione non valida'
-                    }));
-                    return;
-                }
-
-                console.log(`📞 DEBUG CHIAMATA: Richiesta da "${ws.pageType}" verso "${data.targetPage}" in room "${ws.companyRoom}"`);
-
-                // Verifica che il client chiamante abbia un pageType valido
-                if (!ws.pageType) {
-                    console.log('⚠️ Client chiamante senza pageType definito');
-                    ws.send(JSON.stringify({
-                        action: 'callError',
-                        message: 'Errore identificazione pagina chiamante'
-                    }));
                     return;
                 }
 
                 // Invia richiesta chiamata ai client della pagina target
                 if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
                     const roomClients = companyRooms.get(ws.companyRoom);
-                    console.log(`📞 DEBUG: Room "${ws.companyRoom}" ha ${roomClients.size} client totali`);
-
-                    // Elenco dettagliato dei client nella room
-                    let clientDetails = [];
-                    roomClients.forEach((client, index) => {
-                        clientDetails.push(`Client ${index}: pageType="${client.pageType}", readyState=${client.readyState}, caller=${client === ws}`);
-                    });
-                    console.log(`📞 DEBUG: Client nella room: ${clientDetails.join(', ')}`);
-
                     const callMessage = JSON.stringify({
                         action: 'incomingCall',
                         callId: data.callId,
@@ -753,63 +712,17 @@ wss.on('connection', (ws, req) => {
                         timestamp: new Date().toLocaleTimeString('it-IT')
                     });
 
-                    console.log(`📞 DEBUG: Messaggio chiamata da inviare:`, JSON.parse(callMessage));
-
                     let sentCount = 0;
-                    let targetClients = 0;
-                    let availableTargets = 0;
-                    
                     roomClients.forEach((client) => {
-                        console.log(`📞 DEBUG: Controllo client - pageType: "${client.pageType}", target: "${data.targetPage}", match: ${client.pageType === data.targetPage}`);
-                        
-                        if (client.pageType === data.targetPage) {
-                            targetClients++;
-                            console.log(`📞 Target client trovato: pageType="${client.pageType}", readyState=${client.readyState}, isOpen=${client.readyState === WebSocket.OPEN}, isSelf=${client === ws}`);
-                            
-                            if (client.readyState === WebSocket.OPEN) {
-                                availableTargets++;
-                                if (client !== ws) {
-                                    try {
-                                        client.send(callMessage);
-                                        sentCount++;
-                                        console.log(`✅ CHIAMATA INVIATA con successo a client ${data.targetPage} (ID: ${data.callId})`);
-                                    } catch (sendError) {
-                                        console.log(`❌ Errore invio chiamata: ${sendError.message}`);
-                                    }
-                                } else {
-                                    console.log(`⚠️ Saltato invio a se stesso`);
-                                }
-                            } else {
-                                console.log(`❌ Client ${data.targetPage} non disponibile: readyState=${client.readyState}`);
-                            }
+                        if (client.readyState === WebSocket.OPEN && client.pageType === data.targetPage && client !== ws) {
+                            client.send(callMessage);
+                            sentCount++;
                         }
                     });
 
-                    console.log(`📞 RISULTATO CHIAMATA FINALE: ${targetClients} client "${data.targetPage}" totali, ${availableTargets} disponibili, ${sentCount} notificati per callId: ${data.callId}`);
-
-                    // Invia feedback al chiamante
-                    if (sentCount === 0) {
-                        console.log(`❌ Nessuna chiamata inviata - invio errore al chiamante`);
-                        ws.send(JSON.stringify({
-                            action: 'callError',
-                            callId: data.callId,
-                            message: `Nessun client disponibile nella pagina ${data.targetPage}`
-                        }));
-                    } else {
-                        console.log(`✅ Chiamata iniziata con successo - invio conferma al chiamante`);
-                        ws.send(JSON.stringify({
-                            action: 'callInitiated',
-                            callId: data.callId,
-                            targetPage: data.targetPage,
-                            clientsNotified: sentCount
-                        }));
-                    }
+                    console.log(`📞 Richiesta chiamata inviata da ${ws.pageType} a ${data.targetPage}: ${sentCount} client notificati`);
                 } else {
                     console.log('⚠️ Client non assegnato a nessuna room per chiamata');
-                    ws.send(JSON.stringify({
-                        action: 'callError',
-                        message: 'Non sei connesso a nessuna room'
-                    }));
                 }
 
             } else if (data.action === 'acceptCall') {
@@ -1085,41 +998,13 @@ setInterval(() => {
     }
 }, 300000); // Ogni 5 minuti
 
-// Gestione graceful shutdown
-process.on('SIGTERM', () => {
-    console.log('📴 SIGTERM ricevuto, chiusura server...');
-    server.close(() => {
-        console.log('✅ Server chiuso correttamente');
-        process.exit(0);
-    });
+// Avvia il server
+const PORT = 5000;
+server.listen(PORT, '0.0.0.0', () => {
+    console.log(`🛡️ Server sicuro avviato su http://0.0.0.0:${PORT}`);
+    console.log('✅ Autenticazione WebSocket attiva');
+    console.log('✅ Validazione dati attiva');
+    console.log('✅ Rate limiting ottimizzato');
+}).on('error', (error) => {
+    console.error('❌ Errore avvio server:', error);
 });
-
-process.on('SIGINT', () => {
-    console.log('📴 SIGINT ricevuto, chiusura server...');
-    server.close(() => {
-        console.log('✅ Server chiuso correttamente');
-        process.exit(0);
-    });
-});
-
-// Avvia il server con gestione errori robusta
-const PORT = process.env.PORT || 5000;
-
-function startServer(port) {
-    server.listen(port, '0.0.0.0', () => {
-        console.log(`🛡️ Server sicuro avviato su http://0.0.0.0:${port}`);
-        console.log('✅ Autenticazione WebSocket attiva');
-        console.log('✅ Validazione dati attiva');
-        console.log('✅ Rate limiting ottimizzato');
-    }).on('error', (error) => {
-        if (error.code === 'EADDRINUSE') {
-            console.log(`❌ Porta ${port} già in uso. Provo con la porta ${port + 1}...`);
-            startServer(port + 1);
-        } else {
-            console.error('❌ Errore avvio server:', error);
-            process.exit(1);
-        }
-    });
-}
-
-startServer(PORT);
