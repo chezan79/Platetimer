@@ -616,7 +616,7 @@
         // Funzione per resettare la selezione
         function resetSelection() {
             selectedDestinations = [];
-            document.querySelectorAll('.destination-button').forEach(btn => {
+            document.querySelectorAll('.destination-button').forEach(btn =>{
                 btn.classList.remove('selected');
             });
             document.querySelectorAll('.duration-button').forEach(btn => {
@@ -1451,7 +1451,7 @@
             console.log('Nome azienda impostato:', name);
         }
 
-                // Sistema messaggio vocale con registrazione audio per cucina
+        // Sistema messaggio vocale con registrazione audio per cucina
         let voiceRecognition = null;
         let isRecordingMessage = false;
         let currentTranscript = '';
@@ -1551,7 +1551,7 @@
 
             try {
                 // Avvia registrazione audio
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                const stream = awaitnavigator.mediaDevices.getUserMedia({ audio: true });
                 mediaRecorder = new MediaRecorder(stream, {
                     mimeType: 'audio/webm;codecs=opus'
                 });
@@ -2263,8 +2263,7 @@
             statusDiv.style.color = '#28a745';
             statusDiv.style.fontWeight = 'normal';
 
-            // Pulisci il messaggio dopo 5 secondi
-            setTimeout(() => {
+            // Pulisci il messaggio dopo 5 secondi            setTimeout(() => {
                 statusDiv.textContent = '';
             }, 5000);
 
@@ -2558,26 +2557,23 @@
             }
         }
 
+        function riproduciAudioChiamata(audioData) {
+            try {
+                const audio = new Audio(`data:audio/webm;base64,${audioData}`);
+                audio.play().catch(e => console.log('Errore riproduzione audio:', e));
+            } catch (error) {
+                console.log('Errore audio:', error);
+            }
+        }
+
         function accettaChiamata(callId) {
             if (ws && ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({
                     action: 'acceptCall',
                     callId: callId
                 }));
-
-                currentCall = {
-                    id: callId,
-                    isOutgoing: false,
-                    startTime: Date.now()
-                };
-
                 isInCall = true;
                 avviaAudioChiamata();
-                console.log(`✅ Chiamata ${callId} accettata`);
-
-                // Aggiorna lo status
-                document.getElementById('call-status').textContent = '✅ Chiamata accettata';
-                document.getElementById('call-status').style.color = '#28a745';
             }
         }
 
@@ -2587,33 +2583,22 @@
                     action: 'rejectCall',
                     callId: callId
                 }));
-                console.log(`❌ Chiamata ${callId} rifiutata`);
             }
             rimuoviInterfacciaChiamata();
         }
 
-        function terminaChiamata() {
-            if (currentCall && ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({
-                    action: 'endCall',
-                    callId: currentCall.id
-                }));
+        function rimuoviInterfacciaChiamata() {
+            const incomingCall = document.getElementById('incoming-call-interface');
+            const activeCall = document.getElementById('active-call-interface');
+            if (incomingCall) incomingCall.remove();
+            if (activeCall) activeCall.remove();
+
+            const alertAudio = document.getElementById('alertSound');
+            if (alertAudio) {
+                alertAudio.loop = false;
+                alertAudio.pause();
+                alertAudio.currentTime = 0;
             }
-
-            fermaAudioChiamata();
-            rimuoviInterfacciaChiamata();
-
-            currentCall = null;
-            isInCall = false;
-
-            document.getElementById('call-status').textContent = '📞 Chiamata terminata';
-            document.getElementById('call-status').style.color = '#6c757d';
-
-            setTimeout(() => {
-                document.getElementById('call-status').textContent = '';
-            }, 3000);
-
-            console.log('📞 Chiamata terminata');
         }
 
         async function avviaAudioChiamata() {
@@ -2625,12 +2610,7 @@
 
                 callAudioRecorder.ondataavailable = event => {
                     if (event.data.size > 0 && currentCall && isInCall) {
-                        // Limita la dimensione dei chunk audio
-                        if (event.data.size > 50000) { // Max 50KB per chunk
-                            console.log('🔇 Chunk audio troppo grande, saltato');
-                            return;
-                        }
-
+                        // Invia audio in tempo reale
                         const reader = new FileReader();
                         reader.onloadend = () => {
                             const audioData = reader.result.split(',')[1];
@@ -2646,9 +2626,9 @@
                     }
                 };
 
-                // Aumenta l'intervallo di registrazione per ridurre il carico
-                callAudioRecorder.start(2000); // Ogni 2 secondi invece di 1
-                console.log('🎤 Audio chiamata avviato con intervallo ottimizzato');
+                // Registra audio in chunk da 1 secondo
+                callAudioRecorder.start(1000);
+                console.log('🎤 Audio chiamata avviato');
 
             } catch (error) {
                 console.error('❌ Errore avvio audio chiamata:', error);
@@ -2699,27 +2679,15 @@
                 document.head.appendChild(style);
             }
 
-            // Creo una funzione separata per gestire l'accettazione
-            window.accettaChiamataAttuale = function() {
-                accettaChiamata(data.callId);
-                rimuoviInterfacciaChiamata();
-                mostraInterfacciaChiamataAttiva(data.from);
-            };
-
-            // Creo una funzione separata per gestire il rifiuto
-            window.rifiutaChiamataAttuale = function() {
-                rifiutaChiamata(data.callId);
-            };
-
             callDiv.innerHTML = `
                 <div style="font-size: 20px; margin-bottom: 15px;">📞 CHIAMATA IN ARRIVO</div>
                 <div style="font-size: 16px; margin-bottom: 20px;">da <strong>${data.from}</strong></div>
                 <div style="display: flex; gap: 15px; justify-content: center;">
-                    <button onclick="accettaChiamataAttuale()" 
+                    <button onclick="accettaChiamata('${data.callId}')" 
                             style="background: #28a745; color: white; border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600;">
                         ✅ Accetta
                     </button>
-                    <button onclick="rifiutaChiamataAttuale()" 
+                    <button onclick="rifiutaChiamata('${data.callId}')" 
                             style="background: #dc3545; color: white; border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600;">
                         ❌ Rifiuta
                     </button>
@@ -2728,7 +2696,6 @@
 
             document.body.appendChild(callDiv);
 
-            // Riproduci suono di chiamata
             const alertAudio = document.getElementById('alertSound');
             if (alertAudio) {
                 alertAudio.loop = true;
@@ -2784,36 +2751,33 @@
                 if (timerElement) {
                     timerElement.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
                 }
-
-                // Auto-disconnect dopo 5 minuti
-                if (elapsed >= 300) { // 5 minuti
-                    console.log('⏰ Chiamata terminata automaticamente dopo 5 minuti');
-                    terminaChiamata();
-                    clearInterval(timerInterval);
-                }
             }, 1000);
 
             console.log(`📞 Interfaccia chiamata attiva con ${targetPage}`);
         }
 
-        function rimuoviInterfacciaChiamata() {
-            const incomingCall = document.getElementById('incoming-call-interface');
-            const activeCall = document.getElementById('active-call-interface');
-
-            if (incomingCall) {
-                incomingCall.remove();
-            }
-            if (activeCall) {
-                activeCall.remove();
+        function terminaChiamata() {
+            if (currentCall && ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    action: 'endCall',
+                    callId: currentCall.id
+                }));
             }
 
-            // Ferma suono di chiamata
-            const alertAudio = document.getElementById('alertSound');
-            if (alertAudio) {
-                alertAudio.loop = false;
-                alertAudio.pause();
-                alertAudio.currentTime = 0;
-            }
+            fermaAudioChiamata();
+            rimuoviInterfacciaChiamata();
+
+            currentCall = null;
+            isInCall = false;
+
+            document.getElementById('call-status').textContent = '📞 Chiamata terminata';
+            document.getElementById('call-status').style.color = '#6c757d';
+
+            setTimeout(() => {
+                document.getElementById('call-status').textContent = '';
+            }, 3000);
+
+            console.log('📞 Chiamata terminata');
         }
 
         function riproduciAudioChiamata(audioData) {
@@ -2821,7 +2785,7 @@
                 const audio = new Audio(`data:audio/webm;base64,${audioData}`);
                 audio.play().catch(e => console.log('Errore riproduzione audio chiamata:', e));
             } catch (error) {
-                console.log('Errore creazione audio chiamata:', error);
+                console.log('Errore audio:', error);
             }
         }
 
