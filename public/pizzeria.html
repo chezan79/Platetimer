@@ -116,7 +116,7 @@
         </div>
     <!-- Container superiore con messaggi vocali e controlli pausa -->
     <div style="position: absolute; top: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 15px; z-index: 500;">
-        
+
         <!-- Sistema messaggio vocale con scelta destinazione -->
         <div style="text-align: center; padding: 8px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; border-left: 4px solid #007bff; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); min-width: 280px;">
             <div style="display: flex; justify-content: center; align-items: center; gap: 6px; flex-wrap: nowrap;">
@@ -166,8 +166,8 @@
                 <!-- I messaggi appariranno qui dinamicamente -->
             </div>
         </div>
-        
-        
+
+
     </div>
 
     <div class="countdown-container">
@@ -275,6 +275,16 @@
                         } else if (data.action === 'deleteVoiceMessage') {
                             console.log('🗑️ Eliminazione messaggio vocale ricevuta in pizzeria:', data);
                             removeVoiceMessage(data.messageId);
+                        } else if (data.action === 'annullaPausaCucina') {
+                            console.log('❌ Messaggio annullamento pausa ricevuto in PIZZERIA:', data);
+                            annullaPausaCucina();
+                        } else if (data.action === 'pausaInsalata') {
+                            console.log('⏸️ Messaggio pausa insalata ricevuto in PIZZERIA:', data);
+                            console.log(`⏸️ Dettagli pausa: ${data.durataMinuti} minuti da ${data.from}`);
+                            mostraPausaInsalata(data);
+                        } else if (data.action === 'annullaPausaInsalata') {
+                            console.log('❌ Messaggio annullamento pausa insalata ricevuto in PIZZERIA:', data);
+                            nascondePausaInsalata();
                         }
                     } catch (error) {
                         console.error('Errore parsing messaggio pizzeria:', error);
@@ -724,7 +734,7 @@
             // Invia a tutte le destinazioni selezionate
             selectedDestinations.forEach(destination => {
                 if (ws && ws.readyState === WebSocket.OPEN) {
-                    const voiceMessageData = {
+                    const voiceMessageData ={
                         action: 'voiceMessage',
                         message: `Messaggio vocale da Pizzeria (${Math.round(audioSize/1024)}KB)`,
                         messageId: `${messageId}_${destination}`,
@@ -985,10 +995,10 @@
         // Funzione per eliminare countdown manualmente
         function eliminaCountdown(tableNumber) {
             console.log(`🗑️ Richiesta eliminazione countdown tavolo ${tableNumber} da pizzeria`);
-            
+
             // Elimina localmente
             deleteCountdown(tableNumber);
-            
+
             // Invia eliminazione via WebSocket a tutti gli altri client
             if (ws && ws.readyState === WebSocket.OPEN) {
                 const deleteMessage = {
@@ -1019,7 +1029,7 @@
             }
 
             const conferma = confirm(`⏸️ Vuoi mettere in pausa la cucina per ${minuti} minuti?\n\nQuesto bloccherà temporaneamente i nuovi countdown per la pizzeria.`);
-            
+
             if (!conferma) return;
 
             console.log(`⏸️ Invio richiesta pausa cucina: ${minuti} minuti`);
@@ -1078,7 +1088,7 @@
             pausaTimer = setInterval(() => {
                 const minutiRim = Math.floor(secondiRimasti / 60);
                 const secondiRim = secondiRimasti % 60;
-                
+
                 statusDiv.textContent = `⏸️ Pausa attiva: ${minutiRim}:${secondiRim.toString().padStart(2, '0')}`;
                 statusDiv.style.color = '#dc3545';
                 statusDiv.style.fontWeight = 'bold';
@@ -1096,7 +1106,7 @@
 
         function terminaPausaLocale() {
             pausaAttiva = false;
-            
+
             if (pausaTimer) {
                 clearInterval(pausaTimer);
                 pausaTimer = null;
@@ -1133,7 +1143,7 @@
             }
 
             const conferma = confirm('❌ Vuoi davvero annullare la pausa?\n\nLa cucina tornerà immediatamente operativa.');
-            
+
             if (!conferma) return;
 
             console.log('❌ Annullamento pausa richiesto da pizzeria');
@@ -1165,7 +1175,14 @@
             }, 3000);
         }
 
-        
+
+        function mostraPausaInsalata(data) {
+            alert(`🥗 Insalata in pausa per ${data.durataMinuti} minuti da ${data.from} alle ${data.timestamp}`);
+        }
+
+        function nascondePausaInsalata() {
+            alert('🥗 Insalata ha ripreso!');
+        }
 
 
     </script>

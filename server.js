@@ -558,6 +558,77 @@ wss.on('connection', (ws, req) => {
                 } else {
                     console.log('⚠️ Client non assegnato a nessuna room per annullamento pausa cucina');
                 }
+
+            } else if (data.action === 'pausaInsalata') {
+                // Validazione richiesta pausa insalata
+                if (!data.durataMinuti || typeof data.durataMinuti !== 'number') {
+                    console.log('⚠️ Durata pausa insalata non valida');
+                    return;
+                }
+
+                if (data.durataMinuti < 1 || data.durataMinuti > 30) {
+                    console.log('⚠️ Durata pausa insalata fuori range (1-30 minuti)');
+                    return;
+                }
+
+                if (!data.messageId || typeof data.messageId !== 'string') {
+                    console.log('⚠️ ID messaggio pausa insalata mancante');
+                    return;
+                }
+
+                // Invia messaggio di pausa insalata a tutti i client della room
+                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    const pausaMessage = JSON.stringify({
+                        action: 'pausaInsalata',
+                        messageId: data.messageId,
+                        durataMinuti: data.durataMinuti,
+                        from: data.from || 'Insalata',
+                        timestamp: data.timestamp || new Date().toLocaleTimeString('it-IT')
+                    });
+
+                    let sentCount = 0;
+                    roomClients.forEach((client) => {
+                        if (client.readyState === WebSocket.OPEN) {
+                            client.send(pausaMessage);
+                            sentCount++;
+                        }
+                    });
+
+                    console.log(`⏸️ Messaggio pausa insalata inviato alla room "${ws.companyRoom}" (${sentCount}/${roomClients.size} client): ${data.durataMinuti} minuti`);
+                } else {
+                    console.log('⚠️ Client non assegnato a nessuna room per pausa insalata');
+                }
+
+            } else if (data.action === 'annullaPausaInsalata') {
+                // Validazione richiesta annullamento pausa insalata
+                if (!data.messageId || typeof data.messageId !== 'string') {
+                    console.log('⚠️ ID messaggio annullamento pausa insalata mancante');
+                    return;
+                }
+
+                // Invia messaggio di annullamento pausa insalata a tutti i client della room
+                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    const annullaPausaMessage = JSON.stringify({
+                        action: 'annullaPausaInsalata',
+                        messageId: data.messageId,
+                        from: data.from || 'Insalata',
+                        timestamp: data.timestamp || new Date().toLocaleTimeString('it-IT')
+                    });
+
+                    let sentCount = 0;
+                    roomClients.forEach((client) => {
+                        if (client.readyState === WebSocket.OPEN) {
+                            client.send(annullaPausaMessage);
+                            sentCount++;
+                        }
+                    });
+
+                    console.log(`❌ Messaggio annullamento pausa insalata inviato alla room "${ws.companyRoom}" (${sentCount}/${roomClients.size} client)`);
+                } else {
+                    console.log('⚠️ Client non assegnato a nessuna room per annullamento pausa insalata');
+                }
             }
         } catch (error) {
             console.error('❌ Errore nel parsing del messaggio:', error);

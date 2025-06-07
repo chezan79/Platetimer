@@ -114,25 +114,46 @@
         <h4 id="company-name" style="margin: 0; color: #333; font-weight: 600;">Nome Azienda</h4>
     </div>
 
-    <!-- Sistema messaggio vocale con scelta destinazione -->
-    <div style="position: absolute; top: 20px; left: 50%; transform: translateX(-50%); text-align: center; padding: 8px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; border-left: 4px solid #007bff; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); min-width: 280px; z-index: 500;">
-        <div style="display: flex; justify-content: center; align-items: center; gap: 6px; flex-wrap: nowrap;">
-            <button class="destination-button" data-destination="cucina" style="padding: 6px 12px; background: linear-gradient(135deg, #28a745 0%, #98FB98 100%); color: #212529; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
-                🍳 Cucina
-            </button>
-            <button class="destination-button" data-destination="pizzeria" style="padding: 6px 12px; background: linear-gradient(135deg, #ffc107 0%, #FFE4C4 100%); color: #212529; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
-                🍕 Pizzeria
-            </button>
-            <button 
-                onclick="toggleVoiceRecording()" 
-                id="voice-message-button" 
-                style="padding: 6px 12px; background: linear-gradient(135deg, #007bff 0%, #0056b3 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; white-space: nowrap;">
-                🎤 5s
-            </button>
+    <!-- Container superiore con messaggi vocali e controlli pausa -->
+    <div style="position: absolute; top: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 15px; z-index: 500;">
+        
+        <!-- Sistema messaggio vocale con scelta destinazione -->
+        <div style="text-align: center; padding: 8px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; border-left: 4px solid #007bff; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); min-width: 280px;">
+            <div style="display: flex; justify-content: center; align-items: center; gap: 6px; flex-wrap: nowrap;">
+                <button class="destination-button" data-destination="cucina" style="padding: 6px 12px; background: linear-gradient(135deg, #28a745 0%, #98FB98 100%); color: #212529; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
+                    🍳 Cucina
+                </button>
+                <button class="destination-button" data-destination="pizzeria" style="padding: 6px 12px; background: linear-gradient(135deg, #ffc107 0%, #FFE4C4 100%); color: #212529; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
+                    🍕 Pizzeria
+                </button>
+                <button 
+                    onclick="toggleVoiceRecording()" 
+                    id="voice-message-button" 
+                    style="padding: 6px 12px; background: linear-gradient(135deg, #007bff 0%, #0056b3 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; white-space: nowrap;">
+                    🎤 5s
+                </button>
+            </div>
+            <div id="voice-message-status" style="margin-top: 4px; font-size: 10px; color: #666; min-height: 12px;">
+            </div>
+            <div id="selected-destinations" style="margin-top: 2px; font-size: 10px; color: #007bff; font-weight: 600;">
+            </div>
         </div>
-        <div id="voice-message-status" style="margin-top: 4px; font-size: 10px; color: #666; min-height: 12px;">
-        </div>
-        <div id="selected-destinations" style="margin-top: 2px; font-size: 10px; color: #007bff; font-weight: 600;">
+
+        <!-- Container controllo pausa insalata -->
+        <div style="text-align: center; padding: 8px; background: linear-gradient(135deg, #e6ffe6 0%, #ccffcc 100%); border-radius: 8px; border-left: 4px solid #28a745; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); min-width: 200px;">
+            <div style="margin-bottom: 4px; color: #155724; font-size: 12px; font-weight: 600;">⏸️ Pausa Insalata</div>
+            <div style="display: flex; justify-content: center; align-items: center; gap: 6px; flex-wrap: nowrap;">
+                <button id="pause-10-btn" onclick="inviaMessaggioPausa(10)" 
+                        style="padding: 6px 12px; background: linear-gradient(135deg, #17a2b8 0%, #138496 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
+                    ⏸️ 10min
+                </button>
+                <button id="pause-15-btn" onclick="inviaMessaggioPausa(15)" 
+                        style="padding: 6px 12px; background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
+                    ⏸️ 15min
+                </button>
+            </div>
+            <div id="pause-status" style="margin-top: 4px; font-size: 10px; color: #155724; min-height: 12px; text-align: center;">
+            </div>
         </div>
     </div>
 
@@ -985,6 +1006,168 @@
             setTimeout(() => {
                 statusDiv.textContent = '';
                 statusDiv.style.color = '#666';
+            }, 3000);
+        }
+
+        // Sistema pausa insalata - funzioni per inviare pause dall'insalata
+        let pausaAttiva = false;
+        let pausaTimer = null;
+
+        function inviaMessaggioPausa(minuti) {
+            if (pausaAttiva) {
+                alert('⚠️ Una pausa è già attiva!');
+                return;
+            }
+
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                alert('❌ Connessione persa. Impossibile inviare pausa.');
+                return;
+            }
+
+            const conferma = confirm(`⏸️ Vuoi mettere in pausa l'insalata per ${minuti} minuti?\n\nQuesto bloccherà temporaneamente i nuovi countdown.`);
+            
+            if (!conferma) return;
+
+            console.log(`⏸️ Invio richiesta pausa insalata da INSALATA: ${minuti} minuti`);
+
+            // Invia messaggio di pausa
+            const messageId = Date.now().toString();
+            const pausaMessage = {
+                action: 'pausaInsalata',
+                messageId: messageId,
+                durataMinuti: minuti,
+                from: 'Insalata',
+                timestamp: new Date().toLocaleTimeString('it-IT')
+            };
+
+            ws.send(JSON.stringify(pausaMessage));
+            console.log(`📤 Messaggio pausa inviato dall'insalata: ${minuti} minuti`);
+
+            // Avvia stato di pausa locale
+            avviaPausaLocale(minuti);
+        }
+
+        function avviaPausaLocale(minuti) {
+            pausaAttiva = true;
+            let secondiRimasti = minuti * 60;
+
+            // Disabilita i pulsanti pausa
+            document.getElementById('pause-10-btn').disabled = true;
+            document.getElementById('pause-15-btn').disabled = true;
+            document.getElementById('pause-10-btn').style.opacity = '0.5';
+            document.getElementById('pause-15-btn').style.opacity = '0.5';
+
+            // Crea e mostra il pulsante annulla pausa
+            const pauseContainer = document.getElementById('pause-10-btn').parentNode;
+            const annullaPausaBtn = document.createElement('button');
+            annullaPausaBtn.id = 'annulla-pausa-btn';
+            annullaPausaBtn.innerHTML = '❌ Annulla';
+            annullaPausaBtn.style.cssText = `
+                padding: 6px 12px; 
+                background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); 
+                color: white; 
+                border: none; 
+                border-radius: 6px; 
+                cursor: pointer; 
+                font-size: 12px; 
+                font-weight: 600; 
+                transition: all 0.3s ease; 
+                white-space: nowrap;
+                margin-top: 4px;
+            `;
+            annullaPausaBtn.onclick = annullaPausa;
+            pauseContainer.appendChild(annullaPausaBtn);
+
+            const statusDiv = document.getElementById('pause-status');
+
+            // Aggiorna il countdown della pausa
+            pausaTimer = setInterval(() => {
+                const minutiRim = Math.floor(secondiRimasti / 60);
+                const secondiRim = secondiRimasti % 60;
+                
+                statusDiv.textContent = `⏸️ Pausa attiva: ${minutiRim}:${secondiRim.toString().padStart(2, '0')}`;
+                statusDiv.style.color = '#dc3545';
+                statusDiv.style.fontWeight = 'bold';
+
+                secondiRimasti--;
+
+                if (secondiRimasti < 0) {
+                    clearInterval(pausaTimer);
+                    terminaPausaLocale();
+                }
+            }, 1000);
+
+            console.log(`⏸️ Pausa locale avviata dall'insalata per ${minuti} minuti`);
+        }
+
+        function terminaPausaLocale() {
+            pausaAttiva = false;
+            
+            if (pausaTimer) {
+                clearInterval(pausaTimer);
+                pausaTimer = null;
+            }
+
+            // Riabilita i pulsanti pausa
+            document.getElementById('pause-10-btn').disabled = false;
+            document.getElementById('pause-15-btn').disabled = false;
+            document.getElementById('pause-10-btn').style.opacity = '1';
+            document.getElementById('pause-15-btn').style.opacity = '1';
+
+            // Rimuovi il pulsante annulla pausa se esiste
+            const annullaPausaBtn = document.getElementById('annulla-pausa-btn');
+            if (annullaPausaBtn) {
+                annullaPausaBtn.remove();
+            }
+
+            const statusDiv = document.getElementById('pause-status');
+            statusDiv.textContent = '✅ Pausa terminata';
+            statusDiv.style.color = '#28a745';
+            statusDiv.style.fontWeight = 'normal';
+
+            // Pulisci il messaggio dopo 5 secondi
+            setTimeout(() => {
+                statusDiv.textContent = '';
+            }, 5000);
+
+            console.log('✅ Pausa locale terminata in insalata');
+        }
+
+        function annullaPausa() {
+            if (!pausaAttiva) {
+                return;
+            }
+
+            const conferma = confirm('❌ Vuoi davvero annullare la pausa?\n\nL\'insalata tornerà immediatamente operativa.');
+            
+            if (!conferma) return;
+
+            console.log('❌ Annullamento pausa richiesto dall\'insalata');
+
+            // Invia messaggio di annullamento pausa
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                const annullaPausaMessage = {
+                    action: 'annullaPausaInsalata',
+                    messageId: Date.now().toString(),
+                    from: 'Insalata',
+                    timestamp: new Date().toLocaleTimeString('it-IT')
+                };
+
+                ws.send(JSON.stringify(annullaPausaMessage));
+                console.log('📤 Messaggio annullamento pausa inviato dall\'insalata');
+            }
+
+            // Termina pausa locale immediatamente
+            terminaPausaLocale();
+
+            const statusDiv = document.getElementById('pause-status');
+            statusDiv.textContent = '❌ Pausa annullata';
+            statusDiv.style.color = '#dc3545';
+            statusDiv.style.fontWeight = 'bold';
+
+            // Pulisci il messaggio dopo 3 secondi
+            setTimeout(() => {
+                statusDiv.textContent = '';
             }, 3000);
         }
 
