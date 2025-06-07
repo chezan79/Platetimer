@@ -144,9 +144,13 @@ const authenticatedSessions = new Map();
 // Rate limiting per prevenire spam
 const rateLimiter = new Map();
 
-// Rate limiting specifico per audio e chiamate
+// Rate limiting specifico per audio e chiamate - più permissivo
 const audioRateLimiter = new Map();
 const callRateLimiter = new Map();
+
+// Separa le connessioni per tipo
+const voiceConnections = new Map();
+const regularConnections = new Map();
 
 // Funzione per validare il nome dell'azienda
 function isValidCompanyName(companyName) {
