@@ -2565,9 +2565,19 @@
                     callId: callId
                 }));
 
+                currentCall = {
+                    id: callId,
+                    isOutgoing: false,
+                    startTime: Date.now()
+                };
+
                 isInCall = true;
                 avviaAudioChiamata();
                 console.log(`✅ Chiamata ${callId} accettata`);
+                
+                // Aggiorna lo status
+                document.getElementById('call-status').textContent = '✅ Chiamata accettata';
+                document.getElementById('call-status').style.color = '#28a745';
             }
         }
 
@@ -2684,15 +2694,27 @@
                 document.head.appendChild(style);
             }
 
+            // Creo una funzione separata per gestire l'accettazione
+            window.accettaChiamataAttuale = function() {
+                accettaChiamata(data.callId);
+                rimuoviInterfacciaChiamata();
+                mostraInterfacciaChiamataAttiva(data.from);
+            };
+
+            // Creo una funzione separata per gestire il rifiuto
+            window.rifiutaChiamataAttuale = function() {
+                rifiutaChiamata(data.callId);
+            };
+
             callDiv.innerHTML = `
                 <div style="font-size: 20px; margin-bottom: 15px;">📞 CHIAMATA IN ARRIVO</div>
                 <div style="font-size: 16px; margin-bottom: 20px;">da <strong>${data.from}</strong></div>
                 <div style="display: flex; gap: 15px; justify-content: center;">
-                    <button onclick="accettaChiamata('${data.callId}')" 
+                    <button onclick="accettaChiamataAttuale()" 
                             style="background: #28a745; color: white; border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600;">
                         ✅ Accetta
                     </button>
-                    <button onclick="rifiutaChiamata('${data.callId}')" 
+                    <button onclick="rifiutaChiamataAttuale()" 
                             style="background: #dc3545; color: white; border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600;">
                         ❌ Rifiuta
                     </button>
