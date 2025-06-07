@@ -330,7 +330,7 @@
         <h4 id="company-name" style="margin: 0; color: #333; font-weight: 600;">Nome Azienda</h4>
     </div>
 
-    <!-- Container superiore con messaggi vocali e controlli pausa -->
+    <!-- Container superiore con messaggi vocali -->
     <div style="position: absolute; top: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 15px; z-index: 500;">
         
         <!-- Sistema messaggio vocale con scelta destinazione -->
@@ -352,23 +352,6 @@
             <div id="voice-message-status" style="margin-top: 4px; font-size: 10px; color: #666; min-height: 12px;">
             </div>
             <div id="selected-destinations-voice" style="margin-top: 2px; font-size: 10px; color: #007bff; font-weight: 600;">
-            </div>
-        </div>
-
-        <!-- Container controllo pausa cucina -->
-        <div style="text-align: center; padding: 8px; background: linear-gradient(135deg, #ffe6e6 0%, #ffcccc 100%); border-radius: 8px; border-left: 4px solid #dc3545; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); min-width: 200px;">
-            <div style="margin-bottom: 4px; color: #721c24; font-size: 12px; font-weight: 600;">⏸️ Pausa Cucina</div>
-            <div style="display: flex; justify-content: center; align-items: center; gap: 6px; flex-wrap: nowrap;">
-                <button id="pause-10-btn" onclick="inviaMessaggioPausa(10)" 
-                        style="padding: 6px 12px; background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%); color: #212529; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
-                    ⏸️ 10min
-                </button>
-                <button id="pause-15-btn" onclick="inviaMessaggioPausa(15)" 
-                        style="padding: 6px 12px; background: linear-gradient(135deg, #fd7e14 0%, #e8690c 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
-                    ⏸️ 15min
-                </button>
-            </div>
-            <div id="pause-status" style="margin-top: 4px; font-size: 10px; color: #721c24; min-height: 12px; text-align: center;">
             </div>
         </div>
     </div>
