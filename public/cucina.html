@@ -384,23 +384,6 @@
             <div id="pause-status" style="margin-top: 4px; font-size: 10px; color: #721c24; min-height: 12px; text-align: center;">
             </div>
         </div>
-
-        <!-- Container chiamate vocali -->
-        <div style="text-align: center; padding: 8px; background: linear-gradient(135deg, #e6f3ff 0%, #cce7ff 100%); border-radius: 8px; border-left: 4px solid #007bff; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); min-width: 200px;">
-            <div style="margin-bottom: 4px; color: #004085; font-size: 12px; font-weight: 600;">📞 Chiamate</div>
-            <div style="display: flex; justify-content: center; align-items: center; gap: 6px; flex-wrap: nowrap;">
-                <button onclick="iniziaChiamata('pizzeria')" 
-                        style="padding: 6px 12px; background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%); color: #212529; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
-                    📞 Pizzeria
-                </button>
-                <button onclick="iniziaChiamata('insalata')" 
-                        style="padding: 6px 12px; background: linear-gradient(135deg, #17a2b8 0%, #138496 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
-                    📞 Insalata
-                </button>
-            </div>
-            <div id="call-status" style="margin-top: 4px; font-size: 10px; color: #004085; min-height: 12px; text-align: center;">
-            </div>
-        </div>
     </div>
 
     <div style="position: absolute; top: 20px; right: 20px; z-index: 1000; display: flex; gap: 10px;">
@@ -616,7 +599,7 @@
         // Funzione per resettare la selezione
         function resetSelection() {
             selectedDestinations = [];
-            document.querySelectorAll('.destination-button').forEach(btn =>{
+            document.querySelectorAll('.destination-button').forEach(btn => {
                 btn.classList.remove('selected');
             });
             document.querySelectorAll('.duration-button').forEach(btn => {
@@ -786,33 +769,6 @@
                         } else if (data.action === 'newUserJoined') {
                             console.log('🎉 Nuovo utente è entrato nella pagina:', data.message);
                             mostraAvvisoNuovoUtente(data);
-                        } else if (data.action === 'incomingCall') {
-                            console.log('📞 Chiamata in arrivo:', data);
-                            mostraChiamataInArrivo(data);
-                        } else if (data.action === 'callAccepted') {
-                            console.log('✅ Chiamata accettata:', data);
-                            if (currentCall && currentCall.id === data.callId) {
-                                isInCall = true;
-                                avviaAudioChiamata();
-                                mostraInterfacciaChiamataAttiva(currentCall.targetPage);
-                                document.getElementById('call-status').textContent = '';
-                            }
-                        } else if (data.action === 'callRejected') {
-                            console.log('❌ Chiamata rifiutata:', data);
-                            if (currentCall && currentCall.id === data.callId) {
-                                currentCall = null;
-                                document.getElementById('call-status').textContent = '❌ Chiamata rifiutata';
-                                setTimeout(() => {
-                                    document.getElementById('call-status').textContent = '';
-                                }, 3000);
-                            }
-                        } else if (data.action === 'callEnded') {
-                            console.log('📞 Chiamata terminata:', data);
-                            terminaChiamata();
-                        } else if (data.action === 'callAudio') {
-                            if (isInCall && currentCall && currentCall.id === data.callId) {
-                                riproduciAudioChiamata(data.audioData);
-                            }
                         }
                     } catch (error) {
                         console.error('Errore nel parsing del messaggio WebSocket:', error);
@@ -2263,7 +2219,8 @@
             statusDiv.style.color = '#28a745';
             statusDiv.style.fontWeight = 'normal';
 
-            // Pulisci il messaggio dopo 5 secondi            setTimeout(() => {
+            // Pulisci il messaggio dopo 5 secondi
+            setTimeout(() => {
                 statusDiv.textContent = '';
             }, 5000);
 
@@ -2506,287 +2463,6 @@
                     setTimeout(() => noticeDiv.remove(), 300);
                 }
             }, 5000);
-        }
-
-        // Sistema chiamate vocali
-        let currentCall = null;
-        let isInCall = false;
-        let callAudioRecorder = null;
-        let callAudioChunks = [];
-
-        function iniziaChiamata(targetPage) {
-            if (isInCall) {
-                alert('📞 Sei già in una chiamata!');
-                return;
-            }
-
-            const callId = `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({
-                    action: 'startCall',
-                    callId: callId,
-                    targetPage: targetPage,
-                    from: 'Cucina'
-                }));
-
-                currentCall = {
-                    id: callId,
-                    targetPage: targetPage,
-                    isOutgoing: true,
-                    startTime: Date.now()
-                };
-
-                document.getElementById('call-status').textContent = `📞 Chiamando ${targetPage}...`;
-                document.getElementById('call-status').style.color = '#007bff';
-
-                console.log(`📞 Chiamata avviata verso ${targetPage}, ID: ${callId}`);
-
-                // Timeout per chiamata non risposta (30 secondi)
-                setTimeout(() => {
-                    if (currentCall && currentCall.id === callId && !isInCall) {
-                        terminaChiamata();
-                        document.getElementById('call-status').textContent = '❌ Nessuna risposta';
-                        setTimeout(() => {
-                            document.getElementById('call-status').textContent = '';
-                        }, 3000);
-                    }
-                }, 30000);
-            } else {
-                alert('❌ Connessione persa. Impossibile avviare chiamata.');
-            }
-        }
-
-        function riproduciAudioChiamata(audioData) {
-            try {
-                const audio = new Audio(`data:audio/webm;base64,${audioData}`);
-                audio.play().catch(e => console.log('Errore riproduzione audio:', e));
-            } catch (error) {
-                console.log('Errore audio:', error);
-            }
-        }
-
-        function accettaChiamata(callId) {
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({
-                    action: 'acceptCall',
-                    callId: callId
-                }));
-                isInCall = true;
-                avviaAudioChiamata();
-            }
-        }
-
-        function rifiutaChiamata(callId) {
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({
-                    action: 'rejectCall',
-                    callId: callId
-                }));
-            }
-            rimuoviInterfacciaChiamata();
-        }
-
-        function rimuoviInterfacciaChiamata() {
-            const incomingCall = document.getElementById('incoming-call-interface');
-            const activeCall = document.getElementById('active-call-interface');
-            if (incomingCall) incomingCall.remove();
-            if (activeCall) activeCall.remove();
-
-            const alertAudio = document.getElementById('alertSound');
-            if (alertAudio) {
-                alertAudio.loop = false;
-                alertAudio.pause();
-                alertAudio.currentTime = 0;
-            }
-        }
-
-        async function avviaAudioChiamata() {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                callAudioRecorder = new MediaRecorder(stream, {
-                    mimeType: 'audio/webm;codecs=opus'
-                });
-
-                callAudioRecorder.ondataavailable = event => {
-                    if (event.data.size > 0 && currentCall && isInCall) {
-                        // Invia audio in tempo reale
-                        const reader = new FileReader();
-                        reader.onloadend = () => {
-                            const audioData = reader.result.split(',')[1];
-                            if (ws && ws.readyState === WebSocket.OPEN) {
-                                ws.send(JSON.stringify({
-                                    action: 'callAudio',
-                                    callId: currentCall.id,
-                                    audioData: audioData
-                                }));
-                            }
-                        };
-                        reader.readAsDataURL(event.data);
-                    }
-                };
-
-                // Registra audio in chunk da 1 secondo
-                callAudioRecorder.start(1000);
-                console.log('🎤 Audio chiamata avviato');
-
-            } catch (error) {
-                console.error('❌ Errore avvio audio chiamata:', error);
-                alert('❌ Impossibile accedere al microfono per la chiamata.');
-            }
-        }
-
-        function fermaAudioChiamata() {
-            if (callAudioRecorder && callAudioRecorder.state !== 'inactive') {
-                callAudioRecorder.stop();
-                callAudioRecorder.stream.getTracks().forEach(track => track.stop());
-                callAudioRecorder = null;
-                console.log('🔇 Audio chiamata fermato');
-            }
-        }
-
-        function mostraChiamataInArrivo(data) {
-            // Rimuovi eventuali chiamate precedenti
-            rimuoviInterfacciaChiamata();
-
-            const callDiv = document.createElement('div');
-            callDiv.id = 'incoming-call-interface';
-            callDiv.style.cssText = `
-                position: fixed;
-                top: 50%;
-                left: 50%;
-                transform: translate(-50%, -50%);
-                background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
-                color: white;
-                padding: 25px;
-                border-radius: 15px;
-                box-shadow: 0 15px 35px rgba(0, 0, 0, 0.4);
-                z-index: 3000;
-                text-align: center;
-                min-width: 300px;
-                animation: callPulse 1s ease-in-out infinite;
-            `;
-
-            if (!document.getElementById('callAnimations')) {
-                const style = document.createElement('style');
-                style.id = 'callAnimations';
-                style.textContent = `
-                    @keyframes callPulse {
-                        0%, 100% { transform: translate(-50%, -50%) scale(1); }
-                        50% { transform: translate(-50%, -50%) scale(1.05); }
-                    }
-                `;
-                document.head.appendChild(style);
-            }
-
-            callDiv.innerHTML = `
-                <div style="font-size: 20px; margin-bottom: 15px;">📞 CHIAMATA IN ARRIVO</div>
-                <div style="font-size: 16px; margin-bottom: 20px;">da <strong>${data.from}</strong></div>
-                <div style="display: flex; gap: 15px; justify-content: center;">
-                    <button onclick="accettaChiamata('${data.callId}')" 
-                            style="background: #28a745; color: white; border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600;">
-                        ✅ Accetta
-                    </button>
-                    <button onclick="rifiutaChiamata('${data.callId}')" 
-                            style="background: #dc3545; color: white; border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600;">
-                        ❌ Rifiuta
-                    </button>
-                </div>
-            `;
-
-            document.body.appendChild(callDiv);
-
-            const alertAudio = document.getElementById('alertSound');
-            if (alertAudio) {
-                alertAudio.loop = true;
-                alertAudio.play().catch(e => console.log('Errore audio chiamata:', e));
-            }
-
-            console.log(`📞 Chiamata in arrivo da ${data.from}, ID: ${data.callId}`);
-        }
-
-        function mostraInterfacciaChiamataAttiva(targetPage) {
-            rimuoviInterfacciaChiamata();
-
-            const callDiv = document.createElement('div');
-            callDiv.id = 'active-call-interface';
-            callDiv.style.cssText = `
-                position: fixed;
-                top: 20px;
-                left: 50%;
-                transform: translateX(-50%);
-                background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%);
-                color: white;
-                padding: 15px 20px;
-                border-radius: 10px;
-                box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
-                z-index: 2500;
-                text-align: center;
-                min-width: 250px;
-            `;
-
-            const startTime = Date.now();
-            callDiv.innerHTML = `
-                <div style="font-size: 16px; margin-bottom: 10px;">📞 In chiamata con ${targetPage}</div>
-                <div id="call-timer" style="font-size: 14px; margin-bottom: 10px;">00:00</div>
-                <button onclick="terminaChiamata()" 
-                        style="background: #dc3545; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600;">
-                    📞 Termina
-                </button>
-            `;
-
-            document.body.appendChild(callDiv);
-
-            // Aggiorna timer chiamata
-            const timerInterval = setInterval(() => {
-                if (!isInCall || !currentCall) {
-                    clearInterval(timerInterval);
-                    return;
-                }
-
-                const elapsed = Math.floor((Date.now() - startTime) / 1000);
-                const minutes = Math.floor(elapsed / 60);
-                const seconds = elapsed % 60;
-                const timerElement = document.getElementById('call-timer');
-                if (timerElement) {
-                    timerElement.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-                }
-            }, 1000);
-
-            console.log(`📞 Interfaccia chiamata attiva con ${targetPage}`);
-        }
-
-        function terminaChiamata() {
-            if (currentCall && ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({
-                    action: 'endCall',
-                    callId: currentCall.id
-                }));
-            }
-
-            fermaAudioChiamata();
-            rimuoviInterfacciaChiamata();
-
-            currentCall = null;
-            isInCall = false;
-
-            document.getElementById('call-status').textContent = '📞 Chiamata terminata';
-            document.getElementById('call-status').style.color = '#6c757d';
-
-            setTimeout(() => {
-                document.getElementById('call-status').textContent = '';
-            }, 3000);
-
-            console.log('📞 Chiamata terminata');
-        }
-
-        function riproduciAudioChiamata(audioData) {
-            try {
-                const audio = new Audio(`data:audio/webm;base64,${audioData}`);
-                audio.play().catch(e => console.log('Errore riproduzione audio chiamata:', e));
-            } catch (error) {
-                console.log('Errore audio:', error);
-            }
         }
 
         // Sistema toggle controlli
