@@ -2790,7 +2790,12 @@
                 min-width: 250px;
             `;
 
-            const startTime = Date.now();
+            // Usa currentCall.startTime se disponibile, altrimenti Date.now()
+            const startTime = currentCall ? currentCall.startTime : Date.now();
+            if (currentCall && !currentCall.startTime) {
+                currentCall.startTime = Date.now();
+            }
+
             callDiv.innerHTML = `
                 <div style="font-size: 16px; margin-bottom: 10px;">📞 In chiamata con ${targetPage}</div>
                 <div id="call-timer" style="font-size: 14px; margin-bottom: 10px;">00:00</div>
@@ -2802,17 +2807,19 @@
 
             document.body.appendChild(callDiv);
 
-            // Aggiorna timer chiamata
-            const timerInterval = setInterval(() => {
+            // Timer per chiamata con gestione migliorata
+            currentCall.timerInterval = setInterval(() => {
                 if (!isInCall || !currentCall) {
-                    clearInterval(timerInterval);
+                    clearInterval(currentCall.timerInterval);
                     return;
                 }
 
-                const elapsed = Math.floor((Date.now() - startTime) / 1000);
+                const now = Date.now();
+                const elapsed = Math.floor((now - (currentCall.startTime || startTime)) / 1000);
                 const minutes = Math.floor(elapsed / 60);
                 const seconds = elapsed % 60;
                 const timerElement = document.getElementById('call-timer');
+                
                 if (timerElement) {
                     timerElement.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
                 }
@@ -2821,11 +2828,11 @@
                 if (elapsed >= 300) { // 5 minuti
                     console.log('⏰ Chiamata terminata automaticamente dopo 5 minuti');
                     terminaChiamata();
-                    clearInterval(timerInterval);
+                    clearInterval(currentCall.timerInterval);
                 }
             }, 1000);
 
-            console.log(`📞 Interfaccia chiamata attiva con ${targetPage}`);
+            console.log(`📞 Interfaccia chiamata attiva con ${targetPage}, startTime: ${new Date(startTime).toLocaleTimeString()}`);
         }
 
         function rimuoviInterfacciaChiamata() {

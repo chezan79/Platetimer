@@ -1660,57 +1660,119 @@
                     callId: currentCall.id
                 }));
             }
+
+            // Cleanup timer se esiste
+            if (currentCall && currentCall.timerInterval) {
+                clearInterval(currentCall.timerInterval);
+                currentCall.timerInterval = null;
+            }
+
             fermaAudioChiamata();
             rimuoviInterfacciaChiamata();
+            
             currentCall = null;
             isInCall = false;
-            document.getElementById('call-status').textContent = '';
+            
+            document.getElementById('call-status').textContent = '📞 Chiamata terminata';
+            document.getElementById('call-status').style.color = '#6c757d';
+            
+            setTimeout(() => {
+                document.getElementById('call-status').textContent = '';
+            }, 3000);
+
+            console.log('📞 Chiamata terminata e cleanup completato');
         }
 
         async function avviaAudioChiamata() {
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                console.log('🎤 Avvio audio chiamata...');
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        sampleRate: 44100
+                    }
+                });
+
                 callAudioRecorder = new MediaRecorder(stream, {
                     mimeType: 'audio/webm;codecs=opus'
                 });
 
+                // Store del stream per cleanup
+                currentCall.audioStream = stream;
+
                 callAudioRecorder.ondataavailable = event => {
                     if (event.data.size > 0 && currentCall && isInCall) {
                         // Limita la dimensione dei chunk audio
-                        if (event.data.size > 50000) { // Max 50KB per chunk
+                        if (event.data.size > 30000) { // Max 30KB per chunk
                             console.log('🔇 Chunk audio troppo grande, saltato');
                             return;
                         }
 
                         const reader = new FileReader();
                         reader.onloadend = () => {
-                            const audioData = reader.result.split(',')[1];
-                            if (ws && ws.readyState === WebSocket.OPEN) {
-                                ws.send(JSON.stringify({
-                                    action: 'callAudio',
-                                    callId: currentCall.id,
-                                    audioData: audioData
-                                }));
+                            try {
+                                const audioData = reader.result.split(',')[1];
+                                if (ws && ws.readyState === WebSocket.OPEN && currentCall) {
+                                    ws.send(JSON.stringify({
+                                        action: 'callAudio',
+                                        callId: currentCall.id,
+                                        audioData: audioData,
+                                        timestamp: Date.now()
+                                    }));
+                                    console.log(`🔊 Audio chunk inviato: ${Math.round(event.data.size/1024)}KB`);
+                                }
+                            } catch (sendError) {
+                                console.error('❌ Errore invio audio:', sendError);
                             }
                         };
                         reader.readAsDataURL(event.data);
                     }
                 };
 
-                // Aumenta l'intervallo di registrazione per ridurre il carico
-                callAudioRecorder.start(2000); // Ogni 2 secondi invece di 1
-                console.log('🎤 Audio chiamata avviato con intervallo ottimizzato');
+                callAudioRecorder.onerror = (error) => {
+                    console.error('❌ Errore MediaRecorder:', error);
+                };
+
+                // Avvia registrazione con intervallo ottimizzato
+                callAudioRecorder.start(1500); // Ogni 1.5 secondi
+                console.log('🎤 Audio chiamata avviato correttamente');
+
             } catch (error) {
                 console.error('❌ Errore avvio audio chiamata:', error);
                 alert('❌ Impossibile accedere al microfono per la chiamata.');
+                
+                // Fallback: termina la chiamata se non si riesce ad avviare l'audio
+                terminaChiamata();
             }
         }
 
         function fermaAudioChiamata() {
-            if (callAudioRecorder && callAudioRecorder.state !== 'inactive') {
-                callAudioRecorder.stop();
-                callAudioRecorder.stream.getTracks().forEach(track => track.stop());
+            try {
+                if (callAudioRecorder && callAudioRecorder.state !== 'inactive') {
+                    callAudioRecorder.stop();
+                    console.log('🔇 MediaRecorder fermato');
+                }
+
+                // Ferma tutti i track audio
+                if (currentCall && currentCall.audioStream) {
+                    currentCall.audioStream.getTracks().forEach(track => {
+                        track.stop();
+                        console.log(`🔇 Track audio fermato: ${track.kind}`);
+                    });
+                    currentCall.audioStream = null;
+                }
+
                 callAudioRecorder = null;
+                console.log('🔇 Audio chiamata fermato completamente');
+
+            } catch (error) {
+                console.error('❌ Errore durante stop audio:', error);
+                // Cleanup forzato
+                callAudioRecorder = null;
+                if (currentCall) {
+                    currentCall.audioStream = null;
+                }
             }
         }
 
@@ -1820,28 +1882,35 @@
                 text-align: center; min-width: 250px;
             `;
 
-            const startTime = Date.now();
+            // Usa currentCall.startTime se disponibile, altrimenti Date.now()
+            const startTime = currentCall ? currentCall.startTime : Date.now();
+            if (currentCall && !currentCall.startTime) {
+                currentCall.startTime = Date.now();
+            }
+
             callDiv.innerHTML = `
                 <div style="font-size: 16px; margin-bottom: 10px;">📞 In chiamata con ${targetPage}</div>
-                <div id="call-timer-pizzeria" style="font-size: 12px; margin-bottom: 8px;">00:00</div>
+                <div id="call-timer-pizzeria" style="font-size: 14px; margin-bottom: 10px;">00:00</div>
                 <button onclick="terminaChiamata()" 
-                        style="background: #dc3545; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer;">
+                        style="background: #dc3545; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600;">
                     📞 Termina
                 </button>
             `;
             document.body.appendChild(callDiv);
 
-            // Timer per chiamata e auto-disconnect dopo 5 minuti
-            const timerInterval = setInterval(() => {
+            // Timer per chiamata con gestione migliorata
+            currentCall.timerInterval = setInterval(() => {
                 if (!isInCall || !currentCall) {
-                    clearInterval(timerInterval);
+                    clearInterval(currentCall.timerInterval);
                     return;
                 }
 
-                const elapsed = Math.floor((Date.now() - startTime) / 1000);
+                const now = Date.now();
+                const elapsed = Math.floor((now - (currentCall.startTime || startTime)) / 1000);
                 const minutes = Math.floor(elapsed / 60);
                 const seconds = elapsed % 60;
                 const timerElement = document.getElementById('call-timer-pizzeria');
+                
                 if (timerElement) {
                     timerElement.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
                 }
@@ -1850,9 +1919,11 @@
                 if (elapsed >= 300) { // 5 minuti
                     console.log('⏰ Chiamata terminata automaticamente dopo 5 minuti');
                     terminaChiamata();
-                    clearInterval(timerInterval);
+                    clearInterval(currentCall.timerInterval);
                 }
             }, 1000);
+
+            console.log(`📞 Interfaccia chiamata attiva con ${targetPage}, startTime: ${new Date(startTime).toLocaleTimeString()}`);
         }
 
         function rimuoviInterfacciaChiamata() {
@@ -1865,9 +1936,21 @@
         function riproduciAudioChiamata(audioData) {
             try {
                 const audio = new Audio(`data:audio/webm;base64,${audioData}`);
-                audio.play().catch(e => console.log('Errore riproduzione audio:', e));
+                audio.volume = 0.8; // Volume ottimale
+                audio.preload = 'auto';
+                
+                const playPromise = audio.play();
+                if (playPromise !== undefined) {
+                    playPromise
+                        .then(() => {
+                            console.log('🔊 Audio chiamata riprodotto');
+                        })
+                        .catch(error => {
+                            console.log('⚠️ Errore riproduzione audio chiamata:', error);
+                        });
+                }
             } catch (error) {
-                console.log('Errore audio:', error);
+                console.error('❌ Errore creazione audio chiamata:', error);
             }
         }
 
