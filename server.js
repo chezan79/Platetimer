@@ -144,6 +144,10 @@ const authenticatedSessions = new Map();
 // Rate limiting per prevenire spam
 const rateLimiter = new Map();
 
+// Rate limiting specifico per audio e chiamate
+const audioRateLimiter = new Map();
+const callRateLimiter = new Map();
+
 // Funzione per validare il nome dell'azienda
 function isValidCompanyName(companyName) {
     if (!companyName || typeof companyName !== 'string') return false;
@@ -466,6 +470,21 @@ wss.on('connection', (ws, req) => {
                 }
 
             } else if (data.action === 'voiceMessage') {
+                // Rate limiting specifico per messaggi vocali (max 3 al minuto)
+                const audioLimit = audioRateLimiter.get(ws.clientIp) || { count: 0, resetTime: now + 60000 };
+                if (now > audioLimit.resetTime) {
+                    audioLimit.count = 1;
+                    audioLimit.resetTime = now + 60000;
+                } else {
+                    audioLimit.count++;
+                }
+                audioRateLimiter.set(ws.clientIp, audioLimit);
+                
+                if (audioLimit.count > 3) {
+                    console.log('⚠️ Rate limit audio superato, messaggio scartato');
+                    return;
+                }
+
                 // Validazione messaggio vocale
                 if (!data.message || typeof data.message !== 'string') {
                     console.log('⚠️ Messaggio vocale non valido');
@@ -683,6 +702,21 @@ wss.on('connection', (ws, req) => {
                 }
 
             } else if (data.action === 'startCall') {
+                // Rate limiting per chiamate (max 5 al minuto)
+                const callLimit = callRateLimiter.get(ws.clientIp) || { count: 0, resetTime: now + 60000 };
+                if (now > callLimit.resetTime) {
+                    callLimit.count = 1;
+                    callLimit.resetTime = now + 60000;
+                } else {
+                    callLimit.count++;
+                }
+                callRateLimiter.set(ws.clientIp, callLimit);
+                
+                if (callLimit.count > 5) {
+                    console.log('⚠️ Rate limit chiamate superato');
+                    return;
+                }
+
                 // Validazione richiesta avvio chiamata
                 if (!data.callId || typeof data.callId !== 'string') {
                     console.log('⚠️ ID chiamata mancante');

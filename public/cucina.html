@@ -1451,7 +1451,7 @@
             console.log('Nome azienda impostato:', name);
         }
 
-        // Sistema messaggio vocale con registrazione audio per cucina
+                // Sistema messaggio vocale con registrazione audio per cucina
         let voiceRecognition = null;
         let isRecordingMessage = false;
         let currentTranscript = '';
@@ -2522,7 +2522,7 @@
             }
 
             const callId = `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-            
+
             if (ws && ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({
                     action: 'startCall',
@@ -2574,7 +2574,7 @@
                 isInCall = true;
                 avviaAudioChiamata();
                 console.log(`✅ Chiamata ${callId} accettata`);
-                
+
                 // Aggiorna lo status
                 document.getElementById('call-status').textContent = '✅ Chiamata accettata';
                 document.getElementById('call-status').style.color = '#28a745';
@@ -2602,13 +2602,13 @@
 
             fermaAudioChiamata();
             rimuoviInterfacciaChiamata();
-            
+
             currentCall = null;
             isInCall = false;
 
             document.getElementById('call-status').textContent = '📞 Chiamata terminata';
             document.getElementById('call-status').style.color = '#6c757d';
-            
+
             setTimeout(() => {
                 document.getElementById('call-status').textContent = '';
             }, 3000);
@@ -2799,7 +2799,7 @@
         function rimuoviInterfacciaChiamata() {
             const incomingCall = document.getElementById('incoming-call-interface');
             const activeCall = document.getElementById('active-call-interface');
-            
+
             if (incomingCall) {
                 incomingCall.remove();
             }
