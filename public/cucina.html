@@ -332,7 +332,7 @@
 
     <!-- Container superiore con messaggi vocali e controlli pausa -->
     <div style="position: absolute; top: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 15px; z-index: 500;">
-        
+
         <!-- Sistema messaggio vocale con scelta destinazione -->
         <div style="text-align: center; padding: 8px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; border-left: 4px solid #007bff; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); min-width: 280px;">
             <div style="display: flex; justify-content: center; align-items: center; gap: 6px; flex-wrap: nowrap;">
@@ -652,12 +652,11 @@
 
                     // Unisciti alla room con un piccolo delay per stabilizzare la connessione
                     setTimeout(() => {
-                        const companyName = localStorage.getItem('userCompany') || 'Nome Azienda';
-                        const joinMessage = {
+                        const companyName = localStorage.getItem('userCompany') || 'Nome Azienda';                        const joinMessage = {
                             action: 'joinRoom',
                             companyName: companyName
                         };
-                        
+
                         if (ws.readyState === WebSocket.OPEN) {
                             ws.send(JSON.stringify(joinMessage));
                             console.log(`✅ Connesso alla room: ${companyName}`);
@@ -739,6 +738,12 @@
                         } else if (data.action === 'annullaPausaInsalata') {
                             console.log('❌ Messaggio annullamento pausa insalata ricevuto in CUCINA:', data);
                             nascondePausaInsalata();
+                        } else if (data.action === 'pageOccupied') {
+                            console.warn('⚠️ La pagina è già occupata da un altro utente!', data.message);
+                            mostraAvvisoPaginaOccupata(data);
+                        } else if (data.action === 'newUserJoined') {
+                            console.log('🎉 Nuovo utente è entrato nella pagina:', data.message);
+                            mostraAvvisoNuovoUtente(data);
                         }
                     } catch (error) {
                         console.error('Errore nel parsing del messaggio WebSocket:', error);
@@ -1421,6 +1426,8 @@
                 }
 
                 .destination-button-voice.selected {
+                    transition: transform 0.2s, background-color 0.3s, box-shadow 0.2s;
+                    min-width: 60px;
                     transform: translateY(-2px);
                     box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
                     border: 3px solid #333 !important;
@@ -1807,7 +1814,7 @@
                 style.id = 'pulseAnimation';
                 style.textContent = `
                     @keyframes pulse {
-                        0% { box-shadow: 0 0 0 0 rgba(255, 107, 107, 0.7); }
+                        from { box-shadow: 0 0 0 0 rgba(255, 107, 107, 0.7); }
                         70% { box-shadow: 0 0 0 10px rgba(255, 107, 107, 0); }
                         100% { box-shadow: 0 0 0 0 rgba(255, 107, 107, 0); }
                     }
@@ -1836,18 +1843,18 @@
                 const messageElement = document.getElementById(`voice-message-${messageData.messageId}`);
                 if (messageElement && messageElement.parentNode) {
                     console.log(`🕐 Auto-eliminazione messaggio vocale dopo 60s: ID ${messageData.messageId}`);
-                    
+
                     // Animazione di uscita
                     messageElement.style.animation = 'slideOut 0.3s ease-out';
-                    
+
                     setTimeout(() => {
                         if (messageElement && messageElement.parentNode) {
                             messageElement.parentNode.removeChild(messageElement);
-                            
+
                             // Nascondi container se non ci sono più messaggi
                             const messagesList = document.getElementById('voice-messages-list');
                             const messagesContainerElement = document.getElementById('messagesContainer');
-                            
+
                             if (messagesList.children.length === 0) {
                                 messagesContainerElement.style.display = 'none';
                                 console.log('📦 Container messaggi nascosto (auto-eliminazione)');
@@ -1957,7 +1964,7 @@
             console.log('🎯 CUCINA - Gestione pausa completata');
         }
 
-        
+
 
         function mostraMessaggioPausaCucina(pausaData) {
             // Rimuovi messaggio precedente se esiste
@@ -2043,7 +2050,7 @@
 
         function annullaPausaCucina() {
             console.log('❌ Annullamento pausa cucina richiesto');
-            
+
             // Rimuovi SOLO il messaggio centrale
             const pausaElement = document.getElementById('pausa-cucina-message');
             if (pausaElement) {
@@ -2087,7 +2094,7 @@
             }
 
             const conferma = confirm(`⏸️ Vuoi mettere in pausa la cucina per ${minuti} minuti?\n\nQuesto bloccherà temporaneamente i nuovi countdown.`);
-            
+
             if (!conferma) return;
 
             console.log(`⏸️ Invio richiesta pausa cucina da CUCINA: ${minuti} minuti`);
@@ -2146,7 +2153,7 @@
             pausaTimer = setInterval(() => {
                 const minutiRim = Math.floor(secondiRimasti / 60);
                 const secondiRim = secondiRimasti % 60;
-                
+
                 statusDiv.textContent = `⏸️ Pausa attiva: ${minutiRim}:${secondiRim.toString().padStart(2, '0')}`;
                 statusDiv.style.color = '#dc3545';
                 statusDiv.style.fontWeight = 'bold';
@@ -2164,7 +2171,7 @@
 
         function terminaPausaLocale() {
             pausaAttiva = false;
-            
+
             if (pausaTimer) {
                 clearInterval(pausaTimer);
                 pausaTimer = null;
@@ -2201,7 +2208,7 @@
             }
 
             const conferma = confirm('❌ Vuoi davvero annullare la pausa?\n\nLa cucina tornerà immediatamente operativa.');
-            
+
             if (!conferma) return;
 
             console.log('❌ Annullamento pausa richiesto dalla cucina');
@@ -2342,6 +2349,97 @@
             console.log('❌ Messaggio pausa insalata nascosto in cucina');
         }
 
+        function mostraAvvisoPaginaOccupata(data) {
+            // Rimuovi eventuali avvisi precedenti
+            const existingWarning = document.getElementById('page-occupied-warning');
+            if (existingWarning) {
+                existingWarning.remove();
+            }
+
+            const warningDiv = document.createElement('div');
+            warningDiv.id = 'page-occupied-warning';
+            warningDiv.style.cssText = `
+                position: fixed;
+                top: 20px;
+                left: 50%;
+                transform: translateX(-50%);
+                z-index: 10000;
+                background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+                color: #856404;
+                padding: 15px 20px;
+                border-radius: 10px;
+                border: 2px solid #ffc107;
+                box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+                font-weight: 600;
+                text-align: center;
+                max-width: 500px;
+                animation: slideDown 0.5s ease-out;
+            `;
+
+            warningDiv.innerHTML = `
+                <div style="font-size: 16px; margin-bottom: 8px;">
+                    ⚠️ PAGINA GIÀ IN USO
+                </div>
+                <div style="font-size: 14px; margin-bottom: 10px;">
+                    ${data.message}
+                </div>
+                <button onclick="this.parentElement.remove()" 
+                        style="background: #ffc107; color: #856404; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer; font-weight: 600;">
+                    OK
+                </button>
+            `;
+
+            document.body.appendChild(warningDiv);
+
+            // Rimuovi automaticamente dopo 10 secondi
+            setTimeout(() => {
+                if (warningDiv && warningDiv.parentElement) {
+                    warningDiv.remove();
+                }
+            }, 10000);
+        }
+
+        function mostraAvvisoNuovoUtente(data) {
+            // Rimuovi eventuali avvisi precedenti
+            const existingNotice = document.getElementById('new-user-notice');
+            if (existingNotice) {
+                existingNotice.remove();
+            }
+
+            const noticeDiv = document.createElement('div');
+            noticeDiv.id = 'new-user-notice';
+            noticeDiv.style.cssText = `
+                position: fixed;
+                top: 80px;
+                right: 20px;
+                z-index: 9999;
+                background: linear-gradient(135deg, #d1ecf1 0%, #bee5eb 100%);
+                color: #0c5460;
+                padding: 12px 15px;
+                border-radius: 8px;
+                border-left: 4px solid #17a2b8;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+                font-size: 14px;
+                font-weight: 600;
+                max-width: 300px;
+                animation: slideInRight 0.5s ease-out;
+            `;
+
+            noticeDiv.innerHTML = `
+                <div>${data.message}</div>
+            `;
+
+            document.body.appendChild(noticeDiv);
+
+            // Rimuovi automaticamente dopo 5 secondi
+            setTimeout(() => {
+                if (noticeDiv && noticeDiv.parentElement) {
+                    noticeDiv.style.animation = 'slideOutRight 0.3s ease-in';
+                    setTimeout(() => noticeDiv.remove(), 300);
+                }
+            }, 5000);
+        }
+
         // Sistema toggle controlli
         let controlsVisible = false;
 
@@ -2356,14 +2454,14 @@
                 setTimeout(() => {
                     topContainer.classList.remove('hidden');
                 }, 10);
-                
+
                 toggleBtn.textContent = '📱 Controlli Aperti';
                 toggleBtn.style.background = 'linear-gradient(135deg, #28a745 0%, #20c997 100%)';
-                
+
                 // Riduce lo spazio per i countdown
                 bottomContainer.style.maxHeight = 'calc(100vh - 450px)';
                 bottomContainer.style.minHeight = 'calc(100vh - 500px)';
-                
+
                 controlsVisible = true;
                 console.log('📱 Controlli mostrati');
             } else {
@@ -2372,14 +2470,14 @@
                 setTimeout(() => {
                     topContainer.style.display = 'none';
                 }, 500);
-                
+
                 toggleBtn.textContent = '📱 Mostra Controlli';
                 toggleBtn.style.background = 'linear-gradient(135deg, #007bff 0%, #0056b3 100%)';
-                
+
                 // Aumenta lo spazio per i countdown
                 bottomContainer.style.maxHeight = 'calc(100vh - 200px)';
                 bottomContainer.style.minHeight = 'calc(100vh - 250px)';
-                
+
                 controlsVisible = false;
                 console.log('📱 Controlli nascosti');
             }

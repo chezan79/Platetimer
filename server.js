@@ -186,6 +186,7 @@ wss.on('connection', (ws, req) => {
     console.log(`🔗 Nuova connessione WebSocket da IP: ${clientIp}`);
 
     ws.companyRoom = null; // Inizialmente non assegnato a nessuna room
+    ws.pageType = null; // Tipo di pagina (cucina, pizzeria, insalata)
     ws.lastPing = Date.now();
     ws.lastPong = Date.now();
     ws.isAlive = true;
@@ -314,6 +315,57 @@ wss.on('connection', (ws, req) => {
                             companyCountdowns.delete(tableNumber);
                         }
                     });
+                }
+
+            } else if (data.action === 'joinPage') {
+                // Gestisce l'ingresso in una specifica pagina (cucina, pizzeria, insalata)
+                if (!data.pageType || typeof data.pageType !== 'string') {
+                    console.log('⚠️ Tipo pagina non valido');
+                    return;
+                }
+
+                const validPageTypes = ['cucina', 'pizzeria', 'insalata'];
+                if (!validPageTypes.includes(data.pageType)) {
+                    console.log('⚠️ Tipo pagina non supportato');
+                    return;
+                }
+
+                ws.pageType = data.pageType;
+
+                // Conta quanti utenti sono attualmente sulla stessa pagina
+                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    const samePageClients = Array.from(roomClients).filter(client => 
+                        client.pageType === data.pageType && client !== ws
+                    );
+
+                    console.log(`📄 Client entrato in pagina ${data.pageType}: ${samePageClients.length} altri utenti già presenti`);
+
+                    // Se ci sono altri utenti sulla stessa pagina, invia un avviso
+                    if (samePageClients.length > 0) {
+                        const warningMessage = {
+                            action: 'pageOccupied',
+                            pageType: data.pageType,
+                            otherUsersCount: samePageClients.length,
+                            message: `⚠️ Attenzione: ${samePageClients.length} altro/i utente/i sta/stanno già utilizzando la pagina ${data.pageType.toUpperCase()}`
+                        };
+
+                        ws.send(JSON.stringify(warningMessage));
+
+                        // Informa anche gli altri utenti che qualcuno si è collegato
+                        const newUserMessage = {
+                            action: 'newUserJoined',
+                            pageType: data.pageType,
+                            totalUsers: samePageClients.length + 1,
+                            message: `👥 Un nuovo utente si è collegato alla pagina ${data.pageType.toUpperCase()} (${samePageClients.length + 1} utenti totali)`
+                        };
+
+                        samePageClients.forEach(client => {
+                            if (client.readyState === WebSocket.OPEN) {
+                                client.send(JSON.stringify(newUserMessage));
+                            }
+                        });
+                    }
                 }
 
             } else if (data.action === 'startCountdown') {
@@ -653,6 +705,7 @@ wss.on('connection', (ws, req) => {
 
                 // Cleanup delle risorse del client
                 ws.companyRoom = null;
+                ws.pageType = null;
                 ws.isAlive = false;
 
                 console.log(`🔌 Connessione WebSocket chiusa - Code: ${code}, Reason: ${reason || 'Non specificato'}`);

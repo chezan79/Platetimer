@@ -223,13 +223,28 @@
 
                     startHeartbeat();
 
-                    const companyName = localStorage.getItem('userCompany') || 'Nome Azienda';
-                    const joinMessage = {
-                        action: 'joinRoom',
-                        companyName: companyName
-                    };
-                    ws.send(JSON.stringify(joinMessage));
-                    console.log(`✅ Pizzeria connessa alla room: ${companyName}`);
+                    const companyName = localStorage.getItem('companyName');
+            if (companyName) {
+                console.log('Nome azienda dal localStorage:', companyName);
+
+                // Unisciti alla room aziendale
+                ws.send(JSON.stringify({
+                    action: 'joinRoom',
+                    companyName: companyName
+                }));
+                console.log(`✅ Connesso alla room: ${companyName}`);
+
+                // Informa il server che stiamo entrando nella pagina pizzeria
+                ws.send(JSON.stringify({
+                    action: 'joinPage',
+                    pageType: 'pizzeria'
+                }));
+                console.log('📄 Entrato nella pagina PIZZERIA');
+            } else {
+                console.error('❌ Nome azienda non trovato nel localStorage');
+                alert('❌ Errore: Nome azienda non trovato. Effettua nuovamente il login.');
+                window.location.href = '/';
+            }
                     updateConnectionStatus(true);
                 };
 
@@ -289,6 +304,12 @@
                         } else if (data.action === 'annullaPausaInsalata') {
                             console.log('❌ Messaggio annullamento pausa insalata ricevuto in PIZZERIA:', data);
                             nascondePausaInsalata();
+                        } else if (data.action === 'pageOccupied') {
+                            console.warn('⚠️ Pizzeria: Pagina già occupata da un altro utente!');
+                            mostraAvvisoPaginaOccupata(data);
+                        } else if (data.action === 'newUserJoined') {
+                            console.log('ℹ️ Pizzeria: Nuovo utente entrato nella pagina.');
+                            mostraAvvisoNuovoUtente(data);
                         }
                     } catch (error) {
                         console.error('Errore parsing messaggio pizzeria:', error);
@@ -712,7 +733,7 @@
             const statusDiv = document.getElementById('voice-message-status');
 
             if (isRecording) {
-                button.textContent = '🔴 Registrando...';
+                button.textContent= '🔴 Registrando...';
                 button.style.background = 'linear-gradient(135deg, #dc3545 0%, #c82333 100%)';
                 button.style.transform = 'scale(1.05)';
                 button.disabled = true;
@@ -948,18 +969,18 @@
                 const messageElement = document.getElementById(`voice-message-${messageData.messageId}`);
                 if (messageElement && messageElement.parentNode) {
                     console.log(`🕐 Auto-eliminazione messaggio vocale dopo 60s: ID ${messageData.messageId}`);
-                    
+
                     // Animazione di uscita
                     messageElement.style.animation = 'slideOut 0.3s ease-out';
-                    
+
                     setTimeout(() => {
                         if (messageElement && messageElement.parentNode) {
                             messageElement.parentNode.removeChild(messageElement);
-                            
+
                             // Nascondi container se non ci sono più messaggi
                             const messagesList = document.getElementById('voice-messages-list');
                             const messagesContainerElement = document.getElementById('messagesContainer');
-                            
+
                             if (messagesList.children.length === 0) {
                                 messagesContainerElement.style.display = 'none';
                                 console.log('📦 Container messaggi nascosto (auto-eliminazione)');
@@ -1317,7 +1338,7 @@
             function aggiornaPausaDisplay() {
                 const minuti = Math.floor(tempoRimanente / 60);
                 const secondi = tempoRimanente % 60;
-                
+
                 pausaElement.innerHTML = `
                     <div style="font-size: 20px; font-weight: bold; margin-bottom: 10px;">
                         ⏸️ PAUSA CUCINA ATTIVA
@@ -1436,29 +1457,92 @@
         }
 
         function nascondePausaInsalata() {
-            const pausaElement = document.getElementById('pausa-insalata-message');
-            if (pausaElement) {
-                // Aggiungi CSS per fadeOut se non esiste
-                if (!document.getElementById('pausaInsalataFadeOutAnimation')) {
-                    const style = document.createElement('style');
-                    style.id = 'pausaInsalataFadeOutAnimation';
-                    style.textContent = `
-                        @keyframes fadeOutInsalata {
-                            from { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-                            to { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
-                        }
-                    `;
-                    document.head.appendChild(style);
-                }
-
-                pausaElement.style.animation = 'fadeOutInsalata 0.5s ease-out';
-                setTimeout(() => {
-                    if (pausaElement && pausaElement.parentNode) {
-                        pausaElement.parentNode.removeChild(pausaElement);
-                    }
-                }, 500);
+            const pausaInsalataDiv = document.getElementById('pausa-insalata-container');
+            if (pausaInsalataDiv) {
+                pausaInsalataDiv.remove();
+                console.log('❌ Messaggio pausa insalata nascosto');
             }
-            console.log('❌ Messaggio pausa insalata nascosto in pizzeria');
+        }
+
+        function mostraAvvisoPaginaOccupata(data) {
+            const existingWarning = document.getElementById('page-occupied-warning');
+            if (existingWarning) {
+                existingWarning.remove();
+            }
+
+            const warningDiv = document.createElement('div');
+            warningDiv.id = 'page-occupied-warning';
+            warningDiv.style.cssText = `
+                position: fixed;
+                top: 20px;
+                left: 50%;
+                transform: translateX(-50%);
+                z-index: 10000;
+                background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+                color: #856404;
+                padding: 15px 20px;
+                border-radius: 10px;
+                border: 2px solid #ffc107;
+                box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+                font-weight: 600;
+                text-align: center;
+                max-width: 500px;
+            `;
+
+            warningDiv.innerHTML = `
+                <div style="font-size: 16px; margin-bottom: 8px;">
+                    ⚠️ PAGINA GIÀ IN USO
+                </div>
+                <div style="font-size: 14px; margin-bottom: 10px;">
+                    ${data.message}
+                </div>
+                <button onclick="this.parentElement.remove()" 
+                        style="background: #ffc107; color: #856404; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer; font-weight: 600;">
+                    OK
+                </button>
+            `;
+
+            document.body.appendChild(warningDiv);
+
+            setTimeout(() => {
+                if (warningDiv && warningDiv.parentElement) {
+                    warningDiv.remove();
+                }
+            }, 10000);
+        }
+
+        function mostraAvvisoNuovoUtente(data) {
+            const existingNotice = document.getElementById('new-user-notice');
+            if (existingNotice) {
+                existingNotice.remove();
+            }
+
+            const noticeDiv = document.createElement('div');
+            noticeDiv.id = 'new-user-notice';
+            noticeDiv.style.cssText = `
+                position: fixed;
+                top: 80px;
+                right: 20px;
+                z-index: 9999;
+                background: linear-gradient(135deg, #d1ecf1 0%, #bee5eb 100%);
+                color: #0c5460;
+                padding: 12px 15px;
+                border-radius: 8px;
+                border-left: 4px solid #17a2b8;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+                font-size: 14px;
+                font-weight: 600;
+                max-width: 300px;
+            `;
+
+            noticeDiv.innerHTML = `<div>${data.message}</div>`;
+            document.body.appendChild(noticeDiv);
+
+            setTimeout(() => {
+                if (noticeDiv && noticeDiv.parentElement) {
+                    noticeDiv.remove();
+                }
+            }, 5000);
         }
 
 
