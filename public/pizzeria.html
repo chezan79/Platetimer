@@ -1632,14 +1632,53 @@
             }
         }
 
-        function accettaChiamata(callId) {
+        async function accettaChiamata(callId) {
             if (ws && ws.readyState === WebSocket.OPEN) {
+                console.log('✅ Pizzeria - Accettazione chiamata:', callId);
+                
+                // Invia accettazione al server
                 ws.send(JSON.stringify({
                     action: 'acceptCall',
                     callId: callId
                 }));
+                
+                // Imposta stato chiamata
                 isInCall = true;
-                avviaAudioChiamata();
+                currentCall = {
+                    id: callId,
+                    isOutgoing: false,
+                    startTime: Date.now()
+                };
+                
+                // Prova ad avviare l'audio con retry
+                let audioStarted = false;
+                let retryCount = 0;
+                const maxRetries = 3;
+                
+                while (!audioStarted && retryCount < maxRetries) {
+                    try {
+                        console.log(`🎤 Pizzeria - Tentativo avvio audio ${retryCount + 1}/${maxRetries}`);
+                        await avviaAudioChiamata();
+                        audioStarted = true;
+                        console.log('✅ Pizzeria - Audio chiamata avviato con successo');
+                    } catch (error) {
+                        retryCount++;
+                        console.warn(`⚠️ Pizzeria - Tentativo ${retryCount} fallito:`, error);
+                        
+                        if (retryCount < maxRetries) {
+                            console.log(`🔄 Pizzeria - Retry in 1 secondo...`);
+                            await new Promise(resolve => setTimeout(resolve, 1000));
+                        }
+                    }
+                }
+                
+                if (!audioStarted) {
+                    console.error('❌ Pizzeria - Impossibile avviare audio dopo tutti i tentativi');
+                    alert('⚠️ Chiamata accettata ma microfono non disponibile. Solo ascolto.');
+                }
+            } else {
+                console.error('❌ Pizzeria - WebSocket non connesso per accettare chiamata');
+                alert('❌ Connessione persa. Impossibile accettare la chiamata.');
             }
         }
 
@@ -1654,58 +1693,92 @@
         }
 
         function terminaChiamata() {
+            console.log('📞 Pizzeria - Inizio terminazione chiamata...');
+            
+            // Invia terminazione al server se la chiamata è attiva
             if (currentCall && ws && ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({
                     action: 'endCall',
                     callId: currentCall.id
                 }));
+                console.log('📤 Pizzeria - Messaggio terminazione inviato per:', currentCall.id);
             }
 
             // Cleanup timer se esiste
             if (currentCall && currentCall.timerInterval) {
                 clearInterval(currentCall.timerInterval);
                 currentCall.timerInterval = null;
+                console.log('⏱️ Pizzeria - Timer chiamata fermato');
             }
 
+            // Ferma audio prima di rimuovere interfaccia
             fermaAudioChiamata();
+            
+            // Rimuovi interfaccia
             rimuoviInterfacciaChiamata();
             
+            // Reset stato
+            const previousCallId = currentCall ? currentCall.id : 'unknown';
             currentCall = null;
             isInCall = false;
             
-            document.getElementById('call-status').textContent = '📞 Chiamata terminata';
-            document.getElementById('call-status').style.color = '#6c757d';
-            
-            setTimeout(() => {
-                document.getElementById('call-status').textContent = '';
-            }, 3000);
+            // Aggiorna status
+            const statusElement = document.getElementById('call-status');
+            if (statusElement) {
+                statusElement.textContent = '📞 Chiamata terminata';
+                statusElement.style.color = '#6c757d';
+                
+                setTimeout(() => {
+                    if (statusElement) {
+                        statusElement.textContent = '';
+                    }
+                }, 3000);
+            }
 
-            console.log('📞 Chiamata terminata e cleanup completato');
+            console.log(`✅ Pizzeria - Chiamata ${previousCallId} terminata e cleanup completato`);
         }
 
         async function avviaAudioChiamata() {
             try {
-                console.log('🎤 Avvio audio chiamata...');
+                console.log('🎤 Pizzeria - Avvio audio chiamata...');
+                
+                // Richiesta permessi microfono con configurazione robusta
                 const stream = await navigator.mediaDevices.getUserMedia({ 
                     audio: {
                         echoCancellation: true,
                         noiseSuppression: true,
+                        autoGainControl: true,
                         sampleRate: 44100
                     }
                 });
 
+                // Verifica che lo stream sia valido
+                if (!stream || stream.getAudioTracks().length === 0) {
+                    throw new Error('Nessun track audio disponibile');
+                }
+
+                console.log('✅ Pizzeria - Stream audio ottenuto, tracks:', stream.getAudioTracks().length);
+
+                // Controlla supporto MediaRecorder
+                if (!MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+                    console.warn('⚠️ Pizzeria - Codec opus non supportato, uso default');
+                }
+
                 callAudioRecorder = new MediaRecorder(stream, {
-                    mimeType: 'audio/webm;codecs=opus'
+                    mimeType: MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 
+                             'audio/webm;codecs=opus' : 'audio/webm'
                 });
 
                 // Store del stream per cleanup
-                currentCall.audioStream = stream;
+                if (currentCall) {
+                    currentCall.audioStream = stream;
+                }
 
                 callAudioRecorder.ondataavailable = event => {
                     if (event.data.size > 0 && currentCall && isInCall) {
                         // Limita la dimensione dei chunk audio
-                        if (event.data.size > 30000) { // Max 30KB per chunk
-                            console.log('🔇 Chunk audio troppo grande, saltato');
+                        if (event.data.size > 50000) { // Max 50KB per chunk
+                            console.log('🔇 Pizzeria - Chunk audio troppo grande, saltato:', event.data.size);
                             return;
                         }
 
@@ -1713,65 +1786,124 @@
                         reader.onloadend = () => {
                             try {
                                 const audioData = reader.result.split(',')[1];
-                                if (ws && ws.readyState === WebSocket.OPEN && currentCall) {
+                                if (ws && ws.readyState === WebSocket.OPEN && currentCall && isInCall) {
                                     ws.send(JSON.stringify({
                                         action: 'callAudio',
                                         callId: currentCall.id,
                                         audioData: audioData,
+                                        from: 'pizzeria',
                                         timestamp: Date.now()
                                     }));
-                                    console.log(`🔊 Audio chunk inviato: ${Math.round(event.data.size/1024)}KB`);
+                                    console.log(`🔊 Pizzeria - Audio chunk inviato: ${Math.round(event.data.size/1024)}KB`);
                                 }
                             } catch (sendError) {
-                                console.error('❌ Errore invio audio:', sendError);
+                                console.error('❌ Pizzeria - Errore invio audio:', sendError);
                             }
                         };
+                        
+                        reader.onerror = () => {
+                            console.error('❌ Pizzeria - Errore lettura audio chunk');
+                        };
+                        
                         reader.readAsDataURL(event.data);
                     }
                 };
 
                 callAudioRecorder.onerror = (error) => {
-                    console.error('❌ Errore MediaRecorder:', error);
+                    console.error('❌ Pizzeria - Errore MediaRecorder:', error);
+                    // Non terminare immediatamente, può essere un errore temporaneo
                 };
 
-                // Avvia registrazione con intervallo ottimizzato
-                callAudioRecorder.start(1500); // Ogni 1.5 secondi
-                console.log('🎤 Audio chiamata avviato correttamente');
+                callAudioRecorder.onstart = () => {
+                    console.log('✅ Pizzeria - MediaRecorder avviato con successo');
+                };
+
+                callAudioRecorder.onstop = () => {
+                    console.log('🛑 Pizzeria - MediaRecorder fermato');
+                };
+
+                // Avvia registrazione con intervallo ottimizzato per ridurre carico
+                callAudioRecorder.start(2000); // Ogni 2 secondi
+                console.log('🎤 Pizzeria - Audio chiamata avviato correttamente con intervallo 2s');
 
             } catch (error) {
-                console.error('❌ Errore avvio audio chiamata:', error);
-                alert('❌ Impossibile accedere al microfono per la chiamata.');
+                console.error('❌ Pizzeria - Errore avvio audio chiamata:', error);
                 
-                // Fallback: termina la chiamata se non si riesce ad avviare l'audio
+                // Messaggio più specifico in base al tipo di errore
+                let errorMessage = '❌ Impossibile accedere al microfono per la chiamata.';
+                if (error.name === 'NotAllowedError') {
+                    errorMessage = '❌ Permessi microfono negati. Abilita il microfono e riprova.';
+                } else if (error.name === 'NotFoundError') {
+                    errorMessage = '❌ Nessun microfono trovato. Collega un microfono e riprova.';
+                } else if (error.name === 'NotSupportedError') {
+                    errorMessage = '❌ Il browser non supporta la registrazione audio.';
+                }
+                
+                alert(errorMessage);
+                
+                // Termina la chiamata se non si riesce ad avviare l'audio
                 terminaChiamata();
             }
         }
 
         function fermaAudioChiamata() {
             try {
-                if (callAudioRecorder && callAudioRecorder.state !== 'inactive') {
-                    callAudioRecorder.stop();
-                    console.log('🔇 MediaRecorder fermato');
+                console.log('🛑 Pizzeria - Inizio stop audio chiamata...');
+                
+                // Stop MediaRecorder se attivo
+                if (callAudioRecorder) {
+                    if (callAudioRecorder.state === 'recording') {
+                        callAudioRecorder.stop();
+                        console.log('🔇 Pizzeria - MediaRecorder fermato (era in recording)');
+                    } else if (callAudioRecorder.state === 'paused') {
+                        callAudioRecorder.stop();
+                        console.log('🔇 Pizzeria - MediaRecorder fermato (era in pausa)');
+                    } else {
+                        console.log('🔇 Pizzeria - MediaRecorder già inattivo:', callAudioRecorder.state);
+                    }
                 }
 
-                // Ferma tutti i track audio
+                // Ferma tutti i track del stream
                 if (currentCall && currentCall.audioStream) {
-                    currentCall.audioStream.getTracks().forEach(track => {
-                        track.stop();
-                        console.log(`🔇 Track audio fermato: ${track.kind}`);
+                    const tracks = currentCall.audioStream.getTracks();
+                    console.log(`🔇 Pizzeria - Fermando ${tracks.length} track audio...`);
+                    
+                    tracks.forEach((track, index) => {
+                        if (track.readyState === 'live') {
+                            track.stop();
+                            console.log(`🔇 Pizzeria - Track ${index} fermato: ${track.kind}, stato: ${track.readyState}`);
+                        } else {
+                            console.log(`🔇 Pizzeria - Track ${index} già fermato: ${track.kind}, stato: ${track.readyState}`);
+                        }
                     });
+                    
                     currentCall.audioStream = null;
+                    console.log('🔇 Pizzeria - Stream audio rimosso dal currentCall');
                 }
 
+                // Cleanup variables
                 callAudioRecorder = null;
-                console.log('🔇 Audio chiamata fermato completamente');
+                console.log('✅ Pizzeria - Audio chiamata fermato completamente');
 
             } catch (error) {
-                console.error('❌ Errore durante stop audio:', error);
-                // Cleanup forzato
-                callAudioRecorder = null;
-                if (currentCall) {
-                    currentCall.audioStream = null;
+                console.error('❌ Pizzeria - Errore durante stop audio:', error);
+                
+                // Cleanup forzato in caso di errore
+                try {
+                    callAudioRecorder = null;
+                    if (currentCall && currentCall.audioStream) {
+                        currentCall.audioStream.getTracks().forEach(track => {
+                            try {
+                                track.stop();
+                            } catch (trackError) {
+                                console.log('⚠️ Pizzeria - Errore stop track (ignorato):', trackError);
+                            }
+                        });
+                        currentCall.audioStream = null;
+                    }
+                    console.log('🔧 Pizzeria - Cleanup forzato completato');
+                } catch (cleanupError) {
+                    console.error('❌ Pizzeria - Errore durante cleanup forzato:', cleanupError);
                 }
             }
         }
@@ -1899,29 +2031,35 @@
             document.body.appendChild(callDiv);
 
             // Timer per chiamata con gestione migliorata
-            currentCall.timerInterval = setInterval(() => {
-                if (!isInCall || !currentCall) {
-                    clearInterval(currentCall.timerInterval);
-                    return;
-                }
+            if (currentCall) {
+                currentCall.timerInterval = setInterval(() => {
+                    if (!isInCall || !currentCall) {
+                        if (currentCall && currentCall.timerInterval) {
+                            clearInterval(currentCall.timerInterval);
+                            currentCall.timerInterval = null;
+                        }
+                        return;
+                    }
 
-                const now = Date.now();
-                const elapsed = Math.floor((now - (currentCall.startTime || startTime)) / 1000);
-                const minutes = Math.floor(elapsed / 60);
-                const seconds = elapsed % 60;
-                const timerElement = document.getElementById('call-timer-pizzeria');
+                    const now = Date.now();
+                    const elapsed = Math.floor((now - (currentCall.startTime || startTime)) / 1000);
+                    const minutes = Math.floor(elapsed / 60);
+                    const seconds = elapsed % 60;
+                    const timerElement = document.getElementById('call-timer-pizzeria');
+                    
+                    if (timerElement) {
+                        timerElement.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                    }
+
+                    // Auto-disconnect dopo 5 minuti
+                    if (elapsed >= 300) { // 5 minuti
+                        console.log('⏰ Pizzeria - Chiamata terminata automaticamente dopo 5 minuti');
+                        terminaChiamata();
+                    }
+                }, 1000);
                 
-                if (timerElement) {
-                    timerElement.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-                }
-
-                // Auto-disconnect dopo 5 minuti
-                if (elapsed >= 300) { // 5 minuti
-                    console.log('⏰ Chiamata terminata automaticamente dopo 5 minuti');
-                    terminaChiamata();
-                    clearInterval(currentCall.timerInterval);
-                }
-            }, 1000);
+                console.log(`⏱️ Pizzeria - Timer chiamata avviato per ${targetPage}, startTime: ${new Date(startTime).toLocaleTimeString()}`);
+            }
 
             console.log(`📞 Interfaccia chiamata attiva con ${targetPage}, startTime: ${new Date(startTime).toLocaleTimeString()}`);
         }
