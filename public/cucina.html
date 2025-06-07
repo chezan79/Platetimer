@@ -2079,9 +2079,85 @@
         }
 
         function mostraMessaggioPausaCucina(pausaData) {
-            // Rimossa la creazione di messaggi laterali per le pause pizzeria
-            // Il messaggio centrale dell'indicatore pausa è sufficiente
-            console.log(`⏸️ Pausa cucina ricevuta: ${pausaData.durataMinuti} minuti da ${pausaData.from} - Solo indicatore centrale`);
+            // Rimuovi messaggio precedente se esiste
+            const existingMessage = document.getElementById('pausa-cucina-message');
+            if (existingMessage) {
+                existingMessage.remove();
+            }
+
+            // Crea elemento messaggio pausa con formato uniforme
+            const pausaElement = document.createElement('div');
+            pausaElement.id = 'pausa-cucina-message';
+            pausaElement.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+                color: white;
+                padding: 25px;
+                border-radius: 15px;
+                box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3);
+                z-index: 2000;
+                text-align: center;
+                border: 3px solid #a71e2a;
+                min-width: 350px;
+                font-family: Arial, sans-serif;
+                animation: pausaPulse 2s ease-in-out infinite;
+            `;
+
+            // Aggiungi animazione CSS se non esiste
+            if (!document.getElementById('pausaCucinaAnimations')) {
+                const style = document.createElement('style');
+                style.id = 'pausaCucinaAnimations';
+                style.textContent = `
+                    @keyframes pausaPulse {
+                        0%, 100% { transform: translate(-50%, -50%) scale(1); }
+                        50% { transform: translate(-50%, -50%) scale(1.05); }
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+
+            let tempoRimanente = pausaData.durataMinuti * 60;
+
+            function aggiornaPausaCucinaDisplay() {
+                const minuti = Math.floor(tempoRimanente / 60);
+                const secondi = tempoRimanente % 60;
+
+                pausaElement.innerHTML = `
+                    <div style="font-size: 20px; font-weight: bold; margin-bottom: 10px;">
+                        ⏸️ PAUSA CUCINA ATTIVA
+                    </div>
+                    <div style="font-size: 16px; margin-bottom: 8px;">
+                        Richiesta da: ${pausaData.from}
+                    </div>
+                    <div style="font-size: 24px; font-weight: bold; color: #ffebee;">
+                        ${minuti}:${secondi.toString().padStart(2, '0')}
+                    </div>
+                    <div style="font-size: 14px; margin-top: 8px; opacity: 0.9;">
+                        Servizio temporaneamente sospeso
+                    </div>
+                `;
+
+                if (tempoRimanente > 0) {
+                    tempoRimanente--;
+                    setTimeout(aggiornaPausaCucinaDisplay, 1000);
+                } else {
+                    annullaPausaCucina();
+                }
+            }
+
+            document.body.appendChild(pausaElement);
+            aggiornaPausaCucinaDisplay();
+
+            // Riproduci allarme per pausa
+            const alertAudio = document.getElementById('alertSound');
+            if (alertAudio) {
+                alertAudio.play().catch(e => console.log('Errore audio pausa cucina:', e));
+            }
+
+            console.log(`🚨 Messaggio pausa cucina visualizzato in formato uniforme: ${pausaData.durataMinuti} minuti`);
         }
 
         function annullaPausaCucina() {
@@ -2092,10 +2168,34 @@
 
             console.log('❌ Annullamento pausa cucina richiesto');
             
+            // Rimuovi messaggio pausa se presente
+            const pausaElement = document.getElementById('pausa-cucina-message');
+            if (pausaElement) {
+                // Aggiungi CSS per fadeOut se non esiste
+                if (!document.getElementById('pausaCucinaFadeOutAnimation')) {
+                    const style = document.createElement('style');
+                    style.id = 'pausaCucinaFadeOutAnimation';
+                    style.textContent = `
+                        @keyframes fadeOutCucina {
+                            from { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+                            to { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
+                        }
+                    `;
+                    document.head.appendChild(style);
+                }
+
+                pausaElement.style.animation = 'fadeOutCucina 0.5s ease-out';
+                setTimeout(() => {
+                    if (pausaElement && pausaElement.parentNode) {
+                        pausaElement.parentNode.removeChild(pausaElement);
+                    }
+                }, 500);
+            }
+            
             // Termina immediatamente la pausa
             terminaPausaCucina();
 
-            console.log('❌ ✅ Pausa cucina annullata - Solo indicatore centrale rimosso');
+            console.log('❌ ✅ Pausa cucina annullata - Messaggio centrale rimosso');
         }
 
         // Sistema pausa cucina - funzioni per inviare pause dalla cucina
