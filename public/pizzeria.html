@@ -1601,13 +1601,18 @@
 
             const callId = `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
+            console.log(`📞 PIZZERIA: Avvio chiamata verso ${targetPage}, ID: ${callId}`);
+
             if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({
+                const callMessage = {
                     action: 'startCall',
                     callId: callId,
                     targetPage: targetPage,
                     from: 'Pizzeria'
-                }));
+                };
+
+                console.log(`📤 PIZZERIA: Invio messaggio chiamata:`, callMessage);
+                ws.send(JSON.stringify(callMessage));
 
                 currentCall = {
                     id: callId,
@@ -1619,8 +1624,11 @@
                 document.getElementById('call-status').textContent = `📞 Chiamando ${targetPage}...`;
                 document.getElementById('call-status').style.color = '#007bff';
 
+                console.log(`⏰ PIZZERIA: Timeout di 30s impostato per chiamata ${callId}`);
+
                 setTimeout(() => {
                     if (currentCall && currentCall.id === callId && !isInCall) {
+                        console.log(`⏰ PIZZERIA: Timeout scaduto per chiamata ${callId}`);
                         terminaChiamata();
                         document.getElementById('call-status').textContent = '❌ Nessuna risposta';
                         setTimeout(() => {
@@ -1628,6 +1636,9 @@
                         }, 3000);
                     }
                 }, 30000);
+            } else {
+                console.error('❌ PIZZERIA: WebSocket non connesso per chiamata');
+                alert('❌ Connessione persa. Impossibile avviare chiamata.');
             }
         }
 

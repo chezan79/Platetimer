@@ -787,7 +787,8 @@
                             console.log('🎉 Nuovo utente è entrato nella pagina:', data.message);
                             mostraAvvisoNuovoUtente(data);
                         } else if (data.action === 'incomingCall') {
-                            console.log('📞 Chiamata in arrivo:', data);
+                            console.log('📞 CUCINA: Chiamata in arrivo ricevuta:', data);
+                            console.log(`📞 CUCINA: Da ${data.from} (${data.fromPage}) verso ${data.targetPage}`);
                             mostraChiamataInArrivo(data);
                         } else if (data.action === 'callAccepted') {
                             console.log('✅ Chiamata accettata:', data);
@@ -2646,6 +2647,8 @@
         }
 
         function mostraChiamataInArrivo(data) {
+            console.log(`🔔 CUCINA: Mostrando interfaccia chiamata in arrivo per ID ${data.callId}`);
+            
             // Rimuovi eventuali chiamate precedenti
             rimuoviInterfacciaChiamata();
 
@@ -2695,14 +2698,18 @@
             `;
 
             document.body.appendChild(callDiv);
+            console.log(`✅ CUCINA: Interfaccia chiamata creata e aggiunta al DOM`);
 
             const alertAudio = document.getElementById('alertSound');
             if (alertAudio) {
                 alertAudio.loop = true;
                 alertAudio.play().catch(e => console.log('Errore audio chiamata:', e));
+                console.log(`🔊 CUCINA: Audio allarme avviato per chiamata`);
+            } else {
+                console.log(`⚠️ CUCINA: Elemento audio non trovato`);
             }
 
-            console.log(`📞 Chiamata in arrivo da ${data.from}, ID: ${data.callId}`);
+            console.log(`📞 CUCINA: Chiamata in arrivo completamente mostrata - ID: ${data.callId}`);
         }
 
         function mostraInterfacciaChiamataAttiva(targetPage) {

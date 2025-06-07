@@ -331,6 +331,7 @@ wss.on('connection', (ws, req) => {
                 }
 
                 ws.pageType = data.pageType;
+                console.log(`🔍 DEBUG: Client registrato come ${data.pageType} nella room "${ws.companyRoom}"`);
 
                 // Conta quanti utenti sono attualmente sulla stessa pagina
                 if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
@@ -338,6 +339,10 @@ wss.on('connection', (ws, req) => {
                     const samePageClients = Array.from(roomClients).filter(client => 
                         client.pageType === data.pageType && client !== ws
                     );
+
+                    // Stampa stato completo della room
+                    const allClients = Array.from(roomClients).map(client => client.pageType || 'undefined');
+                    console.log(`🔍 DEBUG: Stato room "${ws.companyRoom}": [${allClients.join(', ')}]`);
 
                     console.log(`📄 Client entrato in pagina ${data.pageType}: ${samePageClients.length} altri utenti già presenti`);
 
@@ -700,9 +705,20 @@ wss.on('connection', (ws, req) => {
                     return;
                 }
 
+                console.log(`🔍 DEBUG CHIAMATA: Richiesta da ${ws.pageType} verso ${data.targetPage} in room "${ws.companyRoom}"`);
+
                 // Invia richiesta chiamata ai client della pagina target
                 if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
                     const roomClients = companyRooms.get(ws.companyRoom);
+                    console.log(`🔍 DEBUG: Room ha ${roomClients.size} client totali`);
+
+                    // Elenco dettagliato dei client nella room
+                    let clientDetails = [];
+                    roomClients.forEach((client, index) => {
+                        clientDetails.push(`Client ${index}: pageType="${client.pageType}", readyState=${client.readyState}`);
+                    });
+                    console.log(`🔍 DEBUG: Client nella room: ${clientDetails.join(', ')}`);
+
                     const callMessage = JSON.stringify({
                         action: 'incomingCall',
                         callId: data.callId,
@@ -713,14 +729,21 @@ wss.on('connection', (ws, req) => {
                     });
 
                     let sentCount = 0;
+                    let targetClients = 0;
                     roomClients.forEach((client) => {
-                        if (client.readyState === WebSocket.OPEN && client.pageType === data.targetPage && client !== ws) {
-                            client.send(callMessage);
-                            sentCount++;
+                        if (client.pageType === data.targetPage) {
+                            targetClients++;
+                            if (client.readyState === WebSocket.OPEN && client !== ws) {
+                                client.send(callMessage);
+                                sentCount++;
+                                console.log(`✅ Chiamata inviata a client ${data.targetPage}`);
+                            } else {
+                                console.log(`❌ Client ${data.targetPage} non disponibile: readyState=${client.readyState}, isSelf=${client === ws}`);
+                            }
                         }
                     });
 
-                    console.log(`📞 Richiesta chiamata inviata da ${ws.pageType} a ${data.targetPage}: ${sentCount} client notificati`);
+                    console.log(`📞 RISULTATO: ${targetClients} client ${data.targetPage} trovati, ${sentCount} notificati`);
                 } else {
                     console.log('⚠️ Client non assegnato a nessuna room per chiamata');
                 }
