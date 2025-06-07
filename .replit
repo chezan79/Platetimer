@@ -25,6 +25,15 @@ mode = "sequential"
 task = "shell.exec"
 args = "node server.js"
 
+[[workflows.workflow]]
+name = "Run Voice Server"
+author = 43042775
+mode = "parallel"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "node voice-server.js"
+
 [[ports]]
 localPort = 5000
 externalPort = 80
