@@ -767,9 +767,9 @@ setInterval(() => {
         rateLimits: rateLimiter.size,
         memoryUsage: Math.round(process.memoryUsage().heapUsed / 1024 / 1024)
     };
-    
+
     console.log(`📊 Stats: ${stats.clients} client, ${stats.rooms} rooms, ${stats.countdowns} countdown, ${stats.memoryUsage}MB RAM`);
-    
+
     // Alert se troppo carico
     if (stats.clients > 50 || stats.memoryUsage > 100) {
         console.warn(`⚠️ SOVRACCARICO: ${stats.clients} client, ${stats.memoryUsage}MB RAM`);
