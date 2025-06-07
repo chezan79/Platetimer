@@ -666,11 +666,10 @@
                 };
 
                 mediaRecorder.onstop = () => {
-                    ```text
-        // Ferma tutti i track del microfono
+                    // Ferma tutti i track del microfono
                     stream.getTracks().forEach(track => track.stop());
 
-                    // Elabora l'audioregistrato
+                    // Elabora l'audio registrato
                     processRecordedAudio();
                 };
 
