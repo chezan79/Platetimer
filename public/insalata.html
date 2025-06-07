@@ -47,6 +47,34 @@
         }
 
         .countdown-item:hover {
+
+        
+        function updateConnectionStatus(connected) {
+            let status = document.getElementById('connection-status');
+            if (!status) {
+                status = document.createElement('div');
+                status.id = 'connection-status';
+                status.style.cssText = `
+                    position: fixed; bottom: 20px; right: 20px; z-index: 1001;
+                    padding: 8px 12px; border-radius: 6px; font-size: 12px;
+                    font-weight: 600; transition: all 0.3s ease;
+                `;
+                document.body.appendChild(status);
+            }
+
+            if (connected) {
+                status.textContent = '🟢 Connesso';
+                status.style.backgroundColor = '#d4edda';
+                status.style.color = '#155724';
+                status.style.border = '1px solid #c3e6cb';
+            } else {
+                status.textContent = '🔴 Disconnesso - Riconnessione...';
+                status.style.backgroundColor = '#f8d7da';
+                status.style.color = '#721c24';
+                status.style.border = '1px solid #f5c6cb';
+            }
+        }
+
             transform: translateY(-1px);
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
@@ -190,6 +218,7 @@
 
         ws.onopen = () => {
                     console.log('🔗 Insalata WebSocket connesso');
+                    updateConnectionStatus(true);
 
                     // Unisciti alla room con un piccolo delay per stabilizzare la connessione
                     setTimeout(() => {
@@ -266,6 +295,16 @@
             } catch (error) {
                 console.error('Errore nel parsing del messaggio:', error);
             }
+        };
+
+        ws.onclose = (event) => {
+            console.log(`🔌 Insalata WebSocket disconnesso: ${event.code} - ${event.reason}`);
+            updateConnectionStatus(false);
+        };
+
+        ws.onerror = (error) => {
+            console.error('❌ Errore WebSocket insalata:', error);
+            updateConnectionStatus(false);
         };
 
         function startCountdown(tableNumber, timeRemaining) {
