@@ -331,7 +331,7 @@ wss.on('connection', (ws, req) => {
                 }
 
                 ws.pageType = data.pageType;
-                console.log(`🔍 DEBUG: Client registrato come ${data.pageType} nella room "${ws.companyRoom}"`);
+                console.log(`📄 DEBUG: Client registrato come "${data.pageType}" nella room "${ws.companyRoom}"`);
 
                 // Conta quanti utenti sono attualmente sulla stessa pagina
                 if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
@@ -340,11 +340,14 @@ wss.on('connection', (ws, req) => {
                         client.pageType === data.pageType && client !== ws
                     );
 
-                    // Stampa stato completo della room
-                    const allClients = Array.from(roomClients).map(client => client.pageType || 'undefined');
-                    console.log(`🔍 DEBUG: Stato room "${ws.companyRoom}": [${allClients.join(', ')}]`);
+                    // Stampa stato completo della room con più dettagli
+                    const allClients = Array.from(roomClients).map((client, index) => {
+                        const isCurrent = client === ws;
+                        return `${index}:${client.pageType || 'undefined'}${isCurrent ? '*' : ''}`;
+                    });
+                    console.log(`📄 DEBUG: Stato room "${ws.companyRoom}": [${allClients.join(', ')}] (* = current client)`);
 
-                    console.log(`📄 Client entrato in pagina ${data.pageType}: ${samePageClients.length} altri utenti già presenti`);
+                    console.log(`📄 Client entrato in pagina "${data.pageType}": ${samePageClients.length} altri utenti già presenti`);
 
                     // Se ci sono altri utenti sulla stessa pagina, invia un avviso
                     if (samePageClients.length > 0) {
@@ -717,7 +720,7 @@ wss.on('connection', (ws, req) => {
                     return;
                 }
 
-                console.log(`🔍 DEBUG CHIAMATA: Richiesta da "${ws.pageType}" verso "${data.targetPage}" in room "${ws.companyRoom}"`);
+                console.log(`📞 DEBUG CHIAMATA: Richiesta da "${ws.pageType}" verso "${data.targetPage}" in room "${ws.companyRoom}"`);
 
                 // Verifica che il client chiamante abbia un pageType valido
                 if (!ws.pageType) {
@@ -732,14 +735,14 @@ wss.on('connection', (ws, req) => {
                 // Invia richiesta chiamata ai client della pagina target
                 if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
                     const roomClients = companyRooms.get(ws.companyRoom);
-                    console.log(`🔍 DEBUG: Room "${ws.companyRoom}" ha ${roomClients.size} client totali`);
+                    console.log(`📞 DEBUG: Room "${ws.companyRoom}" ha ${roomClients.size} client totali`);
 
                     // Elenco dettagliato dei client nella room
                     let clientDetails = [];
                     roomClients.forEach((client, index) => {
-                        clientDetails.push(`Client ${index}: pageType="${client.pageType}", readyState=${client.readyState}, isOpen=${client.readyState === WebSocket.OPEN}`);
+                        clientDetails.push(`Client ${index}: pageType="${client.pageType}", readyState=${client.readyState}, caller=${client === ws}`);
                     });
-                    console.log(`🔍 DEBUG: Client nella room: ${clientDetails.join(', ')}`);
+                    console.log(`📞 DEBUG: Client nella room: ${clientDetails.join(', ')}`);
 
                     const callMessage = JSON.stringify({
                         action: 'incomingCall',
@@ -750,14 +753,18 @@ wss.on('connection', (ws, req) => {
                         timestamp: new Date().toLocaleTimeString('it-IT')
                     });
 
+                    console.log(`📞 DEBUG: Messaggio chiamata da inviare:`, JSON.parse(callMessage));
+
                     let sentCount = 0;
                     let targetClients = 0;
                     let availableTargets = 0;
                     
                     roomClients.forEach((client) => {
+                        console.log(`📞 DEBUG: Controllo client - pageType: "${client.pageType}", target: "${data.targetPage}", match: ${client.pageType === data.targetPage}`);
+                        
                         if (client.pageType === data.targetPage) {
                             targetClients++;
-                            console.log(`🔍 Target client trovato: pageType="${client.pageType}", readyState=${client.readyState}, isOpen=${client.readyState === WebSocket.OPEN}, isSelf=${client === ws}`);
+                            console.log(`📞 Target client trovato: pageType="${client.pageType}", readyState=${client.readyState}, isOpen=${client.readyState === WebSocket.OPEN}, isSelf=${client === ws}`);
                             
                             if (client.readyState === WebSocket.OPEN) {
                                 availableTargets++;
@@ -765,7 +772,7 @@ wss.on('connection', (ws, req) => {
                                     try {
                                         client.send(callMessage);
                                         sentCount++;
-                                        console.log(`✅ Chiamata inviata con successo a client ${data.targetPage}`);
+                                        console.log(`✅ CHIAMATA INVIATA con successo a client ${data.targetPage} (ID: ${data.callId})`);
                                     } catch (sendError) {
                                         console.log(`❌ Errore invio chiamata: ${sendError.message}`);
                                     }
@@ -778,16 +785,18 @@ wss.on('connection', (ws, req) => {
                         }
                     });
 
-                    console.log(`📞 RISULTATO CHIAMATA: ${targetClients} client "${data.targetPage}" totali, ${availableTargets} disponibili, ${sentCount} notificati`);
+                    console.log(`📞 RISULTATO CHIAMATA FINALE: ${targetClients} client "${data.targetPage}" totali, ${availableTargets} disponibili, ${sentCount} notificati per callId: ${data.callId}`);
 
                     // Invia feedback al chiamante
                     if (sentCount === 0) {
+                        console.log(`❌ Nessuna chiamata inviata - invio errore al chiamante`);
                         ws.send(JSON.stringify({
                             action: 'callError',
                             callId: data.callId,
                             message: `Nessun client disponibile nella pagina ${data.targetPage}`
                         }));
                     } else {
+                        console.log(`✅ Chiamata iniziata con successo - invio conferma al chiamante`);
                         ws.send(JSON.stringify({
                             action: 'callInitiated',
                             callId: data.callId,
