@@ -815,6 +815,10 @@
                         from { opacity: 0; transform: translateX(-20px); }
                         to { opacity: 1; transform: translateX(0); }
                     }
+                    @keyframes slideOut {
+                        from { opacity: 1; transform: translateX(0); }
+                        to { opacity: 0; transform: translateX(20px); }
+                    }
                     @keyframes pulse {
                         0% { box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.7); }
                         70% { box-shadow: 0 0 0 10px rgba(255, 193, 7, 0); }
@@ -934,6 +938,32 @@
                     playVoiceMessage(audioId);
                 }, 1000);
             }
+
+            // ⏰ Auto-eliminazione dopo 60 secondi
+            setTimeout(() => {
+                const messageElement = document.getElementById(`voice-message-${messageData.messageId}`);
+                if (messageElement && messageElement.parentNode) {
+                    console.log(`🕐 Auto-eliminazione messaggio vocale dopo 60s: ID ${messageData.messageId}`);
+                    
+                    // Animazione di uscita
+                    messageElement.style.animation = 'slideOut 0.3s ease-out';
+                    
+                    setTimeout(() => {
+                        if (messageElement && messageElement.parentNode) {
+                            messageElement.parentNode.removeChild(messageElement);
+                            
+                            // Nascondi container se non ci sono più messaggi
+                            const messagesList = document.getElementById('voice-messages-list');
+                            const messagesContainerElement = document.getElementById('messagesContainer');
+                            
+                            if (messagesList.children.length === 0) {
+                                messagesContainerElement.style.display = 'none';
+                                console.log('📦 Container messaggi nascosto (auto-eliminazione)');
+                            }
+                        }
+                    }, 300);
+                }
+            }, 60000); // 60 secondi
         }
 
         function playVoiceMessage(audioId) {
