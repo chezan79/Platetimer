@@ -1943,7 +1943,6 @@
 
             if (pausaCucinaAttiva) {
                 console.log('⚠️ Pausa cucina già attiva, ignorato');
-                alert('⚠️ Una pausa è già attiva!');
                 return;
             }
 
@@ -1952,131 +1951,13 @@
 
             console.log(`✅ CUCINA - Avvio pausa per ${durataMinuti} minuti da ${from}`);
 
-            // Avvia pausa locale
-            avviaPausaCucina(durataMinuti, from);
-
-            // Mostra messaggio di allarme con countdown
+            // SOLO messaggio centrale - rimuove duplicazioni
             mostraMessaggioPausaCucina(pausaData);
 
             console.log('🎯 CUCINA - Gestione pausa completata');
         }
 
-        function avviaPausaCucina(durataMinuti, from) {
-            pausaCucinaAttiva = true;
-            let secondiRimasti = durataMinuti * 60;
-
-            console.log(`⏸️ Pausa cucina avviata per ${durataMinuti} minuti da ${from}`);
-
-            // Disabilita il pulsante pizzeria nelle destinazioni
-            const pizzeriaButton = document.querySelector('.destination-button[data-destination="pizzeria"]');
-            if (pizzeriaButton) {
-                pizzeriaButton.disabled = true;
-                pizzeriaButton.style.opacity = '0.3';
-                pizzeriaButton.style.cursor = 'not-allowed';
-                pizzeriaButton.title = `Pizzeria in pausa per ${Math.floor(secondiRimasti/60)} minuti`;
-            }
-
-            // Crea indicatore pausa visivo
-            let pausaIndicator = document.getElementById('pausa-indicator');
-            if (!pausaIndicator) {
-                pausaIndicator = document.createElement('div');
-                pausaIndicator.id = 'pausa-indicator';
-                pausaIndicator.style.cssText = `
-                    position: fixed;
-                    top: 80px;
-                    left: 50%;
-                    transform: translateX(-50%);
-                    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
-                    color: white;
-                    padding: 10px 20px;
-                    border-radius: 8px;
-                    font-weight: bold;
-                    font-size: 14px;
-                    z-index: 1000;
-                    box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3);
-                    animation: pulse 2s infinite;
-                `;
-                document.body.appendChild(pausaIndicator);
-
-                // Aggiungi CSS per animazione pulse se non esiste
-                if (!document.getElementById('pausaPulseAnimation')) {
-                    const style = document.createElement('style');
-                    style.id = 'pausaPulseAnimation';
-                    style.textContent = `
-                        @keyframes pulse {
-                            0% { transform: translateX(-50%) scale(1); }
-                            50% { transform: translateX(-50%) scale(1.05); }
-                            100% { transform: translateX(-50%) scale(1); }
-                        }
-                    `;
-                    document.head.appendChild(style);
-                }
-            }
-
-            // Timer countdown pausa
-            pausaCucinaTimer = setInterval(() => {
-                const minutiRim = Math.floor(secondiRimasti / 60);
-                const secondiRim = secondiRimasti % 60;
-                
-                pausaIndicator.textContent = `⏸️ PIZZERIA IN PAUSA: ${minutiRim}:${secondiRim.toString().padStart(2, '0')}`;
-
-                // Aggiorna tooltip del pulsante pizzeria
-                if (pizzeriaButton) {
-                    pizzeriaButton.title = `Pizzeria in pausa per ${minutiRim}:${secondiRim.toString().padStart(2, '0')}`;
-                }
-
-                secondiRimasti--;
-
-                if (secondiRimasti < 0) {
-                    clearInterval(pausaCucinaTimer);
-                    terminaPausaCucina();
-                }
-            }, 1000);
-        }
-
-        function terminaPausaCucina() {
-            pausaCucinaAttiva = false;
-            
-            if (pausaCucinaTimer) {
-                clearInterval(pausaCucinaTimer);
-                pausaCucinaTimer = null;
-            }
-
-            // Riabilita il pulsante pizzeria
-            const pizzeriaButton = document.querySelector('.destination-button[data-destination="pizzeria"]');
-            if (pizzeriaButton) {
-                pizzeriaButton.disabled = false;
-                pizzeriaButton.style.opacity = '1';
-                pizzeriaButton.style.cursor = 'pointer';
-                pizzeriaButton.title = '';
-            }
-
-            // Rimuovi indicatore pausa
-            const pausaIndicator = document.getElementById('pausa-indicator');
-            if (pausaIndicator) {
-                pausaIndicator.style.animation = 'fadeOut 0.5s ease-out';
-                setTimeout(() => {
-                    if (pausaIndicator && pausaIndicator.parentNode) {
-                        pausaIndicator.parentNode.removeChild(pausaIndicator);
-                    }
-                }, 500);
-
-                // Aggiungi CSS per fadeOut se non esiste
-                if (!document.getElementById('pausaFadeOutAnimation')) {
-                    const style = document.createElement('style');
-                    style.id = 'pausaFadeOutAnimation';
-                    style.textContent = `
-                        @keyframes fadeOut {
-                            from { opacity: 1; transform: translateX(-50%) scale(1); }
-                            to { opacity: 0; transform: translateX(-50%) scale(0.9); }
-                        }
-                    `;
-                    document.head.appendChild(style);
-                }
-            }
-
-            console.log('✅ Pausa cucina terminata - Pizzeria riattivata');
-        }
+        
 
         function mostraMessaggioPausaCucina(pausaData) {
             // Rimuovi messaggio precedente se esiste
@@ -2161,17 +2042,11 @@
         }
 
         function annullaPausaCucina() {
-            if (!pausaCucinaAttiva) {
-                console.log('⚠️ Nessuna pausa attiva da annullare');
-                return;
-            }
-
             console.log('❌ Annullamento pausa cucina richiesto');
             
-            // Rimuovi messaggio pausa se presente
+            // Rimuovi SOLO il messaggio centrale
             const pausaElement = document.getElementById('pausa-cucina-message');
             if (pausaElement) {
-                // Aggiungi CSS per fadeOut se non esiste
                 if (!document.getElementById('pausaCucinaFadeOutAnimation')) {
                     const style = document.createElement('style');
                     style.id = 'pausaCucinaFadeOutAnimation';
@@ -2191,11 +2066,9 @@
                     }
                 }, 500);
             }
-            
-            // Termina immediatamente la pausa
-            terminaPausaCucina();
 
-            console.log('❌ ✅ Pausa cucina annullata - Messaggio centrale rimosso');
+            pausaCucinaAttiva = false;
+            console.log('❌ ✅ Pausa cucina annullata - Solo messaggio centrale rimosso');
         }
 
         // Sistema pausa cucina - funzioni per inviare pause dalla cucina
