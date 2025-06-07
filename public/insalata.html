@@ -229,6 +229,17 @@
                         if (ws.readyState === WebSocket.OPEN) {
                             ws.send(JSON.stringify(joinMessage));
                             console.log(`✅ Insalata connessa alla room: ${companyName}`);
+
+                            // Informa il server che questo client è sulla pagina insalata
+                            setTimeout(() => {
+                                if (ws.readyState === WebSocket.OPEN) {
+                                    ws.send(JSON.stringify({
+                                        action: 'joinPage',
+                                        pageType: 'insalata'
+                                    }));
+                                    console.log('📄 Informato server: pagina insalata');
+                                }
+                            }, 200);
                         }
                     }, 100);
                 };
@@ -251,11 +262,11 @@
                     return;
                 } else if (data.action === 'startCountdown') {
                             console.log('📥 Countdown ricevuto in insalata:', data);
-                            console.log(`🔍 Destinazione ricevuta: "${data.destination}", Tavolo: ${data.tableNumber}`);
+                            console.log(`🔍 Destinazione ricevuta: "${data.destination}", Tavolo: ${data.tableNumber}, Tempo: ${data.timeRemaining}s`);
 
                             // Mostra solo i countdown destinati all'insalata
                             if (data.destination && data.destination === 'insalata') {
-                                console.log(`✅ Countdown accettato per insalata - Tavolo: ${data.tableNumber}`);
+                                console.log(`✅ Countdown accettato per insalata - Tavolo: ${data.tableNumber}, Tempo: ${Math.floor(data.timeRemaining/60)}:${(data.timeRemaining%60).toString().padStart(2, '0')}`);
                                 startCountdown(data.tableNumber, data.timeRemaining);
                             } else {
                                 console.log(`🚫 Countdown RIFIUTATO in insalata - Destinazione: "${data.destination || 'undefined'}", Tavolo: ${data.tableNumber}`);
@@ -1479,37 +1490,8 @@ function mostraAvvisoPaginaOccupata(data) {
                 // Imposta il nome dell'azienda nell'header
                 document.getElementById('company-name').textContent = companyName;
 
-                // Attendi che la connessione WebSocket sia stabilita
-                if (ws && ws.readyState === WebSocket.OPEN) {
-                    // Unisciti alla room aziendale
-                    ws.send(JSON.stringify({
-                        action: 'joinRoom',
-                        companyName: companyName
-                    }));
-                    console.log(`Insalata connessa alla room: ${companyName}`);
-
-                    // Informa il server che stiamo entrando nella pagina insalata
-                    ws.send(JSON.stringify({
-                        action: 'joinPage',
-                        pageType: 'insalata'
-                    }));
-                    console.log('📄 Entrato nella pagina INSALATA');
-                } else {
-                    // Se la connessione non è ancora pronta, aspetta
-                    setTimeout(() => {
-                        if (ws && ws.readyState === WebSocket.OPEN) {
-                            ws.send(JSON.stringify({
-                                action: 'joinRoom',
-                                companyName: companyName
-                            }));
-                            ws.send(JSON.stringify({
-                                action: 'joinPage',
-                                pageType: 'insalata'
-                            }));
-                            console.log(`Insalata connessa alla room: ${companyName}`);
-                        }
-                    }, 500);
-                }
+                // La connessione WebSocket e joinRoom vengono gestiti nell'evento ws.onopen
+                console.log('📄 Pagina insalata inizializzata, in attesa di connessione WebSocket...');
             } else {
                 console.error('❌ Nome azienda non trovato nel localStorage');
                 alert('❌ Errore: Nome azienda non trovato. Effettua nuovamente il login.');
