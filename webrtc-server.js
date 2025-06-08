@@ -1,17 +1,12 @@
 
 console.log('🚀 Inizializzazione moduli server WebRTC...');
 
-try {
-    const express = require('express');
-    const http = require('http');
-    const WebSocket = require('ws');
-    
-    console.log('✅ Moduli caricati con successo');
-    console.log('🚀 Avvio server WebRTC...');
-} catch (error) {
-    console.error('❌ Errore caricamento moduli:', error);
-    process.exit(1);
-}
+const express = require('express');
+const http = require('http');
+const WebSocket = require('ws');
+
+console.log('✅ Moduli caricati con successo');
+console.log('🚀 Avvio server WebRTC...');
 
 const app = express();
 const server = http.createServer(app);
