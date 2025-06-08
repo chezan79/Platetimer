@@ -873,8 +873,7 @@
             }
         }
 
-        // Inizializza connessione
-        connectWebSocket();
+        // Inizializzazione già gestita da initializeWebSocketWithWebRTC()
 
         function startCountdown(minutes, tableNumber, destination) {
             let timeRemaining = minutes * 60;
@@ -2752,46 +2751,145 @@
             }
         }
 
-        // Integrazione WebRTC nel sistema WebSocket esistente
+        // Variabile per tracciare se i gestori WebRTC sono già configurati
+        let webRTCHandlersConfigured = false;
+
         function setupWebRTCHandlers() {
-            if (!ws) return;
+            if (!ws || webRTCHandlersConfigured) return;
 
-            // Estendi il gestore onmessage esistente
-            const originalHandler = ws.onmessage;
+            // Configura un nuovo gestore che gestisca sia eventi normali che WebRTC
             ws.onmessage = (event) => {
-                // Mantieni la gestione esistente
-                if (originalHandler) {
-                    originalHandler(event);
-                }
-
-                // Aggiungi gestione WebRTC
                 try {
                     const data = JSON.parse(event.data);
-                    
+
+                    // Gestisci prima gli eventi WebRTC
                     if (data.action === 'offer') {
+                        console.log('📞 Offerta WebRTC ricevuta in cucina:', data);
                         handleOffer(data);
+                        return;
                     } else if (data.action === 'answer' && currentCallId === data.callId) {
-                        peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+                        console.log('📞 Risposta WebRTC ricevuta in cucina');
+                        if (peerConnection) {
+                            peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+                        }
+                        return;
                     } else if (data.action === 'candidate' && currentCallId === data.callId) {
-                        peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+                        console.log('📞 ICE candidate ricevuto in cucina');
+                        if (peerConnection) {
+                            peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+                        }
+                        return;
                     } else if (data.action === 'hangup' && currentCallId === data.callId) {
+                        console.log('📞 Hangup ricevuto in cucina');
                         cleanupCall();
+                        return;
                     } else if (data.action === 'callError') {
+                        console.log('📞 Errore chiamata in cucina:', data.message);
                         updateCallUI('error', data.message);
                         cleanupCall();
+                        return;
+                    }
+
+                    // Gestisci ping/pong
+                    if (data.action === 'pong') {
+                        console.log('💓 Pong ricevuto dal server');
+                        if (reconnectInterval) {
+                            clearInterval(reconnectInterval);
+                            reconnectInterval = null;
+                        }
+                        return;
+                    } else if (data.action === 'ping') {
+                        if (ws && ws.readyState === WebSocket.OPEN) {
+                            ws.send(JSON.stringify({ action: 'pong', timestamp: Date.now() }));
+                        }
+                        return;
+                    } else if (data.action === 'connectionConfirmed') {
+                        console.log('✅ Conferma connessione ricevuta:', data.message);
+                        return;
+                    }
+
+                    // Gestisci eventi della cucina
+                    if (data.action === 'startCountdown') {
+                        console.log('📥 Countdown ricevuto via WebSocket:', data);
+                        if (data.destination && data.destination === 'cucina') {
+                            console.log(`✅ Countdown accettato per cucina - Tavolo: ${data.tableNumber}`);
+                            startCountdownVisual(data.tableNumber, data.timeRemaining, data.destination);
+                        } else {
+                            console.log(`🚫 Countdown RIFIUTATO in cucina - Destinazione: "${data.destination || 'undefined'}", Tavolo: ${data.tableNumber}`);
+                        }
+                    } else if (data.action === 'deleteCountdown') {
+                        console.log('📥 Eliminazione countdown ricevuta via WebSocket:', data);
+                        const countdownIndex = countdowns.findIndex(c => c.tableNumber == data.tableNumber);
+                        if (countdownIndex !== -1) {
+                            const countdown = countdowns[countdownIndex];
+                            clearInterval(countdown.interval);
+                            if (countdown.element && countdown.element.parentNode) {
+                                countdown.element.parentNode.removeChild(countdown.element);
+                            }
+                            countdowns.splice(countdownIndex, 1);
+                            console.log(`🗑️ Countdown tavolo ${data.tableNumber} eliminato da altro client`);
+                        }
+                    } else if (data.action === 'voiceMessage') {
+                        console.log('📢 Messaggio vocale ricevuto in cucina:', data);
+                        if (data.destination === 'cucina') {
+                            console.log('✅ Messaggio vocale accettato per cucina');
+                            displayVoiceMessage(data);
+                        } else {
+                            console.log(`🚫 Messaggio vocale ignorato - Destinazione: ${data.destination}`);
+                        }
+                    } else if (data.action === 'deleteVoiceMessage') {
+                        console.log('🗑️ Eliminazione messaggio vocale ricevuta:', data);
+                        removeVoiceMessage(data.messageId);
+                    } else if (data.action === 'pausaCucina') {
+                        console.log('⏸️ Messaggio pausa cucina ricevuto in CUCINA:', data);
+                        gestisciPausaCucina(data);
+                    } else if (data.action === 'annullaPausaCucina') {
+                        console.log('❌ Messaggio annullamento pausa ricevuto in CUCINA:', data);
+                        annullaPausaCucina();
+                    } else if (data.action === 'pausaInsalata') {
+                        console.log('⏸️ Messaggio pausa insalata ricevuto in CUCINA:', data);
+                        mostraPausaInsalata(data);
+                    } else if (data.action === 'annullaPausaInsalata') {
+                        console.log('❌ Messaggio annullamento pausa insalata ricevuto in CUCINA:', data);
+                        nascondePausaInsalata();
+                    } else if (data.action === 'pageOccupied') {
+                        console.warn('⚠️ La pagina è già occupata da un altro utente!', data.message);
+                        mostraAvvisoPaginaOccupata(data);
+                    } else if (data.action === 'newUserJoined') {
+                        console.log('🎉 Nuovo utente è entrato nella pagina:', data.message);
+                        mostraAvvisoNuovoUtente(data);
                     }
                 } catch (error) {
-                    // Ignora errori per messaggi non WebRTC
+                    console.error('Errore nel parsing del messaggio WebSocket:', error);
                 }
             };
+
+            webRTCHandlersConfigured = true;
+            console.log('✅ Gestori WebRTC configurati per cucina');
         }
 
-        // Configura WebRTC quando la connessione è pronta
-        setTimeout(() => {
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                setupWebRTCHandlers();
-            }
-        }, 1000);
+        // Funzione per configurare WebSocket con WebRTC
+        function initializeWebSocketWithWebRTC() {
+            // Prima configura la connessione normale
+            connectWebSocket();
+            
+            // Poi attende che sia pronta e configura WebRTC
+            const checkInterval = setInterval(() => {
+                if (ws && ws.readyState === WebSocket.OPEN && !webRTCHandlersConfigured) {
+                    setupWebRTCHandlers();
+                    clearInterval(checkInterval);
+                }
+            }, 100);
+            
+            // Timeout di sicurezza
+            setTimeout(() => {
+                clearInterval(checkInterval);
+            }, 5000);
+        }
+
+        // Sostituisci l'inizializzazione originale
+        // connectWebSocket(); 
+        initializeWebSocketWithWebRTC();
 
     </script>
     <script src="company-header.js"></script>
