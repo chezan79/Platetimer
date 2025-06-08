@@ -1461,11 +1461,29 @@
         }
 
         function nascondePausaInsalata() {
-            const pausaInsalataDiv = document.getElementById('pausa-insalata-container');
-            if (pausaInsalataDiv) {
-                pausaInsalataDiv.remove();
-                console.log('❌ Messaggio pausa insalata nascosto');
+            const pausaElement = document.getElementById('pausa-insalata-message');
+            if (pausaElement) {
+                // Aggiungi CSS per fadeOut se non esiste
+                if (!document.getElementById('pausaInsalataFadeOutAnimation')) {
+                    const style = document.createElement('style');
+                    style.id = 'pausaInsalataFadeOutAnimation';
+                    style.textContent = `
+                        @keyframes fadeOutInsalata {
+                            from { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+                            to { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
+                        }
+                    `;
+                    document.head.appendChild(style);
+                }
+
+                pausaElement.style.animation = 'fadeOutInsalata 0.5s ease-out';
+                setTimeout(() => {
+                    if (pausaElement && pausaElement.parentNode) {
+                        pausaElement.parentNode.removeChild(pausaElement);
+                    }
+                }, 500);
             }
+            console.log('❌ Messaggio pausa insalata nascosto in pizzeria');
         }
 
         function mostraAvvisoPaginaOccupata(data) {

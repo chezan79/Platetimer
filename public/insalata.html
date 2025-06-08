@@ -299,7 +299,7 @@
                     mostraPausaInsalata(data);
                 } else if (data.action === 'annullaPausaInsalata') {
                             console.log('❌ Messaggio annullamento pausa insalata ricevuto in INSALATA:', data);
-                            annullaPausaInsalata();
+                            nascondePausaInsalata();
                         } else if (data.action === 'pageOccupied') {
                             console.log('⚠️ Pagina occupata:', data);
                             mostraAvvisoPaginaOccupata(data);
