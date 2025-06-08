@@ -9,6 +9,20 @@ console.log('✅ Moduli caricati con successo');
 console.log('🚀 Avvio server WebRTC...');
 
 const app = express();
+app.use(express.json());
+
+// Add CORS headers for cross-origin requests
+app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+    if (req.method === 'OPTIONS') {
+        res.sendStatus(200);
+    } else {
+        next();
+    }
+});
+
 const server = http.createServer(app);
 
 // Route di test per verificare che il server WebRTC sia attivo
@@ -296,24 +310,34 @@ const WEBRTC_PORT = 5001;
 
 console.log(`📞 Tentativo di avvio server WebRTC su porta ${WEBRTC_PORT}...`);
 
+console.log(`📞 Tentativo di avvio server WebRTC su porta ${WEBRTC_PORT}...`);
+
 server.listen(WEBRTC_PORT, '0.0.0.0', () => {
-    console.log(`📞 🎤 Server WebRTC avviato con successo su http://0.0.0.0:${WEBRTC_PORT}`);
+    console.log(`📞 🎤 ✅ SERVER WEBRTC AVVIATO SU PORTA ${WEBRTC_PORT}`);
+    console.log(`🌐 Server accessibile su: http://0.0.0.0:${WEBRTC_PORT}`);
+    console.log(`📊 WebSocket endpoint: ws://0.0.0.0:${WEBRTC_PORT}/webrtc-ws`);
+    console.log(`🔗 Status endpoint: http://0.0.0.0:${WEBRTC_PORT}/status`);
     console.log('✅ WebRTC signaling attivo per chiamate vocali');
     console.log('🍳 Cucina: può effettuare chiamate');
     console.log('🍕 Pizzeria: può solo ricevere chiamate');
-    console.log(`📊 WebSocket Server WebRTC in ascolto su percorso: /webrtc-ws`);
-    console.log(`🌐 Test URL: http://0.0.0.0:${WEBRTC_PORT}/status`);
+    
+    // Test di conferma
+    setTimeout(() => {
+        console.log(`📍 CONFERMA: Server WebRTC operativo su porta ${WEBRTC_PORT}`);
+    }, 1000);
 }).on('error', (error) => {
+    console.error(`❌ ERRORE AVVIO SERVER WEBRTC:`);
+    console.error(`📍 Porta: ${WEBRTC_PORT}`);
+    console.error(`📍 Indirizzo: 0.0.0.0`);
+    console.error(`📍 Errore: ${error.code} - ${error.message}`);
+    
     if (error.code === 'EADDRINUSE') {
-        console.error(`❌ ERRORE: Porta ${WEBRTC_PORT} già in uso`);
-        console.error('💡 Prova a riavviare il sistema completo');
+        console.error(`💡 Soluzione: La porta ${WEBRTC_PORT} è già in uso`);
+        console.error(`💡 Riavvia il workflow "Run Complete System"`);
     } else if (error.code === 'EACCES') {
-        console.error(`❌ ERRORE: Permessi insufficienti per porta ${WEBRTC_PORT}`);
-    } else {
-        console.error('❌ ERRORE CRITICO avvio server WebRTC:', error.message);
+        console.error(`💡 Problema di permessi per la porta ${WEBRTC_PORT}`);
     }
-    console.error('📍 Porta:', WEBRTC_PORT);
-    console.error('📍 Indirizzo:', '0.0.0.0');
+    
     process.exit(1);
 });
 

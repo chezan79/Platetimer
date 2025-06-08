@@ -6,10 +6,10 @@ hidden = [".config", "package-lock.json"]
 requiredFiles = [".replit", "replit.nix", "package.json", "package-lock.json"]
 
 [nix]
-channel = "stable-24_11"
+channel = "stable-24_05"
 
 [deployment]
-run = ["sh", "-c", "node server.js"]
+run = ["sh", "-c", "npm start"]
 deploymentTarget = "autoscale"
 ignorePorts = false
 
@@ -44,4 +44,5 @@ externalPort = 80
 
 [[ports]]
 localPort = 5001
-externalPort = 3000
+externalPort = 5001
+exposeLocalhost = true
