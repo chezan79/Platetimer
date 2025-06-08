@@ -295,6 +295,8 @@ wss.on('connection', (ws, req) => {
                 // Invia tutti i countdown attivi al nuovo client
                 if (activeCountdowns.has(companyName)) {
                     const companyCountdowns = activeCountdowns.get(companyName);
+                    const countdownsToDelete = [];
+                    
                     companyCountdowns.forEach((countdown, tableNumber) => {
                         // Calcola il tempo rimanente attuale
                         const currentTime = Date.now();
@@ -311,9 +313,15 @@ wss.on('connection', (ws, req) => {
                             ws.send(JSON.stringify(syncMessage));
                             console.log(`📡 Countdown sincronizzato inviato: Tavolo ${tableNumber}, Destinazione: ${countdown.destination}, ${Math.floor(remainingTime/60)}:${(remainingTime%60).toString().padStart(2, '0')}`);
                         } else {
-                            // Rimuovi countdown scaduti
-                            companyCountdowns.delete(tableNumber);
+                            // Marca per eliminazione i countdown scaduti
+                            countdownsToDelete.push(tableNumber);
                         }
+                    });
+                    
+                    // Rimuovi countdown scaduti dalla memoria
+                    countdownsToDelete.forEach(tableNumber => {
+                        companyCountdowns.delete(tableNumber);
+                        console.log(`🗑️ Countdown scaduto rimosso durante sincronizzazione: Tavolo ${tableNumber}`);
                     });
                 }
 
@@ -438,7 +446,7 @@ wss.on('connection', (ws, req) => {
                     return;
                 }
 
-                // Rimuovi il countdown attivo dalla memoria del server
+                // Rimuovi il countdown attivo dalla memoria del server PRIMA di inviare
                 if (ws.companyRoom && activeCountdowns.has(ws.companyRoom)) {
                     const companyCountdowns = activeCountdowns.get(ws.companyRoom);
                     if (companyCountdowns.has(data.tableNumber)) {
@@ -447,20 +455,20 @@ wss.on('connection', (ws, req) => {
                     }
                 }
 
-                // Invia eliminazione a tutti i client della room
+                // Invia eliminazione a tutti i client della room (incluso chi ha eliminato per conferma)
                 if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
                     const roomClients = companyRooms.get(ws.companyRoom);
                     const deleteMessage = JSON.stringify(data);
 
                     let sentCount = 0;
                     roomClients.forEach((client) => {
-                        if (client.readyState === WebSocket.OPEN && client !== ws) { // Non inviare a chi ha eliminato
+                        if (client.readyState === WebSocket.OPEN) {
                             client.send(deleteMessage);
                             sentCount++;
                         }
                     });
 
-                    console.log(`🗑️ Eliminazione inviata alla room "${ws.companyRoom}" (${sentCount}/${roomClients.size-1} client): Tavolo ${data.tableNumber}`);
+                    console.log(`🗑️ Eliminazione inviata alla room "${ws.companyRoom}" (${sentCount}/${roomClients.size} client): Tavolo ${data.tableNumber}`);
                 } else {
                     console.log('⚠️ Client non assegnato a nessuna room per eliminazione');
                 }
