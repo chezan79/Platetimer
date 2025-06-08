@@ -119,6 +119,38 @@
 
         
 
+        <!-- Sistema ricezione chiamate vocali WebRTC -->
+        <div id="call-incoming-container" style="text-align: center; padding: 8px; background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%); border-radius: 8px; border-left: 4px solid #ffc107; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); min-width: 280px; display: none;">
+            <div style="margin-bottom: 4px; color: #856404; font-size: 12px; font-weight: 600;">📞 Chiamata in arrivo</div>
+            <div style="display: flex; justify-content: center; align-items: center; gap: 6px; flex-wrap: nowrap;">
+                <button id="answer-btn" onclick="answerCall()" 
+                        style="padding: 6px 12px; background: linear-gradient(135deg, #28a745 0%, #20c997 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
+                    📞✅ Rispondi
+                </button>
+                <button id="reject-btn" onclick="rejectCall()" 
+                        style="padding: 6px 12px; background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
+                    📞❌ Rifiuta
+                </button>
+            </div>
+            <div id="incoming-call-status" style="margin-top: 4px; font-size: 10px; color: #856404; min-height: 12px;">
+                Chiamata da Cucina
+            </div>
+        </div>
+
+        <!-- Sistema chiamata attiva -->
+        <div id="call-active-container" style="text-align: center; padding: 8px; background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); border-radius: 8px; border-left: 4px solid #28a745; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); min-width: 280px; display: none;">
+            <div style="margin-bottom: 4px; color: #155724; font-size: 12px; font-weight: 600;">📞 Chiamata Attiva</div>
+            <div style="display: flex; justify-content: center; align-items: center; gap: 6px; flex-wrap: nowrap;">
+                <button id="hangup-call-btn" onclick="hangupCall()" 
+                        style="padding: 6px 12px; background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
+                    📞❌ Termina
+                </button>
+            </div>
+            <div id="active-call-status" style="margin-top: 4px; font-size: 10px; color: #155724; min-height: 12px;">
+                In chiamata con Cucina
+            </div>
+        </div>
+
         <!-- Sistema messaggio vocale con scelta destinazione -->
         <div style="text-align: center; padding: 8px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; border-left: 4px solid #007bff; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); min-width: 280px;">
             <div style="display: flex; justify-content: center; align-items: center; gap: 6px; flex-wrap: nowrap;">
@@ -1549,6 +1581,331 @@
         }
 
         
+
+
+    // ========== SISTEMA RICEZIONE CHIAMATE VOCALI WEBRTC ==========
+        let webrtcWs = null;
+        let peerConnection = null;
+        let localStream = null;
+        let currentCallId = null;
+        let isCallActive = false;
+        let incomingCallOffer = null;
+
+        // Configurazione WebRTC
+        const rtcConfiguration = {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' }
+            ]
+        };
+
+        // Connetti a server WebRTC
+        function connectWebRTC() {
+            try {
+                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const port = window.location.hostname === 'localhost' ? ':5001' : ':5001';
+                webrtcWs = new WebSocket(`${protocol}//${window.location.hostname}${port}/webrtc-ws`);
+
+                webrtcWs.onopen = () => {
+                    console.log('📞 Pizzeria WebRTC WebSocket connesso');
+                    
+                    // Join room WebRTC
+                    const companyName = localStorage.getItem('userCompany') || 'Default';
+                    webrtcWs.send(JSON.stringify({
+                        action: 'join-webrtc-room',
+                        companyName: companyName,
+                        pageType: 'pizzeria',
+                        userId: 'pizzeria-' + Date.now()
+                    }));
+                };
+
+                webrtcWs.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        console.log('📞 Pizzeria messaggio WebRTC ricevuto:', data);
+                        handleWebRTCMessage(data);
+                    } catch (error) {
+                        console.error('❌ Errore parsing messaggio WebRTC pizzeria:', error);
+                    }
+                };
+
+                webrtcWs.onclose = () => {
+                    console.log('📞 Pizzeria WebRTC WebSocket disconnesso');
+                    // Riconnetti dopo 3 secondi
+                    setTimeout(connectWebRTC, 3000);
+                };
+
+                webrtcWs.onerror = (error) => {
+                    console.error('❌ Errore WebRTC WebSocket pizzeria:', error);
+                };
+
+            } catch (error) {
+                console.error('❌ Errore connessione WebRTC pizzeria:', error);
+            }
+        }
+
+        // Gestisci messaggi WebRTC
+        function handleWebRTCMessage(data) {
+            switch (data.action) {
+                case 'joined-webrtc-room':
+                    console.log('✅ Pizzeria entrata in room WebRTC:', data);
+                    break;
+
+                case 'webrtc-offer':
+                    console.log('📞 Offer ricevuto da:', data.from);
+                    incomingCallOffer = data.offer;
+                    currentCallId = data.callId;
+                    showIncomingCall();
+                    
+                    // Riproduci suono di chiamata
+                    playCallRingtone();
+                    break;
+
+                case 'webrtc-ice-candidate':
+                    if (peerConnection && data.callId === currentCallId) {
+                        peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate))
+                            .catch(error => console.error('❌ Errore addIceCandidate pizzeria:', error));
+                    }
+                    break;
+
+                case 'webrtc-hangup':
+                    if (data.callId === currentCallId) {
+                        console.log('📞 Chiamata terminata dal chiamante');
+                        cleanupCall();
+                        hideIncomingCall();
+                        hideActiveCall();
+                    }
+                    break;
+
+                case 'pong':
+                    // Heartbeat ricevuto
+                    break;
+            }
+        }
+
+        // Mostra UI chiamata in arrivo
+        function showIncomingCall() {
+            document.getElementById('call-incoming-container').style.display = 'block';
+            stopCallRingtone(); // Ferma la suoneria dopo 10 secondi
+            
+            // Auto-rifiuta dopo 30 secondi
+            setTimeout(() => {
+                if (document.getElementById('call-incoming-container').style.display === 'block') {
+                    rejectCall();
+                }
+            }, 30000);
+        }
+
+        // Nascondi UI chiamata in arrivo
+        function hideIncomingCall() {
+            document.getElementById('call-incoming-container').style.display = 'none';
+            stopCallRingtone();
+        }
+
+        // Mostra UI chiamata attiva
+        function showActiveCall() {
+            document.getElementById('call-active-container').style.display = 'block';
+        }
+
+        // Nascondi UI chiamata attiva
+        function hideActiveCall() {
+            document.getElementById('call-active-container').style.display = 'none';
+        }
+
+        // Rispondi alla chiamata
+        async function answerCall() {
+            if (!incomingCallOffer || !currentCallId) {
+                console.error('❌ Nessuna chiamata da rispondere');
+                return;
+            }
+
+            try {
+                hideIncomingCall();
+                showActiveCall();
+                document.getElementById('active-call-status').textContent = 'Connessione in corso...';
+
+                // Ottieni accesso al microfono
+                localStream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    }
+                });
+
+                // Crea peer connection
+                peerConnection = new RTCPeerConnection(rtcConfiguration);
+
+                // Aggiungi stream locale
+                localStream.getTracks().forEach(track => {
+                    peerConnection.addTrack(track, localStream);
+                });
+
+                // Gestisci ICE candidates
+                peerConnection.onicecandidate = (event) => {
+                    if (event.candidate && webrtcWs && webrtcWs.readyState === WebSocket.OPEN) {
+                        webrtcWs.send(JSON.stringify({
+                            action: 'webrtc-ice-candidate',
+                            candidate: event.candidate,
+                            callId: currentCallId,
+                            targetPageType: 'cucina'
+                        }));
+                    }
+                };
+
+                // Gestisci stream remoto
+                peerConnection.ontrack = (event) => {
+                    console.log('📞 Stream remoto ricevuto in pizzeria');
+                    const remoteAudio = document.createElement('audio');
+                    remoteAudio.srcObject = event.streams[0];
+                    remoteAudio.autoplay = true;
+                    remoteAudio.volume = 1.0;
+                    document.body.appendChild(remoteAudio);
+                    
+                    document.getElementById('active-call-status').textContent = 'Chiamata connessa!';
+                };
+
+                // Set remote description e crea answer
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(incomingCallOffer));
+                const answer = await peerConnection.createAnswer();
+                await peerConnection.setLocalDescription(answer);
+
+                // Invia answer
+                if (webrtcWs && webrtcWs.readyState === WebSocket.OPEN) {
+                    webrtcWs.send(JSON.stringify({
+                        action: 'webrtc-answer',
+                        answer: answer,
+                        callId: currentCallId
+                    }));
+
+                    isCallActive = true;
+                    console.log('📞 Answer inviato');
+                } else {
+                    throw new Error('WebSocket non connesso');
+                }
+
+            } catch (error) {
+                console.error('❌ Errore risposta chiamata:', error);
+                rejectCall();
+            }
+        }
+
+        // Rifiuta la chiamata
+        function rejectCall() {
+            console.log('📞 Chiamata rifiutata');
+            
+            if (webrtcWs && webrtcWs.readyState === WebSocket.OPEN && currentCallId) {
+                webrtcWs.send(JSON.stringify({
+                    action: 'webrtc-hangup',
+                    callId: currentCallId,
+                    targetPageType: 'cucina'
+                }));
+            }
+
+            hideIncomingCall();
+            cleanupCall();
+        }
+
+        // Termina chiamata attiva
+        function hangupCall() {
+            console.log('📞 Terminazione chiamata da pizzeria');
+
+            if (webrtcWs && webrtcWs.readyState === WebSocket.OPEN && currentCallId) {
+                webrtcWs.send(JSON.stringify({
+                    action: 'webrtc-hangup',
+                    callId: currentCallId,
+                    targetPageType: 'cucina'
+                }));
+            }
+
+            hideActiveCall();
+            cleanupCall();
+        }
+
+        // Cleanup risorse chiamata
+        function cleanupCall() {
+            isCallActive = false;
+            currentCallId = null;
+            incomingCallOffer = null;
+
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+                localStream = null;
+            }
+
+            if (peerConnection) {
+                peerConnection.close();
+                peerConnection = null;
+            }
+
+            // Rimuovi audio remoto
+            document.querySelectorAll('audio').forEach(audio => {
+                if (audio.srcObject) {
+                    audio.remove();
+                }
+            });
+
+            stopCallRingtone();
+        }
+
+        // Suoneria per chiamata in arrivo
+        let ringtoneInterval = null;
+
+        function playCallRingtone() {
+            // Usa l'audio esistente o crea suono sintetico
+            const alertAudio = document.getElementById('alertSound');
+            
+            ringtoneInterval = setInterval(() => {
+                if (alertAudio) {
+                    alertAudio.play().catch(e => {
+                        // Fallback sintetico
+                        try {
+                            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                            const oscillator = audioContext.createOscillator();
+                            const gain = audioContext.createGain();
+                            
+                            oscillator.connect(gain);
+                            gain.connect(audioContext.destination);
+                            
+                            oscillator.frequency.value = 800;
+                            gain.gain.setValueAtTime(0.1, audioContext.currentTime);
+                            gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+                            
+                            oscillator.start(audioContext.currentTime);
+                            oscillator.stop(audioContext.currentTime + 0.5);
+                        } catch (synthError) {
+                            console.log('❌ Errore suoneria sintetica:', synthError);
+                        }
+                    });
+                }
+            }, 2000);
+
+            // Ferma la suoneria dopo 10 secondi
+            setTimeout(stopCallRingtone, 10000);
+        }
+
+        function stopCallRingtone() {
+            if (ringtoneInterval) {
+                clearInterval(ringtoneInterval);
+                ringtoneInterval = null;
+            }
+        }
+
+        // Inizializza WebRTC all'avvio
+        document.addEventListener('DOMContentLoaded', () => {
+            // Ritarda l'inizializzazione WebRTC per evitare conflitti
+            setTimeout(() => {
+                connectWebRTC();
+            }, 2000);
+        });
+
+        // Cleanup al chiudere la pagina
+        window.addEventListener('beforeunload', () => {
+            cleanupCall();
+            if (webrtcWs) {
+                webrtcWs.close();
+            }
+        });
 
 
     </script>

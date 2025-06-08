@@ -14,7 +14,7 @@ deploymentTarget = "autoscale"
 ignorePorts = false
 
 [workflows]
-runButton = "Run Server"
+runButton = "Run Complete System"
 
 [[workflows.workflow]]
 name = "Run Server"
@@ -24,6 +24,19 @@ mode = "sequential"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "node server.js"
+
+[[workflows.workflow]]
+name = "Run Complete System"
+author = 43042775
+mode = "parallel"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "node server.js"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "node webrtc-server.js"
 
 [[ports]]
 localPort = 5000
