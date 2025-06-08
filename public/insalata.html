@@ -258,7 +258,7 @@
                 const data = JSON.parse(event.data);
 
                 if (data.action === 'ping') {
-                    ws.send(JSON.stringify({ action: 'pong' }));
+                    ws.send(JSON.stringify({ action: 'pong', timestamp: data.timestamp }));
                     return;
                 } else if (data.action === 'startCountdown') {
                             console.log('📥 Countdown ricevuto in insalata:', data);
