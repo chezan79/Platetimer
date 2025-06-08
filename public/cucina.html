@@ -760,9 +760,6 @@
                         } else if (data.action === 'newUserJoined') {
                             console.log('🎉 Nuovo utente è entrato nella pagina:', data.message);
                             mostraAvvisoNuovoUtente(data);
-                        } else if (data.action === 'countdownBlocked') {
-                            console.log('🚫 Rilancio tavolo bloccato:', data.message);
-                            mostraAvvisoTavoloBloccato(data);
                         }
                     } catch (error) {
                         console.error('Errore nel parsing del messaggio WebSocket:', error);
@@ -2457,59 +2454,6 @@
                     setTimeout(() => noticeDiv.remove(), 300);
                 }
             }, 5000);
-        }
-
-        function mostraAvvisoTavoloBloccato(data) {
-            // Rimuovi eventuali avvisi precedenti
-            const existingWarning = document.getElementById('tavolo-blocked-warning');
-            if (existingWarning) {
-                existingWarning.remove();
-            }
-
-            const warningDiv = document.createElement('div');
-            warningDiv.id = 'tavolo-blocked-warning';
-            warningDiv.style.cssText = `
-                position: fixed;
-                top: 50%;
-                left: 50%;
-                transform: translate(-50%, -50%);
-                z-index: 10000;
-                background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
-                color: #721c24;
-                padding: 20px 25px;
-                border-radius: 10px;
-                border: 3px solid #dc3545;
-                box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
-                font-weight: 600;
-                text-align: center;
-                max-width: 400px;
-                animation: slideDown 0.5s ease-out;
-            `;
-
-            warningDiv.innerHTML = `
-                <div style="font-size: 18px; margin-bottom: 12px;">
-                    🚫 RILANCIO BLOCCATO
-                </div>
-                <div style="font-size: 16px; margin-bottom: 15px;">
-                    ${data.message}
-                </div>
-                <div style="font-size: 14px; margin-bottom: 15px; color: #856404; background: #fff3cd; padding: 8px; border-radius: 5px;">
-                    💡 Attendi che tutti i countdown del tavolo terminino prima di rilanciarlo
-                </div>
-                <button onclick="this.parentElement.remove()" 
-                        style="background: #dc3545; color: white; border: none; padding: 8px 16px; border-radius: 5px; cursor: pointer; font-weight: 600;">
-                    OK, Ho Capito
-                </button>
-            `;
-
-            document.body.appendChild(warningDiv);
-
-            // Rimuovi automaticamente dopo 8 secondi
-            setTimeout(() => {
-                if (warningDiv && warningDiv.parentElement) {
-                    warningDiv.remove();
-                }
-            }, 8000);
         }
 
         // Sistema toggle controlli
