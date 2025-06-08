@@ -6,15 +6,15 @@ hidden = [".config", "package-lock.json"]
 requiredFiles = [".replit", "replit.nix", "package.json", "package-lock.json"]
 
 [nix]
-channel = "stable-24_05"
+channel = "stable-24_11"
 
 [deployment]
-run = ["sh", "-c", "npm start"]
+run = ["sh", "-c", "node server.js"]
 deploymentTarget = "autoscale"
 ignorePorts = false
 
 [workflows]
-runButton = "Run Complete System"
+runButton = "Run Server"
 
 [[workflows.workflow]]
 name = "Run Server"
@@ -25,17 +25,6 @@ mode = "sequential"
 task = "shell.exec"
 args = "node server.js"
 
-[[workflows.workflow]]
-name = "Run Complete System"
-author = 43042775
-mode = "parallel"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "node server.js"
-
 [[ports]]
 localPort = 5000
 externalPort = 80
-
-

@@ -9,32 +9,17 @@ const speech = require('@google-cloud/speech');
 const app = express();
 const server = http.createServer(app);
 
-// Configura il WebSocket Server per le funzioni principali
+// Configura il WebSocket Server
 const wss = new WebSocket.Server({ 
     server,
-    path: '/ws' // Percorso per le connessioni WebSocket principali
+    path: '/ws' // Percorso per le connessioni WebSocket
 });
-
-// Sistema chiamate con Agora.io
-const agoraAppId = process.env.AGORA_APP_ID || 'demo-app-id';
 
 // Serve i file statici dalla directory "public"
 app.use(express.static('public'));
 
 // Middleware per parsing JSON
 app.use(express.json());
-
-// Add CORS headers for cross-origin requests
-app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', '*');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-    if (req.method === 'OPTIONS') {
-        res.sendStatus(200);
-    } else {
-        next();
-    }
-});
 
 // Configura Google Cloud Speech
 let speechClient = null;
@@ -52,29 +37,6 @@ try {
 } catch (error) {
     console.error('❌ Errore configurazione Google Cloud Speech:', error.message);
 }
-
-// Route per ottenere configurazione Agora
-app.get('/api/agora-config', (req, res) => {
-    res.json({ 
-        appId: agoraAppId,
-        status: 'Agora.io configurato',
-        uptime: process.uptime(),
-        timestamp: new Date().toISOString() 
-    });
-});
-
-// Endpoint per generare token Agora (per produzione)
-app.post('/api/agora-token', (req, res) => {
-    const { channelName, uid } = req.body;
-
-    // In produzione qui genereresti un token con l'Agora SDK
-    // Per sviluppo usiamo null (modalità test)
-    res.json({
-        token: null, // null per modalità test Agora
-        channelName: channelName,
-        uid: uid || 0
-    });
-});
 
 // Endpoint per salvare messaggi vocali
 app.post('/api/voice-message', (req, res) => {
@@ -100,6 +62,22 @@ app.post('/api/voice-message', (req, res) => {
         res.status(500).json({ error: 'Errore interno server' });
     }
 });
+
+// Endpoint Stripe temporaneamente disabilitato - abbonamenti in standby
+/*
+app.post('/api/create-checkout-session', async (req, res) => {
+    // Endpoint disabilitato per test senza abbonamenti
+    res.status(503).json({ error: 'Abbonamenti temporaneamente disabilitati' });
+});
+*/
+
+// Webhook Stripe temporaneamente disabilitato - abbonamenti in standby
+/*
+app.post('/api/stripe-webhook', express.raw({type: 'application/json'}), (req, res) => {
+    // Webhook disabilitato per test senza abbonamenti
+    res.status(503).json({ error: 'Abbonamenti temporaneamente disabilitati' });
+});
+*/
 
 // Endpoint per il riconoscimento vocale
 app.post('/api/speech-to-text', async (req, res) => {
@@ -160,9 +138,6 @@ const companyRooms = new Map();
 // Store per i countdown attivi per ogni azienda
 const activeCountdowns = new Map();
 
-// Store per le chiamate Agora attive
-const agoraActiveCalls = new Map();
-
 // Mappa per sessioni autenticate
 const authenticatedSessions = new Map();
 
@@ -205,8 +180,7 @@ function checkRateLimit(clientId) {
     return limit.count <= 10; // Max 10 richieste per minuto
 }
 
-// ========== GESTIONE WEBSOCKET PRINCIPALE ==========
-// Gestisci le connessioni WebSocket principali
+// Gestisci le connessioni WebSocket
 wss.on('connection', (ws, req) => {
     const clientIp = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
     console.log(`🔗 Nuova connessione WebSocket da IP: ${clientIp}`);
@@ -235,40 +209,40 @@ wss.on('connection', (ws, req) => {
     }, 500);
 
     ws.on('message', (message) => {
-        try {
-            // Validazione messaggio base
-            if (!message || message.length === 0) {
-                console.log('⚠️ Messaggio vuoto ignorato');
-                return;
-            }
-
-            // Rate limiting più rigoroso: max 5 messaggi per 2 secondi
-            const now = Date.now();
-            if (now - ws.lastMessageTime < 400) { // 400ms tra messaggi
-                ws.messageCount++;
-                if (ws.messageCount > 5) {
-                    console.log('⚠️ Rate limit superato, messaggio scartato');
+            try {
+                // Validazione messaggio base
+                if (!message || message.length === 0) {
+                    console.log('⚠️ Messaggio vuoto ignorato');
                     return;
                 }
-            } else {
-                ws.messageCount = 0;
-                ws.lastMessageTime = now;
-            }
 
-            let data;
-            try {
-                data = JSON.parse(message);
-            } catch (parseError) {
-                console.error('❌ Errore parsing JSON:', parseError.message);
-                return;
-            }
+                // Rate limiting più rigoroso: max 5 messaggi per 2 secondi
+                const now = Date.now();
+                if (now - ws.lastMessageTime < 400) { // 400ms tra messaggi
+                    ws.messageCount++;
+                    if (ws.messageCount > 5) {
+                        console.log('⚠️ Rate limit superato, messaggio scartato');
+                        return;
+                    }
+                } else {
+                    ws.messageCount = 0;
+                    ws.lastMessageTime = now;
+                }
 
-            if (!data || typeof data !== 'object') {
-                console.log('⚠️ Dati messaggio non validi');
-                return;
-            }
+                let data;
+                try {
+                    data = JSON.parse(message);
+                } catch (parseError) {
+                    console.error('❌ Errore parsing JSON:', parseError.message);
+                    return;
+                }
 
-            console.log('📨 Messaggio ricevuto:', data);
+                if (!data || typeof data !== 'object') {
+                    console.log('⚠️ Dati messaggio non validi');
+                    return;
+                }
+
+                console.log('📨 Messaggio ricevuto:', data);
 
             // Validazione dati rigorosa
             if (!data.action) {
@@ -708,90 +682,7 @@ wss.on('connection', (ws, req) => {
                     console.log('⚠️ Client non assegnato a nessuna room per annullamento pausa insalata');
                 }
 
-            } else if (data.action === 'agoraCall') {
-                // Gestione chiamate Agora
-                if (!data.targetPageType || !data.channelName) {
-                    console.log('⚠️ Dati chiamata Agora non validi');
-                    return;
-                }
-
-                // Invia notifica di chiamata alla destinazione
-                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
-                    const roomClients = companyRooms.get(ws.companyRoom);
-                    const callMessage = JSON.stringify({
-                        action: 'incomingAgoraCall',
-                        channelName: data.channelName,
-                        from: data.from || ws.pageType,
-                        targetPageType: data.targetPageType,
-                        callId: data.callId || Date.now().toString()
-                    });
-
-                    let sentCount = 0;
-                    roomClients.forEach((client) => {
-                        if (client.readyState === WebSocket.OPEN && client.pageType === data.targetPageType) {
-                            client.send(callMessage);
-                            sentCount++;
-                        }
-                    });
-
-                    console.log(`📞 Chiamata Agora inviata da ${ws.pageType || 'sconosciuto'} a ${data.targetPageType} (${sentCount} client)`);
-                }
-
-            } else if (data.action === 'agoraCallResponse') {
-                // Gestione risposta chiamate Agora
-                if (!data.callId || !data.response) {
-                    console.log('⚠️ Risposta chiamata Agora non valida');
-                    return;
-                }
-
-                // Inoltra risposta al chiamante
-                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
-                    const roomClients = companyRooms.get(ws.companyRoom);
-                    const responseMessage = JSON.stringify({
-                        action: 'agoraCallResponseReceived',
-                        callId: data.callId,
-                        response: data.response, // 'accepted' o 'rejected'
-                        from: ws.pageType,
-                        channelName: data.channelName
-                    });
-
-                    let sentCount = 0;
-                    roomClients.forEach((client) => {
-                        if (client.readyState === WebSocket.OPEN && client !== ws) {
-                            client.send(responseMessage);
-                            sentCount++;
-                        }
-                    });
-
-                    console.log(`📞 Risposta chiamata Agora (${data.response}) inoltrata (${sentCount} client)`);
-                }
-
-            } else if (data.action === 'agoraHangup') {
-                // Gestione chiusura chiamate Agora
-                if (!data.channelName) {
-                    console.log('⚠️ Dati hangup Agora non validi');
-                    return;
-                }
-
-                // Inoltra hangup a tutti i client della room
-                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
-                    const roomClients = companyRooms.get(ws.companyRoom);
-                    const hangupMessage = JSON.stringify({
-                        action: 'agoraHangupReceived',
-                        channelName: data.channelName,
-                        from: ws.pageType
-                    });
-
-                    let sentCount = 0;
-                    roomClients.forEach((client) => {
-                        if (client.readyState === WebSocket.OPEN && client !== ws) {
-                            client.send(hangupMessage);
-                            sentCount++;
-                        }
-                    });
-
-                    console.log(`📞 Hangup Agora inoltrato (${sentCount} client)`);
-                }
+            
             }
         } catch (error) {
             console.error('❌ Errore nel parsing del messaggio:', error);
@@ -799,54 +690,52 @@ wss.on('connection', (ws, req) => {
     });
 
     ws.on('close', (code, reason) => {
-        try {
-            // Rimuovi il client dalla room quando si disconnette
-            if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
-                const room = companyRooms.get(ws.companyRoom);
-                if (room) {
-                    room.delete(ws);
-                    if (room.size === 0) {
-                        companyRooms.delete(ws.companyRoom);
-                        console.log(`🗑️ Room "${ws.companyRoom}" eliminata (vuota)`);
-                    } else {
-                        console.log(`👋 Client disconnesso dalla room "${ws.companyRoom}" (${room.size} client rimanenti)`);
+            try {
+                // Rimuovi il client dalla room quando si disconnette
+                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                    const room = companyRooms.get(ws.companyRoom);
+                    if (room) {
+                        room.delete(ws);
+                        if (room.size === 0) {
+                            companyRooms.delete(ws.companyRoom);
+                            console.log(`🗑️ Room "${ws.companyRoom}" eliminata (vuota)`);
+                        } else {
+                            console.log(`👋 Client disconnesso dalla room "${ws.companyRoom}" (${room.size} client rimanenti)`);
+                        }
                     }
                 }
+
+                // Cleanup delle risorse del client
+                ws.companyRoom = null;
+                ws.pageType = null;
+                ws.isAlive = false;
+
+                console.log(`🔌 Connessione WebSocket chiusa - Code: ${code}, Reason: ${reason || 'Non specificato'}`);
+            } catch (closeError) {
+                console.error('❌ Errore durante cleanup connessione:', closeError.message);
             }
+        });
 
-            // Cleanup delle risorse del client
-            ws.companyRoom = null;
-            ws.pageType = null;
-            ws.isAlive = false;
+        ws.on('error', (error) => {
+            console.error('❌ Errore WebSocket:', error.message || error);
 
-            console.log(`🔌 Connessione WebSocket chiusa - Code: ${code}, Reason: ${reason || 'Non specificato'}`);
-        } catch (closeError) {
-            console.error('❌ Errore durante cleanup connessione:', closeError.message);
-        }
-    });
-
-    ws.on('error', (error) => {
-        console.error('❌ Errore WebSocket:', error.message || error);
-
-        // Cleanup in caso di errore
-        try {
-            if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
-                const room = companyRooms.get(ws.companyRoom);
-                if (room) {
-                    room.delete(ws);
-                    if (room.size === 0) {
-                        companyRooms.delete(ws.companyRoom);
+            // Cleanup in caso di errore
+            try {
+                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                    const room = companyRooms.get(ws.companyRoom);
+                    if (room) {
+                        room.delete(ws);
+                        if (room.size === 0) {
+                            companyRooms.delete(ws.companyRoom);
+                        }
                     }
                 }
+                ws.isAlive = false;
+            } catch (cleanupError) {
+                console.error('❌ Errore cleanup dopo errore WebSocket:', cleanupError.message);
             }
-            ws.isAlive = false;
-        } catch (cleanupError) {
-            console.error('❌ Errore cleanup dopo errore WebSocket:', cleanupError.message);
-        }
+        });
     });
-});
-
-// Sistema chiamate Agora.io implementato
 
 // Heartbeat ottimizzato - meno frequente per ridurre carico
 setInterval(() => {
@@ -856,7 +745,7 @@ setInterval(() => {
     wss.clients.forEach((ws) => {
         if (ws.readyState === WebSocket.OPEN) {
             // Solo se non ha fatto pong negli ultimi 45 secondi
-            if (now - ws.lastPong> 45000) {
+            if (now - ws.lastPong > 45000) {
                 ws.send(JSON.stringify({ action: 'ping', timestamp: now }));
                 ws.lastPing = now;
             }
@@ -915,18 +804,6 @@ setInterval(() => {
     }
 }, 60000); // Ogni 1 minuto
 
-// Statistiche chiamate Agora
-setInterval(() => {
-    const stats = {
-        activeCalls: agoraActiveCalls.size,
-        rooms: companyRooms.size
-    };
-
-    if (stats.activeCalls > 0) {
-        console.log(`📊 Agora Stats: ${stats.activeCalls} chiamate attive, ${stats.rooms} rooms`);
-    }
-}, 300000); // Ogni 5 minuti
-
 // Gestione errori globali per prevenire crash
 process.on('uncaughtException', (error) => {
     console.error('❌ Errore non gestito:', error);
@@ -940,14 +817,13 @@ process.on('unhandledRejection', (reason, promise) => {
 setInterval(() => {
     const stats = {
         clients: wss.clients.size,
-        agoraCalls: agoraActiveCalls.size,
         rooms: companyRooms.size,
         countdowns: Array.from(activeCountdowns.values()).reduce((sum, map) => sum + map.size, 0),
         rateLimits: rateLimiter.size,
         memoryUsage: Math.round(process.memoryUsage().heapUsed / 1024 / 1024)
     };
 
-    console.log(`📊 Stats: ${stats.clients} client, ${stats.agoraCalls} agora, ${stats.rooms} rooms, ${stats.countdowns} countdown, ${stats.memoryUsage}MB RAM`);
+    console.log(`📊 Stats: ${stats.clients} client, ${stats.rooms} rooms, ${stats.countdowns} countdown, ${stats.memoryUsage}MB RAM`);
 
     // Alert se troppo carico
     if (stats.clients > 50 || stats.memoryUsage > 100) {
@@ -955,15 +831,13 @@ setInterval(() => {
     }
 }, 300000); // Ogni 5 minuti
 
-// Avvia il server su porta 5000
+// Avvia il server
 const PORT = 5000;
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`🛡️ Server completo avviato su http://0.0.0.0:${PORT}`);
-    console.log('✅ WebSocket principale attivo su /ws');
+    console.log(`🛡️ Server sicuro avviato su http://0.0.0.0:${PORT}`);
     console.log('✅ Autenticazione WebSocket attiva');
     console.log('✅ Validazione dati attiva');
     console.log('✅ Rate limiting ottimizzato');
-    console.log('📞 Sistema chiamate Agora.io attivo');
 }).on('error', (error) => {
     console.error('❌ Errore avvio server:', error);
 });
