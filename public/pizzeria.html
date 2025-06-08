@@ -405,7 +405,8 @@
             }
         }
 
-        // Inizializzazione già gestita da connectWebSocketWithWebRTC()
+        // Inizializza connessione
+        connectWebSocket();
 
         function sortCountdowns() {
             countdowns.sort((a, b) => a.timeRemaining - b.timeRemaining);
@@ -1649,169 +1650,15 @@
                 return;
             }
 
-            // Mostra notifica visiva di chiamata in arrivo
-            showIncomingCallNotification(data.from, data.callId);
-        }
-
-        function showIncomingCallNotification(fromPage, callId) {
-            // Rimuovi eventuali notifiche precedenti
-            const existingNotification = document.getElementById('incoming-call-notification');
-            if (existingNotification) {
-                existingNotification.remove();
-            }
-
-            // Crea notifica chiamata in arrivo
-            const notificationDiv = document.createElement('div');
-            notificationDiv.id = 'incoming-call-notification';
-            notificationDiv.style.cssText = `
-                position: fixed;
-                top: 50%;
-                left: 50%;
-                transform: translate(-50%, -50%);
-                background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
-                color: white;
-                padding: 25px;
-                border-radius: 15px;
-                box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3);
-                z-index: 3000;
-                text-align: center;
-                border: 3px solid #198754;
-                min-width: 350px;
-                font-family: Arial, sans-serif;
-                animation: callPulse 1s ease-in-out infinite;
-            `;
-
-            // Aggiungi animazione CSS per la chiamata
-            if (!document.getElementById('callAnimations')) {
-                const style = document.createElement('style');
-                style.id = 'callAnimations';
-                style.textContent = `
-                    @keyframes callPulse {
-                        0%, 100% { transform: translate(-50%, -50%) scale(1); box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3); }
-                        50% { transform: translate(-50%, -50%) scale(1.05); box-shadow: 0 20px 40px rgba(40, 167, 69, 0.4); }
-                    }
-                `;
-                document.head.appendChild(style);
-            }
-
-            notificationDiv.innerHTML = `
-                <div style="font-size: 24px; margin-bottom: 15px;">📞</div>
-                <div style="font-size: 20px; font-weight: bold; margin-bottom: 10px;">
-                    CHIAMATA IN ARRIVO
-                </div>
-                <div style="font-size: 18px; margin-bottom: 20px;">
-                    Da: ${fromPage}
-                </div>
-                <div style="display: flex; gap: 15px; justify-content: center;">
-                    <button onclick="acceptIncomingCall('${callId}')" 
-                            style="background: #28a745; color: white; border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: 600; transition: all 0.3s ease;">
-                        📞 Accetta
-                    </button>
-                    <button onclick="rejectIncomingCall('${callId}')" 
-                            style="background: #dc3545; color: white; border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: 600; transition: all 0.3s ease;">
-                        📞 Rifiuta
-                    </button>
-                </div>
-            `;
-
-            document.body.appendChild(notificationDiv);
-
-            // Riproduci suono di chiamata
-            const alertAudio = document.getElementById('alertSound');
-            if (alertAudio) {
-                alertAudio.loop = true;
-                alertAudio.play().catch(e => console.log('Errore audio chiamata:', e));
-            }
-
-            // Auto-rifiuta dopo 30 secondi
-            setTimeout(() => {
-                const notification = document.getElementById('incoming-call-notification');
-                if (notification) {
-                    rejectIncomingCall(callId);
-                }
-            }, 30000);
-
-            console.log(`📞 Notifica chiamata in arrivo mostrata da ${fromPage}`);
-        }
-
-        async function acceptIncomingCall(callId) {
-            const notification = document.getElementById('incoming-call-notification');
-            if (notification) {
-                notification.remove();
-            }
-
-            // Ferma suono di chiamata
-            const alertAudio = document.getElementById('alertSound');
-            if (alertAudio) {
-                alertAudio.loop = false;
-                alertAudio.pause();
-                alertAudio.currentTime = 0;
-            }
-
-            // Procedi con l'accettazione della chiamata
-            try {
-                currentCallId = callId;
-                isInCall = true;
-                updateCallUI('connecting', 'Connessione...');
-
-                // Ottieni accesso al microfono
-                localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                
-                // Crea peer connection
-                peerConnection = new RTCPeerConnection(configuration);
-
-                // Gestisci ICE candidates
-                peerConnection.onicecandidate = (event) => {
-                    if (event.candidate) {
-                        ws.send(JSON.stringify({
-                            action: 'candidate',
-                            candidate: event.candidate,
-                            callId: currentCallId
-                        }));
-                    }
-                };
-
-                // Gestisci stream remoto
-                peerConnection.ontrack = (event) => {
-                    const remoteAudio = document.getElementById('remoteAudio');
-                    remoteAudio.srcObject = event.streams[0];
-                    updateCallUI('connected', 'Chiamata attiva');
-                };
-
-                // La gestione dell'offerta avverrà quando arriverà via WebSocket
-                console.log('📞 Chiamata accettata, in attesa dell\'offerta WebRTC...');
-
-            } catch (error) {
-                console.error('❌ Errore accettazione chiamata:', error);
-                updateCallUI('error', 'Errore chiamata');
-                cleanupCall();
-            }
-        }
-
-        function rejectIncomingCall(callId) {
-            const notification = document.getElementById('incoming-call-notification');
-            if (notification) {
-                notification.remove();
-            }
-
-            // Ferma suono di chiamata
-            const alertAudio = document.getElementById('alertSound');
-            if (alertAudio) {
-                alertAudio.loop = false;
-                alertAudio.pause();
-                alertAudio.currentTime = 0;
-            }
-
-            // Invia rifiuto
-            if (ws && ws.readyState === WebSocket.OPEN) {
+            const accept = confirm(`📞 Chiamata in arrivo da ${data.from}. Accettare?`);
+            
+            if (!accept) {
                 ws.send(JSON.stringify({
                     action: 'hangup',
-                    callId: callId
+                    callId: data.callId
                 }));
+                return;
             }
-
-            console.log('📞 Chiamata rifiutata');
-        }
 
             try {
                 currentCallId = data.callId;
@@ -1934,133 +1781,47 @@
             }
         }
 
-        // Variabile per tracciare se i gestori WebRTC sono già configurati
-        let webRTCHandlersConfigured = false;
-
+        // Gestione eventi WebRTC aggiuntivi nel sistema WebSocket esistente
+        const originalOnMessage = ws ? ws.onmessage : null;
+        
         function setupWebRTCHandlers() {
-            if (!ws || webRTCHandlersConfigured) return;
+            if (!ws) return;
 
-            // Memorizza il gestore originale
-            const originalOnMessage = ws.onmessage;
-            
+            const originalHandler = ws.onmessage;
             ws.onmessage = (event) => {
+                // Esegui il gestore originale
+                if (originalHandler) {
+                    originalHandler(event);
+                }
+
+                // Gestisci eventi WebRTC
                 try {
                     const data = JSON.parse(event.data);
-
-                    // Gestisci prima gli eventi WebRTC
+                    
                     if (data.action === 'offer') {
-                        console.log('📞 Offerta WebRTC ricevuta in pizzeria:', data);
                         handleOffer(data);
-                        return;
                     } else if (data.action === 'answer' && currentCallId === data.callId) {
-                        console.log('📞 Risposta WebRTC ricevuta in pizzeria');
-                        if (peerConnection) {
-                            peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
-                        }
-                        return;
+                        peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
                     } else if (data.action === 'candidate' && currentCallId === data.callId) {
-                        console.log('📞 ICE candidate ricevuto in pizzeria');
-                        if (peerConnection) {
-                            peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
-                        }
-                        return;
+                        peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
                     } else if (data.action === 'hangup' && currentCallId === data.callId) {
-                        console.log('📞 Hangup ricevuto in pizzeria');
                         cleanupCall();
-                        return;
                     } else if (data.action === 'callError') {
-                        console.log('📞 Errore chiamata in pizzeria:', data.message);
                         updateCallUI('error', data.message);
                         cleanupCall();
-                        return;
-                    }
-
-                    // Gestisci ping/pong
-                    if (data.action === 'ping') {
-                        if (ws && ws.readyState === WebSocket.OPEN) {
-                            ws.send(JSON.stringify({ action: 'pong', timestamp: Date.now() }));
-                        }
-                        return;
-                    } else if (data.action === 'pong') {
-                        console.log('💓 Pizzeria: Pong ricevuto dal server');
-                        return;
-                    } else if (data.action === 'connectionConfirmed') {
-                        console.log('✅ Pizzeria: Conferma connessione ricevuta:', data.message);
-                        return;
-                    }
-
-                    // Gestisci altri eventi della pizzeria
-                    if (data.action === 'startCountdown') {
-                        console.log('📥 Countdown ricevuto in pizzeria:', data);
-                        if (data.destination === 'pizzeria') {
-                            console.log(`✅ Countdown accettato per pizzeria - Tavolo: ${data.tableNumber}`);
-                            startCountdown(data.tableNumber, data.timeRemaining);
-                        } else {
-                            console.log(`🚫 Countdown ignorato - Destinazione: ${data.destination || 'undefined'}, Tavolo: ${data.tableNumber}`);
-                        }
-                    } else if (data.action === 'deleteCountdown') {
-                        console.log('📥 Eliminazione countdown ricevuta in pizzeria:', data);
-                        deleteCountdown(data.tableNumber);
-                    } else if (data.action === 'voiceMessage') {
-                        console.log('📢 Messaggio vocale ricevuto in pizzeria:', data);
-                        if (data.destination === 'pizzeria') {
-                            console.log('✅ Messaggio vocale accettato per pizzeria');
-                            displayVoiceMessage(data);
-                        } else {
-                            console.log(`🚫 Messaggio vocale ignorato - Destinazione: ${data.destination}`);
-                        }
-                    } else if (data.action === 'deleteVoiceMessage') {
-                        console.log('🗑️ Eliminazione messaggio vocale ricevuta in pizzeria:', data);
-                        removeVoiceMessage(data.messageId);
-                    } else if (data.action === 'pausaCucina') {
-                        console.log('⏸️ Messaggio pausa cucina ricevuto in PIZZERIA:', data);
-                        gestisciPausaCucina(data);
-                    } else if (data.action === 'annullaPausaCucina') {
-                        console.log('❌ Messaggio annullamento pausa ricevuto in PIZZERIA:', data);
-                        annullaPausaCucina();
-                    } else if (data.action === 'pausaInsalata') {
-                        console.log('⏸️ Messaggio pausa insalata ricevuto in PIZZERIA:', data);
-                        mostraPausaInsalata(data);
-                    } else if (data.action === 'annullaPausaInsalata') {
-                        console.log('❌ Messaggio annullamento pausa insalata ricevuto in PIZZERIA:', data);
-                        nascondePausaInsalata();
-                    } else if (data.action === 'pageOccupied') {
-                        console.warn('⚠️ Pizzeria: Pagina già occupata da un altro utente!');
-                        mostraAvvisoPaginaOccupata(data);
-                    } else if (data.action === 'newUserJoined') {
-                        console.log('ℹ️ Pizzeria: Nuovo utente entrato nella pagina.');
-                        mostraAvvisoNuovoUtente(data);
                     }
                 } catch (error) {
-                    console.error('Errore parsing messaggio pizzeria:', error);
+                    // Ignora errori di parsing per messaggi non WebRTC
                 }
             };
-
-            webRTCHandlersConfigured = true;
-            console.log('✅ Gestori WebRTC configurati per pizzeria');
         }
 
-        // Configura gestori WebRTC nel connectWebSocket
-        function connectWebSocketWithWebRTC() {
-            connectWebSocket();
-            
-            // Verifica periodicamente se WebSocket è pronto e configura WebRTC
-            const checkInterval = setInterval(() => {
-                if (ws && ws.readyState === WebSocket.OPEN && !webRTCHandlersConfigured) {
-                    setupWebRTCHandlers();
-                    clearInterval(checkInterval);
-                }
-            }, 100);
-            
-            // Timeout di sicurezza
-            setTimeout(() => {
-                clearInterval(checkInterval);
-            }, 5000);
-        }
-
-        // Sostituisci la chiamata connectWebSocket() esistente
-        // connectWebSocket();
-        connectWebSocketWithWebRTC();
+        // Configura gestori WebRTC quando il WebSocket è pronto
+        setTimeout(() => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                setupWebRTCHandlers();
+            }
+        }, 1000);
 
 
     </script>
