@@ -285,9 +285,10 @@
                     return;
                 }
 
-                // Gestione eventi WebRTC per pizzeria (solo ricezione)
+                // PRIORITÀ ASSOLUTA: Gestione eventi WebRTC per pizzeria
                 if (data.action === 'offer') {
                     console.log('📞 PIZZERIA - Offerta WebRTC ricevuta da:', data.from);
+                    event.stopPropagation();
                     handleOffer(data);
                     return;
                 } else if (data.action === 'answer' && currentCallId === data.callId) {
@@ -1819,47 +1820,8 @@
             }
         }
 
-        // Gestione eventi WebRTC aggiuntivi nel sistema WebSocket esistente
-        const originalOnMessage = ws ? ws.onmessage : null;
-
-        function setupWebRTCHandlers() {
-            if (!ws) return;
-
-            const originalHandler = ws.onmessage;
-            ws.onmessage = (event) => {
-                // Esegui il gestore originale
-                if (originalHandler) {
-                    originalHandler(event);
-                }
-
-                // Gestisci eventi WebRTC
-                try {
-                    const data = JSON.parse(event.data);
-
-                    if (data.action === 'offer') {
-                        handleOffer(data);
-                    } else if (data.action === 'answer' && currentCallId === data.callId) {
-                        peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
-                    } else if (data.action === 'candidate' && currentCallId === data.callId) {
-                        peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
-                    } else if (data.action === 'hangup' && currentCallId === data.callId) {
-                        cleanupCall();
-                    } else if (data.action === 'callError') {
-                        updateCallUI('error', data.message);
-                        cleanupCall();
-                    }
-                } catch (error) {
-                    // Ignora errori di parsing per messaggi non WebRTC
-                }
-            };
-        }
-
-        // Configura gestori WebRTC quando il WebSocket è pronto
-        setTimeout(() => {
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                setupWebRTCHandlers();
-            }
-        }, 1000);
+        // I gestori WebRTC sono già integrati nel sistema onmessage principale
+        console.log('✅ PIZZERIA - Gestori WebRTC integrati nel sistema principale');
 
 
     </script>
