@@ -268,72 +268,95 @@
                 };
 
                 ws.onmessage = (event) => {
-                    try {
-                        const data = JSON.parse(event.data);
+            try {
+                const data = JSON.parse(event.data);
 
-                        if (data.action === 'ping') {
-                            if (ws && ws.readyState === WebSocket.OPEN) {
-                                ws.send(JSON.stringify({ action: 'pong', timestamp: Date.now() }));
-                            }
-                            return;
-                        } else if (data.action === 'pong') {
-                            console.log('💓 Pizzeria: Pong ricevuto dal server');
-                            return;
-                        } else if (data.action === 'connectionConfirmed') {
-                            console.log('✅ Pizzeria: Conferma connessione ricevuta:', data.message);
-                            return;
-                        }
-
-                        if (data.action === 'startCountdown') {
-                            console.log('📥 Countdown ricevuto in pizzeria:', data);
-                            // Mostra solo i countdown destinati alla pizzeria
-                            if (data.destination === 'pizzeria') {
-                                console.log(`✅ Countdown accettato per pizzeria - Tavolo: ${data.tableNumber}`);
-                                startCountdown(data.tableNumber, data.timeRemaining);
-                            } else {
-                                console.log(`🚫 Countdown ignorato - Destinazione: ${data.destination || 'undefined'}, Tavolo: ${data.tableNumber}`);
-                            }
-                        } else if (data.action === 'deleteCountdown') {
-                            console.log('📥 Eliminazione countdown ricevuta in pizzeria:', data);
-                            deleteCountdown(data.tableNumber);
-                        } else if (data.action === 'voiceMessage') {
-                            console.log('📢 Messaggio vocale ricevuto in pizzeria:', data);
-                            console.log('📍 Destinazione del messaggio:', data.destination);
-                            // Mostra solo i messaggi destinati alla pizzeria
-                            if (data.destination === 'pizzeria') {
-                                console.log('✅ Messaggio vocale accettato per pizzeria');
-                                displayVoiceMessage(data);
-                            } else {
-                                console.log(`🚫 Messaggio vocale ignorato - Destinazione: ${data.destination}`);
-                            }
-                        } else if (data.action === 'deleteVoiceMessage') {
-                            console.log('🗑️ Eliminazione messaggio vocale ricevuta in pizzeria:', data);
-                            removeVoiceMessage(data.messageId);
-                        } else if (data.action === 'pausaCucina') {
-                            console.log('⏸️ Messaggio pausa cucina ricevuto in PIZZERIA:', data);
-                            console.log(`⏸️ Dettagli pausa: ${data.durataMinuti} minuti da ${data.from}`);
-                            gestisciPausaCucina(data);
-                        } else if (data.action === 'annullaPausaCucina') {
-                            console.log('❌ Messaggio annullamento pausa ricevuto in PIZZERIA:', data);
-                            annullaPausaCucina();
-                        } else if (data.action === 'pausaInsalata') {
-                            console.log('⏸️ Messaggio pausa insalata ricevuto in PIZZERIA:', data);
-                            console.log(`⏸️ Dettagli pausa: ${data.durataMinuti} minuti da ${data.from}`);
-                            mostraPausaInsalata(data);
-                        } else if (data.action === 'annullaPausaInsalata') {
-                            console.log('❌ Messaggio annullamento pausa insalata ricevuto in PIZZERIA:', data);
-                            nascondePausaInsalata();
-                        } else if (data.action === 'pageOccupied') {
-                            console.warn('⚠️ Pizzeria: Pagina già occupata da un altro utente!');
-                            mostraAvvisoPaginaOccupata(data);
-                        } else if (data.action === 'newUserJoined') {
-                            console.log('ℹ️ Pizzeria: Nuovo utente entrato nella pagina.');
-                            mostraAvvisoNuovoUtente(data);
-                        }
-                    } catch (error) {
-                        console.error('Errore parsing messaggio pizzeria:', error);
+                if (data.action === 'ping') {
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({ action: 'pong', timestamp: Date.now() }));
                     }
-                };
+                    return;
+                } else if (data.action === 'pong') {
+                    console.log('💓 Pizzeria: Pong ricevuto dal server');
+                    return;
+                } else if (data.action === 'connectionConfirmed') {
+                    console.log('✅ Pizzeria: Conferma connessione ricevuta:', data.message);
+                    return;
+                }
+
+                // Gestione eventi WebRTC
+                if (data.action === 'offer') {
+                    handleOffer(data);
+                    return;
+                } else if (data.action === 'answer' && currentCallId === data.callId) {
+                    if (peerConnection) {
+                        peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+                    }
+                    return;
+                } else if (data.action === 'candidate' && currentCallId === data.callId) {
+                    if (peerConnection) {
+                        peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+                    }
+                    return;
+                } else if (data.action === 'hangup' && currentCallId === data.callId) {
+                    cleanupCall();
+                    return;
+                } else if (data.action === 'callError') {
+                    updateCallUI('error', data.message);
+                    cleanupCall();
+                    return;
+                }
+
+                if (data.action === 'startCountdown') {
+                    console.log('📥 Countdown ricevuto in pizzeria:', data);
+                    // Mostra solo i countdown destinati alla pizzeria
+                    if (data.destination === 'pizzeria') {
+                        console.log(`✅ Countdown accettato per pizzeria - Tavolo: ${data.tableNumber}`);
+                        startCountdown(data.tableNumber, data.timeRemaining);
+                    } else {
+                        console.log(`🚫 Countdown ignorato - Destinazione: ${data.destination || 'undefined'}, Tavolo: ${data.tableNumber}`);
+                    }
+                } else if (data.action === 'deleteCountdown') {
+                    console.log('📥 Eliminazione countdown ricevuta in pizzeria:', data);
+                    deleteCountdown(data.tableNumber);
+                } else if (data.action === 'voiceMessage') {
+                    console.log('📢 Messaggio vocale ricevuto in pizzeria:', data);
+                    console.log('📍 Destinazione del messaggio:', data.destination);
+                    // Mostra solo i messaggi destinati alla pizzeria
+                    if (data.destination === 'pizzeria') {
+                        console.log('✅ Messaggio vocale accettato per pizzeria');
+                        displayVoiceMessage(data);
+                    } else {
+                        console.log(`🚫 Messaggio vocale ignorato - Destinazione: ${data.destination}`);
+                    }
+                } else if (data.action === 'deleteVoiceMessage') {
+                    console.log('🗑️ Eliminazione messaggio vocale ricevuta in pizzeria:', data);
+                    removeVoiceMessage(data.messageId);
+                } else if (data.action === 'pausaCucina') {
+                    console.log('⏸️ Messaggio pausa cucina ricevuto in PIZZERIA:', data);
+                    console.log(`⏸️ Dettagli pausa: ${data.durataMinuti} minuti da ${data.from}`);
+                    gestisciPausaCucina(data);
+                } else if (data.action === 'annullaPausaCucina') {
+                    console.log('❌ Messaggio annullamento pausa ricevuto in PIZZERIA:', data);
+                    annullaPausaCucina();
+                } else if (data.action === 'pausaInsalata') {
+                    console.log('⏸️ Messaggio pausa insalata ricevuto in PIZZERIA:', data);
+                    console.log(`⏸️ Dettagli pausa: ${data.durataMinuti} minuti da ${data.from}`);
+                    mostraPausaInsalata(data);
+                } else if (data.action === 'annullaPausaInsalata') {
+                    console.log('❌ Messaggio annullamento pausa insalata ricevuto in PIZZERIA:', data);
+                    nascondePausaInsalata();
+                } else if (data.action === 'pageOccupied') {
+                    console.warn('⚠️ Pizzeria: Pagina già occupata da un altro utente!');
+                    mostraAvvisoPaginaOccupata(data);
+                } else if (data.action === 'newUserJoined') {
+                    console.log('ℹ️ Pizzeria: Nuovo utente entrato nella pagina.');
+                    mostraAvvisoNuovoUtente(data);
+                }
+            } catch (error) {
+                console.error('Errore parsing messaggio pizzeria:', error);
+            }
+        };
 
                 ws.onclose = (event) => {
                     console.log(`🔌 Pizzeria WebSocket disconnesso: ${event.code}`);
@@ -1455,8 +1478,7 @@
                     </div>
                 `;
 
-                if (tempoRimanente > 0) {
-                    tempoRimanente--;
+                if (tempoRimanente > 0) {                    tempoRimanente--;
                     setTimeout(aggiornaPausaInsalataDisplay, 1000);
                 } else {
                     nascondePausaInsalata();
@@ -1592,7 +1614,7 @@
 
                 // Ottieni accesso al microfono
                 localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                
+
                 // Crea peer connection
                 peerConnection = new RTCPeerConnection(configuration);
 
@@ -1640,82 +1662,76 @@
             }
         }
 
-        async function handleOffer(data) {
-            if (isInCall) {
-                // Rifiuta la chiamata se già in corso
-                ws.send(JSON.stringify({
-                    action: 'hangup',
-                    callId: data.callId
-                }));
-                return;
-            }
+         async function handleOffer(data) {
+             // Mostra un avviso all'utente per accettare o rifiutare la chiamata
+             const callStatus = document.getElementById('call-status');
+             callStatus.textContent = `📞 Chiamata in arrivo da ${data.from} `;
+             callStatus.style.color = '#ffc107';
 
-            const accept = confirm(`📞 Chiamata in arrivo da ${data.from}. Accettare?`);
-            
-            if (!accept) {
-                ws.send(JSON.stringify({
-                    action: 'hangup',
-                    callId: data.callId
-                }));
-                return;
-            }
+             const acceptCall = confirm(`📞 Chiamata in arrivo da ${data.from}. Accettare?`);
+             if (acceptCall) {
+                 try {
+                     currentCallId = data.callId;
+                     isInCall = true;
 
-            try {
-                currentCallId = data.callId;
-                isInCall = true;
-                updateCallUI('connecting', 'Connessione...');
+                     // Ottieni accesso al microfono
+                     localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-                // Ottieni accesso al microfono
-                localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                
-                // Crea peer connection
-                peerConnection = new RTCPeerConnection(configuration);
+                     // Crea peer connection
+                     peerConnection = new RTCPeerConnection(configuration);
 
-                // Gestisci ICE candidates
-                peerConnection.onicecandidate = (event) => {
-                    if (event.candidate) {
-                        ws.send(JSON.stringify({
-                            action: 'candidate',
-                            candidate: event.candidate,
-                            callId: currentCallId
-                        }));
-                    }
-                };
+                     // Gestisci ICE candidates
+                     peerConnection.onicecandidate = (event) => {
+                         if (event.candidate) {
+                             ws.send(JSON.stringify({
+                                 action: 'candidate',
+                                 candidate: event.candidate,
+                                 callId: currentCallId
+                             }));
+                         }
+                     };
 
-                // Gestisci stream remoto
-                peerConnection.ontrack = (event) => {
-                    const remoteAudio = document.getElementById('remoteAudio');
-                    remoteAudio.srcObject = event.streams[0];
-                    updateCallUI('connected', 'Chiamata attiva');
-                };
+                     // Gestisci stream remoto
+                     peerConnection.ontrack = (event) => {
+                         const remoteAudio = document.getElementById('remoteAudio');
+                         remoteAudio.srcObject = event.streams[0];
+                         updateCallUI('connected', 'Chiamata attiva');
+                     };
 
-                // Imposta offerta remota
-                await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
+                     // Imposta offerta remota
+                     await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
 
-                // Aggiungi stream locale
-                localStream.getTracks().forEach(track => {
-                    peerConnection.addTrack(track, localStream);
-                });
+                     // Aggiungi stream locale
+                     localStream.getTracks().forEach(track => {
+                         peerConnection.addTrack(track, localStream);
+                     });
 
-                // Crea risposta
-                const answer = await peerConnection.createAnswer();
-                await peerConnection.setLocalDescription(answer);
+                     // Crea risposta
+                     const answer = await peerConnection.createAnswer();
+                     await peerConnection.setLocalDescription(answer);
 
-                // Invia risposta
-                ws.send(JSON.stringify({
-                    action: 'answer',
-                    answer: answer,
-                    callId: currentCallId
-                }));
+                     // Invia risposta
+                     ws.send(JSON.stringify({
+                         action: 'answer',
+                         answer: answer,
+                         callId: currentCallId
+                     }));
 
-                console.log('📞 Chiamata accettata');
-
-            } catch (error) {
-                console.error('❌ Errore accettazione chiamata:', error);
-                updateCallUI('error', 'Errore chiamata');
-                cleanupCall();
-            }
-        }
+                     console.log('📞 Chiamata accettata');
+                 } catch (error) {
+                     console.error('❌ Errore accettazione chiamata:', error);
+                     updateCallUI('error', 'Errore chiamata');
+                     cleanupCall();
+                 }
+             } else {
+                 // Rifiuta la chiamata
+                 ws.send(JSON.stringify({
+                     action: 'hangup',
+                     callId: data.callId
+                 }));
+                 cleanupCall();
+             }
+         }
 
         function hangupCall() {
             if (currentCallId) {
@@ -1783,7 +1799,7 @@
 
         // Gestione eventi WebRTC aggiuntivi nel sistema WebSocket esistente
         const originalOnMessage = ws ? ws.onmessage : null;
-        
+
         function setupWebRTCHandlers() {
             if (!ws) return;
 
@@ -1797,7 +1813,7 @@
                 // Gestisci eventi WebRTC
                 try {
                     const data = JSON.parse(event.data);
-                    
+
                     if (data.action === 'offer') {
                         handleOffer(data);
                     } else if (data.action === 'answer' && currentCallId === data.callId) {
