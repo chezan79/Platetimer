@@ -274,7 +274,7 @@
                             // Mostra solo i countdown destinati alla pizzeria
                             if (data.destination === 'pizzeria') {
                                 console.log(`✅ Countdown accettato per pizzeria - Tavolo: ${data.tableNumber}`);
-                                startCountdown(data.tableNumber, data.timeRemaining, data.destination);
+                                startCountdown(data.tableNumber, data.timeRemaining);
                             } else {
                                 console.log(`🚫 Countdown ignorato - Destinazione: ${data.destination || 'undefined'}, Tavolo: ${data.tableNumber}`);
                             }
@@ -723,8 +723,7 @@
                 statusDiv.style.color = '#dc3545';
             };
 
-            ```text
-reader.readAsDataURL(audioBlob);
+            reader.readAsDataURL(audioBlob);
         }
 
 
@@ -1048,7 +1047,7 @@ reader.readAsDataURL(audioBlob);
             }
         }
 
-
+        
 
         // Sistema pausa cucina
         let pausaAttiva = false;
