@@ -272,8 +272,15 @@
                                 console.log(`🚫 Countdown RIFIUTATO in insalata - Destinazione: "${data.destination || 'undefined'}", Tavolo: ${data.tableNumber}`);
                             }
                 } else if (data.action === 'deleteCountdown') {
-                    console.log(`🗑️ Eliminazione countdown in insalata: Tavolo ${data.tableNumber}`);
-                    deleteCountdown(data.tableNumber);
+                    console.log(`🗑️ Eliminazione countdown ricevuta in insalata: Tavolo ${data.tableNumber}`);
+                    // Verifica se il countdown da eliminare esiste nella pagina insalata
+                    const existingCountdown = countdowns.find(c => c.tableNumber == data.tableNumber);
+                    if (existingCountdown) {
+                        console.log(`✅ Countdown trovato in insalata, eliminazione: Tavolo ${data.tableNumber}`);
+                        deleteCountdown(data.tableNumber);
+                    } else {
+                        console.log(`🚫 Countdown non presente in insalata, ignorata eliminazione: Tavolo ${data.tableNumber}`);
+                    }
                 } else if (data.action === 'voiceMessage') {
                     console.log('📢 Messaggio vocale ricevuto in insalata:', data);
                     console.log('📍 Destinazione del messaggio:', data.destination);
@@ -344,7 +351,8 @@
                 tableNumber: tableNumber,
                 timeRemaining: remainingTime,
                 element: countdownElement,
-                interval: null
+                interval: null,
+                destination: 'insalata'
             };
             countdown.interval = setInterval(() => {
                 if (remainingTime <= 0) {
