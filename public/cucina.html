@@ -1020,26 +1020,26 @@
         }
 
         function eliminaCountdown(tableNumber) {
-            const countdownIndex = countdowns.findIndex(c => c.tableNumber == tableNumber);
-            if (countdownIndex !== -1) {
-                const countdown = countdowns[countdownIndex];
-                clearInterval(countdown.interval);
-                if (countdown.element && countdown.element.parentNode) {
-                    countdown.element.parentNode.removeChild(countdown.element);
-                }
-                countdowns.splice(countdownIndex, 1);
-                console.log(`Countdown tavolo ${tableNumber} eliminato manualmente`);
-
-                // 🔄 Sincronizza l'eliminazione via WebSocket
-                if (ws && ws.readyState === WebSocket.OPEN) {
-                    const deleteMessage = {
-                        action: 'deleteCountdown',
-                        tableNumber: tableNumber
-                    };
-                    ws.send(JSON.stringify(deleteMessage));
-                    console.log(`📤 Eliminazione countdown inviata via WebSocket: Tavolo ${tableNumber}`);
-                } else {
-                    console.error('❌ WebSocket non connesso per eliminazione');
+            // 🔄 Invia eliminazione via WebSocket PRIMA di rimuovere localmente
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                const deleteMessage = {
+                    action: 'deleteCountdown',
+                    tableNumber: tableNumber
+                };
+                ws.send(JSON.stringify(deleteMessage));
+                console.log(`📤 Eliminazione countdown inviata via WebSocket: Tavolo ${tableNumber}`);
+            } else {
+                console.error('❌ WebSocket non connesso per eliminazione');
+                // Se non connesso, rimuovi solo localmente
+                const countdownIndex = countdowns.findIndex(c => c.tableNumber == tableNumber);
+                if (countdownIndex !== -1) {
+                    const countdown = countdowns[countdownIndex];
+                    clearInterval(countdown.interval);
+                    if (countdown.element && countdown.element.parentNode) {
+                        countdown.element.parentNode.removeChild(countdown.element);
+                    }
+                    countdowns.splice(countdownIndex, 1);
+                    console.log(`Countdown tavolo ${tableNumber} eliminato localmente (WebSocket disconnesso)`);
                 }
             }
         }
