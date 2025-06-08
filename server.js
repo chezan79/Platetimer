@@ -191,6 +191,7 @@ wss.on('connection', (ws, req) => {
     ws.lastPong = Date.now();
     ws.isAlive = true;
     ws.clientIp = clientIp;
+    ws.callId = null; // ID della chiamata attiva
 
     // Rate limiting per prevenire spam
     ws.messageCount = 0;
@@ -681,6 +682,109 @@ wss.on('connection', (ws, req) => {
                 } else {
                     console.log('⚠️ Client non assegnato a nessuna room per annullamento pausa insalata');
                 }
+
+            } else if (data.action === 'offer') {
+                // Gestione offerta WebRTC
+                if (!data.offer || !data.targetPage) {
+                    console.log('⚠️ Dati offerta WebRTC non validi');
+                    return;
+                }
+
+                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    const targetClients = Array.from(roomClients).filter(client => 
+                        client.pageType === data.targetPage && client !== ws
+                    );
+
+                    if (targetClients.length > 0) {
+                        const callId = Date.now().toString();
+                        ws.callId = callId;
+                        
+                        const offerMessage = {
+                            action: 'offer',
+                            offer: data.offer,
+                            callId: callId,
+                            from: ws.pageType || 'unknown'
+                        };
+
+                        targetClients[0].send(JSON.stringify(offerMessage));
+                        targetClients[0].callId = callId;
+                        
+                        console.log(`📞 Offerta WebRTC inviata da ${ws.pageType} a ${data.targetPage}`);
+                    } else {
+                        ws.send(JSON.stringify({
+                            action: 'callError',
+                            message: 'Destinazione non disponibile'
+                        }));
+                    }
+                }
+
+            } else if (data.action === 'answer') {
+                // Gestione risposta WebRTC
+                if (!data.answer || !data.callId) {
+                    console.log('⚠️ Dati risposta WebRTC non validi');
+                    return;
+                }
+
+                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    const callerClient = Array.from(roomClients).find(client => 
+                        client.callId === data.callId && client !== ws
+                    );
+
+                    if (callerClient) {
+                        callerClient.send(JSON.stringify({
+                            action: 'answer',
+                            answer: data.answer,
+                            callId: data.callId
+                        }));
+                        
+                        console.log(`📞 Risposta WebRTC inviata per chiamata ${data.callId}`);
+                    }
+                }
+
+            } else if (data.action === 'candidate') {
+                // Gestione ICE candidates
+                if (!data.candidate || !data.callId) {
+                    console.log('⚠️ Dati ICE candidate non validi');
+                    return;
+                }
+
+                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    roomClients.forEach(client => {
+                        if (client.callId === data.callId && client !== ws && client.readyState === WebSocket.OPEN) {
+                            client.send(JSON.stringify({
+                                action: 'candidate',
+                                candidate: data.candidate,
+                                callId: data.callId
+                            }));
+                        }
+                    });
+                }
+
+            } else if (data.action === 'hangup') {
+                // Gestione chiusura chiamata
+                if (!data.callId) {
+                    console.log('⚠️ ID chiamata mancante per hangup');
+                    return;
+                }
+
+                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    roomClients.forEach(client => {
+                        if (client.callId === data.callId && client !== ws && client.readyState === WebSocket.OPEN) {
+                            client.send(JSON.stringify({
+                                action: 'hangup',
+                                callId: data.callId
+                            }));
+                            client.callId = null;
+                        }
+                    });
+                }
+
+                ws.callId = null;
+                console.log(`📞 Chiamata ${data.callId} terminata`);
             }
         } catch (error) {
             console.error('❌ Errore nel parsing del messaggio:', error);

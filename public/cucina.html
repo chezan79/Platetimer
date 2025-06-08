@@ -343,8 +343,26 @@
         <h4 id="company-name" style="margin: 0; color: #333; font-weight: 600;">Nome Azienda</h4>
     </div>
 
-    <!-- Container superiore con messaggi vocali e controlli pausa -->
+    <!-- Container superiore con messaggi vocali, chiamate e controlli pausa -->
     <div style="position: absolute; top: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 15px; z-index: 500;">
+
+        <!-- Sistema chiamate vocali WebRTC -->
+        <div style="text-align: center; padding: 8px; background: linear-gradient(135deg, #28a745 0%, #20c997 100%); border-radius: 8px; border-left: 4px solid #198754; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); min-width: 200px;">
+            <div style="margin-bottom: 4px; color: white; font-size: 12px; font-weight: 600;">📞 Chiamata Diretta</div>
+            <div style="display: flex; justify-content: center; align-items: center; gap: 6px; flex-wrap: nowrap;">
+                <button id="call-pizzeria-btn" onclick="startCall('pizzeria')" 
+                        style="padding: 6px 12px; background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%); color: #212529; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
+                    📞 Pizzeria
+                </button>
+                <button id="hangup-btn" onclick="hangupCall()" 
+                        style="padding: 6px 12px; background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap; display: none;">
+                    📞 Chiudi
+                </button>
+            </div>
+            <div id="call-status" style="margin-top: 4px; font-size: 10px; color: white; min-height: 12px; text-align: center;">
+                Pronto per chiamare
+            </div>
+        </div>
 
         <!-- Sistema messaggio vocale con scelta destinazione -->
         <div style="text-align: center; padding: 8px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; border-left: 4px solid #007bff; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); min-width: 280px;">
@@ -491,6 +509,7 @@
 
     <audio id="alertSound" src="alerte-346112.mp3" preload="auto"></audio>
     <audio id="zeroSound" src="costa-rica-eas-alarm-346194.mp3" preload="auto"></audio>
+    <audio id="remoteAudio" autoplay style="display: none;"></audio>
 
     <script>
         // Verifica disponibilità audio all'avvio
@@ -2515,6 +2534,265 @@
                 toggleControls();
             }
         });
+
+        // Sistema chiamate WebRTC per cucina
+        let localStream = null;
+        let peerConnection = null;
+        let currentCallId = null;
+        let isInCall = false;
+
+        const configuration = {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' }
+            ]
+        };
+
+        async function startCall(targetPage) {
+            if (isInCall) {
+                alert('📞 Una chiamata è già in corso!');
+                return;
+            }
+
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                alert('❌ Connessione persa. Impossibile avviare chiamata.');
+                return;
+            }
+
+            try {
+                updateCallUI('connecting', 'Connessione...');
+
+                // Ottieni accesso al microfono
+                localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                
+                // Crea peer connection
+                peerConnection = new RTCPeerConnection(configuration);
+
+                // Aggiungi stream locale
+                localStream.getTracks().forEach(track => {
+                    peerConnection.addTrack(track, localStream);
+                });
+
+                // Gestisci ICE candidates
+                peerConnection.onicecandidate = (event) => {
+                    if (event.candidate && currentCallId) {
+                        ws.send(JSON.stringify({
+                            action: 'candidate',
+                            candidate: event.candidate,
+                            callId: currentCallId
+                        }));
+                    }
+                };
+
+                // Gestisci stream remoto
+                peerConnection.ontrack = (event) => {
+                    const remoteAudio = document.getElementById('remoteAudio');
+                    remoteAudio.srcObject = event.streams[0];
+                    updateCallUI('connected', 'Chiamata attiva');
+                };
+
+                // Crea offerta
+                const offer = await peerConnection.createOffer();
+                await peerConnection.setLocalDescription(offer);
+
+                // Invia offerta
+                ws.send(JSON.stringify({
+                    action: 'offer',
+                    offer: offer,
+                    targetPage: targetPage
+                }));
+
+                console.log(`📞 Chiamata avviata verso ${targetPage}`);
+
+            } catch (error) {
+                console.error('❌ Errore avvio chiamata:', error);
+                updateCallUI('error', 'Errore chiamata');
+                cleanupCall();
+                alert('❌ Impossibile avviare la chiamata. Verifica i permessi del microfono.');
+            }
+        }
+
+        async function handleOffer(data) {
+            if (isInCall) {
+                // Rifiuta la chiamata se già in corso
+                ws.send(JSON.stringify({
+                    action: 'hangup',
+                    callId: data.callId
+                }));
+                return;
+            }
+
+            const accept = confirm(`📞 Chiamata in arrivo da ${data.from}. Accettare?`);
+            
+            if (!accept) {
+                ws.send(JSON.stringify({
+                    action: 'hangup',
+                    callId: data.callId
+                }));
+                return;
+            }
+
+            try {
+                currentCallId = data.callId;
+                isInCall = true;
+                updateCallUI('connecting', 'Connessione...');
+
+                // Ottieni accesso al microfono
+                localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                
+                // Crea peer connection
+                peerConnection = new RTCPeerConnection(configuration);
+
+                // Gestisci ICE candidates
+                peerConnection.onicecandidate = (event) => {
+                    if (event.candidate) {
+                        ws.send(JSON.stringify({
+                            action: 'candidate',
+                            candidate: event.candidate,
+                            callId: currentCallId
+                        }));
+                    }
+                };
+
+                // Gestisci stream remoto
+                peerConnection.ontrack = (event) => {
+                    const remoteAudio = document.getElementById('remoteAudio');
+                    remoteAudio.srcObject = event.streams[0];
+                    updateCallUI('connected', 'Chiamata attiva');
+                };
+
+                // Imposta offerta remota
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
+
+                // Aggiungi stream locale
+                localStream.getTracks().forEach(track => {
+                    peerConnection.addTrack(track, localStream);
+                });
+
+                // Crea risposta
+                const answer = await peerConnection.createAnswer();
+                await peerConnection.setLocalDescription(answer);
+
+                // Invia risposta
+                ws.send(JSON.stringify({
+                    action: 'answer',
+                    answer: answer,
+                    callId: currentCallId
+                }));
+
+                console.log('📞 Chiamata accettata');
+
+            } catch (error) {
+                console.error('❌ Errore accettazione chiamata:', error);
+                updateCallUI('error', 'Errore chiamata');
+                cleanupCall();
+            }
+        }
+
+        function hangupCall() {
+            if (currentCallId) {
+                ws.send(JSON.stringify({
+                    action: 'hangup',
+                    callId: currentCallId
+                }));
+            }
+            cleanupCall();
+        }
+
+        function cleanupCall() {
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+                localStream = null;
+            }
+
+            if (peerConnection) {
+                peerConnection.close();
+                peerConnection = null;
+            }
+
+            const remoteAudio = document.getElementById('remoteAudio');
+            remoteAudio.srcObject = null;
+
+            currentCallId = null;
+            isInCall = false;
+            updateCallUI('idle', 'Pronto per chiamare');
+        }
+
+        function updateCallUI(state, statusText) {
+            const callBtn = document.getElementById('call-pizzeria-btn');
+            const hangupBtn = document.getElementById('hangup-btn');
+            const statusDiv = document.getElementById('call-status');
+
+            statusDiv.textContent = statusText;
+
+            switch (state) {
+                case 'idle':
+                    callBtn.style.display = 'inline-block';
+                    hangupBtn.style.display = 'none';
+                    callBtn.disabled = false;
+                    statusDiv.style.color = 'white';
+                    break;
+                case 'connecting':
+                    callBtn.style.display = 'none';
+                    hangupBtn.style.display = 'inline-block';
+                    statusDiv.style.color = '#ffc107';
+                    isInCall = true;
+                    break;
+                case 'connected':
+                    callBtn.style.display = 'none';
+                    hangupBtn.style.display = 'inline-block';
+                    statusDiv.style.color = '#28a745';
+                    break;
+                case 'error':
+                    callBtn.style.display = 'inline-block';
+                    hangupBtn.style.display = 'none';
+                    callBtn.disabled = false;
+                    statusDiv.style.color = '#dc3545';
+                    isInCall = false;
+                    break;
+            }
+        }
+
+        // Integrazione WebRTC nel sistema WebSocket esistente
+        function setupWebRTCHandlers() {
+            if (!ws) return;
+
+            // Estendi il gestore onmessage esistente
+            const originalHandler = ws.onmessage;
+            ws.onmessage = (event) => {
+                // Mantieni la gestione esistente
+                if (originalHandler) {
+                    originalHandler(event);
+                }
+
+                // Aggiungi gestione WebRTC
+                try {
+                    const data = JSON.parse(event.data);
+                    
+                    if (data.action === 'offer') {
+                        handleOffer(data);
+                    } else if (data.action === 'answer' && currentCallId === data.callId) {
+                        peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+                    } else if (data.action === 'candidate' && currentCallId === data.callId) {
+                        peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+                    } else if (data.action === 'hangup' && currentCallId === data.callId) {
+                        cleanupCall();
+                    } else if (data.action === 'callError') {
+                        updateCallUI('error', data.message);
+                        cleanupCall();
+                    }
+                } catch (error) {
+                    // Ignora errori per messaggi non WebRTC
+                }
+            };
+        }
+
+        // Configura WebRTC quando la connessione è pronta
+        setTimeout(() => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                setupWebRTCHandlers();
+            }
+        }, 1000);
+
     </script>
     <script src="company-header.js"></script>
 </body>
