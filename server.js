@@ -829,12 +829,46 @@ setInterval(() => {
     }
 }, 300000); // Ogni 5 minuti
 
+// Importa il generatore di token Agora
+const { AgoraTokenGenerator } = require('./token-server');
+
 // Endpoint per configurazione Agora
 app.get('/api/config', (req, res) => {
     res.json({
         agoraAppId: process.env.AGORA_APP_ID || 'your-agora-app-id',
         agoraToken: process.env.AGORA_TOKEN || null
     });
+});
+
+// Endpoint per generazione token Agora
+app.post('/api/generate-token', (req, res) => {
+    try {
+        const { channelName, uid, role = 1, expireTime = 3600 } = req.body;
+        
+        if (!channelName || !uid) {
+            return res.status(400).json({ error: 'channelName and uid are required' });
+        }
+
+        const appId = process.env.AGORA_APP_ID;
+        const appCertificate = process.env.AGORA_APP_CERTIFICATE;
+        
+        if (!appId) {
+            return res.status(500).json({ error: 'Agora App ID not configured' });
+        }
+
+        const tokenGenerator = new AgoraTokenGenerator(appId, appCertificate);
+        const token = tokenGenerator.generateToken(channelName, uid, role, expireTime);
+        
+        res.json({
+            token: token,
+            channelName: channelName,
+            uid: uid,
+            expireTime: expireTime
+        });
+    } catch (error) {
+        console.error('❌ Errore generazione token:', error);
+        res.status(500).json({ error: 'Failed to generate token' });
+    }
 });
 
 // Avvia il server
