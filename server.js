@@ -284,40 +284,40 @@ wss.on('connection', (ws, req) => {
     }, 500);
 
     ws.on('message', (message) => {
+        try {
+            // Validazione messaggio base
+            if (!message || message.length === 0) {
+                console.log('⚠️ Messaggio vuoto ignorato');
+                return;
+            }
+
+            // Rate limiting più rigoroso: max 5 messaggi per 2 secondi
+            const now = Date.now();
+            if (now - ws.lastMessageTime < 400) { // 400ms tra messaggi
+                ws.messageCount++;
+                if (ws.messageCount > 5) {
+                    console.log('⚠️ Rate limit superato, messaggio scartato');
+                    return;
+                }
+            } else {
+                ws.messageCount = 0;
+                ws.lastMessageTime = now;
+            }
+
+            let data;
             try {
-                // Validazione messaggio base
-                if (!message || message.length === 0) {
-                    console.log('⚠️ Messaggio vuoto ignorato');
-                    return;
-                }
+                data = JSON.parse(message);
+            } catch (parseError) {
+                console.error('❌ Errore parsing JSON:', parseError.message);
+                return;
+            }
 
-                // Rate limiting più rigoroso: max 5 messaggi per 2 secondi
-                const now = Date.now();
-                if (now - ws.lastMessageTime < 400) { // 400ms tra messaggi
-                    ws.messageCount++;
-                    if (ws.messageCount > 5) {
-                        console.log('⚠️ Rate limit superato, messaggio scartato');
-                        return;
-                    }
-                } else {
-                    ws.messageCount = 0;
-                    ws.lastMessageTime = now;
-                }
+            if (!data || typeof data !== 'object') {
+                console.log('⚠️ Dati messaggio non validi');
+                return;
+            }
 
-                let data;
-                try {
-                    data = JSON.parse(message);
-                } catch (parseError) {
-                    console.error('❌ Errore parsing JSON:', parseError.message);
-                    return;
-                }
-
-                if (!data || typeof data !== 'object') {
-                    console.log('⚠️ Dati messaggio non validi');
-                    return;
-                }
-
-                console.log('📨 Messaggio ricevuto:', data);
+            console.log('📨 Messaggio ricevuto:', data);
 
             // Validazione dati rigorosa
             if (!data.action) {
@@ -805,7 +805,6 @@ wss.on('connection', (ws, req) => {
                     console.log(`📞 Risposta chiamata: ${data.action} per ID ${data.callId}`);
                 }
             }
-        }
         } catch (error) {
             console.error('❌ Errore nel parsing del messaggio:', error);
         }
