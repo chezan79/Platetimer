@@ -1,398 +1,299 @@
+// Fallback voice communication using WebRTC peer-to-peer
+let localConnection = null;
+let remoteConnection = null;
+let localStream = null;
+let dataChannel = null;
 
-// Sistema fallback per chiamate vocali senza Agora
-window.fallbackVoiceCall = {
-    isInitialized: false,
-    isCallActive: false,
-    isMuted: false,
-    currentPageType: null,
-    ws: null,
-    currentCallId: null,
-    
-    initialize: function(pageType) {
-        console.log('🔄 Inizializzazione sistema fallback per:', pageType);
+// WebRTC configuration
+const rtcConfig = {
+    iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' }
+    ]
+};
+
+// Fallback voice call system
+class FallbackVoiceCall {
+    constructor() {
+        this.isActive = false;
+        this.isMuted = false;
+        this.currentPageType = null;
+    }
+
+    async initialize(pageType) {
         this.currentPageType = pageType;
-        this.connectWebSocket();
-        this.isInitialized = true;
-        
-        // Aggiorna status iniziale
-        this.updateConnectionStatus('connected');
-        this.updateCallStatus('Ready to call');
-        
-        console.log('✅ Sistema fallback inizializzato');
-    },
-    
-    connectWebSocket: function() {
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        this.ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
-        
-        this.ws.onopen = () => {
-            console.log('🔗 WebSocket connesso per chiamate');
-            this.updateConnectionStatus('connected');
-        };
-        
-        this.ws.onmessage = (event) => {
-            try {
-                const data = JSON.parse(event.data);
-                this.handleWebSocketMessage(data);
-            } catch (error) {
-                console.error('❌ Errore parsing messaggio WebSocket:', error);
-            }
-        };
-        
-        this.ws.onclose = () => {
-            console.log('🔌 WebSocket disconnesso');
-            this.updateConnectionStatus('disconnected');
-        };
-        
-        this.ws.onerror = (error) => {
-            console.error('❌ Errore WebSocket:', error);
-            this.updateConnectionStatus('error');
-        };
-    },
-    
-    handleWebSocketMessage: function(data) {
-        switch (data.action) {
-            case 'incomingCall':
-                this.showIncomingCall(data);
-                break;
-            case 'callResponse':
-                this.handleCallResponse(data);
-                break;
-            case 'callEnded':
-                this.endCall();
-                break;
-        }
-    },
-    
-    showIncomingCall: function(data) {
-        console.log('📞 Chiamata in arrivo:', data);
-        
-        const incomingCallDiv = document.getElementById('incomingCall');
-        if (incomingCallDiv) {
-            incomingCallDiv.style.display = 'block';
-            this.currentCallId = data.callId;
-            
-            // Aggiorna testo della chiamata in arrivo
-            const callText = incomingCallDiv.querySelector('h3');
-            if (callText) {
-                const fromName = data.from === 'cucina' ? 'Cucina' : 'Pizzeria';
-                callText.innerHTML = `<i class="fas fa-phone-volume"></i> Incoming Call from ${fromName}`;
-            }
-            
-            this.updateCallStatus('Incoming call...');
-            this.addCallLog(`Incoming call from ${data.from}`, 'incoming');
-        }
-    },
-    
-    sendWebSocketMessage: function(message) {
-        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-            this.ws.send(JSON.stringify(message));
-        } else {
-            console.error('❌ WebSocket non connesso');
-        }
-    },
-    
-    initiateCall: function() {
-        if (!this.isInitialized) {
-            console.error('❌ Sistema non inizializzato');
+        console.log('Initializing fallback voice system for:', pageType);
+
+        // Listen for signaling messages
+        this.listenForSignaling();
+
+        updateConnectionStatus('disconnected', 'Fallback system ready');
+        return true;
+    }
+
+    async startCall() {
+        if (this.isActive) {
+            console.log('Call already active');
             return;
         }
-        
-        console.log('📞 Avvio chiamata fallback...');
-        
-        const targetPage = this.currentPageType === 'cucina' ? 'pizzeria' : 'cucina';
-        
-        this.sendWebSocketMessage({
-            action: 'initiateCall',
-            from: this.currentPageType,
-            to: targetPage,
-            timestamp: Date.now()
-        });
-        
-        this.updateCallStatus('Calling...');
-        this.updateUI(true);
-        
-        // Simula chiamata attiva dopo 2 secondi se non c'è risposta
-        setTimeout(() => {
-            if (!this.isCallActive) {
-                this.isCallActive = true;
-                this.updateCallStatus('Call active (simulated)');
-                this.addCallLog(`Called ${targetPage}`, 'outgoing');
-            }
-        }, 2000);
-    },
-    
-    acceptCall: function() {
-        if (!this.currentCallId) return;
-        
-        console.log('✅ Chiamata accettata');
-        
-        this.sendWebSocketMessage({
-            action: 'answerCall',
-            callId: this.currentCallId,
-            response: 'accept',
-            from: this.currentPageType,
-            timestamp: Date.now()
-        });
-        
-        this.isCallActive = true;
-        this.updateCallStatus('Call active');
-        this.updateUI(true);
-        this.hideIncomingCall();
-        this.addCallLog('Call accepted', 'accepted');
-    },
-    
-    declineCall: function() {
-        if (!this.currentCallId) return;
-        
-        console.log('❌ Chiamata rifiutata');
-        
-        this.sendWebSocketMessage({
-            action: 'answerCall',
-            callId: this.currentCallId,
-            response: 'decline',
-            from: this.currentPageType,
-            timestamp: Date.now()
-        });
-        
-        this.hideIncomingCall();
-        this.updateCallStatus('Call declined');
-        this.addCallLog('Call declined', 'declined');
-        
-        setTimeout(() => {
-            this.updateCallStatus('Ready to call');
-        }, 3000);
-    },
-    
-    endCall: function() {
-        console.log('📞 Terminazione chiamata fallback');
-        
-        if (this.currentCallId) {
-            this.sendWebSocketMessage({
-                action: 'endCall',
-                callId: this.currentCallId,
+
+        console.log('Starting fallback call...');
+        updateCallStatus('Initiating call...');
+
+        try {
+            // Get user media
+            localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            console.log('Got local audio stream');
+
+            // Create peer connection
+            localConnection = new RTCPeerConnection(rtcConfig);
+
+            // Add local stream
+            localStream.getTracks().forEach(track => {
+                localConnection.addTrack(track, localStream);
+            });
+
+            // Create data channel for signaling
+            dataChannel = localConnection.createDataChannel('signaling');
+
+            // Set up event handlers
+            this.setupConnectionHandlers(localConnection, true);
+
+            // Create offer
+            const offer = await localConnection.createOffer();
+            await localConnection.setLocalDescription(offer);
+
+            // Send offer through localStorage signaling
+            this.sendSignal({
+                type: 'offer',
+                offer: offer,
                 from: this.currentPageType,
                 timestamp: Date.now()
             });
+
+            this.isActive = true;
+            updateCallButtons(true);
+            updateCallStatus('Calling...');
+            logCall('outgoing', 'Fallback call initiated');
+
+        } catch (error) {
+            console.error('Failed to start fallback call:', error);
+            updateCallStatus('Call failed');
+            showError('Failed to access microphone: ' + error.message);
         }
-        
-        this.isCallActive = false;
+    }
+
+    async acceptCall(offer) {
+        console.log('Accepting fallback call...');
+
+        try {
+            // Get user media
+            localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+            // Create peer connection
+            remoteConnection = new RTCPeerConnection(rtcConfig);
+
+            // Add local stream
+            localStream.getTracks().forEach(track => {
+                remoteConnection.addTrack(track, localStream);
+            });
+
+            // Set up event handlers
+            this.setupConnectionHandlers(remoteConnection, false);
+
+            // Set remote description
+            await remoteConnection.setRemoteDescription(offer);
+
+            // Create answer
+            const answer = await remoteConnection.createAnswer();
+            await remoteConnection.setLocalDescription(answer);
+
+            // Send answer
+            this.sendSignal({
+                type: 'answer',
+                answer: answer,
+                from: this.currentPageType,
+                timestamp: Date.now()
+            });
+
+            this.isActive = true;
+            updateCallButtons(true);
+            updateCallStatus('Call active');
+            logCall('incoming', 'Fallback call accepted');
+
+        } catch (error) {
+            console.error('Failed to accept call:', error);
+            showError('Failed to accept call: ' + error.message);
+        }
+    }
+
+    setupConnectionHandlers(connection, isInitiator) {
+        connection.onicecandidate = (event) => {
+            if (event.candidate) {
+                this.sendSignal({
+                    type: 'ice-candidate',
+                    candidate: event.candidate,
+                    from: this.currentPageType,
+                    timestamp: Date.now()
+                });
+            }
+        };
+
+        connection.ontrack = (event) => {
+            console.log('Received remote audio track');
+            const audio = new Audio();
+            audio.srcObject = event.streams[0];
+            audio.play();
+            updateCallStatus('Call active - Audio connected');
+        };
+
+        connection.onconnectionstatechange = () => {
+            console.log('Connection state:', connection.connectionState);
+            if (connection.connectionState === 'connected') {
+                updateConnectionStatus('connected', 'Voice connected');
+            } else if (connection.connectionState === 'disconnected') {
+                this.endCall();
+            }
+        };
+    }
+
+    sendSignal(data) {
+        const targetPage = this.currentPageType === 'cucina' ? 'pizzeria' : 'cucina';
+        const signalKey = `webrtc-signal-${targetPage}`;
+        localStorage.setItem(signalKey, JSON.stringify(data));
+
+        // Also trigger storage event for same-origin pages
+        window.dispatchEvent(new StorageEvent('storage', {
+            key: signalKey,
+            newValue: JSON.stringify(data)
+        }));
+    }
+
+    listenForSignaling() {
+        const signalKey = `webrtc-signal-${this.currentPageType}`;
+
+        // Listen for localStorage changes
+        window.addEventListener('storage', async (event) => {
+            if (event.key === signalKey && event.newValue) {
+                const signal = JSON.parse(event.newValue);
+                await this.handleSignal(signal);
+                // Clear the signal
+                localStorage.removeItem(signalKey);
+            }
+        });
+
+        // Check periodically for signals
+        setInterval(() => {
+            const signalData = localStorage.getItem(signalKey);
+            if (signalData) {
+                const signal = JSON.parse(signalData);
+                if (Date.now() - signal.timestamp < 30000) { // 30 second timeout
+                    this.handleSignal(signal);
+                }
+                localStorage.removeItem(signalKey);
+            }
+        }, 1000);
+    }
+
+    async handleSignal(signal) {
+        console.log('Received signal:', signal.type);
+
+        try {
+            if (signal.type === 'offer' && !this.isActive) {
+                // Show incoming call
+                this.showIncomingCall(signal);
+            } else if (signal.type === 'answer') {
+                await localConnection.setRemoteDescription(signal.answer);
+            } else if (signal.type === 'ice-candidate') {
+                const connection = localConnection || remoteConnection;
+                if (connection) {
+                    await connection.addIceCandidate(signal.candidate);
+                }
+            }
+        } catch (error) {
+            console.error('Error handling signal:', error);
+        }
+    }
+
+    showIncomingCall(signal) {
+        const incomingCallElement = document.getElementById('incomingCall');
+        incomingCallElement.style.display = 'flex';
+
+        // Store the offer for accepting
+        window.pendingOffer = signal.offer;
+
+        playRingtone();
+    }
+
+    async endCall() {
+        console.log('Ending fallback call...');
+
+        // Close connections
+        if (localConnection) {
+            localConnection.close();
+            localConnection = null;
+        }
+        if (remoteConnection) {
+            remoteConnection.close();
+            remoteConnection = null;
+        }
+
+        // Stop local stream
+        if (localStream) {
+            localStream.getTracks().forEach(track => track.stop());
+            localStream = null;
+        }
+
+        this.isActive = false;
         this.isMuted = false;
-        this.currentCallId = null;
-        
-        this.updateCallStatus('Call ended');
-        this.updateUI(false);
-        this.hideIncomingCall();
-        this.addCallLog('Call ended', 'ended');
-        
+        updateCallButtons(false);
+        updateCallStatus('Call ended');
+        updateConnectionStatus('disconnected', 'Fallback system ready');
+
         setTimeout(() => {
-            this.updateCallStatus('Ready to call');
+            updateCallStatus('Ready to call');
         }, 2000);
-    },
-    
-    toggleMute: function() {
-        this.isMuted = !this.isMuted;
-        
-        const muteButton = document.getElementById('muteButton');
-        if (muteButton) {
-            if (this.isMuted) {
-                muteButton.innerHTML = '<i class="fas fa-microphone-slash"></i> Unmute';
-                this.updateCallStatus('Muted');
-            } else {
-                muteButton.innerHTML = '<i class="fas fa-microphone"></i> Mute';
-                this.updateCallStatus('Call active');
-            }
-        }
-        
-        console.log(this.isMuted ? '🔇 Microfono mutato' : '🎤 Microfono riattivato');
-    },
-    
-    handleCallResponse: function(data) {
-        if (data.response === 'accept') {
-            this.isCallActive = true;
-            this.updateCallStatus('Call active');
-            this.updateUI(true);
-            this.addCallLog('Call accepted by remote', 'accepted');
-        } else if (data.response === 'decline') {
-            this.updateCallStatus('Call declined by remote');
-            this.updateUI(false);
-            this.addCallLog('Call declined by remote', 'declined');
-            
+    }
+
+    async toggleMute() {
+        if (!localStream || !this.isActive) return;
+
+        const audioTrack = localStream.getAudioTracks()[0];
+        if (audioTrack) {
+            audioTrack.enabled = !audioTrack.enabled;
+            this.isMuted = !audioTrack.enabled;
+            updateMuteButton(this.isMuted);
+            updateCallStatus(this.isMuted ? 'Microphone muted' : 'Microphone unmuted');
+
             setTimeout(() => {
-                this.updateCallStatus('Ready to call');
-            }, 3000);
+                if (this.isActive) {
+                    updateCallStatus('Call active');
+                }
+            }, 2000);
         }
-    },
-    
-    updateUI: function(callActive) {
-        const callButton = document.getElementById('callButton');
-        const hangupButton = document.getElementById('hangupButton');
-        const muteButton = document.getElementById('muteButton');
-        
-        if (callButton) callButton.disabled = callActive;
-        if (hangupButton) hangupButton.disabled = !callActive;
-        if (muteButton) {
-            muteButton.disabled = !callActive;
-            if (!callActive) {
-                muteButton.innerHTML = '<i class="fas fa-microphone"></i> Mute';
-            }
-        }
-    },
-    
-    hideIncomingCall: function() {
-        const incomingCallDiv = document.getElementById('incomingCall');
-        if (incomingCallDiv) {
-            incomingCallDiv.style.display = 'none';
-        }
-    },
-    
-    updateConnectionStatus: function(status) {
-        const statusElement = document.getElementById('statusText');
-        const indicator = document.querySelector('#connectionStatus i');
-        
-        if (!statusElement || !indicator) return;
-        
-        switch (status) {
-            case 'connected':
-                statusElement.textContent = 'Connected';
-                indicator.style.color = '#28a745';
-                break;
-            case 'connecting':
-                statusElement.textContent = 'Connecting...';
-                indicator.style.color = '#ffc107';
-                break;
-            case 'disconnected':
-                statusElement.textContent = 'Disconnected';
-                indicator.style.color = '#dc3545';
-                break;
-            case 'error':
-                statusElement.textContent = 'Error';
-                indicator.style.color = '#dc3545';
-                break;
-        }
-    },
-    
-    updateCallStatus: function(status) {
-        const callStatusElement = document.getElementById('callStatus');
-        if (callStatusElement) {
-            callStatusElement.textContent = status;
-        }
-    },
-    
-    addCallLog: function(message, type) {
-        const callLogsDiv = document.getElementById('callLogs');
-        if (!callLogsDiv) return;
-        
-        // Rimuovi il messaggio "No recent calls" se presente
-        const noLogsP = callLogsDiv.querySelector('.no-logs');
-        if (noLogsP) {
-            noLogsP.remove();
-        }
-        
-        const logEntry = document.createElement('div');
-        logEntry.className = `call-log-entry ${type}`;
-        logEntry.style.cssText = `
-            padding: 8px 12px;
-            margin: 4px 0;
-            border-radius: 6px;
-            font-size: 14px;
-            border-left: 4px solid;
-        `;
-        
-        // Colori in base al tipo
-        switch (type) {
-            case 'incoming':
-                logEntry.style.backgroundColor = '#e3f2fd';
-                logEntry.style.borderLeftColor = '#2196f3';
-                break;
-            case 'outgoing':
-                logEntry.style.backgroundColor = '#e8f5e8';
-                logEntry.style.borderLeftColor = '#28a745';
-                break;
-            case 'accepted':
-                logEntry.style.backgroundColor = '#e8f5e8';
-                logEntry.style.borderLeftColor = '#28a745';
-                break;
-            case 'declined':
-                logEntry.style.backgroundColor = '#ffeaa7';
-                logEntry.style.borderLeftColor = '#fdcb6e';
-                break;
-            case 'ended':
-                logEntry.style.backgroundColor = '#f8f9fa';
-                logEntry.style.borderLeftColor = '#6c757d';
-                break;
-        }
-        
-        const timestamp = new Date().toLocaleTimeString('it-IT');
-        logEntry.innerHTML = `
-            <div style="font-weight: 600;">${message}</div>
-            <div style="font-size: 12px; color: #666; margin-top: 2px;">${timestamp}</div>
-        `;
-        
-        callLogsDiv.appendChild(logEntry);
-        
-        // Mantieni solo gli ultimi 10 log
-        const logs = callLogsDiv.querySelectorAll('.call-log-entry');
-        if (logs.length > 10) {
-            logs[0].remove();
-        }
-        
-        // Scroll automatico al bottom
-        callLogsDiv.scrollTop = callLogsDiv.scrollHeight;
+    }
+}
+
+// Create global fallback instance
+window.fallbackVoiceCall = new FallbackVoiceCall();
+
+// Override global functions to use fallback
+window.fallbackInitiateCall = async function() {
+    await window.fallbackVoiceCall.startCall();
+};
+
+window.fallbackAcceptCall = async function() {
+    hideIncomingCall();
+    if (window.pendingOffer) {
+        await window.fallbackVoiceCall.acceptCall(window.pendingOffer);
+        window.pendingOffer = null;
     }
 };
 
-// Funzioni globali per compatibilità con HTML
-function fallbackInitiateCall() {
-    // Prova prima Agora, poi fallback
-    if (window.agoraClient && window.AGORA_APP_ID && window.AGORA_APP_ID !== 'your-agora-app-id') {
-        console.log('🎤 Usando Agora per la chiamata');
-        window.initiateAgoraCall();
-    } else {
-        console.log('🔄 Usando sistema fallback per la chiamata');
-        window.fallbackVoiceCall.initiateCall();
-    }
-}
+window.fallbackEndCall = async function() {
+    await window.fallbackVoiceCall.endCall();
+};
 
-function fallbackEndCall() {
-    if (window.agoraClient && window.isCallActive) {
-        console.log('🎤 Terminando chiamata Agora');
-        window.endAgoraCall();
-    } else {
-        console.log('🔄 Terminando chiamata fallback');
-        window.fallbackVoiceCall.endCall();
-    }
-}
-
-function fallbackToggleMute() {
-    if (window.agoraClient && window.isCallActive) {
-        console.log('🎤 Toggle mute Agora');
-        window.toggleAgoraMute();
-    } else {
-        console.log('🔄 Toggle mute fallback');
-        window.fallbackVoiceCall.toggleMute();
-    }
-}
-
-function fallbackAcceptCall() {
-    window.fallbackVoiceCall.acceptCall();
-}
-
-function declineCall() {
-    window.fallbackVoiceCall.declineCall();
-}
-
-// Funzione per regolare volume (per entrambi i sistemi)
-function adjustVolume(value) {
-    const volumeValue = document.getElementById('volumeValue');
-    if (volumeValue) {
-        volumeValue.textContent = `${value}%`;
-    }
-    
-    // Se Agora è attivo, usa la sua funzione
-    if (window.adjustVolume && window.agoraClient) {
-        window.adjustVolume(value);
-    }
-    
-    console.log('🔊 Volume impostato a:', value + '%');
-}
+window.fallbackToggleMute = async function() {
+    await window.fallbackVoiceCall.toggleMute();
+};
