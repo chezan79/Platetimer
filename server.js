@@ -436,7 +436,7 @@ wss.on('connection', (ws, req) => {
                     return;
                 }
 
-                // Memorizza il countdown attivo (un solo countdown per tavolo)
+                // Sistema tavolo con 3 destinazioni max e blocco rilancio
                 if (ws.companyRoom) {
                     if (!activeCountdowns.has(ws.companyRoom)) {
                         activeCountdowns.set(ws.companyRoom, new Map());
@@ -444,19 +444,52 @@ wss.on('connection', (ws, req) => {
 
                     const companyCountdowns = activeCountdowns.get(ws.companyRoom);
                     
-                    // Rimuovi il countdown precedente per questo tavolo se esiste
-                    if (companyCountdowns.has(data.tableNumber)) {
-                        console.log(`🔄 Sostituendo countdown esistente per tavolo ${data.tableNumber}`);
+                    // Controlla se il tavolo ha già countdown attivi
+                    const existingCountdowns = [];
+                    for (const [key, countdown] of companyCountdowns.entries()) {
+                        if (countdown.tableNumber.toString() === data.tableNumber.toString()) {
+                            const currentTime = Date.now();
+                            const elapsed = Math.floor((currentTime - countdown.startTime) / 1000);
+                            const remainingTime = Math.max(0, countdown.initialDuration - elapsed);
+                            
+                            if (remainingTime > 0) {
+                                existingCountdowns.push(countdown);
+                            } else {
+                                // Rimuovi countdown scaduti
+                                companyCountdowns.delete(key);
+                            }
+                        }
                     }
+
+                    // BLOCCO RILANCIO: Se il tavolo ha già countdown attivi, rifiuta
+                    if (existingCountdowns.length > 0) {
+                        const destinations = existingCountdowns.map(c => c.destination).join(', ');
+                        console.log(`🚫 RILANCIO BLOCCATO: Tavolo ${data.tableNumber} ha già countdown attivi per: ${destinations}`);
+                        
+                        // Invia messaggio di errore al client
+                        if (ws.readyState === WebSocket.OPEN) {
+                            ws.send(JSON.stringify({
+                                action: 'countdownBlocked',
+                                tableNumber: data.tableNumber,
+                                message: `❌ Tavolo ${data.tableNumber} già attivo per: ${destinations}`,
+                                activeDestinations: existingCountdowns.map(c => c.destination)
+                            }));
+                        }
+                        return;
+                    }
+
+                    // NUOVA LOGICA: Memorizza con chiave tavolo+destinazione
+                    const countdownKey = `${data.tableNumber}_${destination}`;
                     
-                    companyCountdowns.set(data.tableNumber, {
+                    companyCountdowns.set(countdownKey, {
                         startTime: Date.now(),
                         initialDuration: data.timeRemaining,
                         tableNumber: data.tableNumber,
-                        destination: destination
+                        destination: destination,
+                        countdownKey: countdownKey
                     });
 
-                    console.log(`💾 Countdown memorizzato per azienda "${ws.companyRoom}": Tavolo ${data.tableNumber}, Destinazione: ${destination}`);
+                    console.log(`💾 Countdown memorizzato per azienda "${ws.companyRoom}": Tavolo ${data.tableNumber}, Destinazione: ${destination} (chiave: ${countdownKey})`);
                 }
 
                 // Invia solo ai client della stessa room/azienda
@@ -487,17 +520,18 @@ wss.on('connection', (ws, req) => {
                     return;
                 }
 
-                // Rimuovi TUTTI i countdown per questo tavolo dalla memoria del server PRIMA di inviare
+                // Rimuovi TUTTI i countdown per questo tavolo (tutte le destinazioni) dalla memoria del server
                 if (ws.companyRoom && activeCountdowns.has(ws.companyRoom)) {
                     const companyCountdowns = activeCountdowns.get(ws.companyRoom);
                     let removedCount = 0;
+                    const removedDestinations = [];
 
-                    // Crea un array delle chiavi da rimuovere per evitare modifiche durante l'iterazione
+                    // Trova e rimuovi tutti i countdown per questo tavolo
                     const keysToRemove = [];
                     for (const [key, countdown] of companyCountdowns.entries()) {
-                        if (key.toString() === data.tableNumber.toString() || 
-                            countdown.tableNumber.toString() === data.tableNumber.toString()) {
+                        if (countdown.tableNumber.toString() === data.tableNumber.toString()) {
                             keysToRemove.push(key);
+                            removedDestinations.push(countdown.destination);
                         }
                     }
 
@@ -508,10 +542,11 @@ wss.on('connection', (ws, req) => {
                     });
 
                     console.log(`🗑️ ${removedCount} countdown rimossi dalla memoria server: Azienda "${ws.companyRoom}", Tavolo ${data.tableNumber}`);
+                    console.log(`🎯 Destinazioni rimosse: ${removedDestinations.join(', ')}`);
                     console.log(`📊 Countdown rimanenti per azienda "${ws.companyRoom}": ${companyCountdowns.size}`);
                 }
 
-                // Invia eliminazione a tutti i client della room (incluso chi ha eliminato per conferma)
+                // Invia eliminazione a tutti i client della room
                 if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
                     const roomClients = companyRooms.get(ws.companyRoom);
                     const deleteMessage = JSON.stringify(data);
