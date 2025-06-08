@@ -296,7 +296,7 @@ wss.on('connection', (ws, req) => {
                 if (activeCountdowns.has(companyName)) {
                     const companyCountdowns = activeCountdowns.get(companyName);
                     const countdownsToDelete = [];
-                    
+
                     companyCountdowns.forEach((countdown, tableNumber) => {
                         // Calcola il tempo rimanente attuale
                         const currentTime = Date.now();
@@ -317,7 +317,7 @@ wss.on('connection', (ws, req) => {
                             countdownsToDelete.push(tableNumber);
                         }
                     });
-                    
+
                     // Rimuovi countdown scaduti dalla memoria
                     countdownsToDelete.forEach(tableNumber => {
                         companyCountdowns.delete(tableNumber);
@@ -446,13 +446,28 @@ wss.on('connection', (ws, req) => {
                     return;
                 }
 
-                // Rimuovi il countdown attivo dalla memoria del server PRIMA di inviare
+                // Rimuovi TUTTI i countdown per questo tavolo dalla memoria del server PRIMA di inviare
                 if (ws.companyRoom && activeCountdowns.has(ws.companyRoom)) {
                     const companyCountdowns = activeCountdowns.get(ws.companyRoom);
-                    if (companyCountdowns.has(data.tableNumber)) {
-                        companyCountdowns.delete(data.tableNumber);
-                        console.log(`🗑️ Countdown rimosso dalla memoria server: Azienda "${ws.companyRoom}", Tavolo ${data.tableNumber}`);
+                    let removedCount = 0;
+
+                    // Crea un array delle chiavi da rimuovere per evitare modifiche durante l'iterazione
+                    const keysToRemove = [];
+                    for (const [key, countdown] of companyCountdowns.entries()) {
+                        if (key.toString() === data.tableNumber.toString() || 
+                            countdown.tableNumber.toString() === data.tableNumber.toString()) {
+                            keysToRemove.push(key);
+                        }
                     }
+
+                    // Rimuovi tutte le chiavi trovate
+                    keysToRemove.forEach(key => {
+                        companyCountdowns.delete(key);
+                        removedCount++;
+                    });
+
+                    console.log(`🗑️ ${removedCount} countdown rimossi dalla memoria server: Azienda "${ws.companyRoom}", Tavolo ${data.tableNumber}`);
+                    console.log(`📊 Countdown rimanenti per azienda "${ws.companyRoom}": ${companyCountdowns.size}`);
                 }
 
                 // Invia eliminazione a tutti i client della room (incluso chi ha eliminato per conferma)
@@ -852,21 +867,21 @@ app.get('/api/config', (req, res) => {
 app.post('/api/generate-token', (req, res) => {
     try {
         const { channelName, uid, role = 1, expireTime = 3600 } = req.body;
-        
+
         if (!channelName || !uid) {
             return res.status(400).json({ error: 'channelName and uid are required' });
         }
 
         const appId = process.env.AGORA_APP_ID;
         const appCertificate = process.env.AGORA_APP_CERTIFICATE;
-        
+
         if (!appId) {
             return res.status(500).json({ error: 'Agora App ID not configured' });
         }
 
         const tokenGenerator = new AgoraTokenGenerator(appId, appCertificate);
         const token = tokenGenerator.generateToken(channelName, uid, role, expireTime);
-        
+
         res.json({
             token: token,
             channelName: channelName,
