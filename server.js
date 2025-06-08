@@ -829,6 +829,14 @@ setInterval(() => {
     }
 }, 300000); // Ogni 5 minuti
 
+// Endpoint per configurazione Agora
+app.get('/api/config', (req, res) => {
+    res.json({
+        agoraAppId: process.env.AGORA_APP_ID || 'your-agora-app-id',
+        agoraToken: process.env.AGORA_TOKEN || null
+    });
+});
+
 // Avvia il server
 const PORT = 5000;
 server.listen(PORT, '0.0.0.0', () => {
