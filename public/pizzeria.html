@@ -272,6 +272,41 @@
                     console.log('📞 PIZZERIA DEBUG - Messaggio WebRTC ricevuto:', data.action, data);
                 }
 
+                // PRIORITÀ MASSIMA: Gestione eventi WebRTC per pizzeria (PRIMA di tutto)
+                if (data.action === 'offer') {
+                    console.log('📞 PIZZERIA - Offerta WebRTC ricevuta, targetPage:', data.targetPage);
+                    // Verifica che la chiamata sia diretta a pizzeria
+                    if (data.targetPage === 'pizzeria') {
+                        console.log('📞 PIZZERIA - Chiamata confermata per pizzeria');
+                        handleOffer(data);
+                        return;
+                    } else {
+                        console.log('📞 PIZZERIA - Chiamata non per pizzeria, ignorata');
+                        return;
+                    }
+                } else if (data.action === 'answer' && currentCallId === data.callId) {
+                    console.log('📞 PIZZERIA - Answer ricevuto');
+                    if (peerConnection) {
+                        peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+                    }
+                    return;
+                } else if (data.action === 'candidate' && currentCallId === data.callId) {
+                    console.log('📞 PIZZERIA - ICE candidate ricevuto');
+                    if (peerConnection) {
+                        peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+                    }
+                    return;
+                } else if (data.action === 'hangup' && currentCallId === data.callId) {
+                    console.log('📞 PIZZERIA - Hangup ricevuto');
+                    cleanupCall();
+                    return;
+                } else if (data.action === 'callError') {
+                    console.log('📞 PIZZERIA - Call error ricevuto');
+                    updateCallUI('error', data.message);
+                    cleanupCall();
+                    return;
+                }
+
                 if (data.action === 'ping') {
                     if (ws && ws.readyState === WebSocket.OPEN) {
                         ws.send(JSON.stringify({ action: 'pong', timestamp: Date.now() }));
@@ -282,31 +317,6 @@
                     return;
                 } else if (data.action === 'connectionConfirmed') {
                     console.log('✅ Pizzeria: Conferma connessione ricevuta:', data.message);
-                    return;
-                }
-
-                // PRIORITÀ ASSOLUTA: Gestione eventi WebRTC per pizzeria
-                if (data.action === 'offer') {
-                    console.log('📞 PIZZERIA - Offerta WebRTC ricevuta da:', data.from);
-                    event.stopPropagation();
-                    handleOffer(data);
-                    return;
-                } else if (data.action === 'answer' && currentCallId === data.callId) {
-                    if (peerConnection) {
-                        peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
-                    }
-                    return;
-                } else if (data.action === 'candidate' && currentCallId === data.callId) {
-                    if (peerConnection) {
-                        peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
-                    }
-                    return;
-                } else if (data.action === 'hangup' && currentCallId === data.callId) {
-                    cleanupCall();
-                    return;
-                } else if (data.action === 'callError') {
-                    updateCallUI('error', data.message);
-                    cleanupCall();
                     return;
                 }
 
@@ -1602,26 +1612,58 @@
         };
 
         async function handleOffer(data) {
-            console.log('📞 PIZZERIA - Offerta WebRTC ricevuta da:', data.from);
+            console.log('📞 PIZZERIA - Gestione offerta WebRTC iniziata');
+            console.log('📞 PIZZERIA - Dati ricevuti:', data);
+            
+            // Genera un callId se non presente
+            if (!data.callId) {
+                data.callId = Date.now().toString();
+                console.log('📞 PIZZERIA - CallId generato:', data.callId);
+            }
+            
+            // Determina il mittente
+            const caller = data.from || 'Cucina';
+            console.log('📞 PIZZERIA - Chiamante identificato:', caller);
             
             // Aggiorna immediatamente l'interfaccia per mostrare la chiamata in arrivo
             const callStatus = document.getElementById('call-status');
             if (callStatus) {
-                callStatus.textContent = `📞 Chiamata in arrivo da ${data.from}`;
+                callStatus.textContent = `📞 Chiamata in arrivo da ${caller}`;
                 callStatus.style.color = '#ffc107';
+                console.log('📞 PIZZERIA - Status UI aggiornato');
             }
             
             // Mostra anche un avviso visivo prominente
-            mostraAvvisoChiamataInArrivo(data.from);
+            mostraAvvisoChiamataInArrivo(caller);
 
             // Riproduci suono di chiamata
             const alertAudio = document.getElementById('alertSound');
             if (alertAudio) {
                 alertAudio.play().catch(e => console.log('Errore audio chiamata:', e));
+            } else {
+                console.log('📞 PIZZERIA - File audio non trovato');
+                // Fallback con beep generato
+                try {
+                    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    const oscillator = audioContext.createOscillator();
+                    const gainNode = audioContext.createGain();
+                    
+                    oscillator.connect(gainNode);
+                    gainNode.connect(audioContext.destination);
+                    
+                    oscillator.frequency.value = 800;
+                    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 1);
+                    
+                    oscillator.start(audioContext.currentTime);
+                    oscillator.stop(audioContext.currentTime + 1);
+                } catch (beepError) {
+                    console.log('Impossibile riprodurre beep:', beepError);
+                }
             }
 
             console.log('📞 PIZZERIA - Mostrando conferma chiamata...');
-            const acceptCall = confirm(`📞 CHIAMATA IN ARRIVO DA ${data.from.toUpperCase()}\n\nAccettare la chiamata?`);
+            const acceptCall = confirm(`📞 CHIAMATA IN ARRIVO DA ${caller.toUpperCase()}\n\nAccettare la chiamata?`);
             
             if (acceptCall) {
                 try {
