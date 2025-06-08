@@ -358,12 +358,20 @@
                     stopHeartbeat();
                     updateConnectionStatus(false);
 
+                    // Riconnessione immediata per codice 1006 (disconnessione inaspettata)
+                    const reconnectDelay = event.code === 1006 ? 1000 : 3000;
+
                     if (!reconnectInterval) {
-                        console.log('🔄 Avvio riconnessione pizzeria...');
+                        console.log(`🔄 Avvio riconnessione pizzeria in ${reconnectDelay}ms...`);
                         reconnectInterval = setInterval(() => {
-                            console.log('🔄 Tentativo riconnessione pizzeria...');
-                            connectWebSocket();
-                        }, 3000);
+                            if (!isConnected) {
+                                console.log('🔄 Tentativo riconnessione pizzeria...');
+                                connectWebSocket();
+                            } else {
+                                clearInterval(reconnectInterval);
+                                reconnectInterval = null;
+                            }
+                        }, reconnectDelay);
                     }
                 };
 
@@ -381,12 +389,17 @@
         function startHeartbeat() {
             heartbeatInterval = setInterval(() => {
                 if (ws && ws.readyState === WebSocket.OPEN) {
-                    ws.send(JSON.stringify({ action: 'pong', timestamp: Date.now() }));
+                    try {
+                        ws.send(JSON.stringify({ action: 'pong', timestamp: Date.now() }));
+                    } catch (error) {
+                        console.log('🔄 Pizzeria: Errore invio pong, riconnetto...', error);
+                        connectWebSocket();
+                    }
                 } else if (ws && ws.readyState !== WebSocket.CONNECTING) {
                     console.log('🔄 Pizzeria: Connessione persa durante heartbeat, riconnetto...');
                     connectWebSocket();
                 }
-            }, 15000); // Pong ogni 15 secondi
+            }, 10000); // Pong ogni 10 secondi per maggiore stabilità
         }
 
         function stopHeartbeat() {
