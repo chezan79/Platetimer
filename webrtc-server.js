@@ -1,11 +1,20 @@
 
 console.log('🚀 Inizializzazione moduli server WebRTC...');
 
-const express = require('express');
-const http = require('http');
-const WebSocket = require('ws');
+// Carica moduli con gestione errori
+let express, http, WebSocket;
 
-console.log('✅ Moduli caricati con successo');
+try {
+    express = require('express');
+    http = require('http');
+    WebSocket = require('ws');
+    console.log('✅ Moduli caricati con successo');
+} catch (error) {
+    console.error('❌ Errore caricamento moduli:', error.message);
+    console.error('💡 Esegui: npm install express ws');
+    process.exit(1);
+}
+
 console.log('🚀 Avvio server WebRTC...');
 
 const app = express();
