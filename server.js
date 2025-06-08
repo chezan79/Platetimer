@@ -693,8 +693,10 @@ wss.on('connection', (ws, req) => {
                 if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
                     const roomClients = companyRooms.get(ws.companyRoom);
                     const targetClients = Array.from(roomClients).filter(client => 
-                        client.pageType === data.targetPage && client !== ws
+                        client.pageType === data.targetPage && client !== ws && client.readyState === WebSocket.OPEN
                     );
+
+                    console.log(`📞 Ricerca target "${data.targetPage}": ${targetClients.length} client trovati`);
 
                     if (targetClients.length > 0) {
                         const callId = Date.now().toString();
@@ -707,16 +709,46 @@ wss.on('connection', (ws, req) => {
                             from: ws.pageType || 'unknown'
                         };
 
-                        targetClients[0].send(JSON.stringify(offerMessage));
-                        targetClients[0].callId = callId;
+                        try {
+                            targetClients[0].send(JSON.stringify(offerMessage));
+                            targetClients[0].callId = callId;
 
-                        console.log(`📞 Offerta WebRTC inviata da ${ws.pageType} a ${data.targetPage}`);
+                            console.log(`📞 Offerta WebRTC inviata da ${ws.pageType} a ${data.targetPage} (callId: ${callId})`);
+
+                            // Timeout per chiamate non risposte (30 secondi)
+                            setTimeout(() => {
+                                if (ws.callId === callId && targetClients[0].callId === callId) {
+                                    console.log(`⏰ Timeout chiamata ${callId} - chiusura automatica`);
+                                    const hangupMessage = { action: 'hangup', callId: callId };
+                                    
+                                    if (ws.readyState === WebSocket.OPEN) {
+                                        ws.send(JSON.stringify(hangupMessage));
+                                    }
+                                    if (targetClients[0].readyState === WebSocket.OPEN) {
+                                        targetClients[0].send(JSON.stringify(hangupMessage));
+                                    }
+                                    
+                                    ws.callId = null;
+                                    targetClients[0].callId = null;
+                                }
+                            }, 30000);
+
+                        } catch (sendError) {
+                            console.error('❌ Errore invio offerta:', sendError.message);
+                            ws.send(JSON.stringify({
+                                action: 'callError',
+                                message: 'Errore connessione destinazione'
+                            }));
+                        }
                     } else {
+                        console.log(`📞 Nessun client ${data.targetPage} disponibile`);
                         ws.send(JSON.stringify({
                             action: 'callError',
                             message: 'Destinazione non disponibile'
                         }));
                     }
+                } else {
+                    console.log('⚠️ Client non in room per chiamata');
                 }
 
             } else if (data.action === 'answer') {
