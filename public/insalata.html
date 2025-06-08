@@ -1245,7 +1245,7 @@
 
             console.log('❌ Annullamento pausa richiesto dall\'insalata');
 
-            // Invia messaggio di annullamento pausa
+            // Invia messaggio di annullamento pausa INSALATA
             if (ws && ws.readyState === WebSocket.OPEN) {
                 const annullaPausaMessage = {
                     action: 'annullaPausaInsalata',
@@ -1255,7 +1255,7 @@
                 };
 
                 ws.send(JSON.stringify(annullaPausaMessage));
-                console.log('📤 Messaggio annullamento pausa inviato dall\'insalata');
+                console.log('📤 Messaggio annullamento pausa insalata inviato dall\'insalata');
             }
 
             // Termina pausa locale immediatamente
