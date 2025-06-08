@@ -15,11 +15,8 @@ const wss = new WebSocket.Server({
     path: '/ws' // Percorso per le connessioni WebSocket principali
 });
 
-// Configura il WebSocket Server per WebRTC
-const webrtcWss = new WebSocket.Server({ 
-    server,
-    path: '/webrtc-ws' // Percorso per le connessioni WebRTC
-});
+// Sistema chiamate con Agora.io
+const agoraAppId = process.env.AGORA_APP_ID || 'demo-app-id';
 
 // Serve i file statici dalla directory "public"
 app.use(express.static('public'));
@@ -56,15 +53,26 @@ try {
     console.error('❌ Errore configurazione Google Cloud Speech:', error.message);
 }
 
-// Route di test per verificare che il server WebRTC sia attivo
-app.get('/webrtc-status', (req, res) => {
+// Route per ottenere configurazione Agora
+app.get('/api/agora-config', (req, res) => {
     res.json({ 
-        status: 'WebRTC Server attivo', 
-        port: 5000,
-        connections: webrtcWss ? webrtcWss.clients.size : 0,
-        rooms: webrtcActiveRooms.size,
+        appId: agoraAppId,
+        status: 'Agora.io configurato',
         uptime: process.uptime(),
         timestamp: new Date().toISOString() 
+    });
+});
+
+// Endpoint per generare token Agora (per produzione)
+app.post('/api/agora-token', (req, res) => {
+    const { channelName, uid } = req.body;
+    
+    // In produzione qui genereresti un token con l'Agora SDK
+    // Per sviluppo usiamo null (modalità test)
+    res.json({
+        token: null, // null per modalità test Agora
+        channelName: channelName,
+        uid: uid || 0
     });
 });
 
@@ -152,9 +160,8 @@ const companyRooms = new Map();
 // Store per i countdown attivi per ogni azienda
 const activeCountdowns = new Map();
 
-// Store per le connessioni WebRTC
-const webrtcConnections = new Map();
-const webrtcActiveRooms = new Map();
+// Store per le chiamate Agora attive
+const agoraActiveCalls = new Map();
 
 // Mappa per sessioni autenticate
 const authenticatedSessions = new Map();
@@ -754,171 +761,93 @@ wss.on('connection', (ws, req) => {
     });
 });
 
-// ========== SISTEMA WEBRTC INTEGRATO ==========
-let webRtcClients = new Map(); // Map per gestire client WebRTC per azienda
-
-// WebSocket handler principale che gestisce sia messaggi normali che WebRTC
-wss.on('connection', (ws, req) => {
-    const url = new URL(req.url, `http://${req.headers.host}`);
-
-    // Se è una connessione WebRTC specifica
-    if (url.pathname === '/webrtc-ws') {
-        console.log('📞 Nuova connessione WebRTC WebSocket');
-        handleWebRTCConnection(ws);
-        return;
-    }
-
-    // Gestione WebSocket normale (esistente)
-    handleNormalWebSocket(ws);
-});
-
-function handleWebRTCConnection(ws) {
-    let clientInfo = null;
-
-    // Heartbeat per mantenere la connessione WebRTC attiva
-    const heartbeat = setInterval(() => {
-        if (ws.readyState === 1) {
-            ws.send(JSON.stringify({ action: 'ping', timestamp: Date.now() }));
-        } else {
-            clearInterval(heartbeat);
-        }
-    }, 30000);
-
-    ws.on('message', (message) => {
-        try {
-            const data = JSON.parse(message.toString());
-
-            switch (data.action) {
-                case 'join-webrtc-room':
-                    clientInfo = {
-                        companyName: data.companyName,
-                        pageType: data.pageType,
-                        userId: data.userId,
-                        ws: ws
-                    };
-
-                    const roomKey = `webrtc_${data.companyName}`;
-                    if (!webRtcClients.has(roomKey)) {
-                        webRtcClients.set(roomKey, new Map());
-                    }
-
-                    webRtcClients.get(roomKey).set(data.userId, clientInfo);
-
-                    ws.send(JSON.stringify({
-                        action: 'joined-webrtc-room',
-                        message: `Connesso alla room WebRTC: ${data.companyName}`,
-                        pageType: data.pageType,
-                        userId: data.userId
-                    }));
-
-                    console.log(`📞 ✅ Client ${data.pageType} unito alla room WebRTC: ${data.companyName}`);
-                    break;
-
-                case 'webrtc-offer':
-                    console.log(`📞 📤 Offer ricevuto da ${clientInfo?.pageType} per ${data.targetPageType}`);
-                    forwardWebRTCMessage(data, clientInfo);
-                    break;
-
-                case 'webrtc-answer':
-                    console.log(`📞 📤 Answer ricevuto da ${clientInfo?.pageType} per ${data.targetPageType}`);
-                    forwardWebRTCMessage(data, clientInfo);
-                    break;
-
-                case 'webrtc-ice-candidate':
-                    console.log(`📞 🧊 ICE candidate da ${clientInfo?.pageType} per ${data.targetPageType}`);
-                    forwardWebRTCMessage(data, clientInfo);
-                    break;
-
-                case 'webrtc-hangup':
-                    console.log(`📞 📴 Hangup da ${clientInfo?.pageType} per ${data.targetPageType}`);
-                    forwardWebRTCMessage(data, clientInfo);
-                    break;
-
-                case 'pong':
-                    // Heartbeat response
-                    break;
-
-                default:
-                    console.log('📞 ⚠️ Azione WebRTC non riconosciuta:', data.action);
-            }
-        } catch (error) {
-            console.error('❌ Errore parsing messaggio WebRTC:', error);
-        }
-    });
-
-    ws.on('close', () => {
-        clearInterval(heartbeat);
-        if (clientInfo) {
-            const roomKey = `webrtc_${clientInfo.companyName}`;
-            const room = webRtcClients.get(roomKey);
-            if (room) {
-                room.delete(clientInfo.userId);
-                if (room.size === 0) {
-                    webRtcClients.delete(roomKey);
+} else if (data.action === 'agoraCall') {
+                // Gestione chiamate Agora
+                if (!data.targetPageType || !data.channelName) {
+                    console.log('⚠️ Dati chiamata Agora non validi');
+                    return;
                 }
-            }
-            console.log(`📞 🔌 Client WebRTC disconnesso: ${clientInfo.pageType} da ${clientInfo.companyName}`);
-        }
-    });
 
-    ws.on('error', (error) => {
-        console.error('❌ Errore WebSocket WebRTC:', error);
-    });
-}
+                // Invia notifica di chiamata alla destinazione
+                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    const callMessage = JSON.stringify({
+                        action: 'incomingAgoraCall',
+                        channelName: data.channelName,
+                        from: data.from || ws.pageType,
+                        targetPageType: data.targetPageType,
+                        callId: data.callId || Date.now().toString()
+                    });
 
-function forwardWebRTCMessage(data, senderInfo) {
-    if (!senderInfo) {
-        console.error('❌ SenderInfo non disponibile per forwarding WebRTC');
-        return;
-    }
+                    let sentCount = 0;
+                    roomClients.forEach((client) => {
+                        if (client.readyState === WebSocket.OPEN && client.pageType === data.targetPageType) {
+                            client.send(callMessage);
+                            sentCount++;
+                        }
+                    });
 
-    const roomKey = `webrtc_${senderInfo.companyName}`;
-    const room = webRtcClients.get(roomKey);
+                    console.log(`📞 Chiamata Agora inviata da ${ws.pageType || 'sconosciuto'} a ${data.targetPageType} (${sentCount} client)`);
+                }
 
-    if (!room) {
-        console.error('❌ Room WebRTC non trovata:', roomKey);
-        senderInfo.ws.send(JSON.stringify({
-            action: 'webrtc-error',
-            error: 'Room WebRTC non trovata',
-            callId: data.callId
-        }));
-        return;
-    }
+            } else if (data.action === 'agoraCallResponse') {
+                // Gestione risposta chiamate Agora
+                if (!data.callId || !data.response) {
+                    console.log('⚠️ Risposta chiamata Agora non valida');
+                    return;
+                }
 
-    // Trova il client target nella stessa azienda
-    const targetPageType = data.targetPageType;
-    let targetClient = null;
+                // Inoltra risposta al chiamante
+                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    const responseMessage = JSON.stringify({
+                        action: 'agoraCallResponseReceived',
+                        callId: data.callId,
+                        response: data.response, // 'accepted' o 'rejected'
+                        from: ws.pageType,
+                        channelName: data.channelName
+                    });
 
-    room.forEach((client) => {
-        if (client.pageType === targetPageType && client.userId !== senderInfo.userId) {
-            targetClient = client;
-        }
-    });
+                    let sentCount = 0;
+                    roomClients.forEach((client) => {
+                        if (client.readyState === WebSocket.OPEN && client !== ws) {
+                            client.send(responseMessage);
+                            sentCount++;
+                        }
+                    });
 
-    if (targetClient && targetClient.ws.readyState === 1) {
-        // Aggiungi informazioni sul mittente
-        const messageToForward = {
-            ...data,
-            from: senderInfo.pageType,
-            fromUserId: senderInfo.userId
-        };
+                    console.log(`📞 Risposta chiamata Agora (${data.response}) inoltrata (${sentCount} client)`);
+                }
 
-        targetClient.ws.send(JSON.stringify(messageToForward));
-        console.log(`📞 ✅ Messaggio WebRTC ${data.action} inoltrato da ${senderInfo.pageType} a ${targetPageType}`);
-    } else {
-        // Invia errore al mittente
-        senderInfo.ws.send(JSON.stringify({
-            action: 'webrtc-error',
-            error: `${targetPageType} non disponibile o non connesso`,
-            callId: data.callId
-        }));
-        console.log(`❌ Target ${targetPageType} non disponibile per WebRTC nella room ${roomKey}`);
-    }
-}
+            } else if (data.action === 'agoraHangup') {
+                // Gestione chiusura chiamate Agora
+                if (!data.channelName) {
+                    console.log('⚠️ Dati hangup Agora non validi');
+                    return;
+                }
 
-function handleNormalWebSocket(ws) {
-    // Gestione WebSocket normale (esistente)
-    const clientIp = ws._socket.remoteAddress;
+                // Inoltra hangup a tutti i client della room
+                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    const hangupMessage = JSON.stringify({
+                        action: 'agoraHangupReceived',
+                        channelName: data.channelName,
+                        from: ws.pageType
+                    });
+
+                    let sentCount = 0;
+                    roomClients.forEach((client) => {
+                        if (client.readyState === WebSocket.OPEN && client !== ws) {
+                            client.send(hangupMessage);
+                            sentCount++;
+                        }
+                    });
+
+                    console.log(`📞 Hangup Agora inoltrato (${sentCount} client)`);
+                }
+
+            // Gestione WebSocket normale (esistente)
+            const clientIp = ws._socket?.remoteAddress || 'unknown';
     console.log(`🔗 Nuova connessione WebSocket da IP: ${clientIp}`);
 
     ws.companyRoom = null; // Inizialmente non assegnato a nessuna room
@@ -1471,15 +1400,7 @@ function handleNormalWebSocket(ws) {
     });
 }
 
-// Implemented WebRTC integration with heartbeat and proper message handling.
-// Heartbeat per connessioni WebRTC
-setInterval(() => {
-    webrtcWss.clients.forEach((ws) => {
-        if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ action: 'ping', timestamp: Date.now() }));
-        }
-    });
-}, 30000);
+// Sistema chiamate Agora.io implementato
 
 // Heartbeat ottimizzato - meno frequente per ridurre carico
 setInterval(() => {
@@ -1548,16 +1469,15 @@ setInterval(() => {
     }
 }, 60000); // Ogni 1 minuto
 
-// Statistiche WebRTC
+// Statistiche chiamate Agora
 setInterval(() => {
     const stats = {
-        connections: webrtcWss.clients.size,
-        rooms: webrtcActiveRooms.size,
-        totalUsers: Array.from(webrtcActiveRooms.values()).reduce((sum, room) => sum + room.size, 0)
+        activeCalls: agoraActiveCalls.size,
+        rooms: companyRooms.size
     };
 
-    if (stats.connections > 0) {
-        console.log(`📊 WebRTC Stats: ${stats.connections} conn, ${stats.rooms} rooms, ${stats.totalUsers} users`);
+    if (stats.activeCalls > 0) {
+        console.log(`📊 Agora Stats: ${stats.activeCalls} chiamate attive, ${stats.rooms} rooms`);
     }
 }, 300000); // Ogni 5 minuti
 
@@ -1574,15 +1494,14 @@ process.on('unhandledRejection', (reason, promise) => {
 setInterval(() => {
     const stats = {
         clients: wss.clients.size,
-        webrtcClients: webrtcWss.clients.size,
+        agoraCalls: agoraActiveCalls.size,
         rooms: companyRooms.size,
-        webrtcRooms: webrtcActiveRooms.size,
         countdowns: Array.from(activeCountdowns.values()).reduce((sum, map) => sum + map.size, 0),
         rateLimits: rateLimiter.size,
         memoryUsage: Math.round(process.memoryUsage().heapUsed / 1024 / 1024)
     };
 
-    console.log(`📊 Stats: ${stats.clients} client, ${stats.webrtcClients} webrtc, ${stats.rooms} rooms, ${stats.countdowns} countdown, ${stats.memoryUsage}MB RAM`);
+    console.log(`📊 Stats: ${stats.clients} client, ${stats.agoraCalls} agora, ${stats.rooms} rooms, ${stats.countdowns} countdown, ${stats.memoryUsage}MB RAM`);
 
     // Alert se troppo carico
     if (stats.clients > 50 || stats.memoryUsage > 100) {
@@ -1595,11 +1514,10 @@ const PORT = 5000;
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`🛡️ Server completo avviato su http://0.0.0.0:${PORT}`);
     console.log('✅ WebSocket principale attivo su /ws');
-    console.log('✅ WebSocket WebRTC attivo su /webrtc-ws');
     console.log('✅ Autenticazione WebSocket attiva');
     console.log('✅ Validazione dati attiva');
     console.log('✅ Rate limiting ottimizzato');
-    console.log('📞 WebRTC integrato sulla stessa porta');
+    console.log('📞 Sistema chiamate Agora.io attivo');
 }).on('error', (error) => {
     console.error('❌ Errore avvio server:', error);
 });

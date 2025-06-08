@@ -119,15 +119,15 @@
 
         
 
-        <!-- Sistema ricezione chiamate vocali WebRTC -->
+        <!-- Sistema ricezione chiamate vocali Agora.io -->
         <div id="call-incoming-container" style="text-align: center; padding: 8px; background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%); border-radius: 8px; border-left: 4px solid #ffc107; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); min-width: 280px; display: none;">
-            <div style="margin-bottom: 4px; color: #856404; font-size: 12px; font-weight: 600;">📞 Chiamata in arrivo</div>
+            <div style="margin-bottom: 4px; color: #856404; font-size: 12px; font-weight: 600;">📞 Chiamata Agora in arrivo</div>
             <div style="display: flex; justify-content: center; align-items: center; gap: 6px; flex-wrap: nowrap;">
-                <button id="answer-btn" onclick="answerCall()" 
+                <button id="answer-btn" onclick="answerAgoraCall()" 
                         style="padding: 6px 12px; background: linear-gradient(135deg, #28a745 0%, #20c997 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
                     📞✅ Rispondi
                 </button>
-                <button id="reject-btn" onclick="rejectCall()" 
+                <button id="reject-btn" onclick="rejectAgoraCall()" 
                         style="padding: 6px 12px; background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
                     📞❌ Rifiuta
                 </button>

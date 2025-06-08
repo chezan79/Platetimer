@@ -346,25 +346,23 @@
     <!-- Container superiore con messaggi vocali, chiamate e controlli pausa -->
     <div style="position: absolute; top: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 15px; z-index: 500;">
 
-        
-
-        <!-- Sistema chiamate vocali WebRTC -->
+        <!-- Sistema chiamate vocali Agora.io -->
         <div style="text-align: center; padding: 8px; background: linear-gradient(135deg, #e8f5e8 0%, #d4edda 100%); border-radius: 8px; border-left: 4px solid #28a745; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); min-width: 280px;">
+            <div style="margin-bottom: 4px; color: #155724; font-size: 12px; font-weight: 600;">📞 Chiamate Vocali Agora</div>
             <div style="display: flex; justify-content: center; align-items: center; gap: 6px; flex-wrap: nowrap;">
-                <button id="call-pizzeria-btn" onclick="startCallToPizzeria()" 
+                <button id="call-pizzeria-btn" onclick="callPizzeriaAgora()" 
                         style="padding: 6px 12px; background: linear-gradient(135deg, #28a745 0%, #20c997 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
                     📞 Chiama Pizzeria
                 </button>
-                <button id="hangup-btn" onclick="hangupCall()" disabled
-                        style="padding: 6px 12px; background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap; opacity: 0.5;">
+                <button id="hangup-btn" onclick="hangupAgoraCall()" disabled
+                        style="padding: 6px 12px; background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; opacity: 0.5; white-space: nowrap;">
                     📞❌ Riaggancia
                 </button>
             </div>
-            <div id="call-status" style="margin-top: 4px; font-size: 10px; color: #666; min-height: 12px;">
+            <div id="call-status" style="margin-top: 4px; font-size: 10px; color: #155724; min-height: 12px;">
                 Pronto per chiamare
             </div>
-            <div id="call-quality" style="margin-top: 2px; font-size: 10px; color: #28a745; font-weight: 600;">
-            </div>
+            <div id="call-quality" style="margin-top: 2px; font-size: 10px; color: #6c757d; min-height: 10px;"></div>
         </div>
 
         <!-- Sistema messaggio vocale con scelta destinazione -->
@@ -666,6 +664,7 @@
         let isConnected = false;
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         let lastPong = 0;
+        let companyName = localStorage.getItem('userCompany') || 'Nome Azienda';
 
         function connectWebSocket() {
             try {
@@ -686,7 +685,6 @@
 
                     // Unisciti alla room con un piccolo delay per stabilizzare la connessione
                     setTimeout(() => {
-                            const companyName = localStorage.getItem('userCompany') || 'Nome Azienda';
                             const joinMessage = {
                                 action: 'joinRoom',
                                 companyName: companyName
@@ -790,6 +788,9 @@
                         } else if (data.action === 'newUserJoined') {
                             console.log('🎉 Nuovo utente è entrato nella pagina:', data.message);
                             mostraAvvisoNuovoUtente(data);
+                        } else if (data.action === 'agoraCallResponseReceived' || data.action === 'agoraHangupReceived') {
+                            // Gestisci messaggi Agora
+                            handleAgoraMessage(data);
                         }
                     } catch (error) {
                         console.error('Errore nel parsing del messaggio WebSocket:', error);
@@ -1451,7 +1452,7 @@
                     } else {
                         selectedDestinationsVoice.push(destination);
                         this.classList.add('selected');
-                    }
+                                        }
 
                     updateDestinationDisplayVoice();
                     console.log('Destinazioni selezionate per messaggi vocali in cucina:', selectedDestinationsVoice);
@@ -2268,7 +2269,7 @@
                     timestamp: new Date().toLocaleTimeString('it-IT')
                 };
 
-                ws.send(JSON.stringify(annullaPausaMessage));
+                ws.send(JSON.stringify(annullaPausaMessage));```
                 console.log('📤 Messaggio annullamento pausa inviato dalla cucina');
             }
 
@@ -2537,276 +2538,213 @@
             }
         });
 
-        
-
-    // ========== SISTEMA CHIAMATE VOCALI WEBRTC ==========
-        let webrtcWs = null;
-        let peerConnection = null;
-        let localStream = null;
-        let currentCallId = null;
+        // ========== SISTEMA CHIAMATE VOCALI AGORA.IO ==========
+        let agoraClient = null;
+        let localAudioTrack = null;
         let isCallActive = false;
+        let currentChannelName = null;
+        let currentCallId = null;
+        let agoraConfig = null;
 
-        // Configurazione WebRTC
-        const rtcConfiguration = {
-            iceServers: [
-                { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:stun1.l.google.com:19302' }
-            ]
-        };
+        // Carica SDK Agora.io
+        function loadAgoraSDK() {
+            return new Promise((resolve, reject) => {
+                if (window.AgoraRTC) {
+                    resolve();
+                    return;
+                }
 
-        // Connetti a server WebRTC
-        function connectWebRTC() {
+                const script = document.createElement('script');
+                script.src = 'https://download.agora.io/sdk/release/AgoraRTC_N-4.20.2.js';
+                script.onload = () => {
+                    console.log('📞 Agora SDK caricato');
+                    resolve();
+                };
+                script.onerror = () => {
+                    console.error('❌ Errore caricamento Agora SDK');
+                    reject(new Error('Errore caricamento Agora SDK'));
+                };
+                document.head.appendChild(script);
+            });
+        }
+
+        // Inizializza Agora
+        async function initializeAgora() {
             try {
-                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-                const wsUrl = `${protocol}//${window.location.host}/webrtc-ws`;
-                
-                console.log('📞 Cucina: Tentativo connessione WebRTC a:', wsUrl);
-                webrtcWs = new WebSocket(wsUrl);
+                await loadAgoraSDK();
 
-                webrtcWs.onopen = () => {
-                    console.log('📞 Cucina: WebRTC WebSocket connesso');
-                    updateCallStatus('📞 Pronto per chiamare', '#28a745');
-                    
-                    // Join room WebRTC con delay per stabilizzare
-                    setTimeout(() => {
-                        const companyName = localStorage.getItem('userCompany') || 'Default';
-                        const joinData = {
-                            action: 'join-webrtc-room',
-                            companyName: companyName,
-                            pageType: 'cucina',
-                            userId: 'cucina-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9)
-                        };
-                        
-                        console.log('📞 Cucina: Invio join-webrtc-room:', joinData);
-                        webrtcWs.send(JSON.stringify(joinData));
-                    }, 500);
-                };
+                // Ottieni configurazione Agora dal server
+                const response = await fetch('/api/agora-config');
+                agoraConfig = await response.json();
 
-                webrtcWs.onmessage = (event) => {
-                    try {
-                        const data = JSON.parse(event.data);
-                        console.log('📞 Cucina: Messaggio WebRTC ricevuto:', data);
-                        handleWebRTCMessage(data);
-                    } catch (error) {
-                        console.error('❌ Cucina: Errore parsing messaggio WebRTC:', error);
-                    }
-                };
+                console.log('📞 Configurazione Agora ricevuta:', agoraConfig);
 
-                webrtcWs.onclose = (event) => {
-                    console.log('📞 Cucina: WebRTC WebSocket disconnesso:', event.code);
-                    updateCallStatus('🔴 Disconnesso - Riconnessione...', '#dc3545');
-                    
-                    // Riconnetti dopo 3 secondi
-                    setTimeout(() => {
-                        console.log('🔄 Cucina: Tentativo di riconnessione WebRTC...');
-                        connectWebRTC();
-                    }, 3000);
-                };
+                // Crea client Agora
+                agoraClient = AgoraRTC.createClient({ 
+                    mode: "rtc", 
+                    codec: "vp8" 
+                });
 
-                webrtcWs.onerror = (error) => {
-                    console.error('❌ Cucina: Errore WebRTC WebSocket:', error);
-                    updateCallStatus('❌ Errore connessione server chiamate', '#dc3545');
-                };
+                console.log('📞 Client Agora creato');
+                updateCallStatus('🟢 Agora pronto', '#28a745');
 
             } catch (error) {
-                console.error('❌ Cucina: Errore connessione WebRTC:', error);
-                updateCallStatus('❌ Errore inizializzazione WebRTC', '#dc3545');
+                console.error('❌ Errore inizializzazione Agora:', error);
+                updateCallStatus('❌ Errore Agora', '#dc3545');
             }
         }
 
-        // Gestisci messaggi WebRTC
-        function handleWebRTCMessage(data) {
-            switch (data.action) {
-                case 'joined-webrtc-room':
-                    console.log('✅ Cucina: Entrato in room WebRTC:', data);
-                    updateCallStatus('📞 Connesso - Pronto per chiamare', '#28a745');
-                    break;
-
-                case 'webrtc-answer':
-                    if (peerConnection && data.callId === currentCallId) {
-                        console.log('📞 Cucina: Answer ricevuto da pizzeria');
-                        peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer))
-                            .then(() => {
-                                updateCallStatus('📞 Chiamata connessa!', '#28a745');
-                                document.getElementById('call-quality').textContent = 'Qualità: Buona ✅';
-                                console.log('✅ Cucina: Chiamata stabilita con successo');
-                            })
-                            .catch(error => {
-                                console.error('❌ Cucina: Errore setRemoteDescription:', error);
-                                updateCallStatus('❌ Errore connessione chiamata', '#dc3545');
-                                cleanupCall();
-                            });
-                    }
-                    break;
-
-                case 'webrtc-ice-candidate':
-                    if (peerConnection && data.callId === currentCallId) {
-                        peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate))
-                            .then(() => {
-                                console.log('🧊 Cucina: ICE candidate aggiunto');
-                            })
-                            .catch(error => console.error('❌ Cucina: Errore addIceCandidate:', error));
-                    }
-                    break;
-
-                case 'webrtc-hangup':
-                    if (data.callId === currentCallId) {
-                        console.log('📞 Cucina: Chiamata terminata dalla pizzeria');
-                        cleanupCall();
-                        updateCallStatus('📞 Chiamata terminata', '#6c757d');
-                    }
-                    break;
-
-                case 'webrtc-error':
-                    console.error('❌ Cucina: Errore WebRTC ricevuto:', data.error);
-                    updateCallStatus(`❌ ${data.error}`, '#dc3545');
-                    cleanupCall();
-                    break;
-
-                case 'ping':
-                    // Rispondi al ping del server WebRTC
-                    if (webrtcWs && webrtcWs.readyState === WebSocket.OPEN) {
-                        webrtcWs.send(JSON.stringify({ action: 'pong', timestamp: Date.now() }));
-                    }
-                    break;
-
-                case 'pong':
-                    // Heartbeat ricevuto
-                    break;
-
-                default:
-                    console.log('📞 Cucina: Messaggio WebRTC non gestito:', data.action);
+        // Aggiorna stato chiamata
+        function updateCallStatus(message, color) {
+            const statusElement = document.getElementById('call-status');
+            if (statusElement) {
+                statusElement.textContent = message;
+                statusElement.style.color = color;
             }
         }
 
-        // Avvia chiamata alla pizzeria
-        async function startCallToPizzeria() {
+        // Chiama pizzeria con Agora
+        async function callPizzeriaAgora() {
             if (isCallActive) {
-                console.log('⚠️ Chiamata già attiva');
+                console.log('📞 Chiamata già attiva');
                 return;
             }
 
             try {
-                updateCallStatus('📞 Avvio chiamata...', '#ffc107');
-                
-                // Ottieni accesso al microfono
-                localStream = await navigator.mediaDevices.getUserMedia({ 
-                    audio: {
-                        echoCancellation: true,
-                        noiseSuppression: true,
-                        autoGainControl: true
+                console.log('📞 Avvio chiamata Agora alla pizzeria');
+                updateCallStatus('📞 Connessione in corso...', '#ffc107');
+
+                // Genera nome canale unico
+                currentChannelName = `call-${companyName.replace(/\s+/g, '-')}-${Date.now()}`;
+                currentCallId = Date.now().toString();
+
+                console.log('📞 Canale Agora:', currentChannelName);
+
+                // Ottieni token (per produzione)
+                const tokenResponse = await fetch('/api/agora-token', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        channelName: currentChannelName,
+                        uid: 0
+                    })
+                });
+                const tokenData = await tokenResponse.json();
+
+                // Join al canale Agora
+                await agoraClient.join(
+                    agoraConfig.appId, 
+                    currentChannelName, 
+                    tokenData.token, 
+                    0
+                );
+
+                console.log('📞 Unito al canale Agora:', currentChannelName);
+
+                // Crea e pubblica audio track
+                localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack({
+                    echoCancellation: true,
+                    autoGainControl: true,
+                    noiseSuppression: true
+                });
+
+                await agoraClient.publish([localAudioTrack]);
+                console.log('🎤 Audio pubblicato su Agora');
+
+                // Gestisci utenti remoti
+                agoraClient.on("user-published", async (user, mediaType) => {
+                    console.log('📞 Utente remoto entrato:', user.uid);
+                    await agoraClient.subscribe(user, mediaType);
+
+                    if (mediaType === "audio") {
+                        console.log('🔊 Audio remoto ricevuto');
+                        user.audioTrack.play();
+                        updateCallStatus('📞 Connesso con pizzeria!', '#28a745');
                     }
                 });
 
-                // Crea peer connection
-                peerConnection = new RTCPeerConnection(rtcConfiguration);
-
-                // Aggiungi stream locale
-                localStream.getTracks().forEach(track => {
-                    peerConnection.addTrack(track, localStream);
+                agoraClient.on("user-unpublished", (user) => {
+                    console.log('📞 Utente remoto uscito:', user.uid);
+                    updateCallStatus('📞 Pizzeria disconnessa', '#dc3545');
                 });
 
-                // Gestisci ICE candidates
-                peerConnection.onicecandidate = (event) => {
-                    if (event.candidate && webrtcWs && webrtcWs.readyState === WebSocket.OPEN) {
-                        webrtcWs.send(JSON.stringify({
-                            action: 'webrtc-ice-candidate',
-                            candidate: event.candidate,
-                            callId: currentCallId,
-                            targetPageType: 'pizzeria'
-                        }));
-                    }
-                };
-
-                // Gestisci stream remoto
-                peerConnection.ontrack = (event) => {
-                    console.log('📞 Stream remoto ricevuto');
-                    const remoteAudio = document.createElement('audio');
-                    remoteAudio.srcObject = event.streams[0];
-                    remoteAudio.autoplay = true;
-                    remoteAudio.volume = 1.0;
-                    document.body.appendChild(remoteAudio);
-                };
-
-                // Crea offer
-                const offer = await peerConnection.createOffer();
-                await peerConnection.setLocalDescription(offer);
-
-                // Invia offer
-                currentCallId = 'call-' + Date.now();
-                if (webrtcWs && webrtcWs.readyState === WebSocket.OPEN) {
-                    webrtcWs.send(JSON.stringify({
-                        action: 'webrtc-offer',
-                        offer: offer,
-                        callId: currentCallId,
-                        targetPageType: 'pizzeria'
+                // Invia notifica di chiamata alla pizzeria
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({
+                        action: 'agoraCall',
+                        channelName: currentChannelName,
+                        targetPageType: 'pizzeria',
+                        from: 'cucina',
+                        callId: currentCallId
                     }));
-
-                    isCallActive = true;
-                    updateCallUI(true);
-                    updateCallStatus('📞 Chiamando pizzeria...', '#ffc107');
-                    
-                    // Timeout per chiamata senza risposta
-                    setTimeout(() => {
-                        if (isCallActive && !peerConnection.currentRemoteDescription) {
-                            updateCallStatus('📞 Nessuna risposta', '#dc3545');
-                            hangupCall();
-                        }
-                    }, 30000); // 30 secondi
-                } else {
-                    throw new Error('WebSocket non connesso');
                 }
+
+                isCallActive = true;
+                updateCallUI(true);
+                updateCallStatus('📞 Chiamando pizzeria...', '#ffc107');
+
+                // Timeout per chiamata senza risposta
+                setTimeout(() => {
+                    if (isCallActive && agoraClient.remoteUsers.length === 0) {
+                        updateCallStatus('📞 Nessuna risposta', '#dc3545');
+                        hangupAgoraCall();
+                    }
+                }, 30000);
 
             } catch (error) {
-                console.error('❌ Errore avvio chiamata:', error);
+                console.error('❌ Errore chiamata Agora:', error);
                 updateCallStatus('❌ Errore chiamata', '#dc3545');
-                cleanupCall();
+                cleanupAgoraCall();
             }
         }
 
-        // Termina chiamata
-        function hangupCall() {
+        // Termina chiamata Agora
+        async function hangupAgoraCall() {
             if (!isCallActive) return;
 
-            console.log('📞 Terminazione chiamata');
+            console.log('📞 Terminazione chiamata Agora');
 
-            // Invia hangup al server
-            if (webrtcWs && webrtcWs.readyState === WebSocket.OPEN && currentCallId) {
-                webrtcWs.send(JSON.stringify({
-                    action: 'webrtc-hangup',
-                    callId: currentCallId,
-                    targetPageType: 'pizzeria'
-                }));
+            try {
+                // Invia notifica hangup
+                if (ws && ws.readyState === WebSocket.OPEN && currentChannelName) {
+                    ws.send(JSON.stringify({
+                        action: 'agoraHangup',
+                        channelName: currentChannelName
+                    }));
+                }
+
+                await cleanupAgoraCall();
+                updateCallStatus('📞 Chiamata terminata', '#6c757d');
+
+            } catch (error) {
+                console.error('❌ Errore terminazione chiamata:', error);
+                updateCallStatus('❌ Errore terminazione', '#dc3545');
             }
-
-            cleanupCall();
-            updateCallStatus('📞 Chiamata terminata', '#6c757d');
         }
 
-        // Cleanup risorse chiamata
-        function cleanupCall() {
+        // Cleanup risorse Agora
+        async function cleanupAgoraCall() {
             isCallActive = false;
+            currentChannelName = null;
             currentCallId = null;
 
-            if (localStream) {
-                localStream.getTracks().forEach(track => track.stop());
-                localStream = null;
-            }
-
-            if (peerConnection) {
-                peerConnection.close();
-                peerConnection = null;
-            }
-
-            // Rimuovi audio remoto
-            document.querySelectorAll('audio').forEach(audio => {
-                if (audio.srcObject) {
-                    audio.remove();
+            try {
+                if (localAudioTrack) {
+                    localAudioTrack.stop();
+                    localAudioTrack.close();
+                    localAudioTrack = null;
                 }
-            });
 
-            updateCallUI(false);
-            document.getElementById('call-quality').textContent = '';
+                if (agoraClient) {
+                    await agoraClient.leave();
+                    console.log('📞 Uscito dal canale Agora');
+                }
+
+                updateCallUI(false);
+
+            } catch (error) {
+                console.error('❌ Errore cleanup Agora:', error);
+            }
         }
 
         // Aggiorna UI chiamata
@@ -2827,29 +2765,36 @@
             }
         }
 
-        // Aggiorna status chiamata
-        function updateCallStatus(message, color) {
-            const statusDiv = document.getElementById('call-status');
-            statusDiv.textContent = message;
-            statusDiv.style.color = color;
+        // Gestisci messaggi Agora dal WebSocket
+        function handleAgoraMessage(data) {
+            switch (data.action) {
+                case 'agoraCallResponseReceived':
+                    if (data.callId === currentCallId) {
+                        if (data.response === 'accepted') {
+                            console.log('📞 Chiamata accettata dalla pizzeria');
+                            updateCallStatus('📞 Pizzeria sta entrando...', '#28a745');
+                        } else {
+                            console.log('📞 Chiamata rifiutata dalla pizzeria');
+                            updateCallStatus('📞 Chiamata rifiutata', '#dc3545');
+                            hangupAgoraCall();
+                        }
+                    }
+                    break;
+
+                case 'agoraHangupReceived':
+                    if (data.channelName === currentChannelName) {
+                        console.log('📞 Hangup ricevuto dalla pizzeria');
+                        cleanupAgoraCall();
+                        updateCallStatus('📞 Chiamata terminata', '#6c757d');
+                    }
+                    break;
+            }
         }
 
-        // Inizializza WebRTC all'avvio
-        document.addEventListener('DOMContentLoaded', () => {
-            // Ritarda l'inizializzazione WebRTC per evitare conflitti
-            setTimeout(() => {
-                connectWebRTC();
-            }, 2000);
-        });
-
-        // Cleanup al chiudere la pagina
-        window.addEventListener('beforeunload', () => {
-            cleanupCall();
-            if (webrtcWs) {
-                webrtcWs.close();
-            }
-        });
-
+        // Avvia inizializzazione Agora al caricamento
+        setTimeout(() => {
+            initializeAgora();
+        }, 2000);
     </script>
     <script src="company-header.js"></script>
 </body>
