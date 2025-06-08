@@ -262,8 +262,15 @@
                     return;
                 } else if (data.action === 'startCountdown') {
                             console.log('📥 Countdown ricevuto in insalata:', data);
-                            console.log(`✅ Countdown accettato - Tavolo: ${data.tableNumber}, Destinazione: ${data.destination}, Tempo: ${Math.floor(data.timeRemaining/60)}:${(data.timeRemaining%60).toString().padStart(2, '0')}`);
-                            startCountdown(data.tableNumber, data.timeRemaining, data.destination);
+                            console.log(`🔍 Destinazione ricevuta: "${data.destination}", Tavolo: ${data.tableNumber}, Tempo: ${data.timeRemaining}s`);
+
+                            // Mostra solo i countdown destinati all'insalata
+                            if (data.destination && data.destination === 'insalata') {
+                                console.log(`✅ Countdown accettato per insalata - Tavolo: ${data.tableNumber}, Tempo: ${Math.floor(data.timeRemaining/60)}:${(data.timeRemaining%60).toString().padStart(2, '0')}`);
+                                startCountdown(data.tableNumber, data.timeRemaining);
+                            } else {
+                                console.log(`🚫 Countdown RIFIUTATO in insalata - Destinazione: "${data.destination || 'undefined'}", Tavolo: ${data.tableNumber}`);
+                            }
                 } else if (data.action === 'deleteCountdown') {
                     console.log(`🗑️ Eliminazione countdown in insalata: Tavolo ${data.tableNumber}`);
                     deleteCountdown(data.tableNumber);
@@ -315,7 +322,7 @@
             updateConnectionStatus(false);
         };
 
-        function startCountdown(tableNumber, timeRemaining, destination = 'insalata') {
+        function startCountdown(tableNumber, timeRemaining) {
             // Rimuovi il vecchio countdown se esiste
             const existingIndex = countdowns.findIndex(c => c.tableNumber == tableNumber);
             if (existingIndex !== -1) {
@@ -386,16 +393,9 @@
                     if (audio) audio.play().catch(e => console.log('Errore audio:', e));
                 }
 
-                const destinationIcons = {
-                    'cucina': '🍳',
-                    'pizzeria': '🍕',
-                    'insalata': '🥗'
-                };
-
                 countdownElement.innerHTML = `
                     <div class="countdown-table">
-                        <h3>${destinationIcons[destination]} Tavolo ${tableNumber}</h3>
-                        <small style="color: #666; text-transform: capitalize;">${destination}</small>
+                        <h3>Tavolo ${tableNumber}</h3>
                     </div>
                     <div class="countdown-time">
                         <p>${formatTime(remainingTime)}</p>

@@ -713,8 +713,15 @@
                             return;
                         } else if (data.action === 'startCountdown') {
                             console.log('📥 Countdown ricevuto via WebSocket:', data);
-                            console.log(`✅ Countdown accettato - Tavolo: ${data.tableNumber}, Destinazione: ${data.destination}`);
-                            startCountdownVisual(data.tableNumber, data.timeRemaining, data.destination);
+                            console.log(`🔍 Destinazione ricevuta: "${data.destination}", Tavolo: ${data.tableNumber}`);
+
+                            // Mostra il countdown in cucina SOLO se la destinazione è esplicitamente "cucina"
+                            if (data.destination && data.destination === 'cucina') {
+                                console.log(`✅ Countdown accettato per cucina - Tavolo: ${data.tableNumber}`);
+                                startCountdownVisual(data.tableNumber, data.timeRemaining, data.destination);
+                            } else {
+                                console.log(`🚫 Countdown RIFIUTATO in cucina - Destinazione: "${data.destination || 'undefined'}", Tavolo: ${data.tableNumber}`);
+                            }
                         } else if (data.action === 'deleteCountdown') {
                             console.log('📥 Eliminazione countdown ricevuta via WebSocket:', data);
                             const countdownIndex = countdowns.findIndex(c => c.tableNumber == data.tableNumber);
