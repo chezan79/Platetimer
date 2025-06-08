@@ -1649,15 +1649,169 @@
                 return;
             }
 
-            const accept = confirm(`📞 Chiamata in arrivo da ${data.from}. Accettare?`);
-            
-            if (!accept) {
+            // Mostra notifica visiva di chiamata in arrivo
+            showIncomingCallNotification(data.from, data.callId);
+        }
+
+        function showIncomingCallNotification(fromPage, callId) {
+            // Rimuovi eventuali notifiche precedenti
+            const existingNotification = document.getElementById('incoming-call-notification');
+            if (existingNotification) {
+                existingNotification.remove();
+            }
+
+            // Crea notifica chiamata in arrivo
+            const notificationDiv = document.createElement('div');
+            notificationDiv.id = 'incoming-call-notification';
+            notificationDiv.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+                color: white;
+                padding: 25px;
+                border-radius: 15px;
+                box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3);
+                z-index: 3000;
+                text-align: center;
+                border: 3px solid #198754;
+                min-width: 350px;
+                font-family: Arial, sans-serif;
+                animation: callPulse 1s ease-in-out infinite;
+            `;
+
+            // Aggiungi animazione CSS per la chiamata
+            if (!document.getElementById('callAnimations')) {
+                const style = document.createElement('style');
+                style.id = 'callAnimations';
+                style.textContent = `
+                    @keyframes callPulse {
+                        0%, 100% { transform: translate(-50%, -50%) scale(1); box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3); }
+                        50% { transform: translate(-50%, -50%) scale(1.05); box-shadow: 0 20px 40px rgba(40, 167, 69, 0.4); }
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+
+            notificationDiv.innerHTML = `
+                <div style="font-size: 24px; margin-bottom: 15px;">📞</div>
+                <div style="font-size: 20px; font-weight: bold; margin-bottom: 10px;">
+                    CHIAMATA IN ARRIVO
+                </div>
+                <div style="font-size: 18px; margin-bottom: 20px;">
+                    Da: ${fromPage}
+                </div>
+                <div style="display: flex; gap: 15px; justify-content: center;">
+                    <button onclick="acceptIncomingCall('${callId}')" 
+                            style="background: #28a745; color: white; border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: 600; transition: all 0.3s ease;">
+                        📞 Accetta
+                    </button>
+                    <button onclick="rejectIncomingCall('${callId}')" 
+                            style="background: #dc3545; color: white; border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: 600; transition: all 0.3s ease;">
+                        📞 Rifiuta
+                    </button>
+                </div>
+            `;
+
+            document.body.appendChild(notificationDiv);
+
+            // Riproduci suono di chiamata
+            const alertAudio = document.getElementById('alertSound');
+            if (alertAudio) {
+                alertAudio.loop = true;
+                alertAudio.play().catch(e => console.log('Errore audio chiamata:', e));
+            }
+
+            // Auto-rifiuta dopo 30 secondi
+            setTimeout(() => {
+                const notification = document.getElementById('incoming-call-notification');
+                if (notification) {
+                    rejectIncomingCall(callId);
+                }
+            }, 30000);
+
+            console.log(`📞 Notifica chiamata in arrivo mostrata da ${fromPage}`);
+        }
+
+        async function acceptIncomingCall(callId) {
+            const notification = document.getElementById('incoming-call-notification');
+            if (notification) {
+                notification.remove();
+            }
+
+            // Ferma suono di chiamata
+            const alertAudio = document.getElementById('alertSound');
+            if (alertAudio) {
+                alertAudio.loop = false;
+                alertAudio.pause();
+                alertAudio.currentTime = 0;
+            }
+
+            // Procedi con l'accettazione della chiamata
+            try {
+                currentCallId = callId;
+                isInCall = true;
+                updateCallUI('connecting', 'Connessione...');
+
+                // Ottieni accesso al microfono
+                localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                
+                // Crea peer connection
+                peerConnection = new RTCPeerConnection(configuration);
+
+                // Gestisci ICE candidates
+                peerConnection.onicecandidate = (event) => {
+                    if (event.candidate) {
+                        ws.send(JSON.stringify({
+                            action: 'candidate',
+                            candidate: event.candidate,
+                            callId: currentCallId
+                        }));
+                    }
+                };
+
+                // Gestisci stream remoto
+                peerConnection.ontrack = (event) => {
+                    const remoteAudio = document.getElementById('remoteAudio');
+                    remoteAudio.srcObject = event.streams[0];
+                    updateCallUI('connected', 'Chiamata attiva');
+                };
+
+                // La gestione dell'offerta avverrà quando arriverà via WebSocket
+                console.log('📞 Chiamata accettata, in attesa dell\'offerta WebRTC...');
+
+            } catch (error) {
+                console.error('❌ Errore accettazione chiamata:', error);
+                updateCallUI('error', 'Errore chiamata');
+                cleanupCall();
+            }
+        }
+
+        function rejectIncomingCall(callId) {
+            const notification = document.getElementById('incoming-call-notification');
+            if (notification) {
+                notification.remove();
+            }
+
+            // Ferma suono di chiamata
+            const alertAudio = document.getElementById('alertSound');
+            if (alertAudio) {
+                alertAudio.loop = false;
+                alertAudio.pause();
+                alertAudio.currentTime = 0;
+            }
+
+            // Invia rifiuto
+            if (ws && ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({
                     action: 'hangup',
-                    callId: data.callId
+                    callId: callId
                 }));
-                return;
             }
+
+            console.log('📞 Chiamata rifiutata');
+        }
 
             try {
                 currentCallId = data.callId;

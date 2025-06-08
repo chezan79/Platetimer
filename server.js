@@ -699,7 +699,7 @@ wss.on('connection', (ws, req) => {
                     if (targetClients.length > 0) {
                         const callId = Date.now().toString();
                         ws.callId = callId;
-                        
+
                         const offerMessage = {
                             action: 'offer',
                             offer: data.offer,
@@ -709,7 +709,7 @@ wss.on('connection', (ws, req) => {
 
                         targetClients[0].send(JSON.stringify(offerMessage));
                         targetClients[0].callId = callId;
-                        
+
                         console.log(`📞 Offerta WebRTC inviata da ${ws.pageType} a ${data.targetPage}`);
                     } else {
                         ws.send(JSON.stringify({
@@ -738,7 +738,7 @@ wss.on('connection', (ws, req) => {
                             answer: data.answer,
                             callId: data.callId
                         }));
-                        
+
                         console.log(`📞 Risposta WebRTC inviata per chiamata ${data.callId}`);
                     }
                 }
@@ -860,7 +860,7 @@ setInterval(() => {
     }
 }, 30000); // Ogni 30 secondi
 
-// Pulizia periodica ottimizzata - più frequente per evitare accumulo
+// Pulizia periodica ottimizzata -più frequente per evitare accumulo
 setInterval(() => {
     const now = Date.now();
 
@@ -933,6 +933,30 @@ setInterval(() => {
     }
 }, 300000); // Ogni 5 minuti
 
+// Funzione per ottenere il tipo di pagina dal WebSocket
+function getPageType(ws) {
+    return ws.pageType || 'unknown';
+}
+
+// Funzione per ottenere la room corrente dal WebSocket
+function getCurrentRoom(ws) {
+    return ws.companyRoom || 'unknown';
+}
+
+// Funzione per inviare un messaggio a tutti i client in una specifica pagina
+function broadcastToPage(companyName, targetPage, message) {
+    if (companyName && companyRooms.has(companyName)) {
+        const roomClients = companyRooms.get(companyName);
+        const messageString = JSON.stringify(message);
+
+        roomClients.forEach(client => {
+            if (client.pageType === targetPage && client.readyState === WebSocket.OPEN) {
+                client.send(messageString);
+            }
+        });
+    }
+}
+
 // Avvia il server
 const PORT = 5000;
 server.listen(PORT, '0.0.0.0', () => {
@@ -942,4 +966,79 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log('✅ Rate limiting ottimizzato');
 }).on('error', (error) => {
     console.error('❌ Errore avvio server:', error);
+});
+
+wss.on('connection', (ws, req) => {
+    // ... existing connection code ...
+
+    ws.on('message', (message) => {
+        try {
+            // ... existing message handling code ...
+
+            if (data.action === 'joinRoom') {
+                // ... existing joinRoom code ...
+
+            } else if (data.action === 'joinPage') {
+                // ... existing joinPage code ...
+
+            } else if (data.action === 'startCountdown') {
+                // ... existing startCountdown code ...
+
+            } else if (data.action === 'deleteCountdown') {
+                // ... existing deleteCountdown code ...
+
+            } else if (data.action === 'voiceMessage') {
+                // ... existing voiceMessage code ...
+
+            } else if (data.action === 'deleteVoiceMessage') {
+                // ... existing deleteVoiceMessage code ...
+
+            } else if (data.action === 'pausaCucina') {
+                // ... existing pausaCucina code ...
+
+            } else if (data.action === 'annullaPausaCucina') {
+                // ... existing annullaPausaCucina code ...
+
+            } else if (data.action === 'pausaInsalata') {
+                // ... existing pausaInsalata code ...
+
+            } else if (data.action === 'annullaPausaInsalata') {
+                // ... existing annullaPausaInsalata code ...
+
+            } else if (data.action === 'offer') {
+                const callId = Date.now().toString();
+                const targetPage = data.targetPage;
+                const fromPage = getPageType(ws);
+
+                console.log(`📞 Offerta WebRTC inviata da ${fromPage} a ${targetPage}`);
+
+                // Inoltra l'offerta al client di destinazione con informazioni complete
+                broadcastToPage(data.companyName || getCurrentRoom(ws), targetPage, {
+                    action: 'offer',
+                    offer: data.offer,
+                    callId: callId,
+                    from: fromPage,
+                    targetPage: targetPage
+                });
+            } else if (data.action === 'answer') {
+                // ... existing answer code ...
+
+            } else if (data.action === 'candidate') {
+                // ... existing candidate code ...
+
+            } else if (data.action === 'hangup') {
+                // ... existing hangup code ...
+            }
+        } catch (error) {
+            console.error('❌ Errore nel parsing del messaggio:', error);
+        }
+    });
+
+    ws.on('close', (code, reason) => {
+        // ... existing close code ...
+    });
+
+    ws.on('error', (error) => {
+        // ... existing error code ...
+    });
 });
