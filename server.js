@@ -38,6 +38,13 @@ try {
     console.error('❌ Errore configurazione Google Cloud Speech:', error.message);
 }
 
+// Configura Agora.io
+const agoraAppId = process.env.AGORA_APP_ID || 'demo-app-id';
+console.log('📞 Agora App ID configurato:', agoraAppId ? 'Sì' : 'No');
+
+// Store per le chiamate attive
+const activeCalls = new Map();
+
 // Endpoint per salvare messaggi vocali
 app.post('/api/voice-message', (req, res) => {
     try {
@@ -78,6 +85,74 @@ app.post('/api/stripe-webhook', express.raw({type: 'application/json'}), (req, r
     res.status(503).json({ error: 'Abbonamenti temporaneamente disabilitati' });
 });
 */
+
+// Endpoint per ottenere configurazione Agora
+app.get('/api/agora-config', (req, res) => {
+    res.json({
+        appId: agoraAppId,
+        serverUrl: `${req.protocol}://${req.get('host')}`
+    });
+});
+
+// Endpoint per iniziare una chiamata
+app.post('/api/start-call', (req, res) => {
+    try {
+        const { from, to, callId } = req.body;
+        
+        if (!from || !to || !callId) {
+            return res.status(400).json({ error: 'Dati chiamata mancanti' });
+        }
+
+        // Solo la cucina può iniziare chiamate
+        if (from !== 'cucina') {
+            return res.status(403).json({ error: 'Solo la cucina può iniziare chiamate' });
+        }
+
+        // Salva la chiamata attiva
+        activeCalls.set(callId, {
+            from,
+            to,
+            startTime: Date.now(),
+            status: 'calling'
+        });
+
+        console.log(`📞 Chiamata iniziata: ${from} → ${to} (ID: ${callId})`);
+        
+        res.json({ 
+            success: true, 
+            callId,
+            appId: agoraAppId,
+            channel: `call-${callId}`
+        });
+
+    } catch (error) {
+        console.error('❌ Errore avvio chiamata:', error);
+        res.status(500).json({ error: 'Errore interno server' });
+    }
+});
+
+// Endpoint per terminare una chiamata
+app.post('/api/end-call', (req, res) => {
+    try {
+        const { callId } = req.body;
+        
+        if (!callId) {
+            return res.status(400).json({ error: 'ID chiamata mancante' });
+        }
+
+        const call = activeCalls.get(callId);
+        if (call) {
+            activeCalls.delete(callId);
+            console.log(`📞 Chiamata terminata: ID ${callId}`);
+        }
+
+        res.json({ success: true });
+
+    } catch (error) {
+        console.error('❌ Errore termine chiamata:', error);
+        res.status(500).json({ error: 'Errore interno server' });
+    }
+});
 
 // Endpoint per il riconoscimento vocale
 app.post('/api/speech-to-text', async (req, res) => {
@@ -682,8 +757,55 @@ wss.on('connection', (ws, req) => {
                     console.log('⚠️ Client non assegnato a nessuna room per annullamento pausa insalata');
                 }
 
-            
+            } else if (data.action === 'startCall') {
+                // Gestione chiamata Agora
+                if (!data.callId || !data.from || !data.to) {
+                    console.log('⚠️ Dati chiamata non validi');
+                    return;
+                }
+
+                // Solo la cucina può iniziare chiamate
+                if (data.from !== 'cucina') {
+                    console.log('⚠️ Solo la cucina può iniziare chiamate');
+                    return;
+                }
+
+                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    const callMessage = JSON.stringify({
+                        action: 'incomingCall',
+                        callId: data.callId,
+                        from: data.from,
+                        to: data.to,
+                        channel: `call-${data.callId}`,
+                        appId: agoraAppId
+                    });
+
+                    roomClients.forEach((client) => {
+                        if (client.readyState === WebSocket.OPEN) {
+                            client.send(callMessage);
+                        }
+                    });
+
+                    console.log(`📞 Chiamata Agora inviata: ${data.from} → ${data.to}`);
+                }
+
+            } else if (data.action === 'answerCall' || data.action === 'rejectCall' || data.action === 'endCall') {
+                // Gestione risposta/rifiuto/fine chiamata
+                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    const responseMessage = JSON.stringify(data);
+
+                    roomClients.forEach((client) => {
+                        if (client.readyState === WebSocket.OPEN) {
+                            client.send(responseMessage);
+                        }
+                    });
+
+                    console.log(`📞 Risposta chiamata: ${data.action} per ID ${data.callId}`);
+                }
             }
+        }
         } catch (error) {
             console.error('❌ Errore nel parsing del messaggio:', error);
         }

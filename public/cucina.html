@@ -346,6 +346,24 @@
     <!-- Container superiore con messaggi vocali, chiamate e controlli pausa -->
     <div style="position: absolute; top: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 15px; z-index: 500;">
 
+        <!-- Sistema chiamate Agora -->
+        <div style="text-align: center; padding: 8px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; border-left: 4px solid #28a745; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); min-width: 200px;">
+            <div style="margin-bottom: 4px; color: #155724; font-size: 12px; font-weight: 600;">📞 Chiamate</div>
+            <div style="display: flex; justify-content: center; align-items: center; gap: 6px; flex-wrap: nowrap;">
+                <button id="call-pizzeria-btn" onclick="startCallToPizzeria()" 
+                        style="padding: 6px 12px; background: linear-gradient(135deg, #28a745 0%, #20c997 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
+                    📞 Chiama Pizzeria
+                </button>
+                <button id="end-call-btn" onclick="endCall()" disabled
+                        style="padding: 6px 12px; background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap; opacity: 0.5;">
+                    📞 Riaggancia
+                </button>
+            </div>
+            <div id="call-status" style="margin-top: 4px; font-size: 10px; color: #155724; min-height: 12px; text-align: center;">
+                Pronto per chiamare
+            </div>
+        </div>
+
         
 
         <!-- Sistema messaggio vocale con scelta destinazione -->
@@ -493,6 +511,9 @@
 
     <audio id="alertSound" src="alerte-346112.mp3" preload="auto"></audio>
     <audio id="zeroSound" src="costa-rica-eas-alarm-346194.mp3" preload="auto"></audio>
+
+    <!-- Agora SDK -->
+    <script src="https://download.agora.io/sdk/release/AgoraRTC_N-4.18.0.js"></script>
 
     <script>
         // Verifica disponibilità audio all'avvio
@@ -771,6 +792,15 @@
                         } else if (data.action === 'newUserJoined') {
                             console.log('🎉 Nuovo utente è entrato nella pagina:', data.message);
                             mostraAvvisoNuovoUtente(data);
+                        } else if (data.action === 'answerCall') {
+                            console.log('📞 Chiamata accettata dalla pizzeria');
+                            updateCallUI('connected');
+                        } else if (data.action === 'rejectCall') {
+                            console.log('📞 Chiamata rifiutata dalla pizzeria');
+                            endCall();
+                        } else if (data.action === 'endCall') {
+                            console.log('📞 Chiamata terminata dalla pizzeria');
+                            endCall();
                         }
                     } catch (error) {
                         console.error('Errore nel parsing del messaggio WebSocket:', error);
@@ -1388,6 +1418,9 @@
 
         document.addEventListener('DOMContentLoaded', function() {
             console.log('🎤 Pagina caricata - Riconoscimento vocale continuo disponibile');
+            
+            // Inizializza Agora
+            initializeAgora();
 
             setInterval(() => {
                 if (isContinuousListening && continuousRecognition) {
@@ -2465,6 +2498,171 @@
                     setTimeout(() => noticeDiv.remove(), 300);
                 }
             }, 5000);
+        }
+
+        // Sistema chiamate Agora
+        let agoraClient = null;
+        let localAudioTrack = null;
+        let remoteUsers = {};
+        let currentCall = null;
+        let agoraAppId = null;
+
+        // Inizializza Agora
+        async function initializeAgora() {
+            try {
+                const response = await fetch('/api/agora-config');
+                const config = await response.json();
+                agoraAppId = config.appId;
+                
+                if (!agoraAppId || agoraAppId === 'demo-app-id') {
+                    console.log('⚠️ Agora App ID non configurato');
+                    return;
+                }
+
+                agoraClient = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
+                
+                agoraClient.on("user-published", async (user, mediaType) => {
+                    await agoraClient.subscribe(user, mediaType);
+                    console.log("📞 Utente remoto sottoscritto:", user.uid);
+
+                    if (mediaType === 'audio') {
+                        const remoteAudioTrack = user.audioTrack;
+                        remoteAudioTrack.play();
+                        console.log("🔊 Audio remoto riprodotto");
+                    }
+                });
+
+                agoraClient.on("user-unpublished", (user) => {
+                    console.log("📞 Utente remoto disconnesso:", user.uid);
+                });
+
+                console.log('✅ Agora SDK inizializzato');
+            } catch (error) {
+                console.error('❌ Errore inizializzazione Agora:', error);
+            }
+        }
+
+        async function startCallToPizzeria() {
+            if (!agoraClient || !agoraAppId || agoraAppId === 'demo-app-id') {
+                alert('❌ Sistema chiamate non configurato. Configura AGORA_APP_ID nei Secrets.');
+                return;
+            }
+
+            if (currentCall) {
+                alert('⚠️ Chiamata già in corso');
+                return;
+            }
+
+            try {
+                const callId = Date.now().toString();
+                currentCall = {
+                    id: callId,
+                    channel: `call-${callId}`,
+                    to: 'pizzeria'
+                };
+
+                updateCallUI('calling');
+                
+                // Crea il canale audio locale
+                localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack();
+                
+                // Unisciti al canale
+                await agoraClient.join(agoraAppId, currentCall.channel, null);
+                await agoraClient.publish([localAudioTrack]);
+
+                // Invia notifica chiamata via WebSocket
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({
+                        action: 'startCall',
+                        callId: callId,
+                        from: 'cucina',
+                        to: 'pizzeria',
+                        channel: currentCall.channel
+                    }));
+                }
+
+                console.log(`📞 Chiamata avviata verso pizzeria: ${currentCall.channel}`);
+
+            } catch (error) {
+                console.error('❌ Errore avvio chiamata:', error);
+                endCall();
+                alert('❌ Errore nell\'avviare la chiamata');
+            }
+        }
+
+        async function endCall() {
+            if (!currentCall) return;
+
+            try {
+                updateCallUI('ending');
+
+                // Invia notifica fine chiamata
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({
+                        action: 'endCall',
+                        callId: currentCall.id
+                    }));
+                }
+
+                // Pulisci risorse Agora
+                if (localAudioTrack) {
+                    localAudioTrack.stop();
+                    localAudioTrack.close();
+                    localAudioTrack = null;
+                }
+
+                if (agoraClient) {
+                    await agoraClient.leave();
+                }
+
+                currentCall = null;
+                updateCallUI('idle');
+
+                console.log('📞 Chiamata terminata');
+
+            } catch (error) {
+                console.error('❌ Errore termine chiamata:', error);
+                currentCall = null;
+                updateCallUI('idle');
+            }
+        }
+
+        function updateCallUI(status) {
+            const callBtn = document.getElementById('call-pizzeria-btn');
+            const endBtn = document.getElementById('end-call-btn');
+            const statusDiv = document.getElementById('call-status');
+
+            switch (status) {
+                case 'calling':
+                    callBtn.disabled = true;
+                    callBtn.style.opacity = '0.5';
+                    endBtn.disabled = false;
+                    endBtn.style.opacity = '1';
+                    statusDiv.textContent = '📞 Chiamando...';
+                    statusDiv.style.color = '#ffc107';
+                    break;
+                case 'connected':
+                    callBtn.disabled = true;
+                    callBtn.style.opacity = '0.5';
+                    endBtn.disabled = false;
+                    endBtn.style.opacity = '1';
+                    statusDiv.textContent = '📞 In chiamata';
+                    statusDiv.style.color = '#28a745';
+                    break;
+                case 'ending':
+                    statusDiv.textContent = '📞 Terminando...';
+                    statusDiv.style.color = '#dc3545';
+                    break;
+                case 'idle':
+                default:
+                    callBtn.disabled = false;
+                    callBtn.style.opacity = '1';
+                    endBtn.disabled = true;
+                    endBtn.style.opacity = '0.5';
+                    statusDiv.textContent = 'Pronto per chiamare';
+                    statusDiv.style.color = '#155724';
+                    break;
+            }
         }
 
         // Sistema toggle controlli
