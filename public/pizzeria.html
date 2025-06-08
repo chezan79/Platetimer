@@ -1603,7 +1603,7 @@
         function connectWebRTC() {
             try {
                 const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-                const port = window.location.hostname === 'localhost' ? ':5001' : ':5001';
+                const port = window.location.hostname === 'localhost' ? ':5000' : ':5000';
                 webrtcWs = new WebSocket(`${protocol}//${window.location.hostname}${port}/webrtc-ws`);
 
                 webrtcWs.onopen = () => {

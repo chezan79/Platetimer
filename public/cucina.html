@@ -2558,7 +2558,7 @@
         function connectWebRTC() {
             try {
                 const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-                const port = ':5001'; // Sempre porta 5001 per WebRTC
+                const port = window.location.hostname === 'localhost' ? ':5000' : ':5000';
                 const wsUrl = `${protocol}//${window.location.hostname}${port}/webrtc-ws`;
                 
                 console.log('📞 Tentativo connessione WebRTC a:', wsUrl);

@@ -34,10 +34,6 @@ mode = "parallel"
 task = "shell.exec"
 args = "node server.js"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "node webrtc-server.js"
-
 [[ports]]
 localPort = 5000
 externalPort = 80
