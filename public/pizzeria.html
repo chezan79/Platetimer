@@ -272,12 +272,10 @@
                     console.log('📞 PIZZERIA DEBUG - Messaggio WebRTC ricevuto:', data.action, data);
                 }
 
-                // PRIORITÀ ASSOLUTA: Gestione eventi WebRTC per pizzeria (BLOCCA TUTTO IL RESTO)
+                // PRIORITÀ ASSOLUTA: Gestione eventi WebRTC per pizzeria
                 if (data.action === 'offer') {
-                    console.log('📞 PIZZERIA - Offerta WebRTC ricevuta');
-                    // GESTISCI IMMEDIATAMENTE - NON verificare targetPage perché potrebbe essere undefined
-                    event.preventDefault?.();
-                    event.stopPropagation?.();
+                    console.log('📞 PIZZERIA - Offerta WebRTC ricevuta da:', data.from);
+                    console.log('📞 PIZZERIA - CallId:', data.callId);
                     handleOffer(data);
                     return;
                 } else if (data.action === 'answer' && currentCallId === data.callId) {
@@ -1622,129 +1620,100 @@
 
         async function handleOffer(data) {
             console.log('📞 PIZZERIA - Gestione offerta WebRTC iniziata');
-            console.log('📞 PIZZERIA - Dati ricevuti:', data);
-            
-            // Blocca riconnessioni automatiche durante la gestione della chiamata
-            if (reconnectInterval) {
-                clearInterval(reconnectInterval);
-                reconnectInterval = null;
-                console.log('🛑 STOP riconnessione automatica per chiamata');
-            }
-            
-            // Genera un callId se non presente
-            if (!data.callId) {
-                data.callId = Date.now().toString();
-                console.log('📞 PIZZERIA - CallId generato:', data.callId);
-            }
+            console.log('📞 PIZZERIA - CallId ricevuto:', data.callId);
             
             // Determina il mittente
             const caller = data.from || 'Cucina';
-            console.log('📞 PIZZERIA - Chiamante identificato:', caller);
+            console.log('📞 PIZZERIA - Chiamante:', caller);
             
-            // Aggiorna immediatamente l'interfaccia per mostrare la chiamata in arrivo
-            const callStatus = document.getElementById('call-status');
-            if (callStatus) {
-                callStatus.textContent = `📞 Chiamata in arrivo da ${caller}`;
-                callStatus.style.color = '#ffc107';
-                console.log('📞 PIZZERIA - Status UI aggiornato');
-            }
+            // Aggiorna UI immediatamente
+            updateCallUI('incoming', `Chiamata da ${caller}`);
             
-            // Mostra anche un avviso visivo prominente
+            // Mostra avviso visivo
             mostraAvvisoChiamataInArrivo(caller);
 
-            // Riproduci suono di chiamata
+            // Riproduci suono
             const alertAudio = document.getElementById('alertSound');
             if (alertAudio) {
-                alertAudio.play().catch(e => console.log('Errore audio chiamata:', e));
-            } else {
-                console.log('📞 PIZZERIA - File audio non trovato');
-                // Fallback con beep generato
-                try {
-                    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                    const oscillator = audioContext.createOscillator();
-                    const gainNode = audioContext.createGain();
-                    
-                    oscillator.connect(gainNode);
-                    gainNode.connect(audioContext.destination);
-                    
-                    oscillator.frequency.value = 800;
-                    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-                    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 1);
-                    
-                    oscillator.start(audioContext.currentTime);
-                    oscillator.stop(audioContext.currentTime + 1);
-                } catch (beepError) {
-                    console.log('Impossibile riprodurre beep:', beepError);
-                }
+                alertAudio.play().catch(e => console.log('Errore audio:', e));
             }
 
-            console.log('📞 PIZZERIA - Mostrando conferma chiamata...');
+            // Conferma accettazione
             const acceptCall = confirm(`📞 CHIAMATA IN ARRIVO DA ${caller.toUpperCase()}\n\nAccettare la chiamata?`);
             
-            if (acceptCall) {
-                try {
-                    currentCallId = data.callId;
-                    isInCall = true;
-                    updateCallUI('connecting', 'Connessione...');
-
-                    // Ottieni accesso al microfono
-                    localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-
-                    // Crea peer connection
-                    peerConnection = new RTCPeerConnection(configuration);
-
-                    // Gestisci ICE candidates
-                    peerConnection.onicecandidate = (event) => {
-                        if (event.candidate) {
-                            ws.send(JSON.stringify({
-                                action: 'candidate',
-                                candidate: event.candidate,
-                                callId: currentCallId
-                            }));
-                        }
-                    };
-
-                    // Gestisci stream remoto
-                    peerConnection.ontrack = (event) => {
-                        const remoteAudio = document.getElementById('remoteAudio');
-                        remoteAudio.srcObject = event.streams[0];
-                        updateCallUI('connected', 'Chiamata attiva');
-                        rimuoviAvvisoChiamataInArrivo();
-                    };
-
-                    // Imposta offerta remota
-                    await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
-
-                    // Aggiungi stream locale
-                    localStream.getTracks().forEach(track => {
-                        peerConnection.addTrack(track, localStream);
-                    });
-
-                    // Crea risposta
-                    const answer = await peerConnection.createAnswer();
-                    await peerConnection.setLocalDescription(answer);
-
-                    // Invia risposta
-                    ws.send(JSON.stringify({
-                        action: 'answer',
-                        answer: answer,
-                        callId: currentCallId
-                    }));
-
-                    console.log('📞 PIZZERIA - Chiamata accettata');
-                } catch (error) {
-                    console.error('❌ Errore accettazione chiamata in pizzeria:', error);
-                    updateCallUI('error', 'Errore chiamata');
-                    cleanupCall();
-                    rimuoviAvvisoChiamataInArrivo();
-                }
-            } else {
-                // Rifiuta la chiamata
+            if (!acceptCall) {
                 console.log('📞 PIZZERIA - Chiamata rifiutata');
                 ws.send(JSON.stringify({
                     action: 'hangup',
                     callId: data.callId
                 }));
+                updateCallUI('idle', 'In attesa di chiamate');
+                rimuoviAvvisoChiamataInArrivo();
+                return;
+            }
+
+            try {
+                console.log('📞 PIZZERIA - Accettazione chiamata...');
+                currentCallId = data.callId;
+                isInCall = true;
+                updateCallUI('connecting', 'Connessione...');
+
+                // Ottieni microfono
+                localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                console.log('📞 PIZZERIA - Microfono ottenuto');
+
+                // Crea peer connection
+                peerConnection = new RTCPeerConnection(configuration);
+
+                // ICE candidates
+                peerConnection.onicecandidate = (event) => {
+                    if (event.candidate && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({
+                            action: 'candidate',
+                            candidate: event.candidate,
+                            callId: currentCallId
+                        }));
+                        console.log('📞 PIZZERIA - ICE candidate inviato');
+                    }
+                };
+
+                // Stream remoto
+                peerConnection.ontrack = (event) => {
+                    console.log('📞 PIZZERIA - Stream remoto ricevuto');
+                    const remoteAudio = document.getElementById('remoteAudio');
+                    remoteAudio.srcObject = event.streams[0];
+                    updateCallUI('connected', 'Chiamata attiva');
+                    rimuoviAvvisoChiamataInArrivo();
+                };
+
+                // Imposta offerta remota
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
+                console.log('📞 PIZZERIA - Offerta remota impostata');
+
+                // Aggiungi stream locale
+                localStream.getTracks().forEach(track => {
+                    peerConnection.addTrack(track, localStream);
+                });
+                console.log('📞 PIZZERIA - Stream locale aggiunto');
+
+                // Crea e invia risposta
+                const answer = await peerConnection.createAnswer();
+                await peerConnection.setLocalDescription(answer);
+
+                if (ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({
+                        action: 'answer',
+                        answer: answer,
+                        callId: currentCallId
+                    }));
+                    console.log('📞 PIZZERIA - Answer inviato');
+                } else {
+                    throw new Error('WebSocket disconnesso');
+                }
+
+            } catch (error) {
+                console.error('❌ Errore accettazione chiamata:', error);
+                updateCallUI('error', 'Errore chiamata');
                 cleanupCall();
                 rimuoviAvvisoChiamataInArrivo();
             }
@@ -1876,6 +1845,12 @@
                     hangupBtn.style.display = 'none';
                     statusDiv.style.color = 'white';
                     statusDiv.textContent = 'In attesa di chiamate';
+                    isInCall = false;
+                    break;
+                case 'incoming':
+                    hangupBtn.style.display = 'none';
+                    statusDiv.style.color = '#ffc107';
+                    statusDiv.style.fontWeight = 'bold';
                     break;
                 case 'connecting':
                     hangupBtn.style.display = 'inline-block';
