@@ -188,6 +188,7 @@ Adding Agora WebSocket message handling to pizzeria to manage incoming and endin
 
     <!-- Tasto Home in alto a destra -->
     <div style="position: absolute; top: 20px; right: 20px; z-index: 1000; display: flex; gap: 10px;">
+        <button onclick="forceReconnect()" style="padding: 6px 12px; background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500; transition: transform 0.2s, box-shadow 0.2s;">🔄 Riconnetti</button>
         <button onclick="window.location.href='home.html'" style="padding: 6px 12px; background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500; transition: transform 0.2s, box-shadow 0.2s;">🏠 Home</button>
         <button onclick="window.location.href='index.html'" style="padding: 6px 12px; background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500; transition: transform 0.2s, box-shadow 0.2s;">🚪 Esci</button>
     </div>
@@ -274,13 +275,9 @@ Adding Agora WebSocket message handling to pizzeria to manage incoming and endin
 
                 if (data.action === 'startCountdown') {
                     console.log('📥 Countdown ricevuto in pizzeria:', data);
-                    // Mostra solo i countdown destinati alla pizzeria
-                    if (data.destination === 'pizzeria') {
-                        console.log(`✅ Countdown accettato per pizzeria - Tavolo: ${data.tableNumber}`);
-                        startCountdown(data.tableNumber, data.timeRemaining);
-                    } else {
-                        console.log(`🚫 Countdown ignorato - Destinazione: ${data.destination || 'undefined'}, Tavolo: ${data.tableNumber}`);
-                    }
+                    // La pizzeria mostra TUTTI i countdown per monitoraggio generale
+                    console.log(`✅ Countdown accettato per pizzeria - Tavolo: ${data.tableNumber}, Destinazione: ${data.destination || 'generale'}`);
+                    startCountdown(data.tableNumber, data.timeRemaining, data.destination);
                 } else if (data.action === 'deleteCountdown') {
                     console.log('📥 Eliminazione countdown ricevuta in pizzeria:', data);
                     deleteCountdown(data.tableNumber);
@@ -411,6 +408,25 @@ Adding Agora WebSocket message handling to pizzeria to manage incoming and endin
         // Inizializza connessione
         connectWebSocket();
 
+        // Funzione per forzare la riconnessione
+        function forceReconnect() {
+            console.log('🔄 Riconnessione forzata...');
+            if (ws) {
+                ws.close();
+            }
+            if (reconnectInterval) {
+                clearInterval(reconnectInterval);
+                reconnectInterval = null;
+            }
+            if (heartbeatInterval) {
+                clearInterval(heartbeatInterval);
+                heartbeatInterval = null;
+            }
+            setTimeout(() => {
+                connectWebSocket();
+            }, 1000);
+        }
+
         function sortCountdowns() {
             countdowns.sort((a, b) => a.timeRemaining - b.timeRemaining);
             const container = document.getElementById('tavoli');
@@ -422,7 +438,7 @@ Adding Agora WebSocket message handling to pizzeria to manage incoming and endin
 
 
 
-        function startCountdown(tableNumber, timeRemaining) {
+        function startCountdown(tableNumber, timeRemaining, destination = 'generale') {
             // Rimuovi il vecchio countdown se esiste
             const existingIndex = countdowns.findIndex(c => c.tableNumber == tableNumber);
             if (existingIndex !== -1) {
@@ -495,9 +511,16 @@ Adding Agora WebSocket message handling to pizzeria to manage incoming and endin
                     }
                 }
 
+                const destinationIcons = {
+                    'cucina': '🍳',
+                    'pizzeria': '🍕', 
+                    'insalata': '🥗',
+                    'generale': '⏰'
+                };
+                
                 countdownElement.innerHTML = `
                     <div class="countdown-table">
-                        <h3>Tavolo ${tableNumber}</h3>
+                        <h3>${destinationIcons[destination] || '⏰'} Tavolo ${tableNumber}</h3>
                     </div>
                     <div class="countdown-time">
                         <p>${formatTime(remainingTime)}</p>
