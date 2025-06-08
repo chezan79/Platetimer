@@ -349,42 +349,39 @@ wss.on('connection', (ws, req) => {
 
                     console.log(`📄 Client entrato in pagina ${data.pageType}: ${samePageClients.length} altri utenti già presenti`);
 
-                    // Sincronizza countdown specifici per la pagina - per tutte le pagine inclusa pizzeria
+                    // Sincronizza tutti i countdown attivi (ogni pagina vede tutti i countdown)
                     if (ws.companyRoom && activeCountdowns.has(ws.companyRoom)) {
                         const companyCountdowns = activeCountdowns.get(ws.companyRoom);
                         const countdownsToDelete = [];
                         let syncedCount = 0;
 
                         companyCountdowns.forEach((countdown, tableNumber) => {
-                            // Filtra countdown per la pagina specifica
-                            if (countdown.destination === data.pageType) {
-                                const currentTime = Date.now();
-                                const elapsed = Math.floor((currentTime - countdown.startTime) / 1000);
-                                const remainingTime = Math.max(0, countdown.initialDuration - elapsed);
+                            const currentTime = Date.now();
+                            const elapsed = Math.floor((currentTime - countdown.startTime) / 1000);
+                            const remainingTime = Math.max(0, countdown.initialDuration - elapsed);
 
-                                if (remainingTime > 0) {
-                                    const syncMessage = {
-                                        action: 'startCountdown',
-                                        tableNumber: tableNumber,
-                                        timeRemaining: remainingTime,
-                                        destination: countdown.destination
-                                    };
-                                    ws.send(JSON.stringify(syncMessage));
-                                    syncedCount++;
-                                    console.log(`📡 Countdown ${data.pageType}-specifico inviato: Tavolo ${tableNumber}, ${Math.floor(remainingTime/60)}:${(remainingTime%60).toString().padStart(2, '0')}`);
-                                } else {
-                                    countdownsToDelete.push(tableNumber);
-                                }
+                            if (remainingTime > 0) {
+                                const syncMessage = {
+                                    action: 'startCountdown',
+                                    tableNumber: tableNumber,
+                                    timeRemaining: remainingTime,
+                                    destination: countdown.destination
+                                };
+                                ws.send(JSON.stringify(syncMessage));
+                                syncedCount++;
+                                console.log(`📡 Countdown sincronizzato inviato: Tavolo ${tableNumber}, Destinazione: ${countdown.destination}, ${Math.floor(remainingTime/60)}:${(remainingTime%60).toString().padStart(2, '0')}`);
+                            } else {
+                                countdownsToDelete.push(tableNumber);
                             }
                         });
 
                         // Rimuovi countdown scaduti
                         countdownsToDelete.forEach(tableNumber => {
                             companyCountdowns.delete(tableNumber);
-                            console.log(`🗑️ Countdown scaduto rimosso per ${data.pageType}: Tavolo ${tableNumber}`);
+                            console.log(`🗑️ Countdown scaduto rimosso durante sincronizzazione: Tavolo ${tableNumber}`);
                         });
 
-                        console.log(`📊 Sincronizzazione ${data.pageType}: ${syncedCount} countdown inviati, ${countdownsToDelete.length} scaduti rimossi`);
+                        console.log(`📊 Sincronizzazione: ${syncedCount} countdown inviati, ${countdownsToDelete.length} scaduti rimossi`);
                     }
 
                     // Se ci sono altri utenti sulla stessa pagina, invia un avviso
@@ -439,13 +436,19 @@ wss.on('connection', (ws, req) => {
                     return;
                 }
 
-                // Memorizza il countdown attivo
+                // Memorizza il countdown attivo (un solo countdown per tavolo)
                 if (ws.companyRoom) {
                     if (!activeCountdowns.has(ws.companyRoom)) {
                         activeCountdowns.set(ws.companyRoom, new Map());
                     }
 
                     const companyCountdowns = activeCountdowns.get(ws.companyRoom);
+                    
+                    // Rimuovi il countdown precedente per questo tavolo se esiste
+                    if (companyCountdowns.has(data.tableNumber)) {
+                        console.log(`🔄 Sostituendo countdown esistente per tavolo ${data.tableNumber}`);
+                    }
+                    
                     companyCountdowns.set(data.tableNumber, {
                         startTime: Date.now(),
                         initialDuration: data.timeRemaining,

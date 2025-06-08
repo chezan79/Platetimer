@@ -271,13 +271,8 @@
 
                         if (data.action === 'startCountdown') {
                             console.log('📥 Countdown ricevuto in pizzeria:', data);
-                            // Mostra solo i countdown destinati alla pizzeria
-                            if (data.destination === 'pizzeria') {
-                                console.log(`✅ Countdown accettato per pizzeria - Tavolo: ${data.tableNumber}`);
-                                startCountdown(data.tableNumber, data.timeRemaining);
-                            } else {
-                                console.log(`🚫 Countdown ignorato - Destinazione: ${data.destination || 'undefined'}, Tavolo: ${data.tableNumber}`);
-                            }
+                            console.log(`✅ Countdown accettato - Tavolo: ${data.tableNumber}, Destinazione: ${data.destination}`);
+                            startCountdown(data.tableNumber, data.timeRemaining, data.destination);
                         } else if (data.action === 'deleteCountdown') {
                             console.log('📥 Eliminazione countdown ricevuta in pizzeria:', data);
                             deleteCountdown(data.tableNumber);
@@ -404,7 +399,7 @@
 
 
 
-        function startCountdown(tableNumber, timeRemaining) {
+        function startCountdown(tableNumber, timeRemaining, destination = 'pizzeria') {
             // Rimuovi il vecchio countdown se esiste
             const existingIndex = countdowns.findIndex(c => c.tableNumber == tableNumber);
             if (existingIndex !== -1) {
@@ -477,9 +472,16 @@
                     }
                 }
 
+                const destinationIcons = {
+                    'cucina': '🍳',
+                    'pizzeria': '🍕',
+                    'insalata': '🥗'
+                };
+
                 countdownElement.innerHTML = `
                     <div class="countdown-table">
-                        <h3>Tavolo ${tableNumber}</h3>
+                        <h3>${destinationIcons[destination]} Tavolo ${tableNumber}</h3>
+                        <small style="color: #666; text-transform: capitalize;">${destination}</small>
                     </div>
                     <div class="countdown-time">
                         <p>${formatTime(remainingTime)}</p>
