@@ -1,7 +1,17 @@
 
-const express = require('express');
-const http = require('http');
-const WebSocket = require('ws');
+console.log('🚀 Inizializzazione moduli server WebRTC...');
+
+try {
+    const express = require('express');
+    const http = require('http');
+    const WebSocket = require('ws');
+    
+    console.log('✅ Moduli caricati con successo');
+    console.log('🚀 Avvio server WebRTC...');
+} catch (error) {
+    console.error('❌ Errore caricamento moduli:', error);
+    process.exit(1);
+}
 
 const app = express();
 const server = http.createServer(app);
@@ -271,11 +281,19 @@ setInterval(() => {
 
 // Avvia server WebRTC su porta 5001
 const WEBRTC_PORT = 5001;
+
+console.log(`📞 Tentativo di avvio server WebRTC su porta ${WEBRTC_PORT}...`);
+
 server.listen(WEBRTC_PORT, '0.0.0.0', () => {
-    console.log(`📞 🎤 Server WebRTC avviato su http://0.0.0.0:${WEBRTC_PORT}`);
+    console.log(`📞 🎤 Server WebRTC avviato con successo su http://0.0.0.0:${WEBRTC_PORT}`);
     console.log('✅ WebRTC signaling attivo per chiamate vocali');
     console.log('🍳 Cucina: può effettuare chiamate');
     console.log('🍕 Pizzeria: può solo ricevere chiamate');
+    console.log(`📊 WebSocket Server WebRTC in ascolto su percorso: /webrtc-ws`);
 }).on('error', (error) => {
-    console.error('❌ Errore avvio server WebRTC:', error);
+    console.error('❌ ERRORE CRITICO avvio server WebRTC:', error);
+    console.error('📍 Porta:', WEBRTC_PORT);
+    console.error('📍 Indirizzo:', '0.0.0.0');
+    console.error('📍 Stack trace:', error.stack);
+    process.exit(1);
 });

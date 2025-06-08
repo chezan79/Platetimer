@@ -2558,8 +2558,11 @@
         function connectWebRTC() {
             try {
                 const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-                const port = window.location.hostname === 'localhost' ? ':5001' : ':5001';
-                webrtcWs = new WebSocket(`${protocol}//${window.location.hostname}${port}/webrtc-ws`);
+                const port = ':5001'; // Sempre porta 5001 per WebRTC
+                const wsUrl = `${protocol}//${window.location.hostname}${port}/webrtc-ws`;
+                
+                console.log('📞 Tentativo connessione WebRTC a:', wsUrl);
+                webrtcWs = new WebSocket(wsUrl);
 
                 webrtcWs.onopen = () => {
                     console.log('📞 WebRTC WebSocket connesso');
@@ -2592,6 +2595,14 @@
 
                 webrtcWs.onerror = (error) => {
                     console.error('❌ Errore WebRTC WebSocket:', error);
+                    updateCallStatus('❌ Errore connessione server chiamate', '#dc3545');
+                    
+                    // Mostra errore all'utente
+                    const statusDiv = document.getElementById('call-status');
+                    if (statusDiv) {
+                        statusDiv.textContent = '❌ Server chiamate non disponibile';
+                        statusDiv.style.color = '#dc3545';
+                    }
                 };
 
             } catch (error) {
