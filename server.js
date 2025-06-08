@@ -444,42 +444,36 @@ wss.on('connection', (ws, req) => {
 
                     const companyCountdowns = activeCountdowns.get(ws.companyRoom);
                     
-                    // Controlla se il tavolo ha già countdown attivi
-                    const existingCountdowns = [];
-                    for (const [key, countdown] of companyCountdowns.entries()) {
-                        if (countdown.tableNumber.toString() === data.tableNumber.toString()) {
-                            const currentTime = Date.now();
-                            const elapsed = Math.floor((currentTime - countdown.startTime) / 1000);
-                            const remainingTime = Math.max(0, countdown.initialDuration - elapsed);
-                            
-                            if (remainingTime > 0) {
-                                existingCountdowns.push(countdown);
-                            } else {
-                                // Rimuovi countdown scaduti
-                                companyCountdowns.delete(key);
-                            }
-                        }
-                    }
-
-                    // BLOCCO RILANCIO: Se il tavolo ha già countdown attivi, rifiuta
-                    if (existingCountdowns.length > 0) {
-                        const destinations = existingCountdowns.map(c => c.destination).join(', ');
-                        console.log(`🚫 RILANCIO BLOCCATO: Tavolo ${data.tableNumber} ha già countdown attivi per: ${destinations}`);
-                        
-                        // Invia messaggio di errore al client
-                        if (ws.readyState === WebSocket.OPEN) {
-                            ws.send(JSON.stringify({
-                                action: 'countdownBlocked',
-                                tableNumber: data.tableNumber,
-                                message: `❌ Tavolo ${data.tableNumber} già attivo per: ${destinations}`,
-                                activeDestinations: existingCountdowns.map(c => c.destination)
-                            }));
-                        }
-                        return;
-                    }
-
-                    // NUOVA LOGICA: Memorizza con chiave tavolo+destinazione
+                    // Controlla se il tavolo ha già un countdown per questa specifica destinazione
                     const countdownKey = `${data.tableNumber}_${destination}`;
+                    const existingCountdown = companyCountdowns.get(countdownKey);
+                    
+                    if (existingCountdown) {
+                        const currentTime = Date.now();
+                        const elapsed = Math.floor((currentTime - existingCountdown.startTime) / 1000);
+                        const remainingTime = Math.max(0, existingCountdown.initialDuration - elapsed);
+                        
+                        if (remainingTime > 0) {
+                            // BLOCCO RILANCIO: Questa specifica destinazione è già attiva
+                            console.log(`🚫 RILANCIO BLOCCATO: Tavolo ${data.tableNumber} destinazione ${destination} già attiva`);
+                            
+                            // Invia messaggio di errore al client
+                            if (ws.readyState === WebSocket.OPEN) {
+                                ws.send(JSON.stringify({
+                                    action: 'countdownBlocked',
+                                    tableNumber: data.tableNumber,
+                                    message: `❌ Tavolo ${data.tableNumber} già attivo per: ${destination}`,
+                                    activeDestinations: [destination]
+                                }));
+                            }
+                            return;
+                        } else {
+                            // Rimuovi countdown scaduto
+                            companyCountdowns.delete(countdownKey);
+                        }
+                    }
+
+                    // Memorizza con chiave tavolo+destinazione
                     
                     companyCountdowns.set(countdownKey, {
                         startTime: Date.now(),
