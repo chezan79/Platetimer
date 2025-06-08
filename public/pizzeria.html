@@ -1603,20 +1603,27 @@
         function connectWebRTC() {
             try {
                 const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-                const port = window.location.hostname === 'localhost' ? ':5000' : ':5000';
-                webrtcWs = new WebSocket(`${protocol}//${window.location.hostname}${port}/webrtc-ws`);
+                const wsUrl = `${protocol}//${window.location.host}/webrtc-ws`;
+                
+                console.log('📞 Pizzeria: Tentativo connessione WebRTC a:', wsUrl);
+                webrtcWs = new WebSocket(wsUrl);
 
                 webrtcWs.onopen = () => {
-                    console.log('📞 Pizzeria WebRTC WebSocket connesso');
+                    console.log('📞 Pizzeria: WebRTC WebSocket connesso');
                     
-                    // Join room WebRTC
-                    const companyName = localStorage.getItem('userCompany') || 'Default';
-                    webrtcWs.send(JSON.stringify({
-                        action: 'join-webrtc-room',
-                        companyName: companyName,
-                        pageType: 'pizzeria',
-                        userId: 'pizzeria-' + Date.now()
-                    }));
+                    // Join room WebRTC con delay per stabilizzare
+                    setTimeout(() => {
+                        const companyName = localStorage.getItem('userCompany') || 'Default';
+                        const joinData = {
+                            action: 'join-webrtc-room',
+                            companyName: companyName,
+                            pageType: 'pizzeria',
+                            userId: 'pizzeria-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9)
+                        };
+                        
+                        console.log('📞 Pizzeria: Invio join-webrtc-room:', joinData);
+                        webrtcWs.send(JSON.stringify(joinData));
+                    }, 500);
                 };
 
                 webrtcWs.onmessage = (event) => {
@@ -1648,11 +1655,11 @@
         function handleWebRTCMessage(data) {
             switch (data.action) {
                 case 'joined-webrtc-room':
-                    console.log('✅ Pizzeria entrata in room WebRTC:', data);
+                    console.log('✅ Pizzeria: Entrata in room WebRTC:', data);
                     break;
 
                 case 'webrtc-offer':
-                    console.log('📞 Offer ricevuto da:', data.from);
+                    console.log('📞 Pizzeria: Offer ricevuto da:', data.from);
                     incomingCallOffer = data.offer;
                     currentCallId = data.callId;
                     showIncomingCall();

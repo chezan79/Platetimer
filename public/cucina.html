@@ -2558,55 +2558,59 @@
         function connectWebRTC() {
             try {
                 const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-                const port = window.location.hostname === 'localhost' ? ':5000' : ':5000';
-                const wsUrl = `${protocol}//${window.location.hostname}${port}/webrtc-ws`;
+                const wsUrl = `${protocol}//${window.location.host}/webrtc-ws`;
                 
-                console.log('📞 Tentativo connessione WebRTC a:', wsUrl);
+                console.log('📞 Cucina: Tentativo connessione WebRTC a:', wsUrl);
                 webrtcWs = new WebSocket(wsUrl);
 
                 webrtcWs.onopen = () => {
-                    console.log('📞 WebRTC WebSocket connesso');
+                    console.log('📞 Cucina: WebRTC WebSocket connesso');
+                    updateCallStatus('📞 Pronto per chiamare', '#28a745');
                     
-                    // Join room WebRTC
-                    const companyName = localStorage.getItem('userCompany') || 'Default';
-                    webrtcWs.send(JSON.stringify({
-                        action: 'join-webrtc-room',
-                        companyName: companyName,
-                        pageType: 'cucina',
-                        userId: 'cucina-' + Date.now()
-                    }));
+                    // Join room WebRTC con delay per stabilizzare
+                    setTimeout(() => {
+                        const companyName = localStorage.getItem('userCompany') || 'Default';
+                        const joinData = {
+                            action: 'join-webrtc-room',
+                            companyName: companyName,
+                            pageType: 'cucina',
+                            userId: 'cucina-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9)
+                        };
+                        
+                        console.log('📞 Cucina: Invio join-webrtc-room:', joinData);
+                        webrtcWs.send(JSON.stringify(joinData));
+                    }, 500);
                 };
 
                 webrtcWs.onmessage = (event) => {
                     try {
                         const data = JSON.parse(event.data);
-                        console.log('📞 Messaggio WebRTC ricevuto:', data);
+                        console.log('📞 Cucina: Messaggio WebRTC ricevuto:', data);
                         handleWebRTCMessage(data);
                     } catch (error) {
-                        console.error('❌ Errore parsing messaggio WebRTC:', error);
+                        console.error('❌ Cucina: Errore parsing messaggio WebRTC:', error);
                     }
                 };
 
-                webrtcWs.onclose = () => {
-                    console.log('📞 WebRTC WebSocket disconnesso');
+                webrtcWs.onclose = (event) => {
+                    console.log('📞 Cucina: WebRTC WebSocket disconnesso:', event.code);
+                    updateCallStatus('🔴 Disconnesso - Riconnessione...', '#dc3545');
+                    
                     // Riconnetti dopo 3 secondi
-                    setTimeout(connectWebRTC, 3000);
+                    setTimeout(() => {
+                        console.log('🔄 Cucina: Tentativo di riconnessione WebRTC...');
+                        connectWebRTC();
+                    }, 3000);
                 };
 
                 webrtcWs.onerror = (error) => {
-                    console.error('❌ Errore WebRTC WebSocket:', error);
+                    console.error('❌ Cucina: Errore WebRTC WebSocket:', error);
                     updateCallStatus('❌ Errore connessione server chiamate', '#dc3545');
-                    
-                    // Mostra errore all'utente
-                    const statusDiv = document.getElementById('call-status');
-                    if (statusDiv) {
-                        statusDiv.textContent = '❌ Server chiamate non disponibile';
-                        statusDiv.style.color = '#dc3545';
-                    }
                 };
 
             } catch (error) {
-                console.error('❌ Errore connessione WebRTC:', error);
+                console.error('❌ Cucina: Errore connessione WebRTC:', error);
+                updateCallStatus('❌ Errore inizializzazione WebRTC', '#dc3545');
             }
         }
 
@@ -2614,45 +2618,64 @@
         function handleWebRTCMessage(data) {
             switch (data.action) {
                 case 'joined-webrtc-room':
-                    console.log('✅ Entrato in room WebRTC:', data);
+                    console.log('✅ Cucina: Entrato in room WebRTC:', data);
+                    updateCallStatus('📞 Connesso - Pronto per chiamare', '#28a745');
                     break;
 
                 case 'webrtc-answer':
                     if (peerConnection && data.callId === currentCallId) {
-                        console.log('📞 Answer ricevuto');
+                        console.log('📞 Cucina: Answer ricevuto da pizzeria');
                         peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer))
                             .then(() => {
                                 updateCallStatus('📞 Chiamata connessa!', '#28a745');
-                                document.getElementById('call-quality').textContent = 'Qualità: Buona';
+                                document.getElementById('call-quality').textContent = 'Qualità: Buona ✅';
+                                console.log('✅ Cucina: Chiamata stabilita con successo');
                             })
-                            .catch(error => console.error('❌ Errore setRemoteDescription:', error));
+                            .catch(error => {
+                                console.error('❌ Cucina: Errore setRemoteDescription:', error);
+                                updateCallStatus('❌ Errore connessione chiamata', '#dc3545');
+                                cleanupCall();
+                            });
                     }
                     break;
 
                 case 'webrtc-ice-candidate':
                     if (peerConnection && data.callId === currentCallId) {
                         peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate))
-                            .catch(error => console.error('❌ Errore addIceCandidate:', error));
+                            .then(() => {
+                                console.log('🧊 Cucina: ICE candidate aggiunto');
+                            })
+                            .catch(error => console.error('❌ Cucina: Errore addIceCandidate:', error));
                     }
                     break;
 
                 case 'webrtc-hangup':
                     if (data.callId === currentCallId) {
-                        console.log('📞 Chiamata terminata dal ricevente');
+                        console.log('📞 Cucina: Chiamata terminata dalla pizzeria');
                         cleanupCall();
                         updateCallStatus('📞 Chiamata terminata', '#6c757d');
                     }
                     break;
 
                 case 'webrtc-error':
-                    console.error('❌ Errore WebRTC:', data.error);
+                    console.error('❌ Cucina: Errore WebRTC ricevuto:', data.error);
                     updateCallStatus(`❌ ${data.error}`, '#dc3545');
                     cleanupCall();
+                    break;
+
+                case 'ping':
+                    // Rispondi al ping del server WebRTC
+                    if (webrtcWs && webrtcWs.readyState === WebSocket.OPEN) {
+                        webrtcWs.send(JSON.stringify({ action: 'pong', timestamp: Date.now() }));
+                    }
                     break;
 
                 case 'pong':
                     // Heartbeat ricevuto
                     break;
+
+                default:
+                    console.log('📞 Cucina: Messaggio WebRTC non gestito:', data.action);
             }
         }
 
