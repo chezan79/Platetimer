@@ -117,21 +117,17 @@
     <!-- Container superiore con messaggi vocali, chiamate e controlli pausa -->
     <div style="position: absolute; top: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 15px; z-index: 500;">
 
-        <!-- Sistema chiamate vocali WebRTC -->
-        <div style="text-align: center; padding: 8px; background: linear-gradient(135deg, #28a745 0%, #20c997 100%); border-radius: 8px; border-left: 4px solid #198754; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); min-width: 200px;">
-            <div style="margin-bottom: 4px; color: white; font-size: 12px; font-weight: 600;">📞 Chiamata Diretta</div>
+        <!-- Sistema ricezione chiamate -->
+        <div style="text-align: center; padding: 8px; background: linear-gradient(135deg, #17a2b8 0%, #138496 100%); border-radius: 8px; border-left: 4px solid #117a8b; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); min-width: 200px;">
+            <div style="margin-bottom: 4px; color: white; font-size: 12px; font-weight: 600;">📞 Ricezione Chiamate</div>
             <div style="display: flex; justify-content: center; align-items: center; gap: 6px; flex-wrap: nowrap;">
-                <button id="call-cucina-btn" onclick="startCall('cucina')" 
-                        style="padding: 6px 12px; background: linear-gradient(135deg, #28a745 0%, #20c997 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
-                    📞 Cucina
-                </button>
                 <button id="hangup-btn" onclick="hangupCall()" 
                         style="padding: 6px 12px; background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap; display: none;">
                     📞 Chiudi
                 </button>
             </div>
             <div id="call-status" style="margin-top: 4px; font-size: 10px; color: white; min-height: 12px; text-align: center;">
-                Pronto per chiamare
+                In attesa di chiamate
             </div>
         </div>
 
@@ -1586,7 +1582,7 @@
             }, 5000);
         }
 
-        // Sistema chiamate WebRTC
+        // Sistema chiamate WebRTC - solo ricezione
         let localStream = null;
         let peerConnection = null;
         let currentCallId = null;
@@ -1598,140 +1594,160 @@
             ]
         };
 
-        async function startCall(targetPage) {
-            if (isInCall) {
-                alert('📞 Una chiamata è già in corso!');
-                return;
+        async function handleOffer(data) {
+            console.log('📞 PIZZERIA - Offerta WebRTC ricevuta:', data);
+            
+            // Aggiorna immediatamente l'interfaccia per mostrare la chiamata in arrivo
+            const callStatus = document.getElementById('call-status');
+            callStatus.textContent = `📞 Chiamata in arrivo da ${data.from}`;
+            callStatus.style.color = '#ffc107';
+            
+            // Mostra anche un avviso visivo prominente
+            mostraAvvisoChiamataInArrivo(data.from);
+
+            // Riproduci suono di chiamata
+            const alertAudio = document.getElementById('alertSound');
+            if (alertAudio) {
+                alertAudio.play().catch(e => console.log('Errore audio chiamata:', e));
             }
 
-            if (!ws || ws.readyState !== WebSocket.OPEN) {
-                alert('❌ Connessione persa. Impossibile avviare chiamata.');
-                return;
-            }
+            const acceptCall = confirm(`📞 CHIAMATA IN ARRIVO DA ${data.from.toUpperCase()}\n\nAccettare la chiamata?`);
+            
+            if (acceptCall) {
+                try {
+                    currentCallId = data.callId;
+                    isInCall = true;
+                    updateCallUI('connecting', 'Connessione...');
 
-            try {
-                updateCallUI('connecting', 'Connessione...');
+                    // Ottieni accesso al microfono
+                    localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-                // Ottieni accesso al microfono
-                localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    // Crea peer connection
+                    peerConnection = new RTCPeerConnection(configuration);
 
-                // Crea peer connection
-                peerConnection = new RTCPeerConnection(configuration);
+                    // Gestisci ICE candidates
+                    peerConnection.onicecandidate = (event) => {
+                        if (event.candidate) {
+                            ws.send(JSON.stringify({
+                                action: 'candidate',
+                                candidate: event.candidate,
+                                callId: currentCallId
+                            }));
+                        }
+                    };
 
-                // Aggiungi stream locale
-                localStream.getTracks().forEach(track => {
-                    peerConnection.addTrack(track, localStream);
-                });
+                    // Gestisci stream remoto
+                    peerConnection.ontrack = (event) => {
+                        const remoteAudio = document.getElementById('remoteAudio');
+                        remoteAudio.srcObject = event.streams[0];
+                        updateCallUI('connected', 'Chiamata attiva');
+                        rimuoviAvvisoChiamataInArrivo();
+                    };
 
-                // Gestisci ICE candidates
-                peerConnection.onicecandidate = (event) => {
-                    if (event.candidate && currentCallId) {
-                        ws.send(JSON.stringify({
-                            action: 'candidate',
-                            candidate: event.candidate,
-                            callId: currentCallId
-                        }));
-                    }
-                };
+                    // Imposta offerta remota
+                    await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
 
-                // Gestisci stream remoto
-                peerConnection.ontrack = (event) => {
-                    const remoteAudio = document.getElementById('remoteAudio');
-                    remoteAudio.srcObject = event.streams[0];
-                    updateCallUI('connected', 'Chiamata attiva');
-                };
+                    // Aggiungi stream locale
+                    localStream.getTracks().forEach(track => {
+                        peerConnection.addTrack(track, localStream);
+                    });
 
-                // Crea offerta
-                const offer = await peerConnection.createOffer();
-                await peerConnection.setLocalDescription(offer);
+                    // Crea risposta
+                    const answer = await peerConnection.createAnswer();
+                    await peerConnection.setLocalDescription(answer);
 
-                // Invia offerta
+                    // Invia risposta
+                    ws.send(JSON.stringify({
+                        action: 'answer',
+                        answer: answer,
+                        callId: currentCallId
+                    }));
+
+                    console.log('📞 PIZZERIA - Chiamata accettata');
+                } catch (error) {
+                    console.error('❌ Errore accettazione chiamata in pizzeria:', error);
+                    updateCallUI('error', 'Errore chiamata');
+                    cleanupCall();
+                    rimuoviAvvisoChiamataInArrivo();
+                }
+            } else {
+                // Rifiuta la chiamata
+                console.log('📞 PIZZERIA - Chiamata rifiutata');
                 ws.send(JSON.stringify({
-                    action: 'offer',
-                    offer: offer,
-                    targetPage: targetPage
+                    action: 'hangup',
+                    callId: data.callId
                 }));
-
-                console.log(`📞 Chiamata avviata verso ${targetPage}`);
-
-            } catch (error) {
-                console.error('❌ Errore avvio chiamata:', error);
-                updateCallUI('error', 'Errore chiamata');
                 cleanupCall();
-                alert('❌ Impossibile avviare la chiamata. Verifica i permessi del microfono.');
+                rimuoviAvvisoChiamataInArrivo();
             }
         }
 
-         async function handleOffer(data) {
-             // Mostra un avviso all'utente per accettare o rifiutare la chiamata
-             const callStatus = document.getElementById('call-status');
-             callStatus.textContent = `📞 Chiamata in arrivo da ${data.from} `;
-             callStatus.style.color = '#ffc107';
+        function mostraAvvisoChiamataInArrivo(caller) {
+            // Rimuovi avviso precedente se esiste
+            const existingAlert = document.getElementById('incoming-call-alert');
+            if (existingAlert) {
+                existingAlert.remove();
+            }
 
-             const acceptCall = confirm(`📞 Chiamata in arrivo da ${data.from}. Accettare?`);
-             if (acceptCall) {
-                 try {
-                     currentCallId = data.callId;
-                     isInCall = true;
+            const alertDiv = document.createElement('div');
+            alertDiv.id = 'incoming-call-alert';
+            alertDiv.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%);
+                color: #212529;
+                padding: 30px;
+                border-radius: 15px;
+                box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3);
+                z-index: 10000;
+                text-align: center;
+                border: 3px solid #d39e00;
+                min-width: 400px;
+                font-family: Arial, sans-serif;
+                animation: pulseCall 1s ease-in-out infinite;
+            `;
 
-                     // Ottieni accesso al microfono
-                     localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            // Aggiungi animazione CSS
+            if (!document.getElementById('callAnimations')) {
+                const style = document.createElement('style');
+                style.id = 'callAnimations';
+                style.textContent = `
+                    @keyframes pulseCall {
+                        0%, 100% { transform: translate(-50%, -50%) scale(1); box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3); }
+                        50% { transform: translate(-50%, -50%) scale(1.05); box-shadow: 0 20px 40px rgba(255, 193, 7, 0.5); }
+                    }
+                `;
+                document.head.appendChild(style);
+            }
 
-                     // Crea peer connection
-                     peerConnection = new RTCPeerConnection(configuration);
+            alertDiv.innerHTML = `
+                <div style="font-size: 24px; font-weight: bold; margin-bottom: 15px;">
+                    📞 CHIAMATA IN ARRIVO
+                </div>
+                <div style="font-size: 20px; margin-bottom: 20px;">
+                    da <strong>${caller}</strong>
+                </div>
+                <div style="font-size: 16px; opacity: 0.8;">
+                    Conferma nella finestra di dialogo
+                </div>
+            `;
 
-                     // Gestisci ICE candidates
-                     peerConnection.onicecandidate = (event) => {
-                         if (event.candidate) {
-                             ws.send(JSON.stringify({
-                                 action: 'candidate',
-                                 candidate: event.candidate,
-                                 callId: currentCallId
-                             }));
-                         }
-                     };
+            document.body.appendChild(alertDiv);
+        }
 
-                     // Gestisci stream remoto
-                     peerConnection.ontrack = (event) => {
-                         const remoteAudio = document.getElementById('remoteAudio');
-                         remoteAudio.srcObject = event.streams[0];
-                         updateCallUI('connected', 'Chiamata attiva');
-                     };
-
-                     // Imposta offerta remota
-                     await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
-
-                     // Aggiungi stream locale
-                     localStream.getTracks().forEach(track => {
-                         peerConnection.addTrack(track, localStream);
-                     });
-
-                     // Crea risposta
-                     const answer = await peerConnection.createAnswer();
-                     await peerConnection.setLocalDescription(answer);
-
-                     // Invia risposta
-                     ws.send(JSON.stringify({
-                         action: 'answer',
-                         answer: answer,
-                         callId: currentCallId
-                     }));
-
-                     console.log('📞 Chiamata accettata');
-                 } catch (error) {
-                     console.error('❌ Errore accettazione chiamata:', error);
-                     updateCallUI('error', 'Errore chiamata');
-                     cleanupCall();
-                 }
-             } else {
-                 // Rifiuta la chiamata
-                 ws.send(JSON.stringify({
-                     action: 'hangup',
-                     callId: data.callId
-                 }));
-                 cleanupCall();
-             }
-         }
+        function rimuoviAvvisoChiamataInArrivo() {
+            const alertDiv = document.getElementById('incoming-call-alert');
+            if (alertDiv) {
+                alertDiv.style.animation = 'fadeOut 0.5s ease-out';
+                setTimeout(() => {
+                    if (alertDiv && alertDiv.parentNode) {
+                        alertDiv.parentNode.removeChild(alertDiv);
+                    }
+                }, 500);
+            }
+        }
 
         function hangupCall() {
             if (currentCallId) {
@@ -1763,7 +1779,6 @@
         }
 
         function updateCallUI(state, statusText) {
-            const callBtn = document.getElementById('call-cucina-btn');
             const hangupBtn = document.getElementById('hangup-btn');
             const statusDiv = document.getElementById('call-status');
 
@@ -1771,28 +1786,26 @@
 
             switch (state) {
                 case 'idle':
-                    callBtn.style.display = 'inline-block';
                     hangupBtn.style.display = 'none';
-                    callBtn.disabled = false;
                     statusDiv.style.color = 'white';
+                    statusDiv.textContent = 'In attesa di chiamate';
                     break;
                 case 'connecting':
-                    callBtn.style.display = 'none';
                     hangupBtn.style.display = 'inline-block';
                     statusDiv.style.color = '#ffc107';
                     isInCall = true;
                     break;
                 case 'connected':
-                    callBtn.style.display = 'none';
                     hangupBtn.style.display = 'inline-block';
                     statusDiv.style.color = '#28a745';
                     break;
                 case 'error':
-                    callBtn.style.display = 'inline-block';
                     hangupBtn.style.display = 'none';
-                    callBtn.disabled = false;
                     statusDiv.style.color = '#dc3545';
                     isInCall = false;
+                    setTimeout(() => {
+                        updateCallUI('idle', 'In attesa di chiamate');
+                    }, 3000);
                     break;
             }
         }

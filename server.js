@@ -699,7 +699,7 @@ wss.on('connection', (ws, req) => {
                     if (targetClients.length > 0) {
                         const callId = Date.now().toString();
                         ws.callId = callId;
-                        
+
                         const offerMessage = {
                             action: 'offer',
                             offer: data.offer,
@@ -709,7 +709,7 @@ wss.on('connection', (ws, req) => {
 
                         targetClients[0].send(JSON.stringify(offerMessage));
                         targetClients[0].callId = callId;
-                        
+
                         console.log(`📞 Offerta WebRTC inviata da ${ws.pageType} a ${data.targetPage}`);
                     } else {
                         ws.send(JSON.stringify({
@@ -738,7 +738,7 @@ wss.on('connection', (ws, req) => {
                             answer: data.answer,
                             callId: data.callId
                         }));
-                        
+
                         console.log(`📞 Risposta WebRTC inviata per chiamata ${data.callId}`);
                     }
                 }
@@ -860,7 +860,7 @@ setInterval(() => {
     }
 }, 30000); // Ogni 30 secondi
 
-// Pulizia periodica ottimizzata - più frequente per evitare accumulo
+// Pulizia periodica ottimizzata- più frequente per evitare accumulo
 setInterval(() => {
     const now = Date.now();
 
