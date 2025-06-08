@@ -227,28 +227,38 @@
 
                     startHeartbeat();
 
-                    const companyName = localStorage.getItem('userCompany');
-            if (companyName) {
-                console.log('Nome azienda dal localStorage:', companyName);
+                    // Unisciti alla room con un piccolo delay per stabilizzare la connessione
+                    setTimeout(() => {
+                        const companyName = localStorage.getItem('userCompany');
+                        if (companyName) {
+                            console.log('Nome azienda dal localStorage:', companyName);
 
-                // Unisciti alla room aziendale
-                ws.send(JSON.stringify({
-                    action: 'joinRoom',
-                    companyName: companyName
-                }));
-                console.log(`✅ Connesso alla room: ${companyName}`);
+                            // Unisciti alla room aziendale
+                            if (ws.readyState === WebSocket.OPEN) {
+                                ws.send(JSON.stringify({
+                                    action: 'joinRoom',
+                                    companyName: companyName
+                                }));
+                                console.log(`✅ Connesso alla room: ${companyName}`);
 
-                // Informa il server che stiamo entrando nella pagina pizzeria
-                ws.send(JSON.stringify({
-                    action: 'joinPage',
-                    pageType: 'pizzeria'
-                }));
-                console.log('📄 Entrato nella pagina PIZZERIA');
-            } else {
-                console.error('❌ Nome azienda non trovato nel localStorage');
-                alert('❌ Errore: Nome azienda non trovato. Effettua nuovamente il login.');
-                window.location.href = '/';
-            }
+                                // Informa il server che stiamo entrando nella pagina pizzeria
+                                setTimeout(() => {
+                                    if (ws.readyState === WebSocket.OPEN) {
+                                        ws.send(JSON.stringify({
+                                            action: 'joinPage',
+                                            pageType: 'pizzeria'
+                                        }));
+                                        console.log('📄 Informato server: pagina pizzeria');
+                                    }
+                                }, 200);
+                            }
+                        } else {
+                            console.error('❌ Nome azienda non trovato nel localStorage');
+                            alert('❌ Errore: Nome azienda non trovato. Effettua nuovamente il login.');
+                            window.location.href = '/';
+                        }
+                    }, 100);
+
                     updateConnectionStatus(true);
                 };
 
