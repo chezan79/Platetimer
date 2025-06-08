@@ -272,18 +272,14 @@
                     console.log('📞 PIZZERIA DEBUG - Messaggio WebRTC ricevuto:', data.action, data);
                 }
 
-                // PRIORITÀ MASSIMA: Gestione eventi WebRTC per pizzeria (PRIMA di tutto)
+                // PRIORITÀ ASSOLUTA: Gestione eventi WebRTC per pizzeria (BLOCCA TUTTO IL RESTO)
                 if (data.action === 'offer') {
-                    console.log('📞 PIZZERIA - Offerta WebRTC ricevuta, targetPage:', data.targetPage);
-                    // Verifica che la chiamata sia diretta a pizzeria
-                    if (data.targetPage === 'pizzeria') {
-                        console.log('📞 PIZZERIA - Chiamata confermata per pizzeria');
-                        handleOffer(data);
-                        return;
-                    } else {
-                        console.log('📞 PIZZERIA - Chiamata non per pizzeria, ignorata');
-                        return;
-                    }
+                    console.log('📞 PIZZERIA - Offerta WebRTC ricevuta');
+                    // GESTISCI IMMEDIATAMENTE - NON verificare targetPage perché potrebbe essere undefined
+                    event.preventDefault?.();
+                    event.stopPropagation?.();
+                    handleOffer(data);
+                    return;
                 } else if (data.action === 'answer' && currentCallId === data.callId) {
                     console.log('📞 PIZZERIA - Answer ricevuto');
                     if (peerConnection) {
@@ -377,9 +373,22 @@
                     stopHeartbeat();
                     updateConnectionStatus(false);
 
+                    // NON riconnettere automaticamente se siamo in chiamata
+                    if (isInCall || currentCallId) {
+                        console.log('🚫 NON riconnetto durante chiamata attiva');
+                        return;
+                    }
+
                     if (!reconnectInterval) {
                         console.log('🔄 Avvio riconnessione pizzeria...');
                         reconnectInterval = setInterval(() => {
+                            // Doppio controllo: non riconnettere se chiamata iniziata nel frattempo
+                            if (isInCall || currentCallId) {
+                                console.log('🚫 Annullo riconnessione - chiamata in corso');
+                                clearInterval(reconnectInterval);
+                                reconnectInterval = null;
+                                return;
+                            }
                             console.log('🔄 Tentativo riconnessione pizzeria...');
                             connectWebSocket();
                         }, 3000);
@@ -1615,6 +1624,13 @@
             console.log('📞 PIZZERIA - Gestione offerta WebRTC iniziata');
             console.log('📞 PIZZERIA - Dati ricevuti:', data);
             
+            // Blocca riconnessioni automatiche durante la gestione della chiamata
+            if (reconnectInterval) {
+                clearInterval(reconnectInterval);
+                reconnectInterval = null;
+                console.log('🛑 STOP riconnessione automatica per chiamata');
+            }
+            
             // Genera un callId se non presente
             if (!data.callId) {
                 data.callId = Date.now().toString();
@@ -1812,6 +1828,8 @@
         }
 
         function cleanupCall() {
+            console.log('🧹 PIZZERIA - Cleanup chiamata iniziato');
+            
             if (localStream) {
                 localStream.getTracks().forEach(track => track.stop());
                 localStream = null;
@@ -1827,7 +1845,24 @@
 
             currentCallId = null;
             isInCall = false;
-            updateCallUI('idle', 'Pronto per chiamare');
+            updateCallUI('idle', 'In attesa di chiamate');
+            rimuoviAvvisoChiamataInArrivo();
+            
+            // RIABILITA riconnessione automatica dopo la chiamata
+            console.log('🔄 Riabilito riconnessione automatica post-chiamata');
+            
+            // Se non connesso, riavvia riconnessione
+            if (!isConnected && !reconnectInterval) {
+                setTimeout(() => {
+                    if (!isConnected && !reconnectInterval) {
+                        console.log('🔄 Riavvio riconnessione post-chiamata...');
+                        reconnectInterval = setInterval(() => {
+                            console.log('🔄 Tentativo riconnessione post-chiamata...');
+                            connectWebSocket();
+                        }, 3000);
+                    }
+                }, 1000);
+            }
         }
 
         function updateCallUI(state, statusText) {
