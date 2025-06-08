@@ -1020,17 +1020,21 @@
         }
 
         function eliminaCountdown(tableNumber) {
-            // 🔄 Invia eliminazione via WebSocket PRIMA di rimuovere localmente
+            console.log(`🗑️ Richiesta eliminazione countdown da cucina: Tavolo ${tableNumber}`);
+            
+            // Invia eliminazione via WebSocket
             if (ws && ws.readyState === WebSocket.OPEN) {
                 const deleteMessage = {
                     action: 'deleteCountdown',
                     tableNumber: tableNumber
                 };
                 ws.send(JSON.stringify(deleteMessage));
-                console.log(`📤 Eliminazione countdown inviata via WebSocket: Tavolo ${tableNumber}`);
+                console.log(`📤 Eliminazione countdown inviata da cucina via WebSocket: Tavolo ${tableNumber}`);
             } else {
-                console.error('❌ WebSocket non connesso per eliminazione');
-                // Se non connesso, rimuovi solo localmente
+                console.error('❌ WebSocket non connesso per eliminazione countdown in cucina');
+                alert('❌ Connessione persa. Impossibile eliminare il countdown.');
+                
+                // Fallback: rimuovi solo localmente se WebSocket non disponibile
                 const countdownIndex = countdowns.findIndex(c => c.tableNumber == tableNumber);
                 if (countdownIndex !== -1) {
                     const countdown = countdowns[countdownIndex];
@@ -1039,7 +1043,7 @@
                         countdown.element.parentNode.removeChild(countdown.element);
                     }
                     countdowns.splice(countdownIndex, 1);
-                    console.log(`Countdown tavolo ${tableNumber} eliminato localmente (WebSocket disconnesso)`);
+                    console.log(`🗑️ Countdown tavolo ${tableNumber} eliminato solo localmente (WebSocket disconnesso)`);
                 }
             }
         }
