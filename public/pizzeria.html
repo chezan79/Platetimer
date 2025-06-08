@@ -266,6 +266,11 @@
                 ws.onmessage = (event) => {
             try {
                 const data = JSON.parse(event.data);
+                
+                // Debug per chiamate WebRTC
+                if (data.action === 'offer' || data.action === 'answer' || data.action === 'candidate' || data.action === 'hangup') {
+                    console.log('📞 PIZZERIA DEBUG - Messaggio WebRTC ricevuto:', data.action, data);
+                }
 
                 if (data.action === 'ping') {
                     if (ws && ws.readyState === WebSocket.OPEN) {
@@ -280,8 +285,9 @@
                     return;
                 }
 
-                // Gestione eventi WebRTC
+                // Gestione eventi WebRTC per pizzeria (solo ricezione)
                 if (data.action === 'offer') {
+                    console.log('📞 PIZZERIA - Offerta WebRTC ricevuta da:', data.from);
                     handleOffer(data);
                     return;
                 } else if (data.action === 'answer' && currentCallId === data.callId) {
@@ -1595,12 +1601,14 @@
         };
 
         async function handleOffer(data) {
-            console.log('📞 PIZZERIA - Offerta WebRTC ricevuta:', data);
+            console.log('📞 PIZZERIA - Offerta WebRTC ricevuta da:', data.from);
             
             // Aggiorna immediatamente l'interfaccia per mostrare la chiamata in arrivo
             const callStatus = document.getElementById('call-status');
-            callStatus.textContent = `📞 Chiamata in arrivo da ${data.from}`;
-            callStatus.style.color = '#ffc107';
+            if (callStatus) {
+                callStatus.textContent = `📞 Chiamata in arrivo da ${data.from}`;
+                callStatus.style.color = '#ffc107';
+            }
             
             // Mostra anche un avviso visivo prominente
             mostraAvvisoChiamataInArrivo(data.from);
@@ -1611,6 +1619,7 @@
                 alertAudio.play().catch(e => console.log('Errore audio chiamata:', e));
             }
 
+            console.log('📞 PIZZERIA - Mostrando conferma chiamata...');
             const acceptCall = confirm(`📞 CHIAMATA IN ARRIVO DA ${data.from.toUpperCase()}\n\nAccettare la chiamata?`);
             
             if (acceptCall) {
