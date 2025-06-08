@@ -788,6 +788,7 @@ wss.on('connection', (ws, req) => {
             }
         } catch (error) {
             console.error('❌ Errore nel parsing del messaggio:', error);
+            console.log('📦 Messaggio problematico:', message);
         }
     });
 
@@ -1006,6 +1007,1944 @@ wss.on('connection', (ws, req) => {
                 // ... existing annullaPausaInsalata code ...
 
             } else if (data.action === 'offer') {
+                // Gestione offerta WebRTC
+                if (!data.offer || !data.targetPage) {
+                    console.log('⚠️ Dati offerta WebRTC non validi');
+                    return;
+                }
+
+                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    const targetClients = Array.from(roomClients).filter(client => 
+                        client.pageType === data.targetPage && client !== ws
+                    );
+
+                    if (targetClients.length > 0) {
+                        const callId = Date.now().toString();
+                        ws.callId = callId;
+
+                        const offerMessage = {
+                            action: 'offer',
+                            offer: data.offer,
+                            callId: callId,
+                            from: ws.pageType || 'unknown'
+                        };
+
+                        targetClients[0].send(JSON.stringify(offerMessage));
+                        targetClients[0].callId = callId;
+
+                        console.log(`📞 Offerta WebRTC inviata da ${ws.pageType} a ${data.targetPage}`);
+                    } else {
+                        ws.send(JSON.stringify({
+                            action: 'callError',
+                            message: 'Destinazione non disponibile'
+                        }));
+                    }
+                }
+
+            } else if (data.action === 'answer') {
+                // Gestione risposta WebRTC
+                if (!data.answer || !data.callId) {
+                    console.log('⚠️ Dati risposta WebRTC non validi');
+                    return;
+                }
+
+                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    const callerClient = Array.from(roomClients).find(client => 
+                        client.callId === data.callId && client !== ws
+                    );
+
+                    if (callerClient) {
+                        callerClient.send(JSON.stringify({
+                            action: 'answer',
+                            answer: data.answer,
+                            callId: data.callId
+                        }));
+
+                        console.log(`📞 Risposta WebRTC inviata per chiamata ${data.callId}`);
+                    }
+                }
+
+            } else if (data.action === 'candidate') {
+                // Gestione ICE candidates
+                if (!data.candidate || !data.callId) {
+                    console.log('⚠️ Dati ICE candidate non validi');
+                    return;
+                }
+
+                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    roomClients.forEach(client => {
+                        if (client.callId === data.callId && client !== ws && client.readyState === WebSocket.OPEN) {
+                            client.send(JSON.stringify({
+                                action: 'candidate',
+                                candidate: data.candidate,
+                                callId: data.callId
+                            }));
+                        }
+                    });
+                }
+
+            } else if (data.action === 'hangup') {
+                // Gestione chiusura chiamata
+                if (!data.callId) {
+                    console.log('⚠️ ID chiamata mancante per hangup');
+                    return;
+                }
+
+                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    roomClients.forEach(client => {
+                        if (client.callId === data.callId && client !== ws && client.readyState === WebSocket.OPEN) {
+                            client.send(JSON.stringify({
+                                action: 'hangup',
+                                callId: data.callId
+                            }));
+                            client.callId = null;
+                        }
+                    });
+                }
+
+                ws.callId = null;
+                console.log(`📞 Chiamata ${data.callId} terminata`);
+            }
+        } catch (error) {
+            console.error('❌ Errore nel parsing del messaggio:', error);
+            console.log('📦 Messaggio problematico:', message);
+        }
+    });
+
+    ws.on('close', (code, reason) => {
+        try {
+            // Rimuovi il client dalla room quando si disconnette
+            if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                const room = companyRooms.get(ws.companyRoom);
+                if (room) {
+                    room.delete(ws);
+                    if (room.size === 0) {
+                        companyRooms.delete(ws.companyRoom);
+                        console.log(`🗑️ Room "${ws.companyRoom}" eliminata (vuota)`);
+                    } else {
+                        console.log(`👋 Client disconnesso dalla room "${ws.companyRoom}" (${room.size} client rimanenti)`);
+                    }
+                }
+            }
+
+            // Cleanup delle risorse del client
+            ws.companyRoom = null;
+            ws.pageType = null;
+            ws.isAlive = false;
+
+            console.log(`🔌 Connessione WebSocket chiusa - Code: ${code}, Reason: ${reason || 'Non specificato'}`);
+        } catch (closeError) {
+            console.error('❌ Errore durante cleanup connessione:', closeError.message);
+        }
+    });
+
+    ws.on('error', (error) => {
+        console.error('❌ Errore WebSocket:', error.message || error);
+
+        // Cleanup in caso di errore
+        try {
+            if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                const room = companyRooms.get(ws.companyRoom);
+                if (room) {
+                    room.delete(ws);
+                    if (room.size === 0) {
+                        companyRooms.delete(ws.companyRoom);
+                    }
+                }
+            }
+            ws.isAlive = false;
+        } catch (cleanupError) {
+            console.error('❌ Errore cleanup dopo errore WebSocket:', cleanupError.message);
+        }
+    });
+});
+
+// Heartbeat ottimizzato - meno frequente per ridurre carico
+setInterval(() => {
+    const now = Date.now();
+    let activeClients = 0;
+
+    wss.clients.forEach((ws) => {
+        if (ws.readyState === WebSocket.OPEN) {
+            // Solo se non ha fatto pong negli ultimi 45 secondi
+            if (now - ws.lastPong > 45000) {
+                ws.send(JSON.stringify({ action: 'ping', timestamp: now }));
+                ws.lastPing = now;
+            }
+            activeClients++;
+        }
+    });
+
+    if (activeClients > 0) {
+        console.log(`💓 Heartbeat per ${activeClients} client attivi`);
+    }
+}, 30000); // Ogni 30 secondi
+
+// Pulizia periodica ottimizzata -più frequente per evitare accumulo
+setInterval(() => {
+    const now = Date.now();
+
+    // Pulisci connessioni WebSocket morte (nessun pong per più di 60 secondi)
+    let deadConnections = 0;
+    wss.clients.forEach((ws) => {
+        if (now - ws.lastPong > 60000) { // 60 secondi senza pong
+            console.log(`🗑️ Connessione morta rilevata, terminazione...`);
+            ws.terminate();
+            deadConnections++;
+        }
+    });
+
+    // Pulisci rate limiter scaduti
+    for (const [clientId, limit] of rateLimiter.entries()) {
+        if (now > limit.resetTime + 120000) { // 2 minuti di grazia
+            rateLimiter.delete(clientId);
+        }
+    }
+
+    // Pulisci countdown scaduti
+    let totalActiveCountdowns = 0;
+    activeCountdowns.forEach((companyCountdowns, companyName) => {
+        companyCountdowns.forEach((countdown, tableNumber) => {
+            const elapsed = Math.floor((now - countdown.startTime) / 1000);
+            const remainingTime = countdown.initialDuration - elapsed;
+
+            if (remainingTime <= -30) { // 30 secondi dopo la scadenza
+                companyCountdowns.delete(tableNumber);
+                console.log(`🗑️ Countdown scaduto rimosso: Azienda "${companyName}", Tavolo ${tableNumber}`);
+            } else {
+                totalActiveCountdowns++;
+            }
+        });
+
+        if (companyCountdowns.size === 0) {
+            activeCountdowns.delete(companyName);
+        }
+    });
+
+    if (deadConnections > 0 || totalActiveCountdowns > 20) {
+        console.log(`🧹 Cleanup: ${deadConnections} conn. morte, ${rateLimiter.size} rate limits, ${totalActiveCountdowns} countdown, ${wss.clients.size} client`);
+    }
+}, 60000); // Ogni 1 minuto
+
+// Gestione errori globali per prevenire crash
+process.on('uncaughtException', (error) => {
+    console.error('❌ Errore non gestito:', error);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('❌ Promise rifiutata non gestita:', reason);
+});
+
+// Monitoraggio carico ogni 5 minuti
+setInterval(() => {
+    const stats = {
+        clients: wss.clients.size,
+        rooms: companyRooms.size,
+        countdowns: Array.from(activeCountdowns.values()).reduce((sum, map) => sum + map.size, 0),
+        rateLimits: rateLimiter.size,
+        memoryUsage: Math.round(process.memoryUsage().heapUsed / 1024 / 1024)
+    };
+
+    console.log(`📊 Stats: ${stats.clients} client, ${stats.rooms} rooms, ${stats.countdowns} countdown, ${stats.memoryUsage}MB RAM`);
+
+    // Alert se troppo carico
+    if (stats.clients > 50 || stats.memoryUsage > 100) {
+        console.warn(`⚠️ SOVRACCARICO: ${stats.clients} client, ${stats.memoryUsage}MB RAM`);
+    }
+}, 300000); // Ogni 5 minuti
+
+// Funzione per ottenere il tipo di pagina dal WebSocket
+function getPageType(ws) {
+    return ws.pageType || 'unknown';
+}
+
+// Funzione per ottenere la room corrente dal WebSocket
+function getCurrentRoom(ws) {
+    return ws.companyRoom || 'unknown';
+}
+
+// Funzione per inviare un messaggio a tutti i client in una specifica pagina
+function broadcastToPage(companyName, targetPage, message) {
+    if (companyName && companyRooms.has(companyName)) {
+        const roomClients = companyRooms.get(companyName);
+        const messageString = JSON.stringify(message);
+
+        roomClients.forEach(client => {
+            if (client.pageType === targetPage && client.readyState === WebSocket.OPEN) {
+                client.send(messageString);
+            }
+        });
+    }
+}
+
+// Avvia il server
+const PORT = 5000;
+server.listen(PORT, '0.0.0.0', () => {
+    console.log(`🛡️ Server sicuro avviato su http://0.0.0.0:${PORT}`);
+    console.log('✅ Autenticazione WebSocket attiva');
+    console.log('✅ Validazione dati attiva');
+    console.log('✅ Rate limiting ottimizzato');
+}).on('error', (error) => {
+    console.error('❌ Errore avvio server:', error);
+});
+
+wss.on('connection', (ws, req) => {
+    // ... existing connection code ...
+
+    ws.on('message', (message) => {
+        try {
+            // ... existing message handling code ...
+
+            if (data.action === 'joinRoom') {
+                // ... existing joinRoom code ...
+
+            } else if (data.action === 'joinPage') {
+                // ... existing joinPage code ...
+
+            } else if (data.action === 'startCountdown') {
+                // ... existing startCountdown code ...
+
+            } else if (data.action === 'deleteCountdown') {
+                // ... existing deleteCountdown code ...
+
+            } else if (data.action === 'voiceMessage') {
+                // ... existing voiceMessage code ...
+
+            } else if (data.action === 'deleteVoiceMessage') {
+                // ... existing deleteVoiceMessage code ...
+
+            } else if (data.action === 'pausaCucina') {
+                // ... existing pausaCucina code ...
+
+            } else if (data.action === 'annullaPausaCucina') {
+                // ... existing annullaPausaCucina code ...
+
+            } else if (data.action === 'pausaInsalata') {
+                // ... existing pausaInsalata code ...
+
+            } else if (data.action === 'annullaPausaInsalata') {
+                // ... existing annullaPausaInsalata code ...
+
+            } else if (data.action === 'offer') {
+                // Gestione offerta WebRTC
+                if (!data.offer || !data.targetPage) {
+                    console.log('⚠️ Dati offerta WebRTC non validi');
+                    return;
+                }
+
+                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    const targetClients = Array.from(roomClients).filter(client => 
+                        client.pageType === data.targetPage && client !== ws
+                    );
+
+                    if (targetClients.length > 0) {
+                        const callId = Date.now().toString();
+                        ws.callId = callId;
+
+                        const offerMessage = {
+                            action: 'offer',
+                            offer: data.offer,
+                            callId: callId,
+                            from: ws.pageType || 'unknown'
+                        };
+
+                        targetClients[0].send(JSON.stringify(offerMessage));
+                        targetClients[0].callId = callId;
+
+                        console.log(`📞 Offerta WebRTC inviata da ${ws.pageType} a ${data.targetPage}`);
+                    } else {
+                        ws.send(JSON.stringify({
+                            action: 'callError',
+                            message: 'Destinazione non disponibile'
+                        }));
+                    }
+                }
+
+            } else if (data.action === 'answer') {
+                // Gestione risposta WebRTC
+                if (!data.answer || !data.callId) {
+                    console.log('⚠️ Dati risposta WebRTC non validi');
+                    return;
+                }
+
+                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    const callerClient = Array.from(roomClients).find(client => 
+                        client.callId === data.callId && client !== ws
+                    );
+
+                    if (callerClient) {
+                        callerClient.send(JSON.stringify({
+                            action: 'answer',
+                            answer: data.answer,
+                            callId: data.callId
+                        }));
+
+                        console.log(`📞 Risposta WebRTC inviata per chiamata ${data.callId}`);
+                    }
+                }
+
+            } else if (data.action === 'candidate') {
+                // Gestione ICE candidates
+                if (!data.candidate || !data.callId) {
+                    console.log('⚠️ Dati ICE candidate non validi');
+                    return;
+                }
+
+                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    roomClients.forEach(client => {
+                        if (client.callId === data.callId && client !== ws && client.readyState === WebSocket.OPEN) {
+                            client.send(JSON.stringify({
+                                action: 'candidate',
+                                candidate: data.candidate,
+                                callId: data.callId
+                            }));
+                        }
+                    });
+                }
+
+            } else if (data.action === 'hangup') {
+                // Gestione chiusura chiamata
+                if (!data.callId) {
+                    console.log('⚠️ ID chiamata mancante per hangup');
+                    return;
+                }
+
+                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    roomClients.forEach(client => {
+                        if (client.callId === data.callId && client !== ws && client.readyState === WebSocket.OPEN) {
+                            client.send(JSON.stringify({
+                                action: 'hangup',
+                                callId: data.callId
+                            }));
+                            client.callId = null;
+                        }
+                    });
+                }
+
+                ws.callId = null;
+                console.log(`📞 Chiamata ${data.callId} terminata`);
+            }
+        } catch (error) {
+            console.error('❌ Errore nel parsing del messaggio:', error);
+            console.log('📦 Messaggio problematico:', message);
+        }
+    });
+
+    ws.on('close', (code, reason) => {
+        try {
+            // Rimuovi il client dalla room quando si disconnette
+            if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                const room = companyRooms.get(ws.companyRoom);
+                if (room) {
+                    room.delete(ws);
+                    if (room.size === 0) {
+                        companyRooms.delete(ws.companyRoom);
+                        console.log(`🗑️ Room "${ws.companyRoom}" eliminata (vuota)`);
+                    } else {
+                        console.log(`👋 Client disconnesso dalla room "${ws.companyRoom}" (${room.size} client rimanenti)`);
+                    }
+                }
+            }
+
+            // Cleanup delle risorse del client
+            ws.companyRoom = null;
+            ws.pageType = null;
+            ws.isAlive = false;
+
+            console.log(`🔌 Connessione WebSocket chiusa - Code: ${code}, Reason: ${reason || 'Non specificato'}`);
+        } catch (closeError) {
+            console.error('❌ Errore durante cleanup connessione:', closeError.message);
+        }
+    });
+
+    ws.on('error', (error) => {
+        console.error('❌ Errore WebSocket:', error.message || error);
+
+        // Cleanup in caso di errore
+        try {
+            if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                const room = companyRooms.get(ws.companyRoom);
+                if (room) {
+                    room.delete(ws);
+                    if (room.size === 0) {
+                        companyRooms.delete(ws.companyRoom);
+                    }
+                }
+            }
+            ws.isAlive = false;
+        } catch (cleanupError) {
+            console.error('❌ Errore cleanup dopo errore WebSocket:', cleanupError.message);
+        }
+    });
+});
+
+// Heartbeat ottimizzato - meno frequente per ridurre carico
+setInterval(() => {
+    const now = Date.now();
+    let activeClients = 0;
+
+    wss.clients.forEach((ws) => {
+        if (ws.readyState === WebSocket.OPEN) {
+            // Solo se non ha fatto pong negli ultimi 45 secondi
+            if (now - ws.lastPong > 45000) {
+                ws.send(JSON.stringify({ action: 'ping', timestamp: now }));
+                ws.lastPing = now;
+            }
+            activeClients++;
+        }
+    });
+
+    if (activeClients > 0) {
+        console.log(`💓 Heartbeat per ${activeClients} client attivi`);
+    }
+}, 30000); // Ogni 30 secondi
+
+// Pulizia periodica ottimizzata -più frequente per evitare accumulo
+setInterval(() => {
+    const now = Date.now();
+
+    // Pulisci connessioni WebSocket morte (nessun pong per più di 60 secondi)
+    let deadConnections = 0;
+    wss.clients.forEach((ws) => {
+        if (now - ws.lastPong > 60000) { // 60 secondi senza pong
+            console.log(`🗑️ Connessione morta rilevata, terminazione...`);
+            ws.terminate();
+            deadConnections++;
+        }
+    });
+
+    // Pulisci rate limiter scaduti
+    for (const [clientId, limit] of rateLimiter.entries()) {
+        if (now > limit.resetTime + 120000) { // 2 minuti di grazia
+            rateLimiter.delete(clientId);
+        }
+    }
+
+    // Pulisci countdown scaduti
+    let totalActiveCountdowns = 0;
+    activeCountdowns.forEach((companyCountdowns, companyName) => {
+        companyCountdowns.forEach((countdown, tableNumber) => {
+            const elapsed = Math.floor((now - countdown.startTime) / 1000);
+            const remainingTime = countdown.initialDuration - elapsed;
+
+            if (remainingTime <= -30) { // 30 secondi dopo la scadenza
+                companyCountdowns.delete(tableNumber);
+                console.log(`🗑️ Countdown scaduto rimosso: Azienda "${companyName}", Tavolo ${tableNumber}`);
+            } else {
+                totalActiveCountdowns++;
+            }
+        });
+
+        if (companyCountdowns.size === 0) {
+            activeCountdowns.delete(companyName);
+        }
+    });
+
+    if (deadConnections > 0 || totalActiveCountdowns > 20) {
+        console.log(`🧹 Cleanup: ${deadConnections} conn. morte, ${rateLimiter.size} rate limits, ${totalActiveCountdowns} countdown, ${wss.clients.size} client`);
+    }
+}, 60000); // Ogni 1 minuto
+
+// Gestione errori globali per prevenire crash
+process.on('uncaughtException', (error) => {
+    console.error('❌ Errore non gestito:', error);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('❌ Promise rifiutata non gestita:', reason);
+});
+
+// Monitoraggio carico ogni 5 minuti
+setInterval(() => {
+    const stats = {
+        clients: wss.clients.size,
+        rooms: companyRooms.size,
+        countdowns: Array.from(activeCountdowns.values()).reduce((sum, map) => sum + map.size, 0),
+        rateLimits: rateLimiter.size,
+        memoryUsage: Math.round(process.memoryUsage().heapUsed / 1024 / 1024)
+    };
+
+    console.log(`📊 Stats: ${stats.clients} client, ${stats.rooms} rooms, ${stats.countdowns} countdown, ${stats.memoryUsage}MB RAM`);
+
+    // Alert se troppo carico
+    if (stats.clients > 50 || stats.memoryUsage > 100) {
+        console.warn(`⚠️ SOVRACCARICO: ${stats.clients} client, ${stats.memoryUsage}MB RAM`);
+    }
+}, 300000); // Ogni 5 minuti
+
+// Funzione per ottenere il tipo di pagina dal WebSocket
+function getPageType(ws) {
+    return ws.pageType || 'unknown';
+}
+
+// Funzione per ottenere la room corrente dal WebSocket
+function getCurrentRoom(ws) {
+    return ws.companyRoom || 'unknown';
+}
+
+// Funzione per inviare un messaggio a tutti i client in una specifica pagina
+function broadcastToPage(companyName, targetPage, message) {
+    if (companyName && companyRooms.has(companyName)) {
+        const roomClients = companyRooms.get(companyName);
+        const messageString = JSON.stringify(message);
+
+        roomClients.forEach(client => {
+            if (client.pageType === targetPage && client.readyState === WebSocket.OPEN) {
+                client.send(messageString);
+            }
+        });
+    }
+}
+
+// Avvia il server
+const PORT = 5000;
+server.listen(PORT, '0.0.0.0', () => {
+    console.log(`🛡️ Server sicuro avviato su http://0.0.0.0:${PORT}`);
+    console.log('✅ Autenticazione WebSocket attiva');
+    console.log('✅ Validazione dati attiva');
+    console.log('✅ Rate limiting ottimizzato');
+}).on('error', (error) => {
+    console.error('❌ Errore avvio server:', error);
+});
+
+wss.on('connection', (ws, req) => {
+    // ... existing connection code ...
+
+    ws.on('message', (message) => {
+        try {
+            // ... existing message handling code ...
+
+            if (data.action === 'joinRoom') {
+                // ... existing joinRoom code ...
+
+            } else if (data.action === 'joinPage') {
+                // ... existing joinPage code ...
+
+            } else if (data.action === 'startCountdown') {
+                // ... existing startCountdown code ...
+
+            } else if (data.action === 'deleteCountdown') {
+                // ... existing deleteCountdown code ...
+
+            } else if (data.action === 'voiceMessage') {
+                // ... existing voiceMessage code ...
+
+            } else if (data.action === 'deleteVoiceMessage') {
+                // ... existing deleteVoiceMessage code ...
+
+            } else if (data.action === 'pausaCucina') {
+                // ... existing pausaCucina code ...
+
+            } else if (data.action === 'annullaPausaCucina') {
+                // ... existing annullaPausaCucina code ...
+
+            } else if (data.action === 'pausaInsalata') {
+                // ... existing pausaInsalata code ...
+
+            } else if (data.action === 'annullaPausaInsalata') {
+                // ... existing annullaPausaInsalata code ...
+
+            } else if (data.action === 'offer') {
+                // Gestione offerta WebRTC
+                if (!data.offer || !data.targetPage) {
+                    console.log('⚠️ Dati offerta WebRTC non validi');
+                    return;
+                }
+
+                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    const targetClients = Array.from(roomClients).filter(client => 
+                        client.pageType === data.targetPage && client !== ws
+                    );
+
+                    if (targetClients.length > 0) {
+                        const callId = Date.now().toString();
+                        ws.callId = callId;
+
+                        const offerMessage = {
+                            action: 'offer',
+                            offer: data.offer,
+                            callId: callId,
+                            from: ws.pageType || 'unknown'
+                        };
+
+                        targetClients[0].send(JSON.stringify(offerMessage));
+                        targetClients[0].callId = callId;
+
+                        console.log(`📞 Offerta WebRTC inviata da ${ws.pageType} a ${data.targetPage}`);
+                    } else {
+                        ws.send(JSON.stringify({
+                            action: 'callError',
+                            message: 'Destinazione non disponibile'
+                        }));
+                    }
+                }
+
+            } else if (data.action === 'answer') {
+                // Gestione risposta WebRTC
+                if (!data.answer || !data.callId) {
+                    console.log('⚠️ Dati risposta WebRTC non validi');
+                    return;
+                }
+
+                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    const callerClient = Array.from(roomClients).find(client => 
+                        client.callId === data.callId && client !== ws
+                    );
+
+                    if (callerClient) {
+                        callerClient.send(JSON.stringify({
+                            action: 'answer',
+                            answer: data.answer,
+                            callId: data.callId
+                        }));
+
+                        console.log(`📞 Risposta WebRTC inviata per chiamata ${data.callId}`);
+                    }
+                }
+
+            } else if (data.action === 'candidate') {
+                // Gestione ICE candidates
+                if (!data.candidate || !data.callId) {
+                    console.log('⚠️ Dati ICE candidate non validi');
+                    return;
+                }
+
+                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    roomClients.forEach(client => {
+                        if (client.callId === data.callId && client !== ws && client.readyState === WebSocket.OPEN) {
+                            client.send(JSON.stringify({
+                                action: 'candidate',
+                                candidate: data.candidate,
+                                callId: data.callId
+                            }));
+                        }
+                    });
+                }
+
+            } else if (data.action === 'hangup') {
+                // Gestione chiusura chiamata
+                if (!data.callId) {
+                    console.log('⚠️ ID chiamata mancante per hangup');
+                    return;
+                }
+
+                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    roomClients.forEach(client => {
+                        if (client.callId === data.callId && client !== ws && client.readyState === WebSocket.OPEN) {
+                            client.send(JSON.stringify({
+                                action: 'hangup',
+                                callId: data.callId
+                            }));
+                            client.callId = null;
+                        }
+                    });
+                }
+
+                ws.callId = null;
+                console.log(`📞 Chiamata ${data.callId} terminata`);
+            }
+        } catch (error) {
+            console.error('❌ Errore nel parsing del messaggio:', error);
+            console.log('📦 Messaggio problematico:', message);
+        }
+    });
+
+    ws.on('close', (code, reason) => {
+        try {
+            // Rimuovi il client dalla room quando si disconnette
+            if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                const room = companyRooms.get(ws.companyRoom);
+                if (room) {
+                    room.delete(ws);
+                    if (room.size === 0) {
+                        companyRooms.delete(ws.companyRoom);
+                        console.log(`🗑️ Room "${ws.companyRoom}" eliminata (vuota)`);
+                    } else {
+                        console.log(`👋 Client disconnesso dalla room "${ws.companyRoom}" (${room.size} client rimanenti)`);
+                    }
+                }
+            }
+
+            // Cleanup delle risorse del client
+            ws.companyRoom = null;
+            ws.pageType = null;
+            ws.isAlive = false;
+
+            console.log(`🔌 Connessione WebSocket chiusa - Code: ${code}, Reason: ${reason || 'Non specificato'}`);
+        } catch (closeError) {
+            console.error('❌ Errore durante cleanup connessione:', closeError.message);
+        }
+    });
+
+    ws.on('error', (error) => {
+        console.error('❌ Errore WebSocket:', error.message || error);
+
+        // Cleanup in caso di errore
+        try {
+            if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                const room = companyRooms.get(ws.companyRoom);
+                if (room) {
+                    room.delete(ws);
+                    if (room.size === 0) {
+                        companyRooms.delete(ws.companyRoom);
+                    }
+                }
+            }
+            ws.isAlive = false;
+        } catch (cleanupError) {
+            console.error('❌ Errore cleanup dopo errore WebSocket:', cleanupError.message);
+        }
+    });
+});
+
+// Heartbeat ottimizzato - meno frequente per ridurre carico
+setInterval(() => {
+    const now = Date.now();
+    let activeClients = 0;
+
+    wss.clients.forEach((ws) => {
+        if (ws.readyState === WebSocket.OPEN) {
+            // Solo se non ha fatto pong negli ultimi 45 secondi
+            if (now - ws.lastPong > 45000) {
+                ws.send(JSON.stringify({ action: 'ping', timestamp: now }));
+                ws.lastPing = now;
+            }
+            activeClients++;
+        }
+    });
+
+    if (activeClients > 0) {
+        console.log(`💓 Heartbeat per ${activeClients} client attivi`);
+    }
+}, 30000); // Ogni 30 secondi
+
+// Pulizia periodica ottimizzata -più frequente per evitare accumulo
+setInterval(() => {
+    const now = Date.now();
+
+    // Pulisci connessioni WebSocket morte (nessun pong per più di 60 secondi)
+    let deadConnections = 0;
+    wss.clients.forEach((ws) => {
+        if (now - ws.lastPong > 60000) { // 60 secondi senza pong
+            console.log(`🗑️ Connessione morta rilevata, terminazione...`);
+            ws.terminate();
+            deadConnections++;
+        }
+    });
+
+    // Pulisci rate limiter scaduti
+    for (const [clientId, limit] of rateLimiter.entries()) {
+        if (now > limit.resetTime + 120000) { // 2 minuti di grazia
+            rateLimiter.delete(clientId);
+        }
+    }
+
+    // Pulisci countdown scaduti
+    let totalActiveCountdowns = 0;
+    activeCountdowns.forEach((companyCountdowns, companyName) => {
+        companyCountdowns.forEach((countdown, tableNumber) => {
+            const elapsed = Math.floor((now - countdown.startTime) / 1000);
+            const remainingTime = countdown.initialDuration - elapsed;
+
+            if (remainingTime <= -30) { // 30 secondi dopo la scadenza
+                companyCountdowns.delete(tableNumber);
+                console.log(`🗑️ Countdown scaduto rimosso: Azienda "${companyName}", Tavolo ${tableNumber}`);
+            } else {
+                totalActiveCountdowns++;
+            }
+        });
+
+        if (companyCountdowns.size === 0) {
+            activeCountdowns.delete(companyName);
+        }
+    });
+
+    if (deadConnections > 0 || totalActiveCountdowns > 20) {
+        console.log(`🧹 Cleanup: ${deadConnections} conn. morte, ${rateLimiter.size} rate limits, ${totalActiveCountdowns} countdown, ${wss.clients.size} client`);
+    }
+}, 60000); // Ogni 1 minuto
+
+// Gestione errori globali per prevenire crash
+process.on('uncaughtException', (error) => {
+    console.error('❌ Errore non gestito:', error);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('❌ Promise rifiutata non gestita:', reason);
+});
+
+// Monitoraggio carico ogni 5 minuti
+setInterval(() => {
+    const stats = {
+        clients: wss.clients.size,
+        rooms: companyRooms.size,
+        countdowns: Array.from(activeCountdowns.values()).reduce((sum, map) => sum + map.size, 0),
+        rateLimits: rateLimiter.size,
+        memoryUsage: Math.round(process.memoryUsage().heapUsed / 1024 / 1024)
+    };
+
+    console.log(`📊 Stats: ${stats.clients} client, ${stats.rooms} rooms, ${stats.countdowns} countdown, ${stats.memoryUsage}MB RAM`);
+
+    // Alert se troppo carico
+    if (stats.clients > 50 || stats.memoryUsage > 100) {
+        console.warn(`⚠️ SOVRACCARICO: ${stats.clients} client, ${stats.memoryUsage}MB RAM`);
+    }
+}, 300000); // Ogni 5 minuti
+
+// Funzione per ottenere il tipo di pagina dal WebSocket
+function getPageType(ws) {
+    return ws.pageType || 'unknown';
+}
+
+// Funzione per ottenere la room corrente dal WebSocket
+function getCurrentRoom(ws) {
+    return ws.companyRoom || 'unknown';
+}
+
+// Funzione per inviare un messaggio a tutti i client in una specifica pagina
+function broadcastToPage(companyName, targetPage, message) {
+    if (companyName && companyRooms.has(companyName)) {
+        const roomClients = companyRooms.get(companyName);
+        const messageString = JSON.stringify(message);
+
+        roomClients.forEach(client => {
+            if (client.pageType === targetPage && client.readyState === WebSocket.OPEN) {
+                client.send(messageString);
+            }
+        });
+    }
+}
+
+// Avvia il server
+const PORT = 5000;
+server.listen(PORT, '0.0.0.0', () => {
+    console.log(`🛡️ Server sicuro avviato su http://0.0.0.0:${PORT}`);
+    console.log('✅ Autenticazione WebSocket attiva');
+    console.log('✅ Validazione dati attiva');
+    console.log('✅ Rate limiting ottimizzato');
+}).on('error', (error) => {
+    console.error('❌ Errore avvio server:', error);
+});
+
+wss.on('connection', (ws, req) => {
+    // ... existing connection code ...
+
+    ws.on('message', (message) => {
+        try {
+            // ... existing message handling code ...
+
+            if (data.action === 'joinRoom') {
+                // ... existing joinRoom code ...
+
+            } else if (data.action === 'joinPage') {
+                // ... existing joinPage code ...
+
+            } else if (data.action === 'startCountdown') {
+                // ... existing startCountdown code ...
+
+            } else if (data.action === 'deleteCountdown') {
+                // ... existing deleteCountdown code ...
+
+            } else if (data.action === 'voiceMessage') {
+                // ... existing voiceMessage code ...
+
+            } else if (data.action === 'deleteVoiceMessage') {
+                // ... existing deleteVoiceMessage code ...
+
+            } else if (data.action === 'pausaCucina') {
+                // ... existing pausaCucina code ...
+
+            } else if (data.action === 'annullaPausaCucina') {
+                // ... existing annullaPausaCucina code ...
+
+            } else if (data.action === 'pausaInsalata') {
+                // ... existing pausaInsalata code ...
+
+            } else if (data.action === 'annullaPausaInsalata') {
+                // ... existing annullaPausaInsalata code ...
+
+            } else if (data.action === 'offer') {
+                // Gestione offerta WebRTC
+                if (!data.offer || !data.targetPage) {
+                    console.log('⚠️ Dati offerta WebRTC non validi');
+                    return;
+                }
+
+                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    const targetClients = Array.from(roomClients).filter(client => 
+                        client.pageType === data.targetPage && client !== ws
+                    );
+
+                    if (targetClients.length > 0) {
+                        const callId = Date.now().toString();
+                        ws.callId = callId;
+
+                        const offerMessage = {
+                            action: 'offer',
+                            offer: data.offer,
+                            callId: callId,
+                            from: ws.pageType || 'unknown'
+                        };
+
+                        targetClients[0].send(JSON.stringify(offerMessage));
+                        targetClients[0].callId = callId;
+
+                        console.log(`📞 Offerta WebRTC inviata da ${ws.pageType} a ${data.targetPage}`);
+                    } else {
+                        ws.send(JSON.stringify({
+                            action: 'callError',
+                            message: 'Destinazione non disponibile'
+                        }));
+                    }
+                }
+
+            } else if (data.action === 'answer') {
+                // Gestione risposta WebRTC
+                if (!data.answer || !data.callId) {
+                    console.log('⚠️ Dati risposta WebRTC non validi');
+                    return;
+                }
+
+                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    const callerClient = Array.from(roomClients).find(client => 
+                        client.callId === data.callId && client !== ws
+                    );
+
+                    if (callerClient) {
+                        callerClient.send(JSON.stringify({
+                            action: 'answer',
+                            answer: data.answer,
+                            callId: data.callId
+                        }));
+
+                        console.log(`📞 Risposta WebRTC inviata per chiamata ${data.callId}`);
+                    }
+                }
+
+            } else if (data.action === 'candidate') {
+                // Gestione ICE candidates
+                if (!data.candidate || !data.callId) {
+                    console.log('⚠️ Dati ICE candidate non validi');
+                    return;
+                }
+
+                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    roomClients.forEach(client => {
+                        if (client.callId === data.callId && client !== ws && client.readyState === WebSocket.OPEN) {
+                            client.send(JSON.stringify({
+                                action: 'candidate',
+                                candidate: data.candidate,
+                                callId: data.callId
+                            }));
+                        }
+                    });
+                }
+
+            } else if (data.action === 'hangup') {
+                // Gestione chiusura chiamata
+                if (!data.callId) {
+                    console.log('⚠️ ID chiamata mancante per hangup');
+                    return;
+                }
+
+                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    roomClients.forEach(client => {
+                        if (client.callId === data.callId && client !== ws && client.readyState === WebSocket.OPEN) {
+                            client.send(JSON.stringify({
+                                action: 'hangup',
+                                callId: data.callId
+                            }));
+                            client.callId = null;
+                        }
+                    });
+                }
+
+                ws.callId = null;
+                console.log(`📞 Chiamata ${data.callId} terminata`);
+            }
+        } catch (error) {
+            console.error('❌ Errore nel parsing del messaggio:', error);
+            console.log('📦 Messaggio problematico:', message);
+        }
+    });
+
+    ws.on('close', (code, reason) => {
+        try {
+            // Rimuovi il client dalla room quando si disconnette
+            if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                const room = companyRooms.get(ws.companyRoom);
+                if (room) {
+                    room.delete(ws);
+                    if (room.size === 0) {
+                        companyRooms.delete(ws.companyRoom);
+                        console.log(`🗑️ Room "${ws.companyRoom}" eliminata (vuota)`);
+                    } else {
+                        console.log(`👋 Client disconnesso dalla room "${ws.companyRoom}" (${room.size} client rimanenti)`);
+                    }
+                }
+            }
+
+            // Cleanup delle risorse del client
+            ws.companyRoom = null;
+            ws.pageType = null;
+            ws.isAlive = false;
+
+            console.log(`🔌 Connessione WebSocket chiusa - Code: ${code}, Reason: ${reason || 'Non specificato'}`);
+        } catch (closeError) {
+            console.error('❌ Errore durante cleanup connessione:', closeError.message);
+        }
+    });
+
+    ws.on('error', (error) => {
+        console.error('❌ Errore WebSocket:', error.message || error);
+
+        // Cleanup in caso di errore
+        try {
+            if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                const room = companyRooms.get(ws.companyRoom);
+                if (room) {
+                    room.delete(ws);
+                    if (room.size === 0) {
+                        companyRooms.delete(ws.companyRoom);
+                    }
+                }
+            }
+            ws.isAlive = false;
+        } catch (cleanupError) {
+            console.error('❌ Errore cleanup dopo errore WebSocket:', cleanupError.message);
+        }
+    });
+});
+
+// Heartbeat ottimizzato - meno frequente per ridurre carico
+setInterval(() => {
+    const now = Date.now();
+    let activeClients = 0;
+
+    wss.clients.forEach((ws) => {
+        if (ws.readyState === WebSocket.OPEN) {
+            // Solo se non ha fatto pong negli ultimi 45 secondi
+            if (now - ws.lastPong > 45000) {
+                ws.send(JSON.stringify({ action: 'ping', timestamp: now }));
+                ws.lastPing = now;
+            }
+            activeClients++;
+        }
+    });
+
+    if (activeClients > 0) {
+        console.log(`💓 Heartbeat per ${activeClients} client attivi`);
+    }
+}, 30000); // Ogni 30 secondi
+
+// Pulizia periodica ottimizzata -più frequente per evitare accumulo
+setInterval(() => {
+    const now = Date.now();
+
+    // Pulisci connessioni WebSocket morte (nessun pong per più di 60 secondi)
+    let deadConnections = 0;
+    wss.clients.forEach((ws) => {
+        if (now - ws.lastPong > 60000) { // 60 secondi senza pong
+            console.log(`🗑️ Connessione morta rilevata, terminazione...`);
+            ws.terminate();
+            deadConnections++;
+        }
+    });
+
+    // Pulisci rate limiter scaduti
+    for (const [clientId, limit] of rateLimiter.entries()) {
+        if (now > limit.resetTime + 120000) { // 2 minuti di grazia
+            rateLimiter.delete(clientId);
+        }
+    }
+
+    // Pulisci countdown scaduti
+    let totalActiveCountdowns = 0;
+    activeCountdowns.forEach((companyCountdowns, companyName) => {
+        companyCountdowns.forEach((countdown, tableNumber) => {
+            const elapsed = Math.floor((now - countdown.startTime) / 1000);
+            const remainingTime = countdown.initialDuration - elapsed;
+
+            if (remainingTime <= -30) { // 30 secondi dopo la scadenza
+                companyCountdowns.delete(tableNumber);
+                console.log(`🗑️ Countdown scaduto rimosso: Azienda "${companyName}", Tavolo ${tableNumber}`);
+            } else {
+                totalActiveCountdowns++;
+            }
+        });
+
+        if (companyCountdowns.size === 0) {
+            activeCountdowns.delete(companyName);
+        }
+    });
+
+    if (deadConnections > 0 || totalActiveCountdowns > 20) {
+        console.log(`🧹 Cleanup: ${deadConnections} conn. morte, ${rateLimiter.size} rate limits, ${totalActiveCountdowns} countdown, ${wss.clients.size} client`);
+    }
+}, 60000); // Ogni 1 minuto
+
+// Gestione errori globali per prevenire crash
+process.on('uncaughtException', (error) => {
+    console.error('❌ Errore non gestito:', error);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('❌ Promise rifiutata non gestita:', reason);
+});
+
+// Monitoraggio carico ogni 5 minuti
+setInterval(() => {
+    const stats = {
+        clients: wss.clients.size,
+        rooms: companyRooms.size,
+        countdowns: Array.from(activeCountdowns.values()).reduce((sum, map) => sum + map.size, 0),
+        rateLimits: rateLimiter.size,
+        memoryUsage: Math.round(process.memoryUsage().heapUsed / 1024 / 1024)
+    };
+
+    console.log(`📊 Stats: ${stats.clients} client, ${stats.rooms} rooms, ${stats.countdowns} countdown, ${stats.memoryUsage}MB RAM`);
+
+    // Alert se troppo carico
+    if (stats.clients > 50 || stats.memoryUsage > 100) {
+        console.warn(`⚠️ SOVRACCARICO: ${stats.clients} client, ${stats.memoryUsage}MB RAM`);
+    }
+}, 300000); // Ogni 5 minuti
+
+// Funzione per ottenere il tipo di pagina dal WebSocket
+function getPageType(ws) {
+    return ws.pageType || 'unknown';
+}
+
+// Funzione per ottenere la room corrente dal WebSocket
+function getCurrentRoom(ws) {
+    return ws.companyRoom || 'unknown';
+}
+
+// Funzione per inviare un messaggio a tutti i client in una specifica pagina
+function broadcastToPage(companyName, targetPage, message) {
+    if (companyName && companyRooms.has(companyName)) {
+        const roomClients = companyRooms.get(companyName);
+        const messageString = JSON.stringify(message);
+
+        roomClients.forEach(client => {
+            if (client.pageType === targetPage && client.readyState === WebSocket.OPEN) {
+                client.send(messageString);
+            }
+        });
+    }
+}
+
+// Avvia il server
+const PORT = 5000;
+server.listen(PORT, '0.0.0.0', () => {
+    console.log(`🛡️ Server sicuro avviato su http://0.0.0.0:${PORT}`);
+    console.log('✅ Autenticazione WebSocket attiva');
+    console.log('✅ Validazione dati attiva');
+    console.log('✅ Rate limiting ottimizzato');
+}).on('error', (error) => {
+    console.error('❌ Errore avvio server:', error);
+});
+
+wss.on('connection', (ws, req) => {
+    // ... existing connection code ...
+
+    ws.on('message', (message) => {
+        try {
+            // ... existing message handling code ...
+
+            if (data.action === 'joinRoom') {
+                // ... existing joinRoom code ...
+
+            } else if (data.action === 'joinPage') {
+                // ... existing joinPage code ...
+
+            } else if (data.action === 'startCountdown') {
+                // ... existing startCountdown code ...
+
+            } else if (data.action === 'deleteCountdown') {
+                // ... existing deleteCountdown code ...
+
+            } else if (data.action === 'voiceMessage') {
+                // ... existing voiceMessage code ...
+
+            } else if (data.action === 'deleteVoiceMessage') {
+                // ... existing deleteVoiceMessage code ...
+
+            } else if (data.action === 'pausaCucina') {
+                // ... existing pausaCucina code ...
+
+            } else if (data.action === 'annullaPausaCucina') {
+                // ... existing annullaPausaCucina code ...
+
+            } else if (data.action === 'pausaInsalata') {
+                // ... existing pausaInsalata code ...
+
+            } else if (data.action === 'annullaPausaInsalata') {
+                // ... existing annullaPausaInsalata code ...
+
+            } else if (data.action === 'offer') {
+                // Gestione offerta WebRTC
+                if (!data.offer || !data.targetPage) {
+                    console.log('⚠️ Dati offerta WebRTC non validi');
+                    return;
+                }
+
+                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    const targetClients = Array.from(roomClients).filter(client => 
+                        client.pageType === data.targetPage && client !== ws
+                    );
+
+                    if (targetClients.length > 0) {
+                        const callId = Date.now().toString();
+                        ws.callId = callId;
+
+                        const offerMessage = {
+                            action: 'offer',
+                            offer: data.offer,
+                            callId: callId,
+                            from: ws.pageType || 'unknown'
+                        };
+
+                        targetClients[0].send(JSON.stringify(offerMessage));
+                        targetClients[0].callId = callId;
+
+                        console.log(`📞 Offerta WebRTC inviata da ${ws.pageType} a ${data.targetPage}`);
+                    } else {
+                        ws.send(JSON.stringify({
+                            action: 'callError',
+                            message: 'Destinazione non disponibile'
+                        }));
+                    }
+                }
+
+            } else if (data.action === 'answer') {
+                // Gestione risposta WebRTC
+                if (!data.answer || !data.callId) {
+                    console.log('⚠️ Dati risposta WebRTC non validi');
+                    return;
+                }
+
+                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    const callerClient = Array.from(roomClients).find(client => 
+                        client.callId === data.callId && client !== ws
+                    );
+
+                    if (callerClient) {
+                        callerClient.send(JSON.stringify({
+                            action: 'answer',
+                            answer: data.answer,
+                            callId: data.callId
+                        }));
+
+                        console.log(`📞 Risposta WebRTC inviata per chiamata ${data.callId}`);
+                    }
+                }
+
+            } else if (data.action === 'candidate') {
+                // Gestione ICE candidates
+                if (!data.candidate || !data.callId) {
+                    console.log('⚠️ Dati ICE candidate non validi');
+                    return;
+                }
+
+                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    roomClients.forEach(client => {
+                        if (client.callId === data.callId && client !== ws && client.readyState === WebSocket.OPEN) {
+                            client.send(JSON.stringify({
+                                action: 'candidate',
+                                candidate: data.candidate,
+                                callId: data.callId
+                            }));
+                        }
+                    });
+                }
+
+            } else if (data.action === 'hangup') {
+                // Gestione chiusura chiamata
+                if (!data.callId) {
+                    console.log('⚠️ ID chiamata mancante per hangup');
+                    return;
+                }
+
+                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    roomClients.forEach(client => {
+                        if (client.callId === data.callId && client !== ws && client.readyState === WebSocket.OPEN) {
+                            client.send(JSON.stringify({
+                                action: 'hangup',
+                                callId: data.callId
+                            }));
+                            client.callId = null;
+                        }
+                    });
+                }
+
+                ws.callId = null;
+                console.log(`📞 Chiamata ${data.callId} terminata`);
+            }
+        } catch (error) {
+            console.error('❌ Errore nel parsing del messaggio:', error);
+            console.log('📦 Messaggio problematico:', message);
+        }
+    });
+
+    ws.on('close', (code, reason) => {
+        try {
+            // Rimuovi il client dalla room quando si disconnette
+            if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                const room = companyRooms.get(ws.companyRoom);
+                if (room) {
+                    room.delete(ws);
+                    if (room.size === 0) {
+                        companyRooms.delete(ws.companyRoom);
+                        console.log(`🗑️ Room "${ws.companyRoom}" eliminata (vuota)`);
+                    } else {
+                        console.log(`👋 Client disconnesso dalla room "${ws.companyRoom}" (${room.size} client rimanenti)`);
+                    }
+                }
+            }
+
+            // Cleanup delle risorse del client
+            ws.companyRoom = null;
+            ws.pageType = null;
+            ws.isAlive = false;
+
+            console.log(`🔌 Connessione WebSocket chiusa - Code: ${code}, Reason: ${reason || 'Non specificato'}`);
+        } catch (closeError) {
+            console.error('❌ Errore durante cleanup connessione:', closeError.message);
+        }
+    });
+
+    ws.on('error', (error) => {
+        console.error('❌ Errore WebSocket:', error.message || error);
+
+        // Cleanup in caso di errore
+        try {
+            if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                const room = companyRooms.get(ws.companyRoom);
+                if (room) {
+                    room.delete(ws);
+                    if (room.size === 0) {
+                        companyRooms.delete(ws.companyRoom);
+                    }
+                }
+            }
+            ws.isAlive = false;
+        } catch (cleanupError) {
+            console.error('❌ Errore cleanup dopo errore WebSocket:', cleanupError.message);
+        }
+    });
+});
+
+// Heartbeat ottimizzato - meno frequente per ridurre carico
+setInterval(() => {
+    const now = Date.now();
+    let activeClients = 0;
+
+    wss.clients.forEach((ws) => {
+        if (ws.readyState === WebSocket.OPEN) {
+            // Solo se non ha fatto pong negli ultimi 45 secondi
+            if (now - ws.lastPong > 45000) {
+                ws.send(JSON.stringify({ action: 'ping', timestamp: now }));
+                ws.lastPing = now;
+            }
+            activeClients++;
+        }
+    });
+
+    if (activeClients > 0) {
+        console.log(`💓 Heartbeat per ${activeClients} client attivi`);
+    }
+}, 30000); // Ogni 30 secondi
+
+// Pulizia periodica ottimizzata -più frequente per evitare accumulo
+setInterval(() => {
+    const now = Date.now();
+
+    // Pulisci connessioni WebSocket morte (nessun pong per più di 60 secondi)
+    let deadConnections = 0;
+    wss.clients.forEach((ws) => {
+        if (now - ws.lastPong > 60000) { // 60 secondi senza pong
+            console.log(`🗑️ Connessione morta rilevata, terminazione...`);
+            ws.terminate();
+            deadConnections++;
+        }
+    });
+
+    // Pulisci rate limiter scaduti
+    for (const [clientId, limit] of rateLimiter.entries()) {
+        if (now > limit.resetTime + 120000) { // 2 minuti di grazia
+            rateLimiter.delete(clientId);
+        }
+    }
+
+    // Pulisci countdown scaduti
+    let totalActiveCountdowns = 0;
+    activeCountdowns.forEach((companyCountdowns, companyName) => {
+        companyCountdowns.forEach((countdown, tableNumber) => {
+            const elapsed = Math.floor((now - countdown.startTime) / 1000);
+            const remainingTime = countdown.initialDuration - elapsed;
+
+            if (remainingTime <= -30) { // 30 secondi dopo la scadenza
+                companyCountdowns.delete(tableNumber);
+                console.log(`🗑️ Countdown scaduto rimosso: Azienda "${companyName}", Tavolo ${tableNumber}`);
+            } else {
+                totalActiveCountdowns++;
+            }
+        });
+
+        if (companyCountdowns.size === 0) {
+            activeCountdowns.delete(companyName);
+        }
+    });
+
+    if (deadConnections > 0 || totalActiveCountdowns > 20) {
+        console.log(`🧹 Cleanup: ${deadConnections} conn. morte, ${rateLimiter.size} rate limits, ${totalActiveCountdowns} countdown, ${wss.clients.size} client`);
+    }
+}, 60000); // Ogni 1 minuto
+
+// Gestione errori globali per prevenire crash
+process.on('uncaughtException', (error) => {
+    console.error('❌ Errore non gestito:', error);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('❌ Promise rifiutata non gestita:', reason);
+});
+
+// Monitoraggio carico ogni 5 minuti
+setInterval(() => {
+    const stats = {
+        clients: wss.clients.size,
+        rooms: companyRooms.size,
+        countdowns: Array.from(activeCountdowns.values()).reduce((sum, map) => sum + map.size, 0),
+        rateLimits: rateLimiter.size,
+        memoryUsage: Math.round(process.memoryUsage().heapUsed / 1024 / 1024)
+    };
+
+    console.log(`📊 Stats: ${stats.clients} client, ${stats.rooms} rooms, ${stats.countdowns} countdown, ${stats.memoryUsage}MB RAM`);
+
+    // Alert se troppo carico
+    if (stats.clients > 50 || stats.memoryUsage > 100) {
+        console.warn(`⚠️ SOVRACCARICO: ${stats.clients} client, ${stats.memoryUsage}MB RAM`);
+    }
+}, 300000); // Ogni 5 minuti
+
+// Funzione per ottenere il tipo di pagina dal WebSocket
+function getPageType(ws) {
+    return ws.pageType || 'unknown';
+}
+
+// Funzione per ottenere la room corrente dal WebSocket
+function getCurrentRoom(ws) {
+    return ws.companyRoom || 'unknown';
+}
+
+// Funzione per inviare un messaggio a tutti i client in una specifica pagina
+function broadcastToPage(companyName, targetPage, message) {
+    if (companyName && companyRooms.has(companyName)) {
+        const roomClients = companyRooms.get(companyName);
+        const messageString = JSON.stringify(message);
+
+        roomClients.forEach(client => {
+            if (client.pageType === targetPage && client.readyState === WebSocket.OPEN) {
+                client.send(messageString);
+            }
+        });
+    }
+}
+
+// Avvia il server
+const PORT = 5000;
+server.listen(PORT, '0.0.0.0', () => {
+    console.log(`🛡️ Server sicuro avviato su http://0.0.0.0:${PORT}`);
+    console.log('✅ Autenticazione WebSocket attiva');
+    console.log('✅ Validazione dati attiva');
+    console.log('✅ Rate limiting ottimizzato');
+}).on('error', (error) => {
+    console.error('❌ Errore avvio server:', error);
+});
+
+wss.on('connection', (ws, req) => {
+    // ... existing connection code ...
+
+    ws.on('message', (message) => {
+        try {
+            // ... existing message handling code ...
+
+            if (data.action === 'joinRoom') {
+                // ... existing joinRoom code ...
+
+            } else if (data.action === 'joinPage') {
+                // ... existing joinPage code ...
+
+            } else if (data.action === 'startCountdown') {
+                // ... existing startCountdown code ...
+
+            } else if (data.action === 'deleteCountdown') {
+                // ... existing deleteCountdown code ...
+
+            } else if (data.action === 'voiceMessage') {
+                // ... existing voiceMessage code ...
+
+            } else if (data.action === 'deleteVoiceMessage') {
+                // ... existing deleteVoiceMessage code ...
+
+            } else if (data.action === 'pausaCucina') {
+                // ... existing pausaCucina code ...
+
+            } else if (data.action === 'annullaPausaCucina') {
+                // ... existing annullaPausaCucina code ...
+
+            } else if (data.action === 'pausaInsalata') {
+                // ... existing pausaInsalata code ...
+
+            } else if (data.action === 'annullaPausaInsalata') {
+                // ... existing annullaPausaInsalata code ...
+
+            } else if (data.action === 'offer') {
+                // Gestione offerta WebRTC
+                if (!data.offer || !data.targetPage) {
+                    console.log('⚠️ Dati offerta WebRTC non validi');
+                    return;
+                }
+
+                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    const targetClients = Array.from(roomClients).filter(client => 
+                        client.pageType === data.targetPage && client !== ws
+                    );
+
+                    if (targetClients.length > 0) {
+                        const callId = Date.now().toString();
+                        ws.callId = callId;
+
+                        const offerMessage = {
+                            action: 'offer',
+                            offer: data.offer,
+                            callId: callId,
+                            from: ws.pageType || 'unknown'
+                        };
+
+                        targetClients[0].send(JSON.stringify(offerMessage));
+                        targetClients[0].callId = callId;
+
+                        console.log(`📞 Offerta WebRTC inviata da ${ws.pageType} a ${data.targetPage}`);
+                    } else {
+                        ws.send(JSON.stringify({
+                            action: 'callError',
+                            message: 'Destinazione non disponibile'
+                        }));
+                    }
+                }
+
+            } else if (data.action === 'answer') {
+                // Gestione risposta WebRTC
+                if (!data.answer || !data.callId) {
+                    console.log('⚠️ Dati risposta WebRTC non validi');
+                    return;
+                }
+
+                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    const callerClient = Array.from(roomClients).find(client => 
+                        client.callId === data.callId && client !== ws
+                    );
+
+                    if (callerClient) {
+                        callerClient.send(JSON.stringify({
+                            action: 'answer',
+                            answer: data.answer,
+                            callId: data.callId
+                        }));
+
+                        console.log(`📞 Risposta WebRTC inviata per chiamata ${data.callId}`);
+                    }
+                }
+
+            } else if (data.action === 'candidate') {
+                // Gestione ICE candidates
+                if (!data.candidate || !data.callId) {
+                    console.log('⚠️ Dati ICE candidate non validi');
+                    return;
+                }
+
+                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    roomClients.forEach(client => {
+                        if (client.callId === data.callId && client !== ws && client.readyState === WebSocket.OPEN) {
+                            client.send(JSON.stringify({
+                                action: 'candidate',
+                                candidate: data.candidate,
+                                callId: data.callId
+                            }));
+                        }
+                    });
+                }
+
+            } else if (data.action === 'hangup') {
+                // Gestione chiusura chiamata
+                if (!data.callId) {
+                    console.log('⚠️ ID chiamata mancante per hangup');
+                    return;
+                }
+
+                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    roomClients.forEach(client => {
+                        if (client.callId === data.callId && client !== ws && client.readyState === WebSocket.OPEN) {
+                            client.send(JSON.stringify({
+                                action: 'hangup',
+                                callId: data.callId
+                            }));
+                            client.callId = null;
+                        }
+                    });
+                }
+
+                ws.callId = null;
+                console.log(`📞 Chiamata ${data.callId} terminata`);
+            }
+        } catch (error) {
+            console.error('❌ Errore nel parsing del messaggio:', error);
+            console.log('📦 Messaggio problematico:', message);
+        }
+    });
+
+    ws.on('close', (code, reason) => {
+        try {
+            // Rimuovi il client dalla room quando si disconnette
+            if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                const room = companyRooms.get(ws.companyRoom);
+                if (room) {
+                    room.delete(ws);
+                    if (room.size === 0) {
+                        companyRooms.delete(ws.companyRoom);
+                        console.log(`🗑️ Room "${ws.companyRoom}" eliminata (vuota)`);
+                    } else {
+                        console.log(`👋 Client disconnesso dalla room "${ws.companyRoom}" (${room.size} client rimanenti)`);
+                    }
+                }
+            }
+
+            // Cleanup delle risorse del client
+            ws.companyRoom = null;
+            ws.pageType = null;
+            ws.isAlive = false;
+
+            console.log(`🔌 Connessione WebSocket chiusa - Code: ${code}, Reason: ${reason || 'Non specificato'}`);
+        } catch (closeError) {
+            console.error('❌ Errore durante cleanup connessione:', closeError.message);
+        }
+    });
+
+    ws.on('error', (error) => {
+        console.error('❌ Errore WebSocket:', error.message || error);
+
+        // Cleanup in caso di errore
+        try {
+            if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                const room = companyRooms.get(ws.companyRoom);
+                if (room) {
+                    room.delete(ws);
+                    if (room.size === 0) {
+                        companyRooms.delete(ws.companyRoom);
+                    }
+                }
+            }
+            ws.isAlive = false;
+        } catch (cleanupError) {
+            console.error('❌ Errore cleanup dopo errore WebSocket:', cleanupError.message);
+        }
+    });
+});
+
+// Heartbeat ottimizzato - meno frequente per ridurre carico
+setInterval(() => {
+    const now = Date.now();
+    let activeClients = 0;
+
+    wss.clients.forEach((ws) => {
+        if (ws.readyState === WebSocket.OPEN) {
+            // Solo se non ha fatto pong negli ultimi 45 secondi
+            if (now - ws.lastPong > 45000) {
+                ws.send(JSON.stringify({ action: 'ping', timestamp: now }));
+                ws.lastPing = now;
+            }
+            activeClients++;
+        }
+    });
+
+    if (activeClients > 0) {
+        console.log(`💓 Heartbeat per ${activeClients} client attivi`);
+    }
+}, 30000); // Ogni 30 secondi
+
+// Pulizia periodica ottimizzata -più frequente per evitare accumulo
+setInterval(() => {
+    const now = Date.now();
+
+    // Pulisci connessioni WebSocket morte (nessun pong per più di 60 secondi)
+    let deadConnections = 0;
+    wss.clients.forEach((ws) => {
+        if (now - ws.lastPong > 60000) { // 60 secondi senza pong
+            console.log(`🗑️ Connessione morta rilevata, terminazione...`);
+            ws.terminate();
+            deadConnections++;
+        }
+    });
+
+    // Pulisci rate limiter scaduti
+    for (const [clientId, limit] of rateLimiter.entries()) {
+        if (now > limit.resetTime + 120000) { // 2 minuti di grazia
+            rateLimiter.delete(clientId);
+        }
+    }
+
+    // Pulisci countdown scaduti
+    let totalActiveCountdowns = 0;
+    activeCountdowns.forEach((companyCountdowns, companyName) => {
+        companyCountdowns.forEach((countdown, tableNumber) => {
+            const elapsed = Math.floor((now - countdown.startTime) / 1000);
+            const remainingTime = countdown.initialDuration - elapsed;
+
+            if (remainingTime <= -30) { // 30 secondi dopo la scadenza
+                companyCountdowns.delete(tableNumber);
+                console.log(`🗑️ Countdown scaduto rimosso: Azienda "${companyName}", Tavolo ${tableNumber}`);
+            } else {
+                totalActiveCountdowns++;
+            }
+        });
+
+        if (companyCountdowns.size === 0) {
+            activeCountdowns.delete(companyName);
+        }
+    });
+
+    if (deadConnections > 0 || totalActiveCountdowns > 20) {
+        console.log(`🧹 Cleanup: ${deadConnections} conn. morte, ${rateLimiter.size} rate limits, ${totalActiveCountdowns} countdown, ${wss.clients.size} client`);
+    }
+}, 60000); // Ogni 1 minuto
+
+// Gestione errori globali per prevenire crash
+process.on('uncaughtException', (error) => {
+    console.error('❌ Errore non gestito:', error);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('❌ Promise rifiutata non gestita:', reason);
+});
+
+// Monitoraggio carico ogni 5 minuti
+setInterval(() => {
+    const stats = {
+        clients: wss.clients.size,
+        rooms: companyRooms.size,
+        countdowns: Array.from(activeCountdowns.values()).reduce((sum, map) => sum + map.size, 0),
+        rateLimits: rateLimiter.size,
+        memoryUsage: Math.round(process.memoryUsage().heapUsed / 1024 / 1024)
+    };
+
+    console.log(`📊 Stats: ${stats.clients} client, ${stats.rooms} rooms, ${stats.countdowns} countdown, ${stats.memoryUsage}MB RAM`);
+
+    // Alert se troppo carico
+    if (stats.clients > 50 || stats.memoryUsage > 100) {
+        console.warn(`⚠️ SOVRACCARICO: ${stats.clients} client, ${stats.memoryUsage}MB RAM`);
+    }
+}, 300000); // Ogni 5 minuti
+
+// Funzione per ottenere il tipo di pagina dal WebSocket
+function getPageType(ws) {
+    return ws.pageType || 'unknown';
+}
+
+// Funzione per ottenere la room corrente dal WebSocket
+function getCurrentRoom(ws) {
+    return ws.companyRoom || 'unknown';
+}
+
+// Funzione per inviare un messaggio a tutti i client in una specifica pagina
+function broadcastToPage(companyName, targetPage, message) {
+    if (companyName && companyRooms.has(companyName)) {
+        const roomClients = companyRooms.get(companyName);
+        const messageString = JSON.stringify(message);
+
+        roomClients.forEach(client => {
+            if (client.pageType === targetPage && client.readyState === WebSocket.OPEN) {
+                client.send(messageString);
+            }
+        });
+    }
+}
+
+// Avvia il server
+const PORT = 5000;
+server.listen(PORT, '0.0.0.0', () => {
+    console.log(`🛡️ Server sicuro avviato su http://0.0.0.0:${PORT}`);
+    console.log('✅ Autenticazione WebSocket attiva');
+    console.log('✅ Validazione dati attiva');
+    console.log('✅ Rate limiting ottimizzato');
+}).on('error', (error) => {
+    console.error('❌ Errore avvio server:', error);
+});
+
+wss.on('connection', (ws, req) => {
+    // ... existing connection code ...
+
+    ws.on('message', (message) => {
+        try {
+            // ... existing message handling code ...
+
+            if (data.action === 'joinRoom') {
+                // ... existing joinRoom code ...
+
+            } else if (data.action === 'joinPage') {
+                // ... existing joinPage code ...
+
+            } else if (data.action === 'startCountdown') {
+                // ... existing startCountdown code ...
+
+            } else if (data.action === 'deleteCountdown') {
+                // ... existing deleteCountdown code ...
+
+            } else if (data.action === 'voiceMessage') {
+                // ... existing voiceMessage code ...
+
+            } else if (data.action === 'deleteVoiceMessage') {
+                // ... existing deleteVoiceMessage code ...
+
+            } else if (data.action === 'pausaCucina') {
+                // ... existing pausaCucina code ...
+
+            } else if (data.action === 'annullaPausaCucina') {
+                // ... existing annullaPausaCucina code ...
+
+            } else if (data.action === 'pausaInsalata') {
+                // ... existing pausaInsalata code ...
+
+            } else if (data.action === 'annullaPausaInsalata') {
+                // ... existing annullaPausaInsalata code ...
+
+            } else if (data.action === 'offer') {
                 const callId = Date.now().toString();
                 const targetPage = data.targetPage;
                 const fromPage = getPageType(ws);
@@ -1031,6 +2970,7 @@ wss.on('connection', (ws, req) => {
             }
         } catch (error) {
             console.error('❌ Errore nel parsing del messaggio:', error);
+            console.log('📦 Messaggio problematico:', message);
         }
     });
 
