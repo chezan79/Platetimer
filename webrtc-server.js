@@ -1,24 +1,32 @@
 
 console.log('🚀 Inizializzazione moduli server WebRTC...');
 
-// Carica moduli con gestione errori
-let express, http, WebSocket;
+const express = require('express');
+const http = require('http');
+const WebSocket = require('ws');
 
-try {
-    express = require('express');
-    http = require('http');
-    WebSocket = require('ws');
-    console.log('✅ Moduli caricati con successo');
-} catch (error) {
-    console.error('❌ Errore caricamento moduli:', error.message);
-    console.error('💡 Esegui: npm install express ws');
-    process.exit(1);
-}
-
+console.log('✅ Moduli caricati con successo');
 console.log('🚀 Avvio server WebRTC...');
 
 const app = express();
 const server = http.createServer(app);
+
+// Route di test per verificare che il server WebRTC sia attivo
+app.get('/', (req, res) => {
+    res.json({ 
+        status: 'WebRTC Server attivo', 
+        port: 5001,
+        timestamp: new Date().toISOString() 
+    });
+});
+
+app.get('/status', (req, res) => {
+    res.json({ 
+        connections: wss ? wss.clients.size : 0,
+        rooms: activeRooms.size,
+        uptime: process.uptime()
+    });
+});
 
 // WebSocket Server per WebRTC signaling
 const wss = new WebSocket.Server({ 
@@ -294,10 +302,32 @@ server.listen(WEBRTC_PORT, '0.0.0.0', () => {
     console.log('🍳 Cucina: può effettuare chiamate');
     console.log('🍕 Pizzeria: può solo ricevere chiamate');
     console.log(`📊 WebSocket Server WebRTC in ascolto su percorso: /webrtc-ws`);
+    console.log(`🌐 Test URL: http://0.0.0.0:${WEBRTC_PORT}/status`);
 }).on('error', (error) => {
-    console.error('❌ ERRORE CRITICO avvio server WebRTC:', error);
+    if (error.code === 'EADDRINUSE') {
+        console.error(`❌ ERRORE: Porta ${WEBRTC_PORT} già in uso`);
+        console.error('💡 Prova a riavviare il sistema completo');
+    } else if (error.code === 'EACCES') {
+        console.error(`❌ ERRORE: Permessi insufficienti per porta ${WEBRTC_PORT}`);
+    } else {
+        console.error('❌ ERRORE CRITICO avvio server WebRTC:', error.message);
+    }
     console.error('📍 Porta:', WEBRTC_PORT);
     console.error('📍 Indirizzo:', '0.0.0.0');
-    console.error('📍 Stack trace:', error.stack);
     process.exit(1);
+});
+
+// Gestione graceful shutdown
+process.on('SIGTERM', () => {
+    console.log('📞 Arresto server WebRTC...');
+    server.close(() => {
+        process.exit(0);
+    });
+});
+
+process.on('SIGINT', () => {
+    console.log('📞 Arresto server WebRTC (Ctrl+C)...');
+    server.close(() => {
+        process.exit(0);
+    });
 });
