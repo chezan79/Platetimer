@@ -468,7 +468,7 @@
             </div>
         </div>
 
-      
+
     </div>
 
     <!-- Container in basso per i countdown -->
@@ -646,7 +646,7 @@
 
         function connectWebSocket() {
             try {
-                ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+                                ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
 
                 ws.onopen = () => {
                     console.log('🔗 WebSocket connesso');
@@ -716,12 +716,14 @@
                             console.log(`🔍 Destinazione ricevuta: "${data.destination}", Tavolo: ${data.tableNumber}`);
 
                             // Mostra il countdown in cucina SOLO se la destinazione è esplicitamente "cucina"
-                            if (data.destination && data.destination === 'cucina') {
-                                console.log(`✅ Countdown accettato per cucina - Tavolo: ${data.tableNumber}`);
-                                startCountdownVisual(data.tableNumber, data.timeRemaining, data.destination);
-                            } else {
-                                console.log(`🚫 Countdown RIFIUTATO in cucina - Destinazione: "${data.destination || 'undefined'}", Tavolo: ${data.tableNumber}`);
-                            }
+                            //if (data.destination && data.destination === 'cucina') {
+                            //    console.log(`✅ Countdown accettato per cucina - Tavolo: ${data.tableNumber}`);
+                            //    startCountdownVisual(data.tableNumber, data.timeRemaining, data.destination);
+                            //} else {
+                            //    console.log(`🚫 Countdown RIFIUTATO in cucina - Destinazione: "${data.destination || 'undefined'}", Tavolo: ${data.tableNumber}`);
+                            //}
+                            console.log(`✅ Countdown accettato per cucina - Tavolo: ${data.tableNumber}`);
+                            startCountdownVisual(data.tableNumber, data.timeRemaining, data.destination);
                         } else if (data.action === 'deleteCountdown') {
                             console.log('📥 Eliminazione countdown ricevuta via WebSocket:', data);
                             const countdownIndex = countdowns.findIndex(c => c.tableNumber == data.tableNumber);
@@ -877,11 +879,11 @@
 
         function startCountdownVisual(tableNumber, timeRemaining, destination) {
             // CONTROLLO DI SICUREZZA AGGIUNTIVO
-            if (!destination || destination.toString().toLowerCase().trim() !== 'cucina') {
-                console.log(`🛑 SICUREZZA - startCountdownVisual in cucina ha ricevuto destinazione NON valida: "${destination}"`);
-                console.log(`🛑 BLOCCO ASSOLUTO - questo countdown NON verrà creato`);
-                return; // Blocca completamente la creazione del countdown
-            }
+            //if (!destination || destination.toString().toLowerCase().trim() !== 'cucina') {
+            //    console.log(`🛑 SICUREZZA - startCountdownVisual in cucina ha ricevuto destinazione NON valida: "${destination}"`);
+            //    console.log(`🛑 BLOCCO ASSOLUTO - questo countdown NON verrà creato`);
+            //    return; // Blocca completamente la creazione del countdown
+            //}
 
             console.log(`🎯 CUCINA - Creazione countdown AUTORIZZATA per tavolo ${tableNumber}, destinazione: "${destination}"`);
 
@@ -911,16 +913,16 @@
                 'insalata': '🥗'
             };
 
-            // Colori per destinazioni
+            // PASSO 2: Colori specifici - Verde chiaro per cucina, bianco per altri
             const destinationColors = {
-                'cucina': '#d4edda',
-                'pizzeria': '#fff3cd',
-                'insalata': '#d1ecf1'
+                'cucina': '#d4edda',      // Verde chiaro per cucina
+                'pizzeria': '#ffffff',    // Base bianca per pizzeria
+                'insalata': '#ffffff'     // Base bianca per insalata
             };
 
             const countdownItem = document.createElement('div');
             countdownItem.classList.add('countdown-item');
-            countdownItem.style.backgroundColor = destinationColors[destination] || '#f8f9fa';
+            countdownItem.style.backgroundColor = destinationColors[destination] || '#ffffff';
             countdownItem.innerHTML = `
                 <div class="countdown-table">
                     <h3>${destinationIcons[destination]} Tavolo ${tableNumber}</h3>
@@ -1021,7 +1023,7 @@
 
         function eliminaCountdown(tableNumber) {
             console.log(`🗑️ Richiesta eliminazione countdown da cucina: Tavolo ${tableNumber}`);
-            
+
             // Invia eliminazione via WebSocket
             if (ws && ws.readyState === WebSocket.OPEN) {
                 const deleteMessage = {
@@ -1033,7 +1035,7 @@
             } else {
                 console.error('❌ WebSocket non connesso per eliminazione countdown in cucina');
                 alert('❌ Connessione persa. Impossibile eliminare il countdown.');
-                
+
                 // Fallback: rimuovi solo localmente se WebSocket non disponibile
                 const countdownIndex = countdowns.findIndex(c => c.tableNumber == tableNumber);
                 if (countdownIndex !== -1) {
