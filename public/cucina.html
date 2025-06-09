@@ -873,34 +873,36 @@
         }
 
         function startCountdownVisual(tableNumber, timeRemaining, destination) {
-            console.log(`🎯 CUCINA - Creazione countdown AUTORIZZATA per tavolo ${tableNumber}, destinazione: "${destination}"`);
+            console.log(`🎯 CUCINA - Creazione countdown per tavolo ${tableNumber}, destinazione: "${destination}"`);
 
-            // IMPORTANTE: Per tavoli con destinazioni multiple, mantieni solo quello con priorità più alta
-            // Priorità: cucina > pizzeria > insalata
+            // SOLUZIONE N°2: PRIORITÀ ASSOLUTA PER "CUCINA"
+            // La destinazione "cucina" ha sempre priorità, indipendentemente dall'ordine di arrivo
             const existingCountdownIndex = countdowns.findIndex(c => c.tableNumber == tableNumber);
+            
             if (existingCountdownIndex !== -1) {
                 const existing = countdowns[existingCountdownIndex];
                 
-                // Se il countdown esistente ha destinazione "cucina" e quello nuovo non è "cucina", mantieni quello esistente
-                if (existing.destination === 'cucina' && destination !== 'cucina') {
-                    console.log(`🎯 Countdown tavolo ${tableNumber}: mantengo destinazione CUCINA esistente, ignoro ${destination}`);
+                // Se il nuovo countdown NON è "cucina" ma esiste già "cucina", ignora il nuovo
+                if (destination !== 'cucina' && existing.destination === 'cucina') {
+                    console.log(`🎯 PRIORITÀ CUCINA: Tavolo ${tableNumber} - Ignoro ${destination}, mantengo cucina esistente`);
                     return;
                 }
                 
-                // Se il nuovo countdown è "cucina", sostituisci sempre
-                // Se entrambi non sono "cucina", sostituisci normalmente
+                // Se il nuovo countdown È "cucina", sostituisci SEMPRE (anche se esiste già cucina)
+                // Se nessuno dei due è "cucina", sostituisci normalmente
+                console.log(`🔄 Sostituisco countdown tavolo ${tableNumber}: ${existing.destination} → ${destination}`);
+                
                 clearInterval(existing.interval);
                 if (existing.element && existing.element.parentNode) {
                     existing.element.parentNode.removeChild(existing.element);
                 }
                 countdowns.splice(existingCountdownIndex, 1);
-                console.log(`🔄 Countdown esistente per tavolo ${tableNumber} sostituito (${existing.destination} → ${destination})`);
             }
 
             const countdown = {
                 tableNumber,
                 timeRemaining,
-                destination: destination, // Assicurati che la destinazione sia salvata
+                destination: destination,
                 element: null,
                 interval: null
             };
