@@ -1,0 +1,219 @@
+
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configurazione Pagine - MealMaster</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .config-container {
+            max-width: 800px;
+            margin: 2rem auto;
+            padding: 2rem;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .page-item {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            margin-bottom: 1rem;
+        }
+        .page-input {
+            flex: 1;
+            padding: 0.5rem;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+        }
+        .add-page-btn, .save-config-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 0.5rem;
+        }
+        .remove-page-btn {
+            background: #ff4757;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        .success-message {
+            background: #27ae60;
+            color: white;
+            padding: 1rem;
+            border-radius: 5px;
+            margin-bottom: 1rem;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <script src="company-header.js"></script>
+    
+    <div class="config-container">
+        <h2>🛠️ Configurazione Pagine Azienda</h2>
+        <div id="success-message" class="success-message">
+            ✅ Configurazione salvata con successo!
+        </div>
+        
+        <div id="pages-container">
+            <!-- Le pagine verranno caricate dinamicamente -->
+        </div>
+        
+        <button id="add-page-btn" class="add-page-btn">➕ Aggiungi Pagina</button>
+        <br>
+        <button id="save-config-btn" class="save-config-btn">💾 Salva Configurazione</button>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+        import { getFirestore, doc, getDoc, setDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyDZ0FdjenO-ngblcuXKdwWwvRV5liiR18I",
+            authDomain: "app-dati-tavoli.firebaseapp.com",
+            projectId: "app-dati-tavoli",
+            storageBucket: "app-dati-tavoli.appspot.com",
+            messagingSenderId: "267339065819",
+            appId: "1:267339065819:web:1e74647f740bdf1d725ffe"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        let currentUser = null;
+        let companyName = null;
+
+        // Verifica autenticazione
+        onAuthStateChanged(auth, async (user) => {
+            if (!user) {
+                window.location.href = 'index.html';
+                return;
+            }
+            currentUser = user;
+            companyName = localStorage.getItem('userCompany');
+            if (companyName) {
+                await loadCurrentConfig();
+            }
+        });
+
+        // Carica configurazione attuale
+        async function loadCurrentConfig() {
+            try {
+                const configDoc = await getDoc(doc(db, "company_configs", companyName));
+                if (configDoc.exists()) {
+                    const config = configDoc.data();
+                    displayPages(config.pages || []);
+                } else {
+                    // Configurazione di default
+                    displayPages([
+                        { name: 'Cucina', url: 'cucina.html' },
+                        { name: 'Pizzeria', url: 'pizzeria.html' },
+                        { name: 'Insalata', url: 'insalata.html' }
+                    ]);
+                }
+            } catch (error) {
+                console.error('Errore caricamento configurazione:', error);
+            }
+        }
+
+        // Mostra le pagine nell'interfaccia
+        function displayPages(pages) {
+            const container = document.getElementById('pages-container');
+            container.innerHTML = '';
+            
+            pages.forEach((page, index) => {
+                const pageItem = document.createElement('div');
+                pageItem.className = 'page-item';
+                pageItem.innerHTML = `
+                    <input type="text" class="page-input" placeholder="Nome pagina" value="${page.name}" data-field="name" data-index="${index}">
+                    <input type="text" class="page-input" placeholder="URL (es: cucina.html)" value="${page.url}" data-field="url" data-index="${index}">
+                    <button class="remove-page-btn" onclick="removePage(${index})">🗑️ Rimuovi</button>
+                `;
+                container.appendChild(pageItem);
+            });
+        }
+
+        // Aggiungi nuova pagina
+        document.getElementById('add-page-btn').addEventListener('click', () => {
+            const container = document.getElementById('pages-container');
+            const currentPages = getCurrentPages();
+            const newIndex = currentPages.length;
+            
+            const pageItem = document.createElement('div');
+            pageItem.className = 'page-item';
+            pageItem.innerHTML = `
+                <input type="text" class="page-input" placeholder="Nome pagina" value="" data-field="name" data-index="${newIndex}">
+                <input type="text" class="page-input" placeholder="URL (es: nuova-pagina.html)" value="" data-field="url" data-index="${newIndex}">
+                <button class="remove-page-btn" onclick="removePage(${newIndex})">🗑️ Rimuovi</button>
+            `;
+            container.appendChild(pageItem);
+        });
+
+        // Rimuovi pagina
+        window.removePage = function(index) {
+            const currentPages = getCurrentPages();
+            currentPages.splice(index, 1);
+            displayPages(currentPages);
+        };
+
+        // Ottieni pagine attuali dall'interfaccia
+        function getCurrentPages() {
+            const pages = [];
+            const nameInputs = document.querySelectorAll('[data-field="name"]');
+            const urlInputs = document.querySelectorAll('[data-field="url"]');
+            
+            for (let i = 0; i < nameInputs.length; i++) {
+                const name = nameInputs[i].value.trim();
+                const url = urlInputs[i].value.trim();
+                if (name && url) {
+                    pages.push({ name, url });
+                }
+            }
+            return pages;
+        }
+
+        // Salva configurazione
+        document.getElementById('save-config-btn').addEventListener('click', async () => {
+            const pages = getCurrentPages();
+            
+            if (pages.length === 0) {
+                alert('Aggiungi almeno una pagina!');
+                return;
+            }
+
+            try {
+                await setDoc(doc(db, "company_configs", companyName), {
+                    companyName: companyName,
+                    pages: pages,
+                    createdAt: serverTimestamp(),
+                    updatedAt: serverTimestamp()
+                });
+
+                const successMsg = document.getElementById('success-message');
+                successMsg.style.display = 'block';
+                setTimeout(() => {
+                    successMsg.style.display = 'none';
+                }, 3000);
+
+                console.log('✅ Configurazione salvata con successo!');
+            } catch (error) {
+                console.error('❌ Errore salvataggio configurazione:', error);
+                alert('Errore nel salvataggio della configurazione');
+            }
+        });
+    </script>
+</body>
+</html>
