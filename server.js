@@ -446,7 +446,8 @@ wss.on('connection', (ws, req) => {
                     }
 
                     const companyCountdowns = activeCountdowns.get(ws.companyRoom);
-                    companyCountdowns.set(data.tableNumber, {
+                    const countdownKey = `${data.tableNumber}_${destination}`; // Chiave combinata
+                    companyCountdowns.set(countdownKey, {
                         startTime: Date.now(),
                         initialDuration: data.timeRemaining,
                         tableNumber: data.tableNumber,
@@ -492,7 +493,8 @@ wss.on('connection', (ws, req) => {
                     // Crea un array delle chiavi da rimuovere per evitare modifiche durante l'iterazione
                     const keysToRemove = [];
                     for (const [key, countdown] of companyCountdowns.entries()) {
-                        if (key.toString() === data.tableNumber.toString() || 
+                        // Controlla sia la chiave combinata che il tableNumber nel countdown
+                        if (key.startsWith(`${data.tableNumber}_`) || 
                             countdown.tableNumber.toString() === data.tableNumber.toString()) {
                             keysToRemove.push(key);
                         }
