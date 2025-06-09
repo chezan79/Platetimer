@@ -271,12 +271,14 @@
 
                         if (data.action === 'startCountdown') {
                             console.log('📥 Countdown ricevuto in pizzeria:', data);
-                            // Mostra solo i countdown destinati alla pizzeria
-                            if (data.destination === 'pizzeria') {
+                            console.log(`🔍 Destinazione ricevuta: "${data.destination}", Tavolo: ${data.tableNumber}`);
+                            
+                            // PIZZERIA: Mostra SOLO i countdown con destinazione "pizzeria"
+                            if (data.destination && data.destination === 'pizzeria') {
                                 console.log(`✅ Countdown accettato per pizzeria - Tavolo: ${data.tableNumber}`);
                                 startCountdown(data.tableNumber, data.timeRemaining);
                             } else {
-                                console.log(`🚫 Countdown ignorato - Destinazione: ${data.destination || 'undefined'}, Tavolo: ${data.tableNumber}`);
+                                console.log(`🚫 Countdown RIFIUTATO in pizzeria - Destinazione: "${data.destination || 'undefined'}", Tavolo: ${data.tableNumber}`);
                             }
                         } else if (data.action === 'deleteCountdown') {
                             console.log('📥 Eliminazione countdown ricevuta in pizzeria:', data);

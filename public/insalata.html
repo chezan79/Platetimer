@@ -264,7 +264,7 @@
                             console.log('📥 Countdown ricevuto in insalata:', data);
                             console.log(`🔍 Destinazione ricevuta: "${data.destination}", Tavolo: ${data.tableNumber}, Tempo: ${data.timeRemaining}s`);
 
-                            // Mostra solo i countdown destinati all'insalata
+                            // INSALATA: Mostra SOLO i countdown con destinazione "insalata"
                             if (data.destination && data.destination === 'insalata') {
                                 console.log(`✅ Countdown accettato per insalata - Tavolo: ${data.tableNumber}, Tempo: ${Math.floor(data.timeRemaining/60)}:${(data.timeRemaining%60).toString().padStart(2, '0')}`);
                                 startCountdown(data.tableNumber, data.timeRemaining);
