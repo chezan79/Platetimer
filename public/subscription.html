@@ -139,7 +139,8 @@
         </div>
         
         <div class="plans-grid">
-            <!-- Piano Gratuito -->
+            <!-- Piano Gratuito - IN STANDBY -->
+            <!--
             <div class="plan-card" data-plan="free">
                 <div class="plan-title">Gratuito</div>
                 <div class="plan-price">€0<span style="font-size: 16px;">/mese</span></div>
@@ -151,9 +152,10 @@
                 </ul>
                 <button class="select-plan-btn" data-plan="free">Seleziona Gratuito</button>
             </div>
+            -->
             
-            <!-- Piano Premium -->
-            <div class="plan-card" data-plan="premium">
+            <!-- Piano Premium - ATTIVO -->
+            <div class="plan-card" data-plan="premium" style="margin: 0 auto; max-width: 400px;">
                 <div class="plan-title">Premium</div>
                 <div class="plan-price">€29<span style="font-size: 16px;">/mese</span></div>
                 <ul class="plan-features">
@@ -162,11 +164,13 @@
                     <li>Messaggi vocali</li>
                     <li>Statistiche dettagliate</li>
                     <li>Supporto prioritario</li>
+                    <li>Perfetto per ristoranti</li>
                 </ul>
                 <button class="select-plan-btn" data-plan="premium">Seleziona Premium</button>
             </div>
             
-            <!-- Piano Business -->
+            <!-- Piano Business - IN STANDBY -->
+            <!--
             <div class="plan-card" data-plan="business">
                 <div class="plan-title">Business</div>
                 <div class="plan-price">€99<span style="font-size: 16px;">/mese</span></div>
@@ -180,6 +184,7 @@
                 </ul>
                 <button class="select-plan-btn" data-plan="business">Seleziona Business</button>
             </div>
+            -->
         </div>
         
         <div style="text-align: center;">
@@ -256,10 +261,16 @@
             }
         });
 
-        // Gestione selezione piano
+        // Gestione selezione piano (solo Premium attivo)
         document.addEventListener('click', (e) => {
             if (e.target.classList.contains('select-plan-btn')) {
                 const plan = e.target.getAttribute('data-plan');
+                
+                // Solo piano Premium disponibile
+                if (plan !== 'premium') {
+                    alert('Solo il piano Premium è attualmente disponibile');
+                    return;
+                }
                 
                 // Rimuovi selezione precedente
                 document.querySelectorAll('.plan-card').forEach(card => {
@@ -277,12 +288,7 @@
                 
                 selectedPlan = plan;
                 document.getElementById('checkout-btn').disabled = false;
-                
-                if (plan === 'free') {
-                    document.getElementById('checkout-btn').textContent = 'Inizia Gratis';
-                } else {
-                    document.getElementById('checkout-btn').textContent = 'Procedi al Pagamento';
-                }
+                document.getElementById('checkout-btn').textContent = 'Procedi al Pagamento';
             }
         });
 
@@ -308,15 +314,15 @@
             }
         };
 
-        // Gestione checkout
+        // Gestione checkout (solo Premium)
         document.getElementById('checkout-btn').addEventListener('click', async () => {
             if (!selectedPlan) {
-                alert('Seleziona un piano prima di procedere');
+                alert('Seleziona il piano Premium per procedere');
                 return;
             }
 
-            if (selectedPlan === 'free') {
-                accessApp();
+            if (selectedPlan !== 'premium') {
+                alert('Solo il piano Premium è disponibile');
                 return;
             }
 
