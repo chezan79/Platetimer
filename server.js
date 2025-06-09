@@ -891,7 +891,13 @@ setInterval(() => {
 }, 300000); // Ogni 5 minuti
 
 // Importa il generatore di token Agora
-const { AgoraTokenGenerator } = require('./token-server');
+let AgoraTokenGenerator = null;
+try {
+    const tokenModule = require('./token-server');
+    AgoraTokenGenerator = tokenModule.AgoraTokenGenerator;
+} catch (error) {
+    console.log('⚠️ Token server non disponibile, funzionalità Agora disabilitate');
+}
 
 // Endpoint per configurazione Agora
 app.get('/api/config', (req, res) => {
@@ -904,6 +910,10 @@ app.get('/api/config', (req, res) => {
 // Endpoint per generazione token Agora
 app.post('/api/generate-token', (req, res) => {
     try {
+        if (!AgoraTokenGenerator) {
+            return res.status(500).json({ error: 'Token generator not available' });
+        }
+
         const { channelName, uid, role = 1, expireTime = 3600 } = req.body;
 
         if (!channelName || !uid) {
