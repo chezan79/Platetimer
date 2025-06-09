@@ -1,0 +1,159 @@
+
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generatore Logo Platetimer</title>
+    
+    <!-- Tailwind CSS per gli stili -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React e ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    
+    <!-- Babel per trasformare JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        .font-inter { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body>
+    <!-- Pulsante per tornare alla home -->
+    <div style="position: absolute; top: 20px; right: 20px; z-index: 1000;">
+        <button onclick="window.location.href='home.html'" 
+                style="padding: 8px 16px; background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: 500;">
+            🏠 Home
+        </button>
+    </div>
+
+    <!-- Container per l'app React -->
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState } = React;
+
+        function App() {
+            const [logoUrl, setLogoUrl] = useState('');
+            const [isLoading, setIsLoading] = useState(false);
+            const [errorMessage, setErrorMessage] = useState('');
+
+            const generateLogo = async () => {
+                setIsLoading(true);
+                setErrorMessage('');
+                setLogoUrl('');
+
+                const prompt = `
+                    A minimalist, modern logo for an app called "Platetimer".
+                    The logo should feature a stylized, circular plate shape.
+                    Inside or around the plate, integrate elements that suggest time and synchronization.
+                    Specifically, abstract, precise, intersecting fork and knife shapes functioning as clock hands at the center of the plate, like gears.
+                    The colors should primarily be cool tones: a clean mint green or a soft light blue, combined with a dark gray or black for professionalism and technology.
+                    Optionally, a subtle hint of burnt orange or golden yellow can be used to represent warmth or appetizing food, but sparingly to maintain a clean design.
+                    The overall aesthetic should be clean, precise, and convey efficiency and coordination.
+                    Include the text "Platetimer" next to or below the symbol, using a clean, legible sans-serif font.
+                `;
+
+                try {
+                    const payload = { 
+                        instances: { prompt: prompt }, 
+                        parameters: { "sampleCount": 1} 
+                    };
+                    
+                    // Nota: Inserisci qui la tua API key di Google Generative AI
+                    const apiKey = ""; // ⚠️ Inserire API key qui
+                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${apiKey}`;
+
+                    if (!apiKey) {
+                        throw new Error('API key mancante. Inserire la chiave API di Google Generative AI nel codice.');
+                    }
+
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
+                    const result = await response.json();
+
+                    if (result.predictions && result.predictions.length > 0 && result.predictions[0].bytesBase64Encoded) {
+                        const imageUrl = `data:image/png;base64,${result.predictions[0].bytesBase64Encoded}`;
+                        setLogoUrl(imageUrl);
+                    } else {
+                        setErrorMessage('Nessuna immagine generata o dati immagine non validi.');
+                    }
+                } catch (error) {
+                    console.error('Errore durante la generazione dell\'immagine:', error);
+                    setErrorMessage(`Si è verificato un errore durante la generazione del logo: ${error.message}. Riprova.`);
+                } finally {
+                    setIsLoading(false);
+                }
+            };
+
+            return (
+                <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
+                    <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-xl max-w-md w-full text-center">
+                        <h1 className="text-3xl font-bold text-gray-800 mb-6 font-inter">
+                            Generatore Logo Platetimer
+                        </h1>
+
+                        <button
+                            onClick={generateLogo}
+                            disabled={isLoading}
+                            className={`w-full py-3 px-6 rounded-xl text-lg font-semibold transition-all duration-300
+                                ${isLoading
+                                    ? 'bg-blue-300 text-gray-700 cursor-not-allowed'
+                                    : 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg transform hover:scale-105'
+                                }`}
+                        >
+                            {isLoading ? 'Generazione in corso...' : 'Genera Logo'}
+                        </button>
+
+                        {isLoading && (
+                            <div className="mt-6 flex flex-col items-center">
+                                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+                                <p className="mt-3 text-gray-600">Creazione del tuo logo...</p>
+                            </div>
+                        )}
+
+                        {errorMessage && (
+                            <div className="mt-6 p-4 bg-red-100 border border-red-400 text-red-700 rounded-xl">
+                                <p>{errorMessage}</p>
+                            </div>
+                        )}
+
+                        {logoUrl && (
+                            <div className="mt-8">
+                                <h2 className="text-2xl font-semibold text-gray-800 mb-4 font-inter">
+                                    Il tuo Logo Platetimer:
+                                </h2>
+                                <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                                    <img
+                                        src={logoUrl}
+                                        alt="Platetimer Logo"
+                                        className="max-w-full h-auto mx-auto rounded-lg shadow-md"
+                                        onError={(e) => { 
+                                            e.target.onerror = null; 
+                                            e.target.src="https://placehold.co/300x300/CCCCCC/000000?text=Immagine+non+disponibile"; 
+                                        }}
+                                    />
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        // Render dell'app
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>
