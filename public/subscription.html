@@ -68,9 +68,9 @@
 </head>
 <body>
     <div class="subscription-container">
-        <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px; padding: 15px; margin-bottom: 20px; text-align: center;">
-            <h3 style="color: #856404; margin: 0;">⚠️ Abbonamenti Temporaneamente Disabilitati</h3>
-            <p style="color: #856404; margin: 10px 0 0 0;">L'app è attualmente in modalità test. Tutte le funzionalità sono disponibili gratuitamente.</p>
+        <div style="background: #d4edda; border: 1px solid #c3e6cb; border-radius: 8px; padding: 15px; margin-bottom: 20px; text-align: center;">
+            <h3 style="color: #155724; margin: 0;">✅ Sistema di Pagamento Attivo</h3>
+            <p style="color: #155724; margin: 10px 0 0 0;">Seleziona il piano più adatto alle tue esigenze. Pagamenti sicuri con Stripe.</p>
         </div>
         <h1>🎯 Scegli il tuo Piano</h1>
         <p>Seleziona il piano più adatto per la tua attività</p>
@@ -148,8 +148,11 @@
         const auth = getAuth(app);
         const db = getFirestore(app);
 
-        // Abbonamenti temporaneamente disabilitati
+        // Inizializza Stripe
+        const stripe = Stripe(process.env.STRIPE_PUBLISHABLE_KEY || 'pk_test_51RYAfcG3vUIKUaULNdabWDPHURDRKmLd7l73Uan6YfkVAj2966jePEhlw0h6CrnRdcKSYt7pnBP7EUVBx6SOf7DP00mcCejLS1');
+        
         let currentUser = null;
+        let selectedPlan = null;
 
         // Verifica autenticazione
         onAuthStateChanged(auth, async (user) => {
@@ -203,9 +206,74 @@
                 alert('Errore durante l\'attivazione. Riprova.');
             });
         }
-         document.getElementById('subscribe-btn').addEventListener('click',  () => {
-             accessApp();
-         });
+         // Gestione selezione piano
+        document.querySelectorAll('.plan-card').forEach(card => {
+            card.addEventListener('click', () => {
+                // Rimuovi selezione precedente
+                document.querySelectorAll('.plan-card').forEach(c => c.classList.remove('selected'));
+                
+                // Seleziona il nuovo piano
+                card.classList.add('selected');
+                selectedPlan = card.dataset.plan;
+                
+                const subscribeBtn = document.getElementById('subscribe-btn');
+                
+                if (selectedPlan === 'free') {
+                    subscribeBtn.textContent = 'Accedi Gratis';
+                    subscribeBtn.disabled = false;
+                } else {
+                    subscribeBtn.textContent = `Abbonati al Piano ${selectedPlan === 'premium' ? 'Premium' : 'Business'}`;
+                    subscribeBtn.disabled = false;
+                }
+            });
+        });
+
+        // Gestione sottoscrizione
+        document.getElementById('subscribe-btn').addEventListener('click', async () => {
+            if (!currentUser) {
+                alert('Errore: utente non autenticato');
+                return;
+            }
+
+            if (!selectedPlan) {
+                alert('Seleziona un piano prima di procedere');
+                return;
+            }
+
+            if (selectedPlan === 'free') {
+                accessApp();
+                return;
+            }
+
+            // Crea sessione Stripe per piani a pagamento
+            try {
+                const response = await fetch('/api/create-checkout-session', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        priceId: selectedPlan,
+                        userEmail: currentUser.email
+                    })
+                });
+
+                const { sessionId } = await response.json();
+                
+                // Reindirizza a Stripe Checkout
+                const { error } = await stripe.redirectToCheckout({
+                    sessionId: sessionId
+                });
+
+                if (error) {
+                    console.error('Errore Stripe:', error);
+                    alert('Errore durante il pagamento. Riprova.');
+                }
+            } catch (error) {
+                console.error('Errore checkout:', error);
+                alert('Errore durante il pagamento. Riprova.');
+            }
+        });
     </script>
 </body>
 </html>

@@ -3,8 +3,7 @@ const http = require('http');
 const WebSocket = require('ws');
 const crypto = require('crypto');
 const speech = require('@google-cloud/speech');
-// Stripe temporaneamente disabilitato - abbonamenti in standby
-// const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 const app = express();
 const server = http.createServer(app);
@@ -63,21 +62,84 @@ app.post('/api/voice-message', (req, res) => {
     }
 });
 
-// Endpoint Stripe temporaneamente disabilitato - abbonamenti in standby
-/*
+// Endpoint per creare sessione di checkout Stripe
 app.post('/api/create-checkout-session', async (req, res) => {
-    // Endpoint disabilitato per test senza abbonamenti
-    res.status(503).json({ error: 'Abbonamenti temporaneamente disabilitati' });
-});
-*/
+    try {
+        const { priceId, customerId, userEmail } = req.body;
 
-// Webhook Stripe temporaneamente disabilitato - abbonamenti in standby
-/*
-app.post('/api/stripe-webhook', express.raw({type: 'application/json'}), (req, res) => {
-    // Webhook disabilitato per test senza abbonamenti
-    res.status(503).json({ error: 'Abbonamenti temporaneamente disabilitati' });
+        if (!priceId || !userEmail) {
+            return res.status(400).json({ error: 'Price ID e email sono richiesti' });
+        }
+
+        // Prezzi dei piani
+        const prices = {
+            premium: 'price_1234567890', // Sostituisci con il tuo Price ID reale
+            business: 'price_0987654321'  // Sostituisci con il tuo Price ID reale
+        };
+
+        const session = await stripe.checkout.sessions.create({
+            payment_method_types: ['card'],
+            line_items: [
+                {
+                    price: prices[priceId] || priceId,
+                    quantity: 1,
+                },
+            ],
+            mode: 'subscription',
+            success_url: `${req.headers.origin}/home.html?session_id={CHECKOUT_SESSION_ID}`,
+            cancel_url: `${req.headers.origin}/subscription.html`,
+            customer_email: userEmail,
+            metadata: {
+                plan: priceId,
+                userEmail: userEmail
+            }
+        });
+
+        res.json({ sessionId: session.id });
+    } catch (error) {
+        console.error('❌ Errore creazione sessione Stripe:', error);
+        res.status(500).json({ error: 'Errore durante la creazione della sessione di pagamento' });
+    }
 });
-*/
+
+// Webhook Stripe per gestire eventi di pagamento
+app.post('/api/stripe-webhook', express.raw({type: 'application/json'}), async (req, res) => {
+    const sig = req.headers['stripe-signature'];
+    let event;
+
+    try {
+        event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
+    } catch (err) {
+        console.error('❌ Errore verifica webhook Stripe:', err.message);
+        return res.status(400).send(`Webhook Error: ${err.message}`);
+    }
+
+    // Gestisci eventi specifici
+    switch (event.type) {
+        case 'checkout.session.completed':
+            const session = event.data.object;
+            console.log('✅ Pagamento completato:', session.id);
+            
+            // Qui potresti aggiornare il database utente
+            // await updateUserSubscription(session.metadata.userEmail, session.metadata.plan);
+            break;
+
+        case 'invoice.payment_succeeded':
+            const invoice = event.data.object;
+            console.log('✅ Pagamento ricorrente riuscito:', invoice.id);
+            break;
+
+        case 'invoice.payment_failed':
+            const failedInvoice = event.data.object;
+            console.log('❌ Pagamento ricorrente fallito:', failedInvoice.id);
+            break;
+
+        default:
+            console.log(`ℹ️ Evento Stripe non gestito: ${event.type}`);
+    }
+
+    res.json({ received: true });
+});
 
 // Endpoint per il riconoscimento vocale
 app.post('/api/speech-to-text', async (req, res) => {
