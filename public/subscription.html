@@ -1,130 +1,195 @@
+
 <!DOCTYPE html>
 <html lang="it">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Abbonamento - Sistema Gestione Ordini</title>
+    <title>Sottoscrizione - MealMaster</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://js.stripe.com/v3/"></script>
     <style>
         .subscription-container {
-            max-width: 600px;
-            margin: 50px auto;
-            padding: 30px;
-            background: white;
-            border-radius: 10px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-        }
-        .plan-card {
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
+            max-width: 1200px;
+            margin: 0 auto;
             padding: 20px;
-            margin: 15px 0;
-            cursor: pointer;
-            transition: all 0.3s ease;
         }
+        
+        .plans-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            margin: 40px 0;
+        }
+        
+        .plan-card {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            transition: transform 0.3s ease;
+            border: 2px solid transparent;
+        }
+        
         .plan-card:hover {
-            border-color: #007bff;
-            box-shadow: 0 2px 10px rgba(0,123,255,0.2);
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
         }
+        
         .plan-card.selected {
             border-color: #007bff;
             background: #f8f9ff;
         }
-        .plan-price {
+        
+        .plan-title {
             font-size: 24px;
             font-weight: bold;
-            color: #007bff;
+            color: #333;
+            margin-bottom: 10px;
         }
-        .features-list {
+        
+        .plan-price {
+            font-size: 36px;
+            font-weight: bold;
+            color: #007bff;
+            margin-bottom: 20px;
+        }
+        
+        .plan-features {
             list-style: none;
             padding: 0;
+            margin: 20px 0;
         }
-        .features-list li {
-            padding: 5px 0;
+        
+        .plan-features li {
+            padding: 8px 0;
             color: #666;
         }
-        .features-list li::before {
-            content: "✅ ";
-            margin-right: 8px;
+        
+        .plan-features li:before {
+            content: "✓";
+            color: #28a745;
+            font-weight: bold;
+            margin-right: 10px;
         }
-        .subscribe-btn {
-            background: linear-gradient(135deg, #007bff, #0056b3);
+        
+        .select-plan-btn {
+            width: 100%;
+            padding: 12px 24px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+        
+        .select-plan-btn:hover {
+            background: #0056b3;
+        }
+        
+        .select-plan-btn.selected {
+            background: #28a745;
+        }
+        
+        .checkout-btn {
+            background: #28a745;
             color: white;
             border: none;
             padding: 15px 30px;
-            border-radius: 8px;
-            font-size: 16px;
-            font-weight: bold;
+            font-size: 18px;
+            border-radius: 6px;
             cursor: pointer;
-            width: 100%;
-            margin-top: 20px;
+            margin-top: 30px;
+            transition: background 0.3s ease;
         }
-        .subscribe-btn:disabled {
+        
+        .checkout-btn:hover {
+            background: #218838;
+        }
+        
+        .checkout-btn:disabled {
             background: #ccc;
             cursor: not-allowed;
+        }
+        
+        .loading {
+            display: none;
+            text-align: center;
+            margin-top: 20px;
+        }
+        
+        .user-info {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
         }
     </style>
 </head>
 <body>
     <div class="subscription-container">
-        <div style="background: #d4edda; border: 1px solid #c3e6cb; border-radius: 8px; padding: 15px; margin-bottom: 20px; text-align: center;">
-            <h3 style="color: #155724; margin: 0;">✅ Sistema di Pagamento Attivo</h3>
-            <p style="color: #155724; margin: 10px 0 0 0;">Seleziona il piano più adatto alle tue esigenze. Pagamenti sicuri con Stripe.</p>
+        <h1>Scegli il tuo piano</h1>
+        
+        <div id="user-info" class="user-info">
+            <h3>Informazioni utente</h3>
+            <p id="user-email">Email: Caricamento...</p>
+            <p id="user-company">Azienda: Caricamento...</p>
         </div>
-        <h1>🎯 Scegli il tuo Piano</h1>
-        <p>Seleziona il piano più adatto per la tua attività</p>
-
-        <!-- Piano Base Gratuito -->
-        <div class="plan-card" data-plan="free">
-            <h3>📱 Piano Base</h3>
-            <div class="plan-price">Gratuito</div>
-            <ul class="features-list">
-                <li>Fino a 10 tavoli</li>
-                <li>Countdown base</li>
-                <li>1 destinazione</li>
-                <li>Supporto email</li>
-            </ul>
+        
+        <div class="plans-grid">
+            <!-- Piano Gratuito -->
+            <div class="plan-card" data-plan="free">
+                <div class="plan-title">Gratuito</div>
+                <div class="plan-price">€0<span style="font-size: 16px;">/mese</span></div>
+                <ul class="plan-features">
+                    <li>Fino a 5 tavoli</li>
+                    <li>Countdown base</li>
+                    <li>Supporto email</li>
+                    <li>Funzionalità base</li>
+                </ul>
+                <button class="select-plan-btn" data-plan="free">Seleziona Gratuito</button>
+            </div>
+            
+            <!-- Piano Premium -->
+            <div class="plan-card" data-plan="premium">
+                <div class="plan-title">Premium</div>
+                <div class="plan-price">€29<span style="font-size: 16px;">/mese</span></div>
+                <ul class="plan-features">
+                    <li>Tavoli illimitati</li>
+                    <li>Countdown avanzati</li>
+                    <li>Messaggi vocali</li>
+                    <li>Statistiche dettagliate</li>
+                    <li>Supporto prioritario</li>
+                </ul>
+                <button class="select-plan-btn" data-plan="premium">Seleziona Premium</button>
+            </div>
+            
+            <!-- Piano Business -->
+            <div class="plan-card" data-plan="business">
+                <div class="plan-title">Business</div>
+                <div class="plan-price">€99<span style="font-size: 16px;">/mese</span></div>
+                <ul class="plan-features">
+                    <li>Tutto del Premium</li>
+                    <li>Multi-location</li>
+                    <li>API personalizzate</li>
+                    <li>Integrazione POS</li>
+                    <li>Supporto dedicato</li>
+                    <li>Training personalizzato</li>
+                </ul>
+                <button class="select-plan-btn" data-plan="business">Seleziona Business</button>
+            </div>
         </div>
-
-        <!-- Piano Premium -->
-        <div class="plan-card" data-plan="premium">
-            <h3>⭐ Piano Premium</h3>
-            <div class="plan-price">€29.99/mese</div>
-            <ul class="features-list">
-                <li>Tavoli illimitati</li>
-                <li>Messaggi vocali</li>
-                <li>Tutte le destinazioni (cucina, pizzeria, insalata)</li>
-                <li>Riconoscimento vocale</li>
-                <li>Funzione pausa</li>
-                <li>Statistiche avanzate</li>
-                <li>Supporto prioritario</li>
-            </ul>
-        </div>
-
-        <!-- Piano Business -->
-        <div class="plan-card" data-plan="business">
-            <h3>🏢 Piano Business</h3>
-            <div class="plan-price">€79.99/mese</div>
-            <ul class="features-list">
-                <li>Tutto del Piano Premium</li>
-                <li>Multi-location</li>
-                <li>API personalizzate</li>
-                <li>Integrazione POS</li>
-                <li>Analytics dettagliati</li>
-                <li>Supporto telefonico 24/7</li>
-            </ul>
-        </div>
-
-        <button id="subscribe-btn" class="subscribe-btn" disabled>
-            Seleziona un Piano
-        </button>
-
-        <div id="user-info" style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
-            <p><strong>Utente:</strong> <span id="user-name">-</span></p>
-            <p><strong>Email:</strong> <span id="user-email">-</span></p>
-            <p><strong>Azienda:</strong> <span id="user-company">-</span></p>
-            <p><strong>Piano Attuale:</strong> <span id="current-plan">Base Gratuito</span></p>
+        
+        <div style="text-align: center;">
+            <button id="checkout-btn" class="checkout-btn" disabled>
+                Procedi al Pagamento
+            </button>
+            
+            <div id="loading" class="loading">
+                <p>Caricamento...</p>
+            </div>
         </div>
     </div>
 
@@ -149,7 +214,7 @@
         const db = getFirestore(app);
 
         // Inizializza Stripe
-        const stripe = Stripe(process.env.STRIPE_PUBLISHABLE_KEY || 'pk_test_51RYAfcG3vUIKUaULNdabWDPHURDRKmLd7l73Uan6YfkVAj2966jePEhlw0h6CrnRdcKSYt7pnBP7EUVBx6SOf7DP00mcCejLS1');
+        const stripe = Stripe('pk_test_51RYAfcG3vUIKUaULNdabWDPHURDRKmLd7l73Uan6YfkVAj2966jePEhlw0h6CrnRdcKSYt7pnBP7EUVBx6SOf7DP00mcCejLS1');
         
         let currentUser = null;
         let selectedPlan = null;
@@ -163,78 +228,88 @@
 
             currentUser = user;
 
-            // Verifica se l'utente ha già accesso
-            const userDoc = await getDoc(doc(db, "users", user.uid));
-            if (userDoc.exists()) {
-                const userData = userDoc.data();
-                 document.getElementById('user-name').textContent = userData.firstName + ' ' + userData.lastName;
-                document.getElementById('user-email').textContent = userData.email;
-                document.getElementById('user-company').textContent = userData.company || 'Non specificata';
-                document.getElementById('current-plan').textContent = userData.subscriptionPlan || 'Base Gratuito';
-
-
-                // Se ha già dati, vai direttamente alla home
-                if (userData.companyName) {
-                    window.location.href = 'home.html';
-                    return;
+            // Mostra info utente
+            document.getElementById('user-email').textContent = `Email: ${user.email}`;
+            
+            // Recupera dati utente da Firestore
+            try {
+                const userDoc = await getDoc(doc(db, "users", user.uid));
+                if (userDoc.exists()) {
+                    const userData = userDoc.data();
+                    document.getElementById('user-company').textContent = `Azienda: ${userData.company || 'Non specificata'}`;
+                    
+                    // Verifica se ha già un abbonamento
+                    if (userData.subscription && userData.subscription.active) {
+                        document.getElementById('user-info').innerHTML += `
+                            <p style="color: green; font-weight: bold;">
+                                ✅ Abbonamento attivo: ${userData.subscription.plan}
+                            </p>
+                            <button onclick="accessApp()" class="checkout-btn">
+                                Accedi all'App
+                            </button>
+                        `;
+                        return;
+                    }
                 }
+            } catch (error) {
+                console.error('Errore recupero dati utente:', error);
             }
         });
 
-        // Funzione per accesso diretto all'app
-        function accessApp() {
-            if (!currentUser) {
-                alert('Errore: utente non autenticato');
-                return;
-            }
-
-            // Crea/aggiorna dati utente con accesso completo
-            setDoc(doc(db, "users", currentUser.uid), {
-                email: currentUser.email,
-                firstName: currentUser.email.split('@')[0],
-                lastName: "user",
-                company:  currentUser.email.split('@')[0],
-                subscriptionPlan: 'test',
-                subscriptionStatus: 'active', // Temporaneamente attivo
-                createdAt: new Date(),
-                updatedAt: new Date()
-            }).then(() => {
-                alert('✅ Accesso concesso! Benvenuto in MealMaster');
-                window.location.href = 'home.html';
-            }).catch((error) => {
-                console.error('Errore:', error);
-                alert('Errore durante l\'attivazione. Riprova.');
-            });
-        }
-         // Gestione selezione piano
-        document.querySelectorAll('.plan-card').forEach(card => {
-            card.addEventListener('click', () => {
+        // Gestione selezione piano
+        document.addEventListener('click', (e) => {
+            if (e.target.classList.contains('select-plan-btn')) {
+                const plan = e.target.getAttribute('data-plan');
+                
                 // Rimuovi selezione precedente
-                document.querySelectorAll('.plan-card').forEach(c => c.classList.remove('selected'));
+                document.querySelectorAll('.plan-card').forEach(card => {
+                    card.classList.remove('selected');
+                });
+                document.querySelectorAll('.select-plan-btn').forEach(btn => {
+                    btn.classList.remove('selected');
+                    btn.textContent = btn.textContent.replace('✓ ', '');
+                });
                 
-                // Seleziona il nuovo piano
-                card.classList.add('selected');
-                selectedPlan = card.dataset.plan;
+                // Aggiungi nuova selezione
+                e.target.closest('.plan-card').classList.add('selected');
+                e.target.classList.add('selected');
+                e.target.textContent = '✓ ' + e.target.textContent;
                 
-                const subscribeBtn = document.getElementById('subscribe-btn');
+                selectedPlan = plan;
+                document.getElementById('checkout-btn').disabled = false;
                 
-                if (selectedPlan === 'free') {
-                    subscribeBtn.textContent = 'Accedi Gratis';
-                    subscribeBtn.disabled = false;
+                if (plan === 'free') {
+                    document.getElementById('checkout-btn').textContent = 'Inizia Gratis';
                 } else {
-                    subscribeBtn.textContent = `Abbonati al Piano ${selectedPlan === 'premium' ? 'Premium' : 'Business'}`;
-                    subscribeBtn.disabled = false;
+                    document.getElementById('checkout-btn').textContent = 'Procedi al Pagamento';
                 }
-            });
+            }
         });
 
-        // Gestione sottoscrizione
-        document.getElementById('subscribe-btn').addEventListener('click', async () => {
-            if (!currentUser) {
-                alert('Errore: utente non autenticato');
-                return;
+        // Accesso diretto all'app
+        window.accessApp = async function() {
+            try {
+                // Aggiorna lo stato dell'utente
+                if (selectedPlan === 'free') {
+                    await updateDoc(doc(db, "users", currentUser.uid), {
+                        subscription: {
+                            plan: 'free',
+                            active: true,
+                            startDate: new Date()
+                        }
+                    });
+                }
+                
+                // Reindirizza alla home
+                window.location.href = 'home.html';
+            } catch (error) {
+                console.error('Errore accesso app:', error);
+                alert('Errore durante l\'accesso. Riprova.');
             }
+        };
 
+        // Gestione checkout
+        document.getElementById('checkout-btn').addEventListener('click', async () => {
             if (!selectedPlan) {
                 alert('Seleziona un piano prima di procedere');
                 return;
@@ -244,6 +319,10 @@
                 accessApp();
                 return;
             }
+
+            // Mostra loading
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('checkout-btn').disabled = true;
 
             // Crea sessione Stripe per piani a pagamento
             try {
@@ -257,6 +336,10 @@
                         userEmail: currentUser.email
                     })
                 });
+
+                if (!response.ok) {
+                    throw new Error('Errore nella creazione della sessione');
+                }
 
                 const { sessionId } = await response.json();
                 
@@ -272,8 +355,28 @@
             } catch (error) {
                 console.error('Errore checkout:', error);
                 alert('Errore durante il pagamento. Riprova.');
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('checkout-btn').disabled = false;
             }
         });
+
+        // Gestione successo pagamento (se presente session_id nell'URL)
+        const urlParams = new URLSearchParams(window.location.search);
+        const sessionId = urlParams.get('session_id');
+        
+        if (sessionId) {
+            // Pagamento completato con successo
+            document.getElementById('user-info').innerHTML = `
+                <div style="background: #d4edda; color: #155724; padding: 15px; border-radius: 8px;">
+                    <h3>✅ Pagamento completato!</h3>
+                    <p>Il tuo abbonamento è stato attivato con successo.</p>
+                    <button onclick="accessApp()" class="checkout-btn">
+                        Accedi all'App
+                    </button>
+                </div>
+            `;
+        }
     </script>
 </body>
 </html>

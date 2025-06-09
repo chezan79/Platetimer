@@ -3,7 +3,14 @@ const http = require('http');
 const WebSocket = require('ws');
 const crypto = require('crypto');
 const speech = require('@google-cloud/speech');
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+// Inizializza Stripe solo se la chiave è presente
+let stripe = null;
+if (process.env.STRIPE_SECRET_KEY) {
+    stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+    console.log('✅ Stripe configurato correttamente');
+} else {
+    console.log('⚠️ Stripe non configurato - Chiave segreta mancante');
+}
 
 const app = express();
 const server = http.createServer(app);
@@ -65,16 +72,20 @@ app.post('/api/voice-message', (req, res) => {
 // Endpoint per creare sessione di checkout Stripe
 app.post('/api/create-checkout-session', async (req, res) => {
     try {
+        if (!stripe) {
+            return res.status(500).json({ error: 'Stripe non configurato' });
+        }
+
         const { priceId, customerId, userEmail } = req.body;
 
         if (!priceId || !userEmail) {
             return res.status(400).json({ error: 'Price ID e email sono richiesti' });
         }
 
-        // Prezzi dei piani
+        // Prezzi dei piani (dovrai crearli nel dashboard Stripe)
         const prices = {
-            premium: 'price_1234567890', // Sostituisci con il tuo Price ID reale
-            business: 'price_0987654321'  // Sostituisci con il tuo Price ID reale
+            premium: 'price_premium_monthly', // Crea questo nel dashboard Stripe
+            business: 'price_business_monthly'  // Crea questo nel dashboard Stripe
         };
 
         const session = await stripe.checkout.sessions.create({
