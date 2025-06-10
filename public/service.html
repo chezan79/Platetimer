@@ -637,29 +637,23 @@
         let audioChunks = [];
         let selectedDestinationsVoice = [];
 
-        // Event listener per inizializzazione pulsanti destinazioni
+        // Inizializzazione sistema messaggi vocali come in secondi.html
         document.addEventListener('DOMContentLoaded', function() {
-            console.log('🎯 Inizializzazione pulsanti destinazioni messaggi vocali in service.html');
+            console.log('🎯 Inizializzazione sistema messaggi vocali in service.html');
             
-            // Aspetta un po' per assicurarsi che tutto sia caricato
-            setTimeout(() => {
-                initializeDestinationButtons();
-                initializeVoiceMessageSystem();
-            }, 100);
+            // Inizializza immediatamente come in secondi.html
+            initializeDestinationButtons();
+            initializeVoiceMessageSystem();
         });
 
         function initializeDestinationButtons() {
             const destinationButtonsVoice = document.querySelectorAll('.destination-button-voice');
             console.log('🔘 Pulsanti destinazione trovati:', destinationButtonsVoice.length);
 
-            destinationButtonsVoice.forEach((button, index) => {
-                console.log(`🔘 Inizializzazione pulsante ${index + 1}:`, button.getAttribute('data-destination'));
+            destinationButtonsVoice.forEach(button => {
+                console.log(`🔘 Inizializzazione pulsante:`, button.getAttribute('data-destination'));
                 
-                // Rimuovi eventuali listener esistenti
-                button.replaceWith(button.cloneNode(true));
-                const newButton = document.querySelectorAll('.destination-button-voice')[index];
-                
-                newButton.addEventListener('click', function(e) {
+                button.addEventListener('click', function(e) {
                     e.preventDefault();
                     e.stopPropagation();
                     
@@ -750,7 +744,7 @@
         function updateDestinationDisplayVoice() {
             const displayDiv = document.getElementById('selected-destinations-voice');
             if (selectedDestinationsVoice.length === 0) {
-                displayDiv.textContent = 'Seleziona destinazioni';
+                displayDiv.textContent = '';  // Vuoto come in secondi.html
             } else {
                 const icons = { 'cucina': '🍳', 'pizzeria': '🍕', 'insalata': '🥗', 'secondi': '🍖' };
                 const destNames = { 'cucina': 'Cucina', 'pizzeria': 'Pizzeria', 'insalata': 'Insalata', 'secondi': 'Secondi' };
