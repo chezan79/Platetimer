@@ -231,8 +231,8 @@
     <!-- Container superiore con messaggi vocali -->
     <div style="position: absolute; top: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 15px; z-index: 500;">
 
-        <!-- Sistema messaggio vocale con scelta destinazione -->
-        <div style="text-align: center; padding: 8px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; border-left: 4px solid #007bff; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); min-width: 350px;">
+        <!-- Sistema messaggio vocale con scelta destinazione per tutte le pagine -->
+        <div style="text-align: center; padding: 8px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; border-left: 4px solid #007bff; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); min-width: 400px;">
             <div style="display: flex; justify-content: center; align-items: center; gap: 6px; flex-wrap: wrap;">
                 <button class="destination-button-voice" data-destination="cucina" style="padding: 6px 12px; background: linear-gradient(135deg, #28a745 0%, #98FB98 100%); color: #212529; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
                     🍳 Cucina
@@ -705,15 +705,18 @@
         function updateDestinationDisplayVoice() {
             const displayDiv = document.getElementById('selected-destinations-voice');
             if (selectedDestinationsVoice.length === 0) {
-                displayDiv.textContent = '';
+                displayDiv.textContent = 'Seleziona destinazioni';
             } else {
                 const icons = { 'cucina': '🍳', 'pizzeria': '🍕', 'insalata': '🥗', 'secondi': '🍖' };
                 const destNames = { 'cucina': 'Cucina', 'pizzeria': 'Pizzeria', 'insalata': 'Insalata', 'secondi': 'Secondi' };
                 if (selectedDestinationsVoice.length === 1) {
                     const dest = selectedDestinationsVoice[0];
                     displayDiv.textContent = `${icons[dest]} ${destNames[dest]}`;
+                } else if (selectedDestinationsVoice.length === 4) {
+                    displayDiv.textContent = '🎯 Tutte le destinazioni';
                 } else {
-                    displayDiv.textContent = `${selectedDestinationsVoice.length} destinazioni selezionate`;
+                    const destText = selectedDestinationsVoice.map(d => icons[d]).join(' ');
+                    displayDiv.textContent = `${destText} (${selectedDestinationsVoice.length})`;
                 }
             }
         }
@@ -725,7 +728,7 @@
             }
 
             if (selectedDestinationsVoice.length === 0) {
-                alert('⚠️ Seleziona almeno una destinazione prima di registrare!');
+                alert('⚠️ Seleziona almeno una destinazione prima di registrare!\n\nPuoi scegliere tra: Cucina, Pizzeria, Insalata, Secondi');
                 return;
             }
 
@@ -868,6 +871,13 @@
             const messageId = Date.now().toString();
             const currentTime = new Date().toLocaleTimeString('it-IT');
 
+            // Verifica se almeno una destinazione è selezionata
+            if (selectedDestinationsVoice.length === 0) {
+                alert('⚠️ Seleziona almeno una destinazione prima di inviare!');
+                return;
+            }
+
+            let successCount = 0;
             selectedDestinationsVoice.forEach(destination => {
                 if (ws && ws.readyState === WebSocket.OPEN) {
                     const voiceMessageData = {
@@ -883,28 +893,35 @@
                     };
 
                     ws.send(JSON.stringify(voiceMessageData));
-                    console.log(`📢 🎤 Inviato da sala a ${destination}: ${Math.round(audioSize/1024)}KB`);
+                    console.log(`📢 🎤 Sala → ${destination}: ${Math.round(audioSize/1024)}KB`);
+                    successCount++;
                 } else {
                     console.error('❌ WebSocket non connesso in sala');
-                    alert('❌ Connessione persa.');
-                    return;
                 }
             });
 
             const statusDiv = document.getElementById('voice-message-status');
-            const destText = selectedDestinationsVoice.length === 1 ? 
-                selectedDestinationsVoice[0] : 
-                `${selectedDestinationsVoice.length} destinazioni`;
+            
+            if (successCount > 0) {
+                const destText = selectedDestinationsVoice.length === 1 ? 
+                    selectedDestinationsVoice[0].charAt(0).toUpperCase() + selectedDestinationsVoice[0].slice(1) : 
+                    `${selectedDestinationsVoice.length} destinazioni`;
 
-            statusDiv.textContent = `✅ A ${destText}! (${Math.round(audioSize/1024)}KB)`;
-            statusDiv.style.color = '#28a745';
+                statusDiv.textContent = `✅ Inviato a ${destText}! (${Math.round(audioSize/1024)}KB)`;
+                statusDiv.style.color = '#28a745';
 
-            selectedDestinationsVoice = [];
-            document.querySelectorAll('.destination-button-voice').forEach(btn => {
-                btn.classList.remove('selected');
-            });
-            updateDestinationDisplayVoice();
+                // Reset selezioni dopo invio
+                selectedDestinationsVoice = [];
+                document.querySelectorAll('.destination-button-voice').forEach(btn => {
+                    btn.classList.remove('selected');
+                });
+                updateDestinationDisplayVoice();
+            } else {
+                statusDiv.textContent = '❌ Errore invio';
+                statusDiv.style.color = '#dc3545';
+            }
 
+            // Pulisci stato registrazione
             audioChunks = [];
             mediaRecorder = null;
 
