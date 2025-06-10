@@ -300,7 +300,7 @@
         }
 
         function deleteCountdown(tableNumber) {
-            const countdownIndex = countdowns.findIndex(c => c.tableNumber == tableNumber);
+            const countdownIndex = countdowns.findIndex(c => c.tableNumber.toString() === tableNumber.toString());
             if (countdownIndex !== -1) {
                 const countdown = countdowns[countdownIndex];
                 clearInterval(countdown.interval);
@@ -485,13 +485,13 @@
         }
 
         function removeVoiceMessage(messageId) {
-            const messageDiv = document.getElementById(`message-${messageId}`);
+            const messageDiv = document.getElementById(`voice-message-${messageId}`);
             if (messageDiv) {
                 messageDiv.remove();
 
                 // Nascondi il container se non ci sono messaggi
                 const voiceMessagesList = document.getElementById('voice-messages-list');
-                if (!voiceMessagesList.hasChildNodes()) {
+                if (voiceMessagesList.children.length === 0) {
                     const messagesContainer = document.getElementById('messagesContainer');
                     messagesContainer.style.display = 'none';
                 }
