@@ -541,145 +541,290 @@
             }
         }
 
-        // ========== GESTIONE MESSAGGI VOCALI ==========
-        let selectedDestinationsVoice = [];
+        // ========== SISTEMA MESSAGGIO VOCALE COME PIZZERIA ==========
+        let voiceRecognition = null;
+        let isRecordingMessage = false;
+        let currentTranscript = '';
         let mediaRecorder = null;
         let audioChunks = [];
-        let isRecording = false;
+        let selectedDestinations = [];
 
-        // Inizializzazione controlli messaggi vocali
-        document.querySelectorAll('.destination-button-voice').forEach(button => {
-            button.addEventListener('click', function() {
-                const destination = this.getAttribute('data-destination');
-                if (selectedDestinationsVoice.includes(destination)) {
-                    selectedDestinationsVoice = selectedDestinationsVoice.filter(d => d !== destination);
-                    this.classList.remove('selected');
-                } else {
-                    selectedDestinationsVoice.push(destination);
-                    this.classList.add('selected');
-                }
-                updateDestinationDisplayVoice();
-                console.log('Destinazioni selezionate per messaggi vocali in secondi:', selectedDestinationsVoice);
+        // Gestione selezione destinazioni con stile pizzeria.html
+        document.addEventListener('DOMContentLoaded', function() {
+            const destinationButtons = document.querySelectorAll('.destination-button-voice');
+
+            destinationButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    const destination = this.getAttribute('data-destination');
+
+                    // Toggle singola destinazione
+                    if (selectedDestinations.includes(destination)) {
+                        selectedDestinations = selectedDestinations.filter(d => d !== destination);
+                        this.classList.remove('selected');
+                    } else {
+                        selectedDestinations.push(destination);
+                        this.classList.add('selected');
+                    }
+
+                    updateDestinationDisplay();
+                    console.log('Destinazioni selezionate:', selectedDestinations);
+                });
             });
+
+            // Stile per pulsanti selezionati simile a pizzeria.html
+            const style = document.createElement('style');
+            style.textContent = `
+                .destination-button-voice {
+                    transition: transform 0.2s, background-color 0.3s, box-shadow 0.2s;
+                    min-width: 60px;
+                }
+
+                .destination-button-voice:hover {
+                    transform: translateY(-2px);
+                    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+                }
+
+                .destination-button-voice.selected {
+                    transform: translateY(-2px);
+                    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+                    border: 3px solid #333 !important;
+                    position: relative;
+                }
+
+                .destination-button-voice.selected::after {
+                    content: '✓';
+                    position: absolute;
+                    top: -5px;
+                    right: -5px;
+                    background: #28a745;
+                    color: white;
+                    border-radius: 50%;
+                    width: 20px;
+                    height: 20px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 12px;
+                    font-weight: bold;
+                    border: 2px solid white;
+                }
+            `;
+            document.head.appendChild(style);
         });
 
-        function updateDestinationDisplayVoice() {
+        function updateDestinationDisplay() {
             const displayDiv = document.getElementById('selected-destinations-voice');
-            if (selectedDestinationsVoice.length > 0) {
-                displayDiv.textContent = `Invio a: ${selectedDestinationsVoice.join(', ')}`;
-            } else {
+
+            if (selectedDestinations.length === 0) {
                 displayDiv.textContent = '';
+            } else {
+                const icons = { 'cucina': '🍳', 'pizzeria': '🍕', 'insalata': '🥗' };
+                const destName = selectedDestinations[0].charAt(0).toUpperCase() + selectedDestinations[0].slice(1);
+                displayDiv.textContent = `${icons[selectedDestinations[0]]} ${destName}`;
             }
         }
 
         async function toggleVoiceRecording() {
-            if (selectedDestinationsVoice.length === 0) {
-                alert('⚠️ Seleziona almeno una destinazione per il messaggio vocale');
+            // Previeni avvio multiplo
+            if (isRecordingMessage) {
+                console.log('⚠️ Registrazione già in corso, ignorato');
                 return;
             }
 
-            const button = document.getElementById('voice-message-button');
-            const statusDiv = document.getElementById('voice-message-status');
+            // Verifica destinazioni selezionate
+            if (selectedDestinations.length === 0) {
+                alert('⚠️ Seleziona almeno una destinazione prima di registrare!');
+                return;
+            }
 
-            if (!isRecording) {
-                try {
-                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                    mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
-                    audioChunks = [];
+            try {
+                // Avvia registrazione audio
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream, {
+                    mimeType: 'audio/webm;codecs=opus'
+                });
+                audioChunks = [];
 
-                    mediaRecorder.ondataavailable = (event) => {
-                        if (event.data.size > 0) {
-                            audioChunks.push(event.data);
-                        }
-                    };
+                mediaRecorder.ondataavailable = event => {
+                    audioChunks.push(event.data);
+                };
 
-                    mediaRecorder.onstop = () => {
-                        sendVoiceMessage();
-                        stream.getTracks().forEach(track => track.stop());
-                    };
+                mediaRecorder.onstop = () => {
+                    // Ferma tutti i track del microfono
+                    stream.getTracks().forEach(track => track.stop());
 
-                    mediaRecorder.start();
-                    isRecording = true;
+                    // Elabora l'audio registrato
+                    processRecordedAudio();
+                };
 
-                    button.textContent = '🔴 Stop';
-                    button.style.background = 'linear-gradient(135deg, #dc3545 0%, #c82333 100%)';
-                    statusDiv.textContent = '🎤 Registrando... (5s)';
-                    statusDiv.style.color = '#dc3545';
+                mediaRecorder.start();
+                console.log('🎤 Registrazione audio pura avviata per 5 secondi');
 
-                    setTimeout(() => {
-                        if (isRecording) {
-                            mediaRecorder.stop();
-                            isRecording = false;
-                            button.textContent = '🎤 5s';
-                            button.style.background = 'linear-gradient(135deg, #007bff 0%, #0056b3 100%)';
-                            statusDiv.textContent = '📤 Invio messaggio...';
-                            statusDiv.style.color = '#28a745';
-                        }
-                    }, 5000);
-                } catch (error) {
-                    console.error('Errore accesso microfono in secondi:', error);
-                    alert('⚠️ Impossibile accedere al microfono');
-                }
-            } else {
-                mediaRecorder.stop();
-                isRecording = false;
-                button.textContent = '🎤 5s';
-                button.style.background = 'linear-gradient(135deg, #007bff 0%, #0056b3 100%)';
-                statusDiv.textContent = '📤 Invio messaggio...';
-                statusDiv.style.color = '#28a745';
+                isRecordingMessage = true;
+                updateVoiceMessageUI(true);
+
+                const statusDiv = document.getElementById('voice-message-status');
+                statusDiv.textContent = '🎤 Registrando...';
+                statusDiv.style.color = '#dc3545';
+
+                startCountdownRecording(5);
+
+                // Auto-stop dopo 5 secondi
+                setTimeout(() => {
+                    if (isRecordingMessage && mediaRecorder.state === 'recording') {
+                        mediaRecorder.stop();
+                    }
+                }, 5000);
+
+            } catch (error) {
+                console.error('❌ Errore accesso microfono:', error);
+                alert('❌ Impossibile accedere al microfono. Verifica i permessi.');
+                isRecordingMessage = false;
+                updateVoiceMessageUI(false);
+                return;
             }
         }
 
-        function sendVoiceMessage() {
+        function startCountdownRecording(seconds) {
+            let remaining = seconds;
             const statusDiv = document.getElementById('voice-message-status');
-            
+
+            const countdownInterval = setInterval(() => {
+                remaining--;
+                if (remaining > 0) {
+                    statusDiv.textContent = `🎤 ${remaining}s`;
+                } else {
+                    clearInterval(countdownInterval);
+                }
+            }, 1000);
+        }
+
+        function processRecordedAudio() {
+            isRecordingMessage = false;
+            updateVoiceMessageUI(false);
+
+            const statusDiv = document.getElementById('voice-message-status');
+            statusDiv.textContent = '🔄 Elaborando...';
+            statusDiv.style.color = '#ffc107';
+
             if (audioChunks.length === 0) {
-                statusDiv.textContent = '❌ Nessun audio registrato';
-                statusDiv.style.color = '#dc3545';
+                statusDiv.textContent = '⚠️ Riprova';
+                statusDiv.style.color = '#ffc107';
+
+                setTimeout(() => {
+                    statusDiv.textContent = '';
+                    statusDiv.style.color = '#666';
+                }, 3000);
                 return;
             }
 
-            const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+            // Crea blob audio
+            const audioBlob = new Blob(audioChunks, { type: 'audio/webm;codecs=opus' });
+
+            // Verifica dimensione audio
+            if (audioBlob.size < 1000) { // Meno di 1KB probabilmente è silenzio
+                statusDiv.textContent = '⚠️ Parla più forte';
+                statusDiv.style.color = '#ffc107';
+
+                setTimeout(() => {
+                    statusDiv.textContent = '';
+                    statusDiv.style.color = '#666';
+                }, 3000);
+                return;
+            }
+
+            console.log(`🎤 Audio: ${audioBlob.size} bytes, tipo: ${audioBlob.type}`);
+
+            // Converti in base64 e invia
             const reader = new FileReader();
-            
-            reader.onload = function() {
-                const audioData = reader.result.split(',')[1];
-                const now = new Date();
-                const timestamp = now.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            reader.onloadend = () => {
+                const audioDataBase64 = reader.result.split(',')[1]; // Rimuovi prefisso data:audio/webm;base64,
 
-                selectedDestinationsVoice.forEach(destination => {
-                    const messageId = `${Date.now()}_${destination}`;
-                    const voiceMessage = {
-                        action: 'voiceMessage',
-                        message: `Messaggio vocale da Secondi (${Math.round(audioBlob.size/1024)}KB)`,
-                        messageId: messageId,
-                        from: 'Secondi',
-                        destination: destination,
-                        audioData: audioData,
-                        hasAudio: true,
-                        audioSize: audioBlob.size,
-                        timestamp: timestamp
-                    };
-
-                    if (ws && ws.readyState === WebSocket.OPEN) {
-                        ws.send(JSON.stringify(voiceMessage));
-                        console.log(`📤 Messaggio vocale inviato da secondi a ${destination}: ${Math.round(audioBlob.size/1024)}KB`);
-                    }
-                });
-
-                statusDiv.textContent = `✅ Inviato a ${selectedDestinationsVoice.length} destinazioni`;
+                statusDiv.textContent = '✅ Invio...';
                 statusDiv.style.color = '#28a745';
+
+                sendVoiceAudioMessage(audioDataBase64, audioBlob.size);
+            };
+
+            reader.onerror = () => {
+                console.error('❌ Errore audio');
+                statusDiv.textContent = '❌ Errore';
+                statusDiv.style.color = '#dc3545';
             };
 
             reader.readAsDataURL(audioBlob);
+        }
 
-            // Reset selezioni
+        function updateVoiceMessageUI(isRecording) {
+            const button = document.getElementById('voice-message-button');
+            const statusDiv = document.getElementById('voice-message-status');
+
+            if (isRecording) {
+                button.textContent= '🔴 Registrando...';
+                button.style.background = 'linear-gradient(135deg, #dc3545 0%, #c82333 100%)';
+                button.style.transform = 'scale(1.05)';
+                button.disabled = true;
+            } else {
+                button.textContent = '🎤 5s';
+                button.style.background = 'linear-gradient(135deg, #007bff 0%, #0056b3 100%)';
+                button.style.transform = 'scale(1)';
+                button.disabled = false;
+
+                setTimeout(() => {
+                    if (!isRecordingMessage) {
+                        statusDiv.textContent = '';
+                        statusDiv.style.color = '#666';
+                    }
+                }, 3000);
+            }
+        }
+
+        function sendVoiceAudioMessage(audioDataBase64, audioSize) {
+            const messageId = Date.now().toString();
+            const currentTime = new Date().toLocaleTimeString('it-IT');
+
+            // Invia a tutte le destinazioni selezionate
+            selectedDestinations.forEach(destination => {
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    const voiceMessageData ={
+                        action: 'voiceMessage',
+                        message: `Messaggio vocale da Secondi (${Math.round(audioSize/1024)}KB)`,
+                        messageId: `${messageId}_${destination}`,
+                        from: 'Secondi',
+                        destination: destination,
+                        audioData: audioDataBase64,
+                        hasAudio: true,
+                        audioSize: audioSize,
+                        timestamp: currentTime
+                    };
+
+                    ws.send(JSON.stringify(voiceMessageData));
+                    console.log(`📢 🎤 Inviato a ${destination}: ${Math.round(audioSize/1024)}KB`);
+                } else {
+                    console.error('❌ WebSocket');
+                    alert('❌ Connessione persa.');
+                    return;
+                }
+            });
+
+            const statusDiv = document.getElementById('voice-message-status');
+            const destText = selectedDestinations.length === 1 ? 
+                selectedDestinations[0] : 
+                `${selectedDestinations.length} destinazioni`;
+
+            statusDiv.textContent = `✅ A ${destText}! (${Math.round(audioSize/1024)}KB)`;
+            statusDiv.style.color = '#28a745';
+
+            // Reset delle destinazioni selezionate
+            selectedDestinations = [];
             document.querySelectorAll('.destination-button-voice').forEach(btn => {
                 btn.classList.remove('selected');
             });
-            selectedDestinationsVoice = [];
-            updateDestinationDisplayVoice();
+            updateDestinationDisplay();
+
+            // Pulisci lo stato
             audioChunks = [];
+            mediaRecorder = null;
 
             setTimeout(() => {
                 statusDiv.textContent = '';
