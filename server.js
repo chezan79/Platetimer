@@ -411,7 +411,7 @@ wss.on('connection', (ws, req) => {
                 }
 
                 // Validazione destinazione
-                const validDestinations = ['cucina', 'pizzeria', 'insalata', 'secondi'];
+                const validDestinations = ['cucina', 'pizzeria', 'insalata'];
                 const destination = data.destination || 'cucina';
                 if (!validDestinations.includes(destination)) {
                     console.log('⚠️ Destinazione non valida');
@@ -520,7 +520,7 @@ wss.on('connection', (ws, req) => {
                 }
 
                 // Validazione destinazione
-                const validDestinations = ['cucina', 'insalata', 'pizzeria', 'secondi'];
+                const validDestinations = ['cucina', 'insalata', 'pizzeria'];
                 const destination = data.destination;
                 if (!destination || !validDestinations.includes(destination)) {
                     console.log('⚠️ Destinazione messaggio vocale non valida:', destination);
@@ -840,7 +840,7 @@ setInterval(() => {
     });
 
     if (deadConnections > 0 || totalActiveCountdowns > 20) {
-        console.log(`🧹 Cleanup: ${deadConnections} conn. morte, ${rateLimiter.size} rate limits, ${totalActiveCountdowns} countdown, ${wss.clients.size} client`);
+        console.log(`🧹 Cleanup: ${deadConnections} conn. morte, ${rateLimiter.size} rate limits, ${totalActiveCountdowns} countdown, ${wss.clients.size client}`);
     }
 }, 60000); // Ogni 1 minuto
 
