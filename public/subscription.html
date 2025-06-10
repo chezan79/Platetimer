@@ -1,9 +1,10 @@
+
 <!DOCTYPE html>
 <html lang="it">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sottoscrizione - PlateTimer</title>
+    <title>Seleziona Piano - PlateTimer</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://js.stripe.com/v3/"></script>
     <style>
@@ -129,32 +130,28 @@
 </head>
 <body>
     <div class="subscription-container">
-        <h1>Scegli il tuo piano</h1>
-
+        <h1>Scegli il tuo Piano</h1>
+        
         <div id="user-info" class="user-info">
-            <h3>Informazioni utente</h3>
-            <p id="user-email">Email: Caricamento...</p>
-            <p id="user-company">Azienda: Caricamento...</p>
+            <div id="user-email"></div>
         </div>
 
         <div class="plans-grid">
-            <!-- Piano Gratuito - IN STANDBY -->
-            <!--
+            <!-- Piano Free -->
             <div class="plan-card" data-plan="free">
-                <div class="plan-title">Gratuito</div>
-                <div class="plan-price">€0<span style="font-size: 16px;">/mese</span></div>
+                <div class="plan-title">Free</div>
+                <div class="plan-price">0 CHF<span style="font-size: 16px;">/mese</span></div>
                 <ul class="plan-features">
                     <li>Fino a 5 tavoli</li>
-                    <li>Countdown base</li>
-                    <li>Supporto email</li>
-                    <li>Funzionalità base</li>
+                    <li>Countdown di base</li>
+                    <li>Funzionalità limitate</li>
+                    <li>Perfetto per iniziare</li>
                 </ul>
-                <button class="select-plan-btn" data-plan="free">Seleziona Gratuito</button>
+                <button class="select-plan-btn" data-plan="free">Inizia Gratis</button>
             </div>
-            -->
 
-            <!-- Piano Premium - ATTIVO -->
-            <div class="plan-card" data-plan="premium" style="margin: 0 auto; max-width: 400px;">
+            <!-- Piano Premium -->
+            <div class="plan-card" data-plan="premium">
                 <div class="plan-title">Premium</div>
                 <div class="plan-price">50 CHF<span style="font-size: 16px;">/mese</span></div>
                 <ul class="plan-features">
@@ -167,37 +164,19 @@
                 </ul>
                 <button class="select-plan-btn" data-plan="premium">Seleziona Premium</button>
             </div>
-
-            <!-- Piano Business - IN STANDBY -->
-            <!--
-            <div class="plan-card" data-plan="business">
-                <div class="plan-title">Business</div>
-                <div class="plan-price">€99<span style="font-size: 16px;">/mese</span></div>
-                <ul class="plan-features">
-                    <li>Tutto del Premium</li>
-                    <li>Multi-location</li>
-                    <li>API personalizzate</li>
-                    <li>Integrazione POS</li>
-                    <li>Supporto dedicato</li>
-                    <li>Training personalizzato</li>
-                </ul>
-                <button class="select-plan-btn" data-plan="business">Seleziona Business</button>
-            </div>
-            -->
         </div>
 
         <div style="text-align: center;">
             <button id="checkout-btn" class="checkout-btn" disabled>
                 Procedi al Pagamento
             </button>
-
+            
             <div id="loading" class="loading">
-                <p>Caricamento...</p>
+                <p>Elaborazione pagamento in corso...</p>
             </div>
         </div>
     </div>
 
-    <!-- Firebase -->
     <script type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
         import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
@@ -235,16 +214,15 @@
             // Mostra info utente
             document.getElementById('user-email').textContent = `Email: ${user.email}`;
 
-            // Recupera dati utente da Firestore
+            // Recupera dati utente esistenti
             try {
                 const userDoc = await getDoc(doc(db, "users", user.uid));
                 if (userDoc.exists()) {
                     const userData = userDoc.data();
-                    document.getElementById('user-company').textContent = `Azienda: ${userData.company || 'Non specificata'}`;
-
-                    // Verifica se ha già un abbonamento
                     if (userData.subscription && userData.subscription.active) {
-                        document.getElementById('user-info').innerHTML += `
+                        // Utente con abbonamento attivo
+                        document.getElementById('user-info').innerHTML = `
+                            <div id="user-email">Email: ${user.email}</div>
                             <p style="color: green; font-weight: bold;">
                                 ✅ Abbonamento attivo: ${userData.subscription.plan}
                             </p>
@@ -255,7 +233,8 @@
                         return;
                     } else {
                         // Nuovo utente - mostra messaggio di benvenuto
-                        document.getElementById('user-info').innerHTML += `
+                        document.getElementById('user-info').innerHTML = `
+                            <div id="user-email">Email: ${user.email}</div>
                             <p style="color: #007bff; font-weight: bold;">
                                 🎉 Benvenuto! Scegli il tuo piano per iniziare ad usare PlateTimer
                             </p>
@@ -267,16 +246,10 @@
             }
         });
 
-        // Gestione selezione piano (solo Premium attivo)
+        // Gestione selezione piano
         document.addEventListener('click', (e) => {
             if (e.target.classList.contains('select-plan-btn')) {
                 const plan = e.target.getAttribute('data-plan');
-
-                // Solo piano Premium disponibile
-                if (plan !== 'premium') {
-                    alert('Solo il piano Premium è attualmente disponibile');
-                    return;
-                }
 
                 // Rimuovi selezione precedente
                 document.querySelectorAll('.plan-card').forEach(card => {
@@ -290,11 +263,21 @@
                 // Aggiungi nuova selezione
                 e.target.closest('.plan-card').classList.add('selected');
                 e.target.classList.add('selected');
-                e.target.textContent = '✓ ' + e.target.textContent;
+                e.target.textContent = '✓ ' + e.target.textContent.replace('✓ ', '');
 
                 selectedPlan = plan;
-                document.getElementById('checkout-btn').disabled = false;
-                document.getElementById('checkout-btn').textContent = 'Procedi al Pagamento';
+
+                // Aggiorna pulsante checkout
+                const checkoutBtn = document.getElementById('checkout-btn');
+                if (plan === 'free') {
+                    checkoutBtn.textContent = 'Accedi Gratis';
+                    checkoutBtn.disabled = false;
+                } else if (plan === 'premium') {
+                    checkoutBtn.textContent = 'Procedi al Pagamento (50 CHF/mese)';
+                    checkoutBtn.disabled = false;
+                }
+
+                console.log('Piano selezionato:', plan);
             }
         });
 
@@ -320,61 +303,87 @@
             }
         };
 
-        // Gestione checkout (solo Premium)
+        // Gestione checkout
         document.getElementById('checkout-btn').addEventListener('click', async () => {
+            console.log('Checkout clicked, selectedPlan:', selectedPlan);
+
             if (!selectedPlan) {
-                alert('Seleziona il piano Premium per procedere');
+                alert('Seleziona un piano per procedere');
                 return;
             }
 
+            if (!currentUser) {
+                alert('Errore di autenticazione. Ricarica la pagina.');
+                return;
+            }
+
+            // Piano gratuito - accesso diretto
+            if (selectedPlan === 'free') {
+                await accessApp();
+                return;
+            }
+
+            // Piano Premium - checkout Stripe
             if (selectedPlan !== 'premium') {
-                alert('Solo il piano Premium è disponibile');
+                alert('Solo il piano Premium è disponibile per l\'acquisto');
                 return;
             }
 
             // Mostra loading
             document.getElementById('loading').style.display = 'block';
             document.getElementById('checkout-btn').disabled = true;
+            document.getElementById('checkout-btn').textContent = 'Elaborazione...';
 
-            // Crea sessione Stripe per piani a pagamento
             try {
-                // Mappa i piani ai Price ID per Test Mode
-                const priceMapping = {
-                    'premium': 'price_1RYCsq4UUR769sSaDYCvGIoA' // PlateTimer 50 CHF/mese da Stripe
-                };
+                console.log('Invio richiesta checkout per:', {
+                    priceId: 'premium',
+                    userEmail: currentUser.email
+                });
 
+                // Crea sessione Stripe per piani a pagamento
                 const response = await fetch('/api/create-checkout-session', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        priceId: priceMapping[selectedPlan] || selectedPlan,
+                        priceId: 'premium',
                         userEmail: currentUser.email
                     })
                 });
 
+                console.log('Risposta server:', response.status, response.statusText);
+
                 if (!response.ok) {
-                    throw new Error('Errore nella creazione della sessione');
+                    const errorText = await response.text();
+                    console.error('Errore risposta server:', errorText);
+                    throw new Error(`Errore server: ${response.status} - ${errorText}`);
                 }
 
-                const { sessionId } = await response.json();
+                const responseData = await response.json();
+                console.log('Dati risposta:', responseData);
+
+                if (!responseData.sessionId) {
+                    throw new Error('Session ID mancante nella risposta');
+                }
 
                 // Reindirizza a Stripe Checkout
                 const { error } = await stripe.redirectToCheckout({
-                    sessionId: sessionId
+                    sessionId: responseData.sessionId
                 });
 
                 if (error) {
                     console.error('Errore Stripe:', error);
-                    alert('Errore durante il pagamento. Riprova.');
+                    throw new Error('Errore durante il reindirizzamento: ' + error.message);
                 }
+
             } catch (error) {
                 console.error('Errore checkout:', error);
-                alert('Errore durante il pagamento. Riprova.');
+                alert('Errore durante il pagamento: ' + error.message + '. Riprova o contatta il supporto.');
             } finally {
                 document.getElementById('loading').style.display = 'none';
                 document.getElementById('checkout-btn').disabled = false;
+                document.getElementById('checkout-btn').textContent = 'Procedi al Pagamento (50 CHF/mese)';
             }
         });
 
@@ -385,14 +394,30 @@
         if (sessionId) {
             // Pagamento completato con successo
             document.getElementById('user-info').innerHTML = `
-                <div style="background: #d4edda; color: #155724; padding: 15px; border-radius: 8px;">
-                    <h3>✅ Pagamento completato!</h3>
-                    <p>Il tuo abbonamento è stato attivato con successo.</p>
-                    <button onclick="accessApp()" class="checkout-btn">
+                <div style="text-align: center; color: green;">
+                    <h2>✅ Pagamento Completato!</h2>
+                    <p>Il tuo abbonamento Premium è ora attivo.</p>
+                    <button onclick="window.location.href='home.html'" class="checkout-btn">
                         Accedi all'App
                     </button>
                 </div>
             `;
+
+            // Aggiorna database utente
+            if (currentUser) {
+                try {
+                    await updateDoc(doc(db, "users", currentUser.uid), {
+                        subscription: {
+                            plan: 'premium',
+                            active: true,
+                            startDate: new Date(),
+                            stripeSessionId: sessionId
+                        }
+                    });
+                } catch (error) {
+                    console.error('Errore aggiornamento database:', error);
+                }
+            }
         }
     </script>
 </body>
