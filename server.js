@@ -310,12 +310,17 @@ wss.on('connection', (ws, req) => {
                 }
 
             } else if (data.action === 'joinPage') {
-            // Validazione pageType
-            const validPageTypes = ['cucina', 'pizzeria', 'insalata', 'secondi', 'sala'];
-            if (!validPageTypes.includes(data.pageType)) {
-                console.warn(`⚠️ PageType non valido: ${data.pageType}`);
-                return;
-            }
+                // Gestisce l'ingresso in una specifica pagina (cucina, pizzeria, insalata)
+                if (!data.pageType || typeof data.pageType !== 'string') {
+                    console.log('⚠️ Tipo pagina non valido');
+                    return;
+                }
+
+                const validPageTypes = ['cucina', 'pizzeria', 'insalata'];
+                if (!validPageTypes.includes(data.pageType)) {
+                    console.log('⚠️ Tipo pagina non supportato');
+                    return;
+                }
 
                 ws.pageType = data.pageType;
 
@@ -840,7 +845,7 @@ setInterval(() => {
     });
 
     if (deadConnections > 0 || totalActiveCountdowns > 20) {
-        console.log(`🧹 Cleanup: ${deadConnections} conn. morte, ${rateLimiter.size} rate limits, ${totalActiveCountdowns} countdown, ${wss.clients.size client}`);
+        console.log(`🧹 Cleanup: ${deadConnections} conn. morte, ${rateLimiter.size} rate limits, ${totalActiveCountdowns} countdown, ${wss.clients.size} client`);
     }
 }, 60000); // Ogni 1 minuto
 
