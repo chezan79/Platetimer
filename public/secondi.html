@@ -139,14 +139,11 @@
 
 
 
-    <!-- Container controlli messaggi vocali e chiamate - posizionato in alto a sinistra -->
-    <div style="position: fixed; top: 120px; left: 20px; z-index: 1000; display: flex; flex-direction: column; gap: 12px; max-width: 280px;">
-        
-        <!-- Container controllo messaggi vocali -->
-        <div style="text-align: center; padding: 8px; background: linear-gradient(135deg, #e8f5e8 0%, #d4edda 100%); border-radius: 8px; border-left: 4px solid #28a745; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); min-width: 200px;">
-            <div style="margin-bottom: 4px; color: #155724; font-size: 12px; font-weight: 600;">
-                📢 Messaggi Vocali
-            </div>
+    <!-- Container superiore con messaggi vocali e controlli pausa - posizionato come pizzeria.html -->
+    <div style="position: absolute; top: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 15px; z-index: 500;">
+
+        <!-- Sistema messaggio vocale con scelta destinazione -->
+        <div style="text-align: center; padding: 8px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; border-left: 4px solid #007bff; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); min-width: 280px;">
             <div style="display: flex; justify-content: center; align-items: center; gap: 6px; flex-wrap: nowrap;">
                 <button class="destination-button-voice" data-destination="cucina" style="padding: 6px 12px; background: linear-gradient(135deg, #28a745 0%, #98FB98 100%); color: #212529; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
                     🍳 Cucina
@@ -154,7 +151,7 @@
                 <button class="destination-button-voice" data-destination="pizzeria" style="padding: 6px 12px; background: linear-gradient(135deg, #ffc107 0%, #FFE4C4 100%); color: #212529; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
                     🍕 Pizzeria
                 </button>
-                <button class="destination-button-voice" data-destination="insalata" style="padding: 6px 12px; background: linear-gradient(135deg, #20c997 0%, #98FB98 100%); color: #212529; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
+                <button class="destination-button-voice" data-destination="insalata" style="padding: 6px 12px; background: linear-gradient(135deg, #17a2b8 0%, #B0E0E6 100%); color: #212529; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
                     🥗 Insalata
                 </button>
                 <button 
@@ -163,6 +160,10 @@
                     style="padding: 6px 12px; background: linear-gradient(135deg, #007bff 0%, #0056b3 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; white-space: nowrap;">
                     🎤 5s
                 </button>
+                <button onclick="window.open('secondicall.html', '_blank')" 
+                        style="padding: 6px 12px; background: linear-gradient(135deg, #28a745 0%, #20c997 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; box-shadow: 0 2px 4px rgba(0,0,0,0.1); white-space: nowrap;">
+                    📞 Chiamata
+                </button>
             </div>
             <div id="voice-message-status" style="margin-top: 4px; font-size: 10px; color: #666; min-height: 12px;">
             </div>
@@ -170,52 +171,20 @@
             </div>
         </div>
 
-        <!-- Container controlli chiamate -->
-        <div style="text-align: center; padding: 8px; background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%); border-radius: 8px; border-left: 4px solid #ffc107; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); min-width: 200px;">
-            <div style="margin-bottom: 4px; color: #856404; font-size: 12px; font-weight: 600;">
-                📞 Chiamate
-            </div>
-            <div style="display: flex; justify-content: center; align-items: center; gap: 6px; flex-wrap: nowrap;">
-                <button class="destination-button" data-destination="cucina" style="padding: 6px 12px; background: linear-gradient(135deg, #28a745 0%, #98FB98 100%); color: #212529; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
-                    🍳 Cucina
-                </button>
-                <button class="destination-button" data-destination="pizzeria" style="padding: 6px 12px; background: linear-gradient(135deg, #ffc107 0%, #FFE4C4 100%); color: #212529; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
-                    🍕 Pizzeria
-                </button>
-                <button class="destination-button" data-destination="insalata" style="padding: 6px 12px; background: linear-gradient(135deg, #20c997 0%, #98FB98 100%); color: #212529; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
-                    🥗 Insalata
-                </button>
-                <button 
-                    onclick="initiateCall()" 
-                    id="call-button" 
-                    style="padding: 6px 12px; background: linear-gradient(135deg, #28a745 0%, #20c997 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
-                    📞 Chiamata
-                </button>
-            </div>
-            <div id="call-status" style="margin-top: 4px; font-size: 10px; color: #666; min-height: 12px;">
-            </div>
-            <div id="selected-destinations" style="margin-top: 2px; font-size: 10px; color: #28a745; font-weight: 600;">
-            </div>
-        </div>
-
         <!-- Container controllo pausa cucina -->
-        <div style="text-align: center; padding: 8px; background: linear-gradient(135deg, #ffe6e6 0%, #ffcccc 100%); border-radius: 8px; border-left: 4px solid #dc3545; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); min-width: 200px;">
-            <div style="margin-bottom: 4px; color: #721c24; font-size: 12px; font-weight: 600;">
-                ⏸️ Pausa Cucina
-            </div>
-            <div style="display: flex; justify-content: center; align-items: center; gap: 6px;">
-                <button 
-                    onclick="pauseKitchen(10)" 
-                    style="padding: 6px 12px; background: linear-gradient(135deg, #17a2b8 0%, #138496 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease;">
+        <div style="text-align: center; padding: 8px; background: linear-gradient(135deg, #ffe6e6 0%, #ffc107 100%); border-radius: 8px; border-left: 4px solid #dc3545; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); min-width: 200px;">
+            <div style="margin-bottom: 4px; color: #721c24; font-size: 12px; font-weight: 600;">⏸️ Pausa Secondi</div>
+            <div style="display: flex; justify-content: center; align-items: center; gap: 6px; flex-wrap: nowrap;">
+                <button id="pause-10-btn" onclick="inviaMessaggioPausa(10)" 
+                        style="padding: 6px 12px; background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%); color: #212529; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
                     ⏸️ 10min
                 </button>
-                <button 
-                    onclick="pauseKitchen(15)" 
-                    style="padding: 6px 12px; background: linear-gradient(135deg, #fd7e14 0%, #e55a00 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease;">
+                <button id="pause-15-btn" onclick="inviaMessaggioPausa(15)" 
+                        style="padding: 6px 12px; background: linear-gradient(135deg, #fd7e14 0%, #e8690c 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
                     ⏸️ 15min
                 </button>
             </div>
-            <div id="pause-status" style="margin-top: 4px; font-size: 10px; color: #721c24; min-height: 12px;">
+            <div id="pause-status" style="margin-top: 4px; font-size: 10px; color: #721c24; min-height: 12px; text-align: center;">
             </div>
         </div>
     </div>
@@ -227,10 +196,10 @@
         </div>
         </div>
 
-    <!-- Container dedicato per i messaggi - posizionato in alto a destra -->
-    <div id="messagesContainer" style="position: fixed; top: 120px; right: 20px; z-index: 1000; max-width: 400px; max-height: 300px; background: white; padding: 15px; border-radius: 10px; box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15); display: none; flex-direction: column; overflow-y: auto;">
-        <div id="voice-messages-container" style="padding: 12px; background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-radius: 8px; border-left: 4px solid #2196f3;">
-            <h3 style="margin: 0 0 12px 0; color: #1976d2; font-size: 16px;">📢 Messaggi da Cucina</h3>
+    <!-- Container dedicato per i messaggi vocali - posizionato in alto a destra (inizialmente nascosto) -->
+    <div id="messagesContainer" style="position: fixed; top: 100px; right: 20px; width: 280px; max-width: 280px; z-index: 500; background: white; padding: 15px; border-radius: 10px; box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15); display: none; flex-direction: column; max-height: 60vh; overflow-y: auto;">
+        <div id="voice-messages-container" style="padding: 12px; background: linear-gradient(135deg, #e8f5e8 0%, #d4edda 100%); border-radius: 8px; border-left: 4px solid #28a745;">
+            <h3 style="margin: 0 0 12px 0; color: #155724; font-size: 16px;">📢 Messaggi Ricevuti</h3>
             <div id="voice-messages-list">
                 <!-- I messaggi appariranno qui dinamicamente -->
             </div>
