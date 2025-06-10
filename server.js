@@ -411,7 +411,7 @@ wss.on('connection', (ws, req) => {
                 }
 
                 // Validazione destinazione
-                const validDestinations = ['cucina', 'pizzeria', 'insalata'];
+                const validDestinations = ['cucina', 'pizzeria', 'insalata', 'secondi'];
                 const destination = data.destination || 'cucina';
                 if (!validDestinations.includes(destination)) {
                     console.log('⚠️ Destinazione non valida');
@@ -520,7 +520,7 @@ wss.on('connection', (ws, req) => {
                 }
 
                 // Validazione destinazione
-                const validDestinations = ['cucina', 'insalata', 'pizzeria'];
+                const validDestinations = ['cucina', 'insalata', 'pizzeria', 'secondi'];
                 const destination = data.destination;
                 if (!destination || !validDestinations.includes(destination)) {
                     console.log('⚠️ Destinazione messaggio vocale non valida:', destination);
