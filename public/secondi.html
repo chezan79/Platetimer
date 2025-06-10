@@ -832,163 +832,68 @@
             }, 3000);
         }
 
-        // ========== GESTIONE PAUSA SECONDI ==========
-        let pausaAttiva = false;
-        let pausaTimer = null;
+        // ========== GESTIONE CHIAMATE ==========
+        let selectedDestinations = [];
 
-        function inviaMessaggioPausa(minuti) {
-            if (pausaAttiva) {
-                alert('⚠️ Una pausa è già attiva!');
-                return;
-            }
-
-            if (!ws || ws.readyState !== WebSocket.OPEN) {
-                alert('❌ Connessione persa. Impossibile inviare pausa.');
-                return;
-            }
-
-            const conferma = confirm(`⏸️ Vuoi mettere in pausa i secondi per ${minuti} minuti?\n\nQuesto bloccherà temporaneamente i nuovi countdown per i secondi.`);
-
-            if (!conferma) return;
-
-            console.log(`⏸️ Invio richiesta pausa secondi: ${minuti} minuti`);
-
-            // Invia messaggio di pausa
-            const messageId = Date.now().toString();
-            const pausaMessage = {
-                action: 'pausaSecondi',
-                messageId: messageId,
-                durataMinuti: minuti,
-                from: 'Secondi',
-                timestamp: new Date().toLocaleTimeString('it-IT')
-            };
-
-            ws.send(JSON.stringify(pausaMessage));
-            console.log(`📤 Messaggio pausa inviato: ${minuti} minuti`);
-
-            // Avvia stato di pausa locale
-            avviaPausaLocale(minuti);
-        }
-
-        function avviaPausaLocale(minuti) {
-            pausaAttiva = true;
-            let secondiRimasti = minuti * 60;
-
-            // Disabilita i pulsanti pausa
-            document.getElementById('pause-10-btn').disabled = true;
-            document.getElementById('pause-15-btn').disabled = true;
-            document.getElementById('pause-10-btn').style.opacity = '0.5';
-            document.getElementById('pause-15-btn').style.opacity = '0.5';
-
-            // Crea e mostra il pulsante annulla pausa
-            const pauseContainer = document.getElementById('pause-10-btn').parentNode;
-            const annullaPausaBtn = document.createElement('button');
-            annullaPausaBtn.id = 'annulla-pausa-btn';
-            annullaPausaBtn.innerHTML = '❌ Annulla';
-            annullaPausaBtn.style.cssText = `
-                padding: 6px 12px; 
-                background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); 
-                color: white; 
-                border: none; 
-                border-radius: 6px; 
-                cursor: pointer; 
-                font-size: 12px; 
-                font-weight: 600; 
-                transition: all 0.3s ease; 
-                white-space: nowrap;
-                margin-top: 4px;
-            `;
-            annullaPausaBtn.onclick = annullaPausa;
-            pauseContainer.appendChild(annullaPausaBtn);
-
-            const statusDiv = document.getElementById('pause-status');
-
-            // Aggiorna il countdown della pausa
-            pausaTimer = setInterval(() => {
-                const minutiRim = Math.floor(secondiRimasti / 60);
-                const secondiRim = secondiRimasti % 60;
-
-                statusDiv.textContent = `⏸️ Pausa attiva: ${minutiRim}:${secondiRim.toString().padStart(2, '0')}`;
-                statusDiv.style.color = '#dc3545';
-                statusDiv.style.fontWeight = 'bold';
-
-                secondiRimasti--;
-
-                if (secondiRimasti < 0) {
-                    clearInterval(pausaTimer);
-                    terminaPausaLocale();
+        // Inizializzazione controlli chiamate
+        document.querySelectorAll('.destination-button').forEach(button => {
+            button.addEventListener('click', function() {
+                const destination = this.getAttribute('data-destination');
+                if (selectedDestinations.includes(destination)) {
+                    selectedDestinations = selectedDestinations.filter(d => d !== destination);
+                    this.classList.remove('selected');
+                } else {
+                    selectedDestinations.push(destination);
+                    this.classList.add('selected');
                 }
-            }, 1000);
+                updateDestinationDisplay();
+                console.log('Destinazioni selezionate per chiamate in secondi:', selectedDestinations);
+            });
+        });
 
-            console.log(`⏸️ Pausa locale avviata per ${minuti} minuti`);
+        function updateDestinationDisplay() {
+            const displayDiv = document.getElementById('selected-destinations');
+            if (selectedDestinations.length > 0) {
+                displayDiv.textContent = `Chiama: ${selectedDestinations.join(', ')}`;
+            } else {
+                displayDiv.textContent = '';
+            }
         }
 
-        function terminaPausaLocale() {
-            pausaAttiva = false;
-
-            if (pausaTimer) {
-                clearInterval(pausaTimer);
-                pausaTimer = null;
+        function initiateCall() {
+            if (selectedDestinations.length === 0) {
+                alert('⚠️ Seleziona almeno una destinazione per la chiamata');
+                return;
             }
 
-            // Riabilita i pulsanti pausa
-            document.getElementById('pause-10-btn').disabled = false;
-            document.getElementById('pause-15-btn').disabled = false;
-            document.getElementById('pause-10-btn').style.opacity = '1';
-            document.getElementById('pause-15-btn').style.opacity = '1';
-
-            // Rimuovi il pulsante annulla pausa se esiste
-            const annullaPausaBtn = document.getElementById('annulla-pausa-btn');
-            if (annullaPausaBtn) {
-                annullaPausaBtn.remove();
-            }
-
-            const statusDiv = document.getElementById('pause-status');
-            statusDiv.textContent = '✅ Pausa terminata';
+            const statusDiv = document.getElementById('call-status');
+            statusDiv.textContent = `📞 Chiamando ${selectedDestinations.join(', ')}...`;
             statusDiv.style.color = '#28a745';
-            statusDiv.style.fontWeight = 'normal';
 
-            // Pulisci il messaggio dopo 5 secondi
+            // Implementa qui la logica delle chiamate se necessaria
+            console.log('Chiamata iniziata verso:', selectedDestinations);
+
             setTimeout(() => {
                 statusDiv.textContent = '';
-            }, 5000);
-
-            console.log('✅ Pausa locale terminata');
+                statusDiv.style.color = '#666';
+                // Reset selezioni
+                document.querySelectorAll('.destination-button').forEach(btn => {
+                    btn.classList.remove('selected');
+                });
+                selectedDestinations = [];
+                updateDestinationDisplay();
+            }, 3000);
         }
 
-        function annullaPausa() {
-            if (!pausaAttiva) {
-                return;
-            }
-
-            const conferma = confirm('❌ Vuoi davvero annullare la pausa?\n\nI secondi torneranno immediatamente operativi.');
-
-            if (!conferma) return;
-
-            console.log('❌ Annullamento pausa richiesto da secondi');
-
-            // Invia messaggio di annullamento pausa
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                const annullaPausaMessage = {
-                    action: 'annullaPausaSecondi',
-                    messageId: Date.now().toString(),
-                    from: 'Secondi',
-                    timestamp: new Date().toLocaleTimeString('it-IT')
-                };
-
-                ws.send(JSON.stringify(annullaPausaMessage));
-                console.log('📤 Messaggio annullamento pausa inviato');
-            }
-
-            // Termina pausa locale immediatamente
-            terminaPausaLocale();
-
+        // ========== GESTIONE PAUSA CUCINA ==========
+        function pauseKitchen(minutes) {
             const statusDiv = document.getElementById('pause-status');
-            statusDiv.textContent = '❌ Pausa annullata';
-            statusDiv.style.color = '#dc3545';
-            statusDiv.style.fontWeight = 'bold';
+            statusDiv.textContent = `⏸️ Pausa ${minutes}min attivata`;
+            statusDiv.style.color = '#721c24';
 
-            // Pulisci il messaggio dopo 3 secondi
+            // Implementa qui la logica per la pausa cucina se necessaria
+            console.log(`Pausa cucina attivata per ${minutes} minuti da secondi`);
+
             setTimeout(() => {
                 statusDiv.textContent = '';
             }, 3000);
