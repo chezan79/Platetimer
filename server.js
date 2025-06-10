@@ -69,7 +69,49 @@ app.post('/api/voice-message', (req, res) => {
     }
 });
 
-// Endpoint rimosso - ora usiamo Stripe Buy Button direttamente
+// Endpoint per creare sessione di checkout Stripe
+app.post('/api/create-checkout-session', async (req, res) => {
+    try {
+        if (!stripe) {
+            return res.status(500).json({ error: 'Stripe non configurato' });
+        }
+
+        const { priceId, customerId, userEmail } = req.body;
+
+        if (!priceId || !userEmail) {
+            return res.status(400).json({ error: 'Price ID e email sono richiesti' });
+        }
+
+        // Prezzi dei piani - Price ID per test mode
+        const prices = {
+            premium: 'price_1RYNmtG3vUIKUaULX41ntQJG', // Price ID corretto dal dashboard Stripe
+            business: 'price_business_monthly'  // Crea questo nel dashboard Stripe
+        };
+
+        const session = await stripe.checkout.sessions.create({
+            payment_method_types: ['card'],
+            line_items: [
+                {
+                    price: prices[priceId] || priceId,
+                    quantity: 1,
+                },
+            ],
+            mode: 'subscription',
+            success_url: `${req.headers.origin}/home.html?session_id={CHECKOUT_SESSION_ID}`,
+            cancel_url: `${req.headers.origin}/subscription.html`,
+            customer_email: userEmail,
+            metadata: {
+                plan: priceId,
+                userEmail: userEmail
+            }
+        });
+
+        res.json({ sessionId: session.id });
+    } catch (error) {
+        console.error('❌ Errore creazione sessione Stripe:', error);
+        res.status(500).json({ error: 'Errore durante la creazione della sessione di pagamento' });
+    }
+});
 
 // Webhook Stripe per gestire eventi di pagamento
 app.post('/api/stripe-webhook', express.raw({type: 'application/json'}), async (req, res) => {
