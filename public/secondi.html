@@ -547,7 +547,7 @@
         let currentTranscript = '';
         let mediaRecorder = null;
         let audioChunks = [];
-        let selectedDestinations = [];
+        let selectedDestinationsVoice = [];
 
         // Gestione selezione destinazioni con stile pizzeria.html
         document.addEventListener('DOMContentLoaded', function() {
@@ -558,16 +558,16 @@
                     const destination = this.getAttribute('data-destination');
 
                     // Toggle singola destinazione
-                    if (selectedDestinations.includes(destination)) {
-                        selectedDestinations = selectedDestinations.filter(d => d !== destination);
+                    if (selectedDestinationsVoice.includes(destination)) {
+                        selectedDestinationsVoice = selectedDestinationsVoice.filter(d => d !== destination);
                         this.classList.remove('selected');
                     } else {
-                        selectedDestinations.push(destination);
+                        selectedDestinationsVoice.push(destination);
                         this.classList.add('selected');
                     }
 
-                    updateDestinationDisplay();
-                    console.log('Destinazioni selezionate:', selectedDestinations);
+                    updateDestinationDisplayVoice();
+                    console.log('Destinazioni selezionate:', selectedDestinationsVoice);
                 });
             });
 
@@ -612,15 +612,15 @@
             document.head.appendChild(style);
         });
 
-        function updateDestinationDisplay() {
+        function updateDestinationDisplayVoice() {
             const displayDiv = document.getElementById('selected-destinations-voice');
 
-            if (selectedDestinations.length === 0) {
+            if (selectedDestinationsVoice.length === 0) {
                 displayDiv.textContent = '';
             } else {
                 const icons = { 'cucina': '🍳', 'pizzeria': '🍕', 'insalata': '🥗' };
-                const destName = selectedDestinations[0].charAt(0).toUpperCase() + selectedDestinations[0].slice(1);
-                displayDiv.textContent = `${icons[selectedDestinations[0]]} ${destName}`;
+                const destName = selectedDestinationsVoice[0].charAt(0).toUpperCase() + selectedDestinationsVoice[0].slice(1);
+                displayDiv.textContent = `${icons[selectedDestinationsVoice[0]]} ${destName}`;
             }
         }
 
@@ -632,7 +632,7 @@
             }
 
             // Verifica destinazioni selezionate
-            if (selectedDestinations.length === 0) {
+            if (selectedDestinationsVoice.length === 0) {
                 alert('⚠️ Seleziona almeno una destinazione prima di registrare!');
                 return;
             }
@@ -784,7 +784,7 @@
             const currentTime = new Date().toLocaleTimeString('it-IT');
 
             // Invia a tutte le destinazioni selezionate
-            selectedDestinations.forEach(destination => {
+            selectedDestinationsVoice.forEach(destination => {
                 if (ws && ws.readyState === WebSocket.OPEN) {
                     const voiceMessageData ={
                         action: 'voiceMessage',
@@ -808,19 +808,19 @@
             });
 
             const statusDiv = document.getElementById('voice-message-status');
-            const destText = selectedDestinations.length === 1 ? 
-                selectedDestinations[0] : 
-                `${selectedDestinations.length} destinazioni`;
+            const destText = selectedDestinationsVoice.length === 1 ? 
+                selectedDestinationsVoice[0] : 
+                `${selectedDestinationsVoice.length} destinazioni`;
 
             statusDiv.textContent = `✅ A ${destText}! (${Math.round(audioSize/1024)}KB)`;
             statusDiv.style.color = '#28a745';
 
             // Reset delle destinazioni selezionate
-            selectedDestinations = [];
+            selectedDestinationsVoice = [];
             document.querySelectorAll('.destination-button-voice').forEach(btn => {
                 btn.classList.remove('selected');
             });
-            updateDestinationDisplay();
+            updateDestinationDisplayVoice();
 
             // Pulisci lo stato
             audioChunks = [];
@@ -833,45 +833,45 @@
         }
 
         // ========== GESTIONE CHIAMATE ==========
-        let selectedDestinations = [];
+        let selectedDestinationsCall = [];
 
         // Inizializzazione controlli chiamate
         document.querySelectorAll('.destination-button').forEach(button => {
             button.addEventListener('click', function() {
                 const destination = this.getAttribute('data-destination');
-                if (selectedDestinations.includes(destination)) {
-                    selectedDestinations = selectedDestinations.filter(d => d !== destination);
+                if (selectedDestinationsCall.includes(destination)) {
+                    selectedDestinationsCall = selectedDestinationsCall.filter(d => d !== destination);
                     this.classList.remove('selected');
                 } else {
-                    selectedDestinations.push(destination);
+                    selectedDestinationsCall.push(destination);
                     this.classList.add('selected');
                 }
-                updateDestinationDisplay();
-                console.log('Destinazioni selezionate per chiamate in secondi:', selectedDestinations);
+                updateDestinationDisplayCall();
+                console.log('Destinazioni selezionate per chiamate in secondi:', selectedDestinationsCall);
             });
         });
 
-        function updateDestinationDisplay() {
+        function updateDestinationDisplayCall() {
             const displayDiv = document.getElementById('selected-destinations');
-            if (selectedDestinations.length > 0) {
-                displayDiv.textContent = `Chiama: ${selectedDestinations.join(', ')}`;
+            if (selectedDestinationsCall.length > 0) {
+                displayDiv.textContent = `Chiama: ${selectedDestinationsCall.join(', ')}`;
             } else {
                 displayDiv.textContent = '';
             }
         }
 
         function initiateCall() {
-            if (selectedDestinations.length === 0) {
+            if (selectedDestinationsCall.length === 0) {
                 alert('⚠️ Seleziona almeno una destinazione per la chiamata');
                 return;
             }
 
             const statusDiv = document.getElementById('call-status');
-            statusDiv.textContent = `📞 Chiamando ${selectedDestinations.join(', ')}...`;
+            statusDiv.textContent = `📞 Chiamando ${selectedDestinationsCall.join(', ')}...`;
             statusDiv.style.color = '#28a745';
 
             // Implementa qui la logica delle chiamate se necessaria
-            console.log('Chiamata iniziata verso:', selectedDestinations);
+            console.log('Chiamata iniziata verso:', selectedDestinationsCall);
 
             setTimeout(() => {
                 statusDiv.textContent = '';
@@ -880,8 +880,8 @@
                 document.querySelectorAll('.destination-button').forEach(btn => {
                     btn.classList.remove('selected');
                 });
-                selectedDestinations = [];
-                updateDestinationDisplay();
+                selectedDestinationsCall = [];
+                updateDestinationDisplayCall();
             }, 3000);
         }
 
@@ -924,6 +924,7 @@
                 justify-content: center;
                 font-size: 12px;
                 font-weight: bold;
+                border: 2px solid white;
             }
 
             .destination-button.selected {
