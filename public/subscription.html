@@ -171,6 +171,15 @@
                 Procedi al Pagamento
             </button>
             
+            <div id="stripe-checkout" style="display: none; margin-top: 20px;">
+                <script async src="https://js.stripe.com/v3/buy-button.js"></script>
+                <stripe-buy-button
+                  buy-button-id="buy_btn_1RYPbrG3vUIKUaUL1bkublpR"
+                  publishable-key="pk_live_51RYAfcG3vUIKUaULWLtCeLLjf88YTFmsBxytPEbYQT4gcj1ZAA1JOKAS8cve2ooRRW7Vcizez5bz3R5LC7mINuo200QixyB9sB"
+                >
+                </stripe-buy-button>
+            </div>
+            
             <div id="loading" class="loading">
                 <p>Elaborazione pagamento in corso...</p>
             </div>
@@ -269,12 +278,16 @@
 
                 // Aggiorna pulsante checkout
                 const checkoutBtn = document.getElementById('checkout-btn');
+                const stripeCheckout = document.getElementById('stripe-checkout');
+                
                 if (plan === 'free') {
                     checkoutBtn.textContent = 'Accedi Gratis';
                     checkoutBtn.disabled = false;
+                    checkoutBtn.style.display = 'block';
+                    stripeCheckout.style.display = 'none';
                 } else if (plan === 'premium') {
-                    checkoutBtn.textContent = 'Procedi al Pagamento (50 CHF/mese)';
-                    checkoutBtn.disabled = false;
+                    checkoutBtn.style.display = 'none';
+                    stripeCheckout.style.display = 'block';
                 }
 
                 console.log('Piano selezionato:', plan);
@@ -321,69 +334,6 @@
             if (selectedPlan === 'free') {
                 await accessApp();
                 return;
-            }
-
-            // Piano Premium - checkout Stripe
-            if (selectedPlan !== 'premium') {
-                alert('Solo il piano Premium è disponibile per l\'acquisto');
-                return;
-            }
-
-            // Mostra loading
-            document.getElementById('loading').style.display = 'block';
-            document.getElementById('checkout-btn').disabled = true;
-            document.getElementById('checkout-btn').textContent = 'Elaborazione...';
-
-            try {
-                console.log('Invio richiesta checkout per:', {
-                    priceId: 'premium',
-                    userEmail: currentUser.email
-                });
-
-                // Crea sessione Stripe per piani a pagamento
-                const response = await fetch('/api/create-checkout-session', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        priceId: 'premium',
-                        userEmail: currentUser.email
-                    })
-                });
-
-                console.log('Risposta server:', response.status, response.statusText);
-
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    console.error('Errore risposta server:', errorText);
-                    throw new Error(`Errore server: ${response.status} - ${errorText}`);
-                }
-
-                const responseData = await response.json();
-                console.log('Dati risposta:', responseData);
-
-                if (!responseData.sessionId) {
-                    throw new Error('Session ID mancante nella risposta');
-                }
-
-                // Reindirizza a Stripe Checkout
-                const { error } = await stripe.redirectToCheckout({
-                    sessionId: responseData.sessionId
-                });
-
-                if (error) {
-                    console.error('Errore Stripe:', error);
-                    throw new Error('Errore durante il reindirizzamento: ' + error.message);
-                }
-
-            } catch (error) {
-                console.error('Errore checkout:', error);
-                alert('Errore durante il pagamento: ' + error.message + '. Riprova o contatta il supporto.');
-            } finally {
-                document.getElementById('loading').style.display = 'none';
-                document.getElementById('checkout-btn').disabled = false;
-                document.getElementById('checkout-btn').textContent = 'Procedi al Pagamento (50 CHF/mese)';
             }
         });
 
