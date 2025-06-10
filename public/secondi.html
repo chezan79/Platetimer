@@ -139,6 +139,87 @@
 
 
 
+    <!-- Container controlli messaggi vocali e chiamate - posizionato in alto a sinistra -->
+    <div style="position: fixed; top: 120px; left: 20px; z-index: 1000; display: flex; flex-direction: column; gap: 12px; max-width: 280px;">
+        
+        <!-- Container controllo messaggi vocali -->
+        <div style="text-align: center; padding: 8px; background: linear-gradient(135deg, #e8f5e8 0%, #d4edda 100%); border-radius: 8px; border-left: 4px solid #28a745; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); min-width: 200px;">
+            <div style="margin-bottom: 4px; color: #155724; font-size: 12px; font-weight: 600;">
+                📢 Messaggi Vocali
+            </div>
+            <div style="display: flex; justify-content: center; align-items: center; gap: 6px; flex-wrap: nowrap;">
+                <button class="destination-button-voice" data-destination="cucina" style="padding: 6px 12px; background: linear-gradient(135deg, #28a745 0%, #98FB98 100%); color: #212529; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
+                    🍳 Cucina
+                </button>
+                <button class="destination-button-voice" data-destination="pizzeria" style="padding: 6px 12px; background: linear-gradient(135deg, #ffc107 0%, #FFE4C4 100%); color: #212529; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
+                    🍕 Pizzeria
+                </button>
+                <button class="destination-button-voice" data-destination="insalata" style="padding: 6px 12px; background: linear-gradient(135deg, #20c997 0%, #98FB98 100%); color: #212529; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
+                    🥗 Insalata
+                </button>
+                <button 
+                    onclick="toggleVoiceRecording()" 
+                    id="voice-message-button" 
+                    style="padding: 6px 12px; background: linear-gradient(135deg, #007bff 0%, #0056b3 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; white-space: nowrap;">
+                    🎤 5s
+                </button>
+            </div>
+            <div id="voice-message-status" style="margin-top: 4px; font-size: 10px; color: #666; min-height: 12px;">
+            </div>
+            <div id="selected-destinations-voice" style="margin-top: 2px; font-size: 10px; color: #007bff; font-weight: 600;">
+            </div>
+        </div>
+
+        <!-- Container controlli chiamate -->
+        <div style="text-align: center; padding: 8px; background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%); border-radius: 8px; border-left: 4px solid #ffc107; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); min-width: 200px;">
+            <div style="margin-bottom: 4px; color: #856404; font-size: 12px; font-weight: 600;">
+                📞 Chiamate
+            </div>
+            <div style="display: flex; justify-content: center; align-items: center; gap: 6px; flex-wrap: nowrap;">
+                <button class="destination-button" data-destination="cucina" style="padding: 6px 12px; background: linear-gradient(135deg, #28a745 0%, #98FB98 100%); color: #212529; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
+                    🍳 Cucina
+                </button>
+                <button class="destination-button" data-destination="pizzeria" style="padding: 6px 12px; background: linear-gradient(135deg, #ffc107 0%, #FFE4C4 100%); color: #212529; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
+                    🍕 Pizzeria
+                </button>
+                <button class="destination-button" data-destination="insalata" style="padding: 6px 12px; background: linear-gradient(135deg, #20c997 0%, #98FB98 100%); color: #212529; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
+                    🥗 Insalata
+                </button>
+                <button 
+                    onclick="initiateCall()" 
+                    id="call-button" 
+                    style="padding: 6px 12px; background: linear-gradient(135deg, #28a745 0%, #20c997 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
+                    📞 Chiamata
+                </button>
+            </div>
+            <div id="call-status" style="margin-top: 4px; font-size: 10px; color: #666; min-height: 12px;">
+            </div>
+            <div id="selected-destinations" style="margin-top: 2px; font-size: 10px; color: #28a745; font-weight: 600;">
+            </div>
+        </div>
+
+        <!-- Container controllo pausa cucina -->
+        <div style="text-align: center; padding: 8px; background: linear-gradient(135deg, #ffe6e6 0%, #ffcccc 100%); border-radius: 8px; border-left: 4px solid #dc3545; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); min-width: 200px;">
+            <div style="margin-bottom: 4px; color: #721c24; font-size: 12px; font-weight: 600;">
+                ⏸️ Pausa Cucina
+            </div>
+            <div style="display: flex; justify-content: center; align-items: center; gap: 6px;">
+                <button 
+                    onclick="pauseKitchen(10)" 
+                    style="padding: 6px 12px; background: linear-gradient(135deg, #17a2b8 0%, #138496 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease;">
+                    ⏸️ 10min
+                </button>
+                <button 
+                    onclick="pauseKitchen(15)" 
+                    style="padding: 6px 12px; background: linear-gradient(135deg, #fd7e14 0%, #e55a00 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease;">
+                    ⏸️ 15min
+                </button>
+            </div>
+            <div id="pause-status" style="margin-top: 4px; font-size: 10px; color: #721c24; min-height: 12px;">
+            </div>
+        </div>
+    </div>
+
     <div class="countdown-container">
         <h1>🍽️ Secondi</h1>
         <div id="tavoli">
@@ -497,6 +578,272 @@
                 }
             }
         }
+
+        // ========== GESTIONE MESSAGGI VOCALI ==========
+        let selectedDestinationsVoice = [];
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let isRecording = false;
+
+        // Inizializzazione controlli messaggi vocali
+        document.querySelectorAll('.destination-button-voice').forEach(button => {
+            button.addEventListener('click', function() {
+                const destination = this.getAttribute('data-destination');
+                if (selectedDestinationsVoice.includes(destination)) {
+                    selectedDestinationsVoice = selectedDestinationsVoice.filter(d => d !== destination);
+                    this.classList.remove('selected');
+                } else {
+                    selectedDestinationsVoice.push(destination);
+                    this.classList.add('selected');
+                }
+                updateDestinationDisplayVoice();
+                console.log('Destinazioni selezionate per messaggi vocali in secondi:', selectedDestinationsVoice);
+            });
+        });
+
+        function updateDestinationDisplayVoice() {
+            const displayDiv = document.getElementById('selected-destinations-voice');
+            if (selectedDestinationsVoice.length > 0) {
+                displayDiv.textContent = `Invio a: ${selectedDestinationsVoice.join(', ')}`;
+            } else {
+                displayDiv.textContent = '';
+            }
+        }
+
+        async function toggleVoiceRecording() {
+            if (selectedDestinationsVoice.length === 0) {
+                alert('⚠️ Seleziona almeno una destinazione per il messaggio vocale');
+                return;
+            }
+
+            const button = document.getElementById('voice-message-button');
+            const statusDiv = document.getElementById('voice-message-status');
+
+            if (!isRecording) {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+                    audioChunks = [];
+
+                    mediaRecorder.ondataavailable = (event) => {
+                        if (event.data.size > 0) {
+                            audioChunks.push(event.data);
+                        }
+                    };
+
+                    mediaRecorder.onstop = () => {
+                        sendVoiceMessage();
+                        stream.getTracks().forEach(track => track.stop());
+                    };
+
+                    mediaRecorder.start();
+                    isRecording = true;
+
+                    button.textContent = '🔴 Stop';
+                    button.style.background = 'linear-gradient(135deg, #dc3545 0%, #c82333 100%)';
+                    statusDiv.textContent = '🎤 Registrando... (5s)';
+                    statusDiv.style.color = '#dc3545';
+
+                    setTimeout(() => {
+                        if (isRecording) {
+                            mediaRecorder.stop();
+                            isRecording = false;
+                            button.textContent = '🎤 5s';
+                            button.style.background = 'linear-gradient(135deg, #007bff 0%, #0056b3 100%)';
+                            statusDiv.textContent = '📤 Invio messaggio...';
+                            statusDiv.style.color = '#28a745';
+                        }
+                    }, 5000);
+                } catch (error) {
+                    console.error('Errore accesso microfono in secondi:', error);
+                    alert('⚠️ Impossibile accedere al microfono');
+                }
+            } else {
+                mediaRecorder.stop();
+                isRecording = false;
+                button.textContent = '🎤 5s';
+                button.style.background = 'linear-gradient(135deg, #007bff 0%, #0056b3 100%)';
+                statusDiv.textContent = '📤 Invio messaggio...';
+                statusDiv.style.color = '#28a745';
+            }
+        }
+
+        function sendVoiceMessage() {
+            const statusDiv = document.getElementById('voice-message-status');
+            
+            if (audioChunks.length === 0) {
+                statusDiv.textContent = '❌ Nessun audio registrato';
+                statusDiv.style.color = '#dc3545';
+                return;
+            }
+
+            const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+            const reader = new FileReader();
+            
+            reader.onload = function() {
+                const audioData = reader.result.split(',')[1];
+                const now = new Date();
+                const timestamp = now.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+                selectedDestinationsVoice.forEach(destination => {
+                    const messageId = `${Date.now()}_${destination}`;
+                    const voiceMessage = {
+                        action: 'voiceMessage',
+                        message: `Messaggio vocale da Secondi (${Math.round(audioBlob.size/1024)}KB)`,
+                        messageId: messageId,
+                        from: 'Secondi',
+                        destination: destination,
+                        audioData: audioData,
+                        hasAudio: true,
+                        audioSize: audioBlob.size,
+                        timestamp: timestamp
+                    };
+
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify(voiceMessage));
+                        console.log(`📤 Messaggio vocale inviato da secondi a ${destination}: ${Math.round(audioBlob.size/1024)}KB`);
+                    }
+                });
+
+                statusDiv.textContent = `✅ Inviato a ${selectedDestinationsVoice.length} destinazioni`;
+                statusDiv.style.color = '#28a745';
+            };
+
+            reader.readAsDataURL(audioBlob);
+
+            // Reset selezioni
+            document.querySelectorAll('.destination-button-voice').forEach(btn => {
+                btn.classList.remove('selected');
+            });
+            selectedDestinationsVoice = [];
+            updateDestinationDisplayVoice();
+            audioChunks = [];
+
+            setTimeout(() => {
+                statusDiv.textContent = '';
+                statusDiv.style.color = '#666';
+            }, 3000);
+        }
+
+        // ========== GESTIONE CHIAMATE ==========
+        let selectedDestinations = [];
+
+        // Inizializzazione controlli chiamate
+        document.querySelectorAll('.destination-button').forEach(button => {
+            button.addEventListener('click', function() {
+                const destination = this.getAttribute('data-destination');
+                if (selectedDestinations.includes(destination)) {
+                    selectedDestinations = selectedDestinations.filter(d => d !== destination);
+                    this.classList.remove('selected');
+                } else {
+                    selectedDestinations.push(destination);
+                    this.classList.add('selected');
+                }
+                updateDestinationDisplay();
+                console.log('Destinazioni selezionate per chiamate in secondi:', selectedDestinations);
+            });
+        });
+
+        function updateDestinationDisplay() {
+            const displayDiv = document.getElementById('selected-destinations');
+            if (selectedDestinations.length > 0) {
+                displayDiv.textContent = `Chiama: ${selectedDestinations.join(', ')}`;
+            } else {
+                displayDiv.textContent = '';
+            }
+        }
+
+        function initiateCall() {
+            if (selectedDestinations.length === 0) {
+                alert('⚠️ Seleziona almeno una destinazione per la chiamata');
+                return;
+            }
+
+            const statusDiv = document.getElementById('call-status');
+            statusDiv.textContent = `📞 Chiamando ${selectedDestinations.join(', ')}...`;
+            statusDiv.style.color = '#28a745';
+
+            // Implementa qui la logica delle chiamate se necessaria
+            console.log('Chiamata iniziata verso:', selectedDestinations);
+
+            setTimeout(() => {
+                statusDiv.textContent = '';
+                statusDiv.style.color = '#666';
+                // Reset selezioni
+                document.querySelectorAll('.destination-button').forEach(btn => {
+                    btn.classList.remove('selected');
+                });
+                selectedDestinations = [];
+                updateDestinationDisplay();
+            }, 3000);
+        }
+
+        // ========== GESTIONE PAUSA CUCINA ==========
+        function pauseKitchen(minutes) {
+            const statusDiv = document.getElementById('pause-status');
+            statusDiv.textContent = `⏸️ Pausa ${minutes}min attivata`;
+            statusDiv.style.color = '#721c24';
+
+            // Implementa qui la logica per la pausa cucina se necessaria
+            console.log(`Pausa cucina attivata per ${minutes} minuti da secondi`);
+
+            setTimeout(() => {
+                statusDiv.textContent = '';
+            }, 3000);
+        }
+
+        // Stili per pulsanti selezionati
+        const styleVoice = document.createElement('style');
+        styleVoice.textContent = `
+            .destination-button-voice.selected {
+                transform: translateY(-2px);
+                box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+                border: 3px solid #333 !important;
+                position: relative;
+            }
+
+            .destination-button-voice.selected::after {
+                content: '✓';
+                position: absolute;
+                top: -5px;
+                right: -5px;
+                background: #28a745;
+                color: white;
+                border-radius: 50%;
+                width: 20px;
+                height: 20px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 12px;
+                font-weight: bold;
+            }
+
+            .destination-button.selected {
+                transform: translateY(-2px);
+                box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+                border: 3px solid #333 !important;
+                position: relative;
+            }
+
+            .destination-button.selected::after {
+                content: '✓';
+                position: absolute;
+                top: -5px;
+                right: -5px;
+                background: #28a745;
+                color: white;
+                border-radius: 50%;
+                width: 20px;
+                height: 20px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 12px;
+                font-weight: bold;
+            }
+        `;
+        document.head.appendChild(styleVoice);
 
     </script>
     <script src="company-header.js"></script>
