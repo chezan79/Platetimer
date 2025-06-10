@@ -136,52 +136,17 @@
             <div id="user-email"></div>
         </div>
 
-        <div class="plans-grid">
-            <!-- Piano Free -->
-            <div class="plan-card" data-plan="free">
-                <div class="plan-title">Free</div>
-                <div class="plan-price">0 CHF<span style="font-size: 16px;">/mese</span></div>
-                <ul class="plan-features">
-                    <li>Fino a 5 tavoli</li>
-                    <li>Countdown di base</li>
-                    <li>Funzionalità limitate</li>
-                    <li>Perfetto per iniziare</li>
-                </ul>
-                <button class="select-plan-btn" data-plan="free">Inizia Gratis</button>
-            </div>
-
-            <!-- Piano Premium -->
-            <div class="plan-card" data-plan="premium">
-                <div class="plan-title">Premium</div>
-                <div class="plan-price">50 CHF<span style="font-size: 16px;">/mese</span></div>
-                <ul class="plan-features">
-                    <li>Tavoli illimitati</li>
-                    <li>Countdown avanzati</li>
-                    <li>Messaggi vocali</li>
-                    <li>Statistiche dettagliate</li>
-                    <li>Supporto prioritario</li>
-                    <li>Perfetto per ristoranti</li>
-                </ul>
-                <button class="select-plan-btn" data-plan="premium">Seleziona Premium</button>
-            </div>
-        </div>
-
-        <div style="text-align: center;">
-            <button id="checkout-btn" class="checkout-btn" disabled>
-                Procedi al Pagamento
-            </button>
+        <div style="text-align: center; margin: 40px 0;">
+            <h2>Abbonamento Premium</h2>
+            <p>Accedi a tutte le funzionalità di PlateTimer</p>
             
-            <div id="stripe-checkout" style="display: none; margin-top: 20px;">
+            <div style="margin-top: 30px;">
                 <script async src="https://js.stripe.com/v3/buy-button.js"></script>
                 <stripe-buy-button
                   buy-button-id="buy_btn_1RYPbrG3vUIKUaUL1bkublpR"
                   publishable-key="pk_live_51RYAfcG3vUIKUaULWLtCeLLjf88YTFmsBxytPEbYQT4gcj1ZAA1JOKAS8cve2ooRRW7Vcizez5bz3R5LC7mINuo200QixyB9sB"
                 >
                 </stripe-buy-button>
-            </div>
-            
-            <div id="loading" class="loading">
-                <p>Elaborazione pagamento in corso...</p>
             </div>
         </div>
     </div>
@@ -205,11 +170,7 @@
         const auth = getAuth(app);
         const db = getFirestore(app);
 
-        // Inizializza Stripe
-        const stripe = Stripe('pk_test_51RYAfcG3vUIKUaULNdabWDPHURDRKmLd7l73Uan6YfkVAj2966jePEhlw0h6CrnRdcKSYt7pnBP7EUVBx6SOf7DP00mcCejLS1');
-
         let currentUser = null;
-        let selectedPlan = null;
 
         // Verifica autenticazione
         onAuthStateChanged(auth, async (user) => {
@@ -235,7 +196,7 @@
                             <p style="color: green; font-weight: bold;">
                                 ✅ Abbonamento attivo: ${userData.subscription.plan}
                             </p>
-                            <button onclick="accessApp()" class="checkout-btn">
+                            <button onclick="window.location.href='home.html'" class="checkout-btn">
                                 Accedi all'App
                             </button>
                         `;
@@ -245,95 +206,13 @@
                         document.getElementById('user-info').innerHTML = `
                             <div id="user-email">Email: ${user.email}</div>
                             <p style="color: #007bff; font-weight: bold;">
-                                🎉 Benvenuto! Scegli il tuo piano per iniziare ad usare PlateTimer
+                                🎉 Benvenuto! Completa l'abbonamento per iniziare ad usare PlateTimer
                             </p>
                         `;
                     }
                 }
             } catch (error) {
                 console.error('Errore recupero dati utente:', error);
-            }
-        });
-
-        // Gestione selezione piano
-        document.addEventListener('click', (e) => {
-            if (e.target.classList.contains('select-plan-btn')) {
-                const plan = e.target.getAttribute('data-plan');
-
-                // Rimuovi selezione precedente
-                document.querySelectorAll('.plan-card').forEach(card => {
-                    card.classList.remove('selected');
-                });
-                document.querySelectorAll('.select-plan-btn').forEach(btn => {
-                    btn.classList.remove('selected');
-                    btn.textContent = btn.textContent.replace('✓ ', '');
-                });
-
-                // Aggiungi nuova selezione
-                e.target.closest('.plan-card').classList.add('selected');
-                e.target.classList.add('selected');
-                e.target.textContent = '✓ ' + e.target.textContent.replace('✓ ', '');
-
-                selectedPlan = plan;
-
-                // Aggiorna pulsante checkout
-                const checkoutBtn = document.getElementById('checkout-btn');
-                const stripeCheckout = document.getElementById('stripe-checkout');
-                
-                if (plan === 'free') {
-                    checkoutBtn.textContent = 'Accedi Gratis';
-                    checkoutBtn.disabled = false;
-                    checkoutBtn.style.display = 'block';
-                    stripeCheckout.style.display = 'none';
-                } else if (plan === 'premium') {
-                    checkoutBtn.style.display = 'none';
-                    stripeCheckout.style.display = 'block';
-                }
-
-                console.log('Piano selezionato:', plan);
-            }
-        });
-
-        // Accesso diretto all'app
-        window.accessApp = async function() {
-            try {
-                // Aggiorna lo stato dell'utente
-                if (selectedPlan === 'free') {
-                    await updateDoc(doc(db, "users", currentUser.uid), {
-                        subscription: {
-                            plan: 'free',
-                            active: true,
-                            startDate: new Date()
-                        }
-                    });
-                }
-
-                // Reindirizza alla home
-                window.location.href = 'home.html';
-            } catch (error) {
-                console.error('Errore accesso app:', error);
-                alert('Errore durante l\'accesso. Riprova.');
-            }
-        };
-
-        // Gestione checkout
-        document.getElementById('checkout-btn').addEventListener('click', async () => {
-            console.log('Checkout clicked, selectedPlan:', selectedPlan);
-
-            if (!selectedPlan) {
-                alert('Seleziona un piano per procedere');
-                return;
-            }
-
-            if (!currentUser) {
-                alert('Errore di autenticazione. Ricarica la pagina.');
-                return;
-            }
-
-            // Piano gratuito - accesso diretto
-            if (selectedPlan === 'free') {
-                await accessApp();
-                return;
             }
         });
 
