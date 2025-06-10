@@ -254,6 +254,13 @@
                             </button>
                         `;
                         return;
+                    } else {
+                        // Nuovo utente - mostra messaggio di benvenuto
+                        document.getElementById('user-info').innerHTML += `
+                            <p style="color: #007bff; font-weight: bold;">
+                                🎉 Benvenuto! Scegli il tuo piano per iniziare ad usare PlateTimer
+                            </p>
+                        `;
                     }
                 }
             } catch (error) {
