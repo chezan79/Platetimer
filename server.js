@@ -82,9 +82,9 @@ app.post('/api/create-checkout-session', async (req, res) => {
             return res.status(400).json({ error: 'Price ID e email sono richiesti' });
         }
 
-        // Prezzi dei piani (dovrai crearli nel dashboard Stripe)
+        // Prezzi dei piani - aggiorna con i veri Price ID dal dashboard Stripe
         const prices = {
-            premium: 'price_premium_monthly', // Crea questo nel dashboard Stripe
+            premium: 'price_XXXXX', // Sostituisci con il Price ID reale dal dashboard Stripe
             business: 'price_business_monthly'  // Crea questo nel dashboard Stripe
         };
 
@@ -130,7 +130,7 @@ app.post('/api/stripe-webhook', express.raw({type: 'application/json'}), async (
         case 'checkout.session.completed':
             const session = event.data.object;
             console.log('✅ Pagamento completato:', session.id);
-            
+
             // Qui potresti aggiornare il database utente
             // await updateUserSubscription(session.metadata.userEmail, session.metadata.plan);
             break;
