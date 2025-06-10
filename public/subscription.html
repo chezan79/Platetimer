@@ -332,13 +332,18 @@
 
             // Crea sessione Stripe per piani a pagamento
             try {
+                // Mappa i piani ai Price ID reali
+                const priceMapping = {
+                    'premium': 'price_1RYNmtG3vUIKUaULX41ntQJG'
+                };
+
                 const response = await fetch('/api/create-checkout-session', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        priceId: selectedPlan,
+                        priceId: priceMapping[selectedPlan] || selectedPlan,
                         userEmail: currentUser.email
                     })
                 });
