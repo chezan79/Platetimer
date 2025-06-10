@@ -339,9 +339,9 @@
 
             // Crea sessione Stripe per piani a pagamento
             try {
-                // Mappa i piani ai Price ID reali
+                // Mappa i piani ai Price ID per Test Mode
                 const priceMapping = {
-                    'premium': 'price_1RYNmtG3vUIKUaULX41ntQJG'
+                    'premium': 'price_1RYCsq4UUR769sSaDYCvGIoA'
                 };
 
                 const response = await fetch('/api/create-checkout-session', {
