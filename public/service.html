@@ -631,42 +631,66 @@
             return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
         }
 
-        // Sistema messaggio vocale con registrazione audio per sala (copiato da pizzeria.html)
-        let voiceRecognition = null;
+        // Sistema messaggio vocale per sala
         let isRecordingMessage = false;
-        let currentTranscript = '';
         let mediaRecorder = null;
         let audioChunks = [];
         let selectedDestinationsVoice = [];
 
-        // Gestione selezione destinazioni con stile pizzeria.html
+        // Event listener per inizializzazione pulsanti destinazioni
         document.addEventListener('DOMContentLoaded', function() {
-            const destinationButtonsVoice = document.querySelectorAll('.destination-button-voice');
+            console.log('🎯 Inizializzazione pulsanti destinazioni messaggi vocali in service.html');
+            
+            // Aspetta un po' per assicurarsi che tutto sia caricato
+            setTimeout(() => {
+                initializeDestinationButtons();
+                initializeVoiceMessageSystem();
+            }, 100);
+        });
 
-            destinationButtonsVoice.forEach(button => {
-                button.addEventListener('click', function() {
+        function initializeDestinationButtons() {
+            const destinationButtonsVoice = document.querySelectorAll('.destination-button-voice');
+            console.log('🔘 Pulsanti destinazione trovati:', destinationButtonsVoice.length);
+
+            destinationButtonsVoice.forEach((button, index) => {
+                console.log(`🔘 Inizializzazione pulsante ${index + 1}:`, button.getAttribute('data-destination'));
+                
+                // Rimuovi eventuali listener esistenti
+                button.replaceWith(button.cloneNode(true));
+                const newButton = document.querySelectorAll('.destination-button-voice')[index];
+                
+                newButton.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
                     const destination = this.getAttribute('data-destination');
+                    console.log('🎯 Click destinazione in service:', destination);
 
                     // Toggle singola destinazione
                     if (selectedDestinationsVoice.includes(destination)) {
                         selectedDestinationsVoice = selectedDestinationsVoice.filter(d => d !== destination);
                         this.classList.remove('selected');
+                        console.log('❌ Rimossa destinazione:', destination);
                     } else {
                         selectedDestinationsVoice.push(destination);
                         this.classList.add('selected');
+                        console.log('✅ Aggiunta destinazione:', destination);
                     }
 
                     updateDestinationDisplayVoice();
-                    console.log('Destinazioni selezionate:', selectedDestinationsVoice);
+                    console.log('🎯 Destinazioni selezionate per messaggi vocali in sala:', selectedDestinationsVoice);
                 });
             });
 
-            // Stile per pulsanti selezionati simile a pizzeria.html
-            const style = document.createElement('style');
-            style.textContent = `
+            // Stile per pulsanti selezionati messaggi vocali
+            const styleVoice = document.createElement('style');
+            styleVoice.id = 'voice-button-styles';
+            styleVoice.textContent = `
                 .destination-button-voice {
                     transition: transform 0.2s, background-color 0.3s, box-shadow 0.2s;
                     min-width: 60px;
+                    cursor: pointer !important;
+                    pointer-events: auto !important;
                 }
 
                 .destination-button-voice:hover {
@@ -675,6 +699,8 @@
                 }
 
                 .destination-button-voice.selected {
+                    transition: transform 0.2s, background-color 0.3s, box-shadow 0.2s;
+                    min-width: 60px;
                     transform: translateY(-2px);
                     box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
                     border: 3px solid #333 !important;
@@ -699,14 +725,32 @@
                     border: 2px solid white;
                 }
             `;
-            document.head.appendChild(style);
-        });
+            
+            // Rimuovi stile esistente se presente
+            const existingStyle = document.getElementById('voice-button-styles');
+            if (existingStyle) {
+                existingStyle.remove();
+            }
+            
+            document.head.appendChild(styleVoice);
+        }
+
+        function initializeVoiceMessageSystem() {
+            const voiceButton = document.getElementById('voice-message-button');
+            if (voiceButton) {
+                console.log('🎤 Pulsante registrazione trovato e attivato');
+                voiceButton.style.pointerEvents = 'auto';
+                voiceButton.style.cursor = 'pointer';
+            }
+            
+            // Inizializza display destinazioni
+            updateDestinationDisplayVoice();
+        }
 
         function updateDestinationDisplayVoice() {
             const displayDiv = document.getElementById('selected-destinations-voice');
-
             if (selectedDestinationsVoice.length === 0) {
-                displayDiv.textContent = '';
+                displayDiv.textContent = 'Seleziona destinazioni';
             } else {
                 const icons = { 'cucina': '🍳', 'pizzeria': '🍕', 'insalata': '🥗', 'secondi': '🍖' };
                 const destNames = { 'cucina': 'Cucina', 'pizzeria': 'Pizzeria', 'insalata': 'Insalata', 'secondi': 'Secondi' };
@@ -723,15 +767,13 @@
         }
 
         async function toggleVoiceRecording() {
-            // Previeni avvio multiplo
             if (isRecordingMessage) {
                 console.log('⚠️ Registrazione già in corso in sala, ignorato');
                 return;
             }
 
-            // Verifica destinazioni selezionate
             if (selectedDestinationsVoice.length === 0) {
-                alert('⚠️ Seleziona almeno una destinazione prima di registrare!');
+                alert('⚠️ Seleziona almeno una destinazione prima di registrare!\n\nPuoi scegliere tra: Cucina, Pizzeria, Insalata, Secondi');
                 return;
             }
 
