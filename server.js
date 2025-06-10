@@ -3,14 +3,6 @@ const http = require('http');
 const WebSocket = require('ws');
 const crypto = require('crypto');
 const speech = require('@google-cloud/speech');
-// Inizializza Stripe solo se la chiave è presente
-let stripe = null;
-if (process.env.STRIPE_SECRET_KEY) {
-    stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-    console.log('✅ Stripe configurato correttamente');
-} else {
-    console.log('⚠️ Stripe non configurato - Chiave segreta mancante');
-}
 
 const app = express();
 const server = http.createServer(app);
@@ -69,46 +61,7 @@ app.post('/api/voice-message', (req, res) => {
     }
 });
 
-// Endpoint rimosso - ora usiamo Stripe Buy Button direttamente
-
-// Webhook Stripe per gestire eventi di pagamento
-app.post('/api/stripe-webhook', express.raw({type: 'application/json'}), async (req, res) => {
-    const sig = req.headers['stripe-signature'];
-    let event;
-
-    try {
-        event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
-    } catch (err) {
-        console.error('❌ Errore verifica webhook Stripe:', err.message);
-        return res.status(400).send(`Webhook Error: ${err.message}`);
-    }
-
-    // Gestisci eventi specifici
-    switch (event.type) {
-        case 'checkout.session.completed':
-            const session = event.data.object;
-            console.log('✅ Pagamento completato:', session.id);
-
-            // Qui potresti aggiornare il database utente
-            // await updateUserSubscription(session.metadata.userEmail, session.metadata.plan);
-            break;
-
-        case 'invoice.payment_succeeded':
-            const invoice = event.data.object;
-            console.log('✅ Pagamento ricorrente riuscito:', invoice.id);
-            break;
-
-        case 'invoice.payment_failed':
-            const failedInvoice = event.data.object;
-            console.log('❌ Pagamento ricorrente fallito:', failedInvoice.id);
-            break;
-
-        default:
-            console.log(`ℹ️ Evento Stripe non gestito: ${event.type}`);
-    }
-
-    res.json({ received: true });
-});
+// Endpoint Stripe rimossi - ora usiamo Stripe Buy Button direttamente
 
 // Endpoint per il riconoscimento vocale
 app.post('/api/speech-to-text', async (req, res) => {
@@ -985,5 +938,3 @@ server.listen(PORT, '0.0.0.0', () => {
 }).on('error', (error) => {
     console.error('❌ Errore avvio server:', error);
 });
-
-// Update Stripe Price ID to the correct one.
