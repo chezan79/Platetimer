@@ -840,7 +840,7 @@ setInterval(() => {
     });
 
     if (deadConnections > 0 || totalActiveCountdowns > 20) {
-        console.log(`🧹 Cleanup: ${deadConnections} conn. morte, ${rateLimiter.size} rate limits, ${totalActiveCountdowns} countdown, ${wss.clients.size client}`);
+        console.log(`🧹 Cleanup: ${deadConnections} conn. morte, ${rateLimiter.size} rate limits, ${totalActiveCountdowns} countdown, ${wss.clients.size} client`);
     }
 }, 60000); // Ogni 1 minuto
 
