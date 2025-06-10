@@ -82,9 +82,9 @@ app.post('/api/create-checkout-session', async (req, res) => {
             return res.status(400).json({ error: 'Price ID e email sono richiesti' });
         }
 
-        // Prezzi dei piani - Price ID reali dal dashboard Stripe
+        // Prezzi dei piani - Price ID per test mode
         const prices = {
-            premium: 'price_1RYNmtG3vUIKUaULX41ntQJG', // Piano Premium 50 CHF/mese
+            premium: 'price_1RYCsq4UUR769sSaDYCvGIoA', // Piano Premium Test Mode
             business: 'price_business_monthly'  // Crea questo nel dashboard Stripe
         };
 
