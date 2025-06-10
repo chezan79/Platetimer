@@ -343,7 +343,10 @@
         }
 
         function deleteCountdown(tableNumber) {
-            const countdownIndex = countdowns.findIndex(c => c.tableNumber.toString() === tableNumber.toString());
+            console.log(`🗑️ Tentativo eliminazione countdown in secondi: Tavolo ${tableNumber}`);
+            console.log(`🔍 Countdown presenti:`, countdowns.map(c => ({tavolo: c.tableNumber, tipo: typeof c.tableNumber})));
+            
+            const countdownIndex = countdowns.findIndex(c => c.tableNumber == tableNumber);
             if (countdownIndex !== -1) {
                 const countdown = countdowns[countdownIndex];
                 clearInterval(countdown.interval);
@@ -351,8 +354,10 @@
                     countdown.element.parentNode.removeChild(countdown.element);
                 }
                 countdowns.splice(countdownIndex, 1);
-                console.log(`🗑️ Countdown tavolo ${tableNumber} eliminato in sala via WebSocket`);
+                console.log(`🗑️ ✅ Countdown tavolo ${tableNumber} eliminato in secondi via WebSocket`);
                 sortCountdowns();
+            } else {
+                console.log(`🗑️ ❌ Countdown tavolo ${tableNumber} NON trovato in secondi per eliminazione`);
             }
         }
 
