@@ -637,34 +637,60 @@
         let audioChunks = [];
         let selectedDestinationsVoice = [];
 
-        // Gestione selezione destinazioni per messaggi vocali
+        // Event listener per inizializzazione pulsanti destinazioni
         document.addEventListener('DOMContentLoaded', function() {
-            const destinationButtonsVoice = document.querySelectorAll('.destination-button-voice');
+            console.log('🎯 Inizializzazione pulsanti destinazioni messaggi vocali in service.html');
+            
+            // Aspetta un po' per assicurarsi che tutto sia caricato
+            setTimeout(() => {
+                initializeDestinationButtons();
+                initializeVoiceMessageSystem();
+            }, 100);
+        });
 
-            destinationButtonsVoice.forEach(button => {
-                button.addEventListener('click', function() {
+        function initializeDestinationButtons() {
+            const destinationButtonsVoice = document.querySelectorAll('.destination-button-voice');
+            console.log('🔘 Pulsanti destinazione trovati:', destinationButtonsVoice.length);
+
+            destinationButtonsVoice.forEach((button, index) => {
+                console.log(`🔘 Inizializzazione pulsante ${index + 1}:`, button.getAttribute('data-destination'));
+                
+                // Rimuovi eventuali listener esistenti
+                button.replaceWith(button.cloneNode(true));
+                const newButton = document.querySelectorAll('.destination-button-voice')[index];
+                
+                newButton.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
                     const destination = this.getAttribute('data-destination');
+                    console.log('🎯 Click destinazione in service:', destination);
 
                     // Toggle singola destinazione
                     if (selectedDestinationsVoice.includes(destination)) {
                         selectedDestinationsVoice = selectedDestinationsVoice.filter(d => d !== destination);
                         this.classList.remove('selected');
+                        console.log('❌ Rimossa destinazione:', destination);
                     } else {
                         selectedDestinationsVoice.push(destination);
                         this.classList.add('selected');
+                        console.log('✅ Aggiunta destinazione:', destination);
                     }
 
                     updateDestinationDisplayVoice();
-                    console.log('Destinazioni selezionate per messaggi vocali in sala:', selectedDestinationsVoice);
+                    console.log('🎯 Destinazioni selezionate per messaggi vocali in sala:', selectedDestinationsVoice);
                 });
             });
 
             // Stile per pulsanti selezionati messaggi vocali
             const styleVoice = document.createElement('style');
+            styleVoice.id = 'voice-button-styles';
             styleVoice.textContent = `
                 .destination-button-voice {
                     transition: transform 0.2s, background-color 0.3s, box-shadow 0.2s;
                     min-width: 60px;
+                    cursor: pointer !important;
+                    pointer-events: auto !important;
                 }
 
                 .destination-button-voice:hover {
@@ -699,8 +725,27 @@
                     border: 2px solid white;
                 }
             `;
+            
+            // Rimuovi stile esistente se presente
+            const existingStyle = document.getElementById('voice-button-styles');
+            if (existingStyle) {
+                existingStyle.remove();
+            }
+            
             document.head.appendChild(styleVoice);
-        });
+        }
+
+        function initializeVoiceMessageSystem() {
+            const voiceButton = document.getElementById('voice-message-button');
+            if (voiceButton) {
+                console.log('🎤 Pulsante registrazione trovato e attivato');
+                voiceButton.style.pointerEvents = 'auto';
+                voiceButton.style.cursor = 'pointer';
+            }
+            
+            // Inizializza display destinazioni
+            updateDestinationDisplayVoice();
+        }
 
         function updateDestinationDisplayVoice() {
             const displayDiv = document.getElementById('selected-destinations-voice');
