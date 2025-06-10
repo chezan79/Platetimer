@@ -355,6 +355,9 @@
                 <button class="destination-button-voice" data-destination="insalata" style="padding: 6px 12px; background: linear-gradient(135deg, #17a2b8 0%, #B0E0E6 100%); color: #212529; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
                     🥗 Insalata
                 </button>
+                <button class="destination-button-voice" data-destination="secondi" style="padding: 6px 12px; background: linear-gradient(135deg, #28a745 0%, #20c997 100%); color: #212529; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
+                    🍖 Secondi
+                </button>
                 <button 
                     onclick="toggleVoiceRecording()" 
                     id="voice-message-button" 
@@ -446,6 +449,7 @@
                     <button class="destination-button" data-destination="cucina" style="background: linear-gradient(135deg, #28a745 0%, #98FB98 100%); color: #212529;">🍳 Cucina</button>
                     <button class="destination-button" data-destination="pizzeria" style="background: linear-gradient(135deg, #ffc107 0%, #FFE4C4 100%); color: #212529;">🍕 Pizzeria</button>
                     <button class="destination-button" data-destination="insalata" style="background: linear-gradient(135deg, #ff6b35 0%, #B0E0E6 100%); color: #212529;">🥗 Insalata</button>
+                    <button class="destination-button" data-destination="secondi" style="background: linear-gradient(135deg, #17a2b8 0%, #20c997 100%); color: #212529;">🍖 Secondi</button>
                 </div>
             </div>
         </div>
@@ -612,7 +616,7 @@
             if (selectedDestinations.length === 0) {
                 sectionTitle.textContent = '🎯 Destinazione';
             } else if (selectedDestinations.length === 1) {
-                const icons = {'cucina': '🍳', 'pizzeria': '🍕', 'insalata': '🥗'};
+                const icons = {'cucina': '🍳', 'pizzeria': '🍕', 'insalata': '🥗', 'secondi': '🍖'};
                 sectionTitle.textContent = `🎯 ${icons[selectedDestinations[0]]} ${selectedDestinations[0].charAt(0).toUpperCase() + selectedDestinations[0].slice(1)}`;
             } else {
                 sectionTitle.textContent = `🎯 ${selectedDestinations.length} Destinazioni`;
@@ -622,7 +626,7 @@
         // Funzione per mostrare messaggio di conferma
         function showConfirmationMessage(tableNumber, destinations, minutes) {
             const statusDiv = document.getElementById('voice-status');
-            const icons = {'cucina': '🍳', 'pizzeria': '🍕', 'insalata': '🥗'};
+            const icons = {'cucina': '🍳', 'pizzeria': '🍕', 'insalata': '🥗', 'secondi': '🍖'};
             const destList = destinations.map(d => `${icons[d]} ${d.charAt(0).toUpperCase() + d.slice(1)}`).join(', ');
 
             statusDiv.textContent = `✅ Tavolo ${tableNumber}: ${minutes}min → ${destList}`;
@@ -911,14 +915,16 @@
             const destinationIcons = {
                 'cucina': '🍳',
                 'pizzeria': '🍕',
-                'insalata': '🥗'
+                'insalata': '🥗',
+                'secondi': '🍖'
             };
 
             // PASSO 2: Colori specifici - Verde chiaro per cucina, bianco per altri
             const destinationColors = {
                 'cucina': '#d4edda',      // Verde chiaro per cucina
                 'pizzeria': '#ffffff',    // Base bianca per pizzeria
-                'insalata': '#ffffff'     // Base bianca per insalata
+                'insalata': '#ffffff',    // Base bianca per insalata
+                'secondi': '#ffffff'      // Base bianca per secondi
             };
 
             const countdownItem = document.createElement('div');
@@ -1490,8 +1496,8 @@
             if (selectedDestinationsVoice.length === 0) {
                 displayDiv.textContent = '';
             } else {
-                const icons = { 'pizzeria': '🍕', 'insalata': '🥗' };
-                const destNames = { 'pizzeria': 'Pizzeria', 'insalata': 'Insalata' };
+                const icons = { 'pizzeria': '🍕', 'insalata': '🥗', 'secondi': '🍖' };
+                const destNames = { 'pizzeria': 'Pizzeria', 'insalata': 'Insalata', 'secondi': 'Secondi' };
                 const destName = destNames[selectedDestinationsVoice[0]] || selectedDestinationsVoice[0];
                 displayDiv.textContent = `${icons[selectedDestinationsVoice[0]]} ${destName}`;
             }

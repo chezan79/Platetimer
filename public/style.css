@@ -244,6 +244,14 @@ button[type="submit"]:hover {
 .insalata:hover {
   background: linear-gradient(135deg, #E6E6FA 0%, var(--insalata) 100%); }
 
+.secondi {
+  background: linear-gradient(135deg, #17a2b8 0%, #20c997 100%); 
+  color: #212529;
+}
+
+.secondi:hover {
+  background: linear-gradient(135deg, #20c997 0%, #17a2b8 100%); }
+
 .sala {
   background: linear-gradient(135deg, var(--sala) 0%, #E0FFFF 100%); 
   color: #212529;
