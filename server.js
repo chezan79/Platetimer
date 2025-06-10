@@ -84,7 +84,7 @@ app.post('/api/create-checkout-session', async (req, res) => {
 
         // Prezzi dei piani - Price ID per test mode
         const prices = {
-            premium: 'price_1RYCsq4UUR769sSaDYCvGIoA', // Piano Premium Test Mode
+            premium: 'INSERISCI_QUI_IL_NUOVO_PRICE_ID', // Piano Premium Test Mode - DA SOSTITUIRE
             business: 'price_business_monthly'  // Crea questo nel dashboard Stripe
         };
 
