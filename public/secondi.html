@@ -94,6 +94,34 @@
             transform: translateY(-2px);
             box-shadow: 0 5px 15px rgba(108, 117, 125, 0.3);
         }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(100%);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes slideOut {
+            from {
+                opacity: 1;
+                transform: translateX(0);
+            }
+            to {
+                opacity: 0;
+                transform: translateX(100%);
+            }
+        }
+
+        @keyframes pulse {
+            from { box-shadow: 0 0 0 0 rgba(108, 117, 125, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(108, 117, 125, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(108, 117, 125, 0); }
+        }
     </style>
 </head>
 <body>
@@ -292,24 +320,168 @@
         }
 
         // Funzioni per la gestione dei messaggi vocali
-        function displayVoiceMessage(data) {
+        function displayVoiceMessage(messageData) {
             const messagesContainer = document.getElementById('messagesContainer');
             const voiceMessagesList = document.getElementById('voice-messages-list');
 
             // Mostra il container se ci sono messaggi
             messagesContainer.style.display = 'flex';
 
-            const messageDiv = document.createElement('div');
-            messageDiv.id = `message-${data.messageId}`;
-            messageDiv.style.marginBottom = '10px';
-            messageDiv.innerHTML = `
-                <p style="font-size: 14px; margin: 5px 0;">${data.sender}: ${data.message}</p>
-                <audio controls style="width: 100%;">
-                    <source src="${data.audioUrl}" type="audio/mpeg">
-                    Your browser does not support the audio element.
-                </audio>
+            const messageElement = document.createElement('div');
+            messageElement.id = `voice-message-${messageData.messageId}`;
+            messageElement.style.cssText = `
+                margin-bottom: 12px;
+                background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+                border-radius: 8px;
+                border-left: 4px solid #6c757d;
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-start;
+                gap: 10px;
+                display: flex;
+                flex-direction: column;
+                animation: slideIn 0.3s ease-out;
             `;
-            voiceMessagesList.appendChild(messageDiv);
+
+            // Crea contenuto con audio se disponibile
+            let audioControls = '';
+            if (messageData.hasAudio && messageData.audioData) {
+                const audioId = `audio-${messageData.messageId}`;
+                const audioSize = messageData.audioSize ? `(${Math.round(messageData.audioSize/1024)}KB)` : '';
+                audioControls = `
+                    <div style="margin: 8px 0; background: #f0f8ff; padding: 8px; border-radius: 4px; border: 1px solid #6c757d;">
+                        <div style="font-size: 12px; color: #6c757d; margin-bottom: 4px;">🎤 Messaggio Audio ${audioSize}</div>
+                        <audio id="${audioId}" controls style="width: 100%; height: 35px;">
+                            <source src="data:audio/webm;base64,${messageData.audioData}" type="audio/webm">
+                            <source src="data:audio/wav;base64,${messageData.audioData}" type="audio/wav">
+                            Il tuo browser non supporta l'audio.
+                        </audio>
+                        <div style="margin-top: 4px;">
+                            <button onclick="playVoiceMessage('${audioId}')" 
+                                    style="background: #28a745; color: white; border: none; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-size: 11px; margin-right: 5px;">
+                                🔊 Riproduci
+                            </button>
+                            <button onclick="replayVoiceMessage('${audioId}')" 
+                                    style="background: #17a2b8; color: white; border: none; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-size: 11px;">
+                                🔄 Ripeti
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }
+
+            messageElement.innerHTML = `
+                <div style="padding: 12px; flex: 1; display: flex; flex-direction: column;">
+                    <div style="color: #6c757d; font-size: 12px; margin-bottom: 6px; font-weight: 500;">
+                        ${messageData.from} - ${messageData.timestamp}
+                    </div>
+                    <div style="color: #333; font-size: 16px; line-height: 1.4; margin-bottom: 8px;">
+                        ${messageData.message}
+                    </div>
+                    ${audioControls}
+                </div>
+                <button onclick="deleteVoiceMessage('${messageData.messageId}')" 
+                        style="background: #f44336; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; margin: 12px; transition: background 0.2s; align-self: flex-start;">
+                    🗑️ Elimina
+                </button>
+            `;
+
+            voiceMessagesList.appendChild(messageElement);
+
+            // 🔊 Riproduci allarme per nuovo messaggio
+            const messageAlert = document.getElementById('alertSound');
+            if (messageAlert) {
+                messageAlert.play().catch(error => {
+                    console.log('⚠️ Errore riproduzione allarme messaggio in secondi:', error);
+                });
+            } else {
+                console.log('⚠️ File audio alerte-346112.mp3 non trovato in secondi');
+            }
+
+            // Animazione visiva per attirare l'attenzione
+            const messagesContainerElement = document.getElementById('voice-messages-container');
+            messagesContainerElement.style.border = '2px solid #6c757d';
+            messagesContainerElement.style.animation = 'pulse 2s ease-in-out 3';
+
+            // Rimuovi l'effetto visivo dopo qualche secondo
+            setTimeout(() => {
+                messagesContainerElement.style.border = 'none';
+                messagesContainerElement.style.animation = '';
+            }, 6000);
+
+            console.log(`📢 🔊 Messaggio vocale visualizzato in secondi con allarme: "${messageData.message}"`);
+
+            // 🔊 Auto-riproduzione se c'è audio
+            if (messageData.hasAudio && messageData.audioData) {
+                setTimeout(() => {
+                    const audioId = `audio-${messageData.messageId}`;
+                    playVoiceMessage(audioId);
+                }, 1000);
+            }
+
+            // ⏰ Auto-eliminazione dopo 60 secondi
+            setTimeout(() => {
+                const messageElement = document.getElementById(`voice-message-${messageData.messageId}`);
+                if (messageElement && messageElement.parentNode) {
+                    console.log(`🕐 Auto-eliminazione messaggio vocale dopo 60s: ID ${messageData.messageId}`);
+
+                    // Animazione di uscita
+                    messageElement.style.animation = 'slideOut 0.3s ease-out';
+
+                    setTimeout(() => {
+                        if (messageElement && messageElement.parentNode) {
+                            messageElement.parentNode.removeChild(messageElement);
+
+                            // Nascondi container se non ci sono più messaggi
+                            const messagesList = document.getElementById('voice-messages-list');
+                            const messagesContainerElement = document.getElementById('messagesContainer');
+
+                            if (messagesList.children.length === 0) {
+                                messagesContainerElement.style.display = 'none';
+                                console.log('📦 Container messaggi nascosto (auto-eliminazione)');
+                            }
+                        }
+                    }, 300);
+                }
+            }, 60000); // 60 secondi
+        }
+
+        function playVoiceMessage(audioId) {
+            const audioElement = document.getElementById(audioId);
+            if (audioElement) {
+                audioElement.currentTime = 0; // Riavvolgi all'inizio
+                audioElement.play().catch(error => {
+                    console.log('⚠️ Errore riproduzione audio messaggio in secondi:', error);
+                    alert('⚠️ Impossibile riprodurre l\'audio. Clicca sui controlli audio.');
+                });
+            }
+        }
+
+        function replayVoiceMessage(audioId) {
+            const audioElement = document.getElementById(audioId);
+            if (audioElement) {
+                audioElement.currentTime = 0;
+                audioElement.play().catch(error => {
+                    console.log('⚠️ Errore riproduzione audio messaggio in secondi:', error);
+                });
+            }
+        }
+
+        function deleteVoiceMessage(messageId) {
+            // Invia eliminazione via WebSocket
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                const deleteMessage = {
+                    action: 'deleteVoiceMessage',
+                    messageId: messageId
+                };
+                ws.send(JSON.stringify(deleteMessage));
+                console.log(`📤 Eliminazione messaggio vocale inviata da secondi: ID ${messageId}`);
+            } else {
+                console.error('❌ WebSocket non connesso per eliminazione messaggio vocale in secondi');
+            }
+
+            // Rimuovi localmente
+            removeVoiceMessage(messageId);
         }
 
         function removeVoiceMessage(messageId) {
