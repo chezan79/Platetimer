@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="it">
 <head>
@@ -13,14 +12,14 @@
             margin: 0 auto;
             padding: 20px;
         }
-        
+
         .plans-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
             gap: 30px;
             margin: 40px 0;
         }
-        
+
         .plan-card {
             background: white;
             border-radius: 12px;
@@ -30,49 +29,49 @@
             transition: transform 0.3s ease;
             border: 2px solid transparent;
         }
-        
+
         .plan-card:hover {
             transform: translateY(-5px);
             box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
         }
-        
+
         .plan-card.selected {
             border-color: #007bff;
             background: #f8f9ff;
         }
-        
+
         .plan-title {
             font-size: 24px;
             font-weight: bold;
             color: #333;
             margin-bottom: 10px;
         }
-        
+
         .plan-price {
             font-size: 36px;
             font-weight: bold;
             color: #007bff;
             margin-bottom: 20px;
         }
-        
+
         .plan-features {
             list-style: none;
             padding: 0;
             margin: 20px 0;
         }
-        
+
         .plan-features li {
             padding: 8px 0;
             color: #666;
         }
-        
+
         .plan-features li:before {
             content: "✓";
             color: #28a745;
             font-weight: bold;
             margin-right: 10px;
         }
-        
+
         .select-plan-btn {
             width: 100%;
             padding: 12px 24px;
@@ -84,15 +83,15 @@
             cursor: pointer;
             transition: background 0.3s ease;
         }
-        
+
         .select-plan-btn:hover {
             background: #0056b3;
         }
-        
+
         .select-plan-btn.selected {
             background: #28a745;
         }
-        
+
         .checkout-btn {
             background: #28a745;
             color: white;
@@ -104,22 +103,22 @@
             margin-top: 30px;
             transition: background 0.3s ease;
         }
-        
+
         .checkout-btn:hover {
             background: #218838;
         }
-        
+
         .checkout-btn:disabled {
             background: #ccc;
             cursor: not-allowed;
         }
-        
+
         .loading {
             display: none;
             text-align: center;
             margin-top: 20px;
         }
-        
+
         .user-info {
             background: #f8f9fa;
             padding: 20px;
@@ -131,13 +130,13 @@
 <body>
     <div class="subscription-container">
         <h1>Scegli il tuo piano</h1>
-        
+
         <div id="user-info" class="user-info">
             <h3>Informazioni utente</h3>
             <p id="user-email">Email: Caricamento...</p>
             <p id="user-company">Azienda: Caricamento...</p>
         </div>
-        
+
         <div class="plans-grid">
             <!-- Piano Gratuito - IN STANDBY -->
             <!--
@@ -153,7 +152,7 @@
                 <button class="select-plan-btn" data-plan="free">Seleziona Gratuito</button>
             </div>
             -->
-            
+
             <!-- Piano Premium - ATTIVO -->
             <div class="plan-card" data-plan="premium" style="margin: 0 auto; max-width: 400px;">
                 <div class="plan-title">Premium</div>
@@ -168,7 +167,7 @@
                 </ul>
                 <button class="select-plan-btn" data-plan="premium">Seleziona Premium</button>
             </div>
-            
+
             <!-- Piano Business - IN STANDBY -->
             <!--
             <div class="plan-card" data-plan="business">
@@ -186,12 +185,12 @@
             </div>
             -->
         </div>
-        
+
         <div style="text-align: center;">
             <button id="checkout-btn" class="checkout-btn" disabled>
                 Procedi al Pagamento
             </button>
-            
+
             <div id="loading" class="loading">
                 <p>Caricamento...</p>
             </div>
@@ -220,7 +219,7 @@
 
         // Inizializza Stripe
         const stripe = Stripe('pk_test_51RYAfcG3vUIKUaULNdabWDPHURDRKmLd7l73Uan6YfkVAj2966jePEhlw0h6CrnRdcKSYt7pnBP7EUVBx6SOf7DP00mcCejLS1');
-        
+
         let currentUser = null;
         let selectedPlan = null;
 
@@ -235,14 +234,14 @@
 
             // Mostra info utente
             document.getElementById('user-email').textContent = `Email: ${user.email}`;
-            
+
             // Recupera dati utente da Firestore
             try {
                 const userDoc = await getDoc(doc(db, "users", user.uid));
                 if (userDoc.exists()) {
                     const userData = userDoc.data();
                     document.getElementById('user-company').textContent = `Azienda: ${userData.company || 'Non specificata'}`;
-                    
+
                     // Verifica se ha già un abbonamento
                     if (userData.subscription && userData.subscription.active) {
                         document.getElementById('user-info').innerHTML += `
@@ -272,13 +271,13 @@
         document.addEventListener('click', (e) => {
             if (e.target.classList.contains('select-plan-btn')) {
                 const plan = e.target.getAttribute('data-plan');
-                
+
                 // Solo piano Premium disponibile
                 if (plan !== 'premium') {
                     alert('Solo il piano Premium è attualmente disponibile');
                     return;
                 }
-                
+
                 // Rimuovi selezione precedente
                 document.querySelectorAll('.plan-card').forEach(card => {
                     card.classList.remove('selected');
@@ -287,12 +286,12 @@
                     btn.classList.remove('selected');
                     btn.textContent = btn.textContent.replace('✓ ', '');
                 });
-                
+
                 // Aggiungi nuova selezione
                 e.target.closest('.plan-card').classList.add('selected');
                 e.target.classList.add('selected');
                 e.target.textContent = '✓ ' + e.target.textContent;
-                
+
                 selectedPlan = plan;
                 document.getElementById('checkout-btn').disabled = false;
                 document.getElementById('checkout-btn').textContent = 'Procedi al Pagamento';
@@ -312,7 +311,7 @@
                         }
                     });
                 }
-                
+
                 // Reindirizza alla home
                 window.location.href = 'home.html';
             } catch (error) {
@@ -341,7 +340,7 @@
             try {
                 // Mappa i piani ai Price ID per Test Mode
                 const priceMapping = {
-                    'premium': 'price_1RYCsq4UUR769sSaDYCvGIoA' // Price ID reale da Stripe Test Mode
+                    'premium': 'price_1RYCsq4UUR769sSaDYCvGIoA' // PlateTimer 50 CHF/mese da Stripe
                 };
 
                 const response = await fetch('/api/create-checkout-session', {
@@ -360,7 +359,7 @@
                 }
 
                 const { sessionId } = await response.json();
-                
+
                 // Reindirizza a Stripe Checkout
                 const { error } = await stripe.redirectToCheckout({
                     sessionId: sessionId
@@ -382,7 +381,7 @@
         // Gestione successo pagamento (se presente session_id nell'URL)
         const urlParams = new URLSearchParams(window.location.search);
         const sessionId = urlParams.get('session_id');
-        
+
         if (sessionId) {
             // Pagamento completato con successo
             document.getElementById('user-info').innerHTML = `

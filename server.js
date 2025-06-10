@@ -84,7 +84,7 @@ app.post('/api/create-checkout-session', async (req, res) => {
 
         // Prezzi dei piani - Price ID per test mode
         const prices = {
-            premium: 'price_1RYCsq4UUR769sSaDYCvGIoA', // Piano Premium Test Mode
+            premium: 'price_1RYCsq4UUR769sSaDYCvGIoA', // Price ID da Stripe dashboard - PlateTimer 50 CHF/mese
             business: 'price_business_monthly'  // Crea questo nel dashboard Stripe
         };
 
@@ -1027,3 +1027,5 @@ server.listen(PORT, '0.0.0.0', () => {
 }).on('error', (error) => {
     console.error('❌ Errore avvio server:', error);
 });
+
+// Update Stripe Price ID to the correct one.
