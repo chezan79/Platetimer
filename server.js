@@ -63,6 +63,55 @@ app.post('/api/voice-message', (req, res) => {
 
 // Endpoint Stripe rimossi - ora usiamo Stripe Buy Button direttamente
 
+// Endpoint per signaling HTTP come fallback finale
+app.post('/api/signal', (req, res) => {
+    try {
+        const { action, targetPage, signalData, timestamp, fromDevice } = req.body;
+
+        if (action !== 'webrtcSignal' || !targetPage || !signalData) {
+            return res.status(400).json({ error: 'Invalid signal data' });
+        }
+
+        // Find target clients for HTTP polling fallback
+        let targetClients = 0;
+        let sentCount = 0;
+
+        companyRooms.forEach((roomClients, companyName) => {
+            roomClients.forEach((client) => {
+                if (client.pageType === targetPage && client.readyState === WebSocket.OPEN) {
+                    targetClients++;
+                    try {
+                        client.send(JSON.stringify({
+                            action: 'webrtcSignal',
+                            targetPage: targetPage,
+                            signalData: signalData,
+                            fromDevice: fromDevice || 'http-fallback',
+                            timestamp: timestamp || Date.now(),
+                            method: 'http-polling'
+                        }));
+                        sentCount++;
+                    } catch (sendError) {
+                        console.error('❌ HTTP fallback signal send failed:', sendError);
+                    }
+                }
+            });
+        });
+
+        console.log(`🌐 HTTP fallback signal sent: ${signalData.type} to ${targetPage} (${sentCount}/${targetClients} targets)`);
+
+        res.json({
+            success: true,
+            targetClients: targetClients,
+            sentCount: sentCount,
+            method: 'http-polling'
+        });
+
+    } catch (error) {
+        console.error('❌ HTTP signal endpoint error:', error);
+        res.status(500).json({ error: 'Signal processing failed' });
+    }
+});
+
 // Endpoint per il riconoscimento vocale
 app.post('/api/speech-to-text', async (req, res) => {
     try {

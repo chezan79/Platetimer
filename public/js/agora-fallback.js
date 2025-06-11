@@ -1,40 +1,160 @@
-// Fallback voice communication using WebRTC peer-to-peer
+// Multi-level fallback voice communication system
 let localConnection = null;
 let remoteConnection = null;
 let localStream = null;
 let dataChannel = null;
 
-// Enhanced WebRTC configuration for cross-device compatibility
-const rtcConfig = {
-    iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' },
-        { urls: 'stun:stun2.l.google.com:19302' },
-        { urls: 'stun:stun3.l.google.com:19302' },
-        { urls: 'stun:stun4.l.google.com:19302' }
-    ],
-    iceCandidatePoolSize: 10,
-    bundlePolicy: 'max-bundle',
-    rtcpMuxPolicy: 'require'
-};
+// Fallback connection tracking
+let fallbackLevel = 0;
+let connectionAttempts = 0;
+let maxConnectionAttempts = 5;
+let reconnectInterval = null;
+let healthCheckInterval = null;
 
-// Fallback voice call system
+// Enhanced WebRTC configuration with multiple fallback levels
+const rtcConfigs = [
+    // Level 0: Standard configuration
+    {
+        iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' },
+            { urls: 'stun:stun2.l.google.com:19302' }
+        ],
+        iceCandidatePoolSize: 10,
+        bundlePolicy: 'max-bundle',
+        rtcpMuxPolicy: 'require'
+    },
+    // Level 1: More aggressive ICE gathering
+    {
+        iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' },
+            { urls: 'stun:stun2.l.google.com:19302' },
+            { urls: 'stun:stun3.l.google.com:19302' },
+            { urls: 'stun:stun4.l.google.com:19302' },
+            { urls: 'stun:stun.nextcloud.com:443' },
+            { urls: 'stun:stun.sipgate.net:3478' }
+        ],
+        iceCandidatePoolSize: 20,
+        bundlePolicy: 'max-bundle',
+        rtcpMuxPolicy: 'require',
+        iceTransportPolicy: 'all'
+    },
+    // Level 2: Relay-only fallback
+    {
+        iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' }
+        ],
+        iceCandidatePoolSize: 5,
+        bundlePolicy: 'max-bundle',
+        rtcpMuxPolicy: 'require',
+        iceTransportPolicy: 'relay'
+    }
+];
+
+// Enhanced fallback voice call system with multi-level recovery
 class FallbackVoiceCall {
     constructor() {
         this.isActive = false;
         this.isMuted = false;
         this.currentPageType = null;
+        this.connectionHealth = {
+            lastSuccessfulConnection: null,
+            failedAttempts: 0,
+            currentMethod: 'websocket'
+        };
+        this.signalMethods = ['websocket', 'localStorage', 'polling'];
+        this.currentSignalMethod = 0;
+        this.signalBuffer = [];
+        this.signalRetryQueue = [];
     }
 
     async initialize(pageType) {
         this.currentPageType = pageType;
-        console.log('Initializing fallback voice system for:', pageType);
+        console.log('🔧 Initializing enhanced fallback voice system for:', pageType);
 
-        // Listen for signaling messages
-        this.listenForSignaling();
+        // Initialize all signaling methods
+        this.initializeSignaling();
+        
+        // Start connection health monitoring
+        this.startHealthMonitoring();
 
-        updateConnectionStatus('disconnected', 'Fallback system ready');
+        updateConnectionStatus('disconnected', 'Enhanced fallback system ready');
         return true;
+    }
+
+    startHealthMonitoring() {
+        // Monitor connection health every 10 seconds
+        if (healthCheckInterval) clearInterval(healthCheckInterval);
+        
+        healthCheckInterval = setInterval(() => {
+            this.checkConnectionHealth();
+        }, 10000);
+
+        // Monitor WebSocket specifically
+        this.monitorWebSocket();
+    }
+
+    checkConnectionHealth() {
+        const now = Date.now();
+        const wsConnected = window.socket && window.socket.readyState === WebSocket.OPEN;
+        
+        if (!wsConnected) {
+            this.connectionHealth.failedAttempts++;
+            console.log(`⚠️ Connection health check failed (${this.connectionHealth.failedAttempts} failures)`);
+            
+            if (this.connectionHealth.failedAttempts >= 3) {
+                this.escalateSignalingMethod();
+            }
+        } else {
+            if (this.connectionHealth.failedAttempts > 0) {
+                console.log('✅ Connection health restored');
+            }
+            this.connectionHealth.failedAttempts = 0;
+            this.connectionHealth.lastSuccessfulConnection = now;
+        }
+    }
+
+    escalateSignalingMethod() {
+        if (this.currentSignalMethod < this.signalMethods.length - 1) {
+            this.currentSignalMethod++;
+            const newMethod = this.signalMethods[this.currentSignalMethod];
+            console.log(`📡 Escalating to signaling method: ${newMethod}`);
+            updateConnectionStatus('connecting', `Switching to ${newMethod} signaling`);
+            
+            // Retry buffered signals with new method
+            this.retryBufferedSignals();
+        }
+    }
+
+    monitorWebSocket() {
+        if (!window.socket) return;
+
+        const originalOnClose = window.socket.onclose;
+        window.socket.onclose = (event) => {
+            console.log('🔌 WebSocket closed, initiating fallback recovery');
+            this.handleWebSocketDisconnection();
+            if (originalOnClose) originalOnClose.call(window.socket, event);
+        };
+
+        const originalOnError = window.socket.onerror;
+        window.socket.onerror = (error) => {
+            console.error('❌ WebSocket error, preparing fallback');
+            this.connectionHealth.failedAttempts++;
+            if (originalOnError) originalOnError.call(window.socket, error);
+        };
+    }
+
+    handleWebSocketDisconnection() {
+        if (this.isActive) {
+            console.log('📞 Call active during disconnection, maintaining with fallback');
+            updateCallStatus('Connection lost - Using fallback');
+            
+            // Switch to localStorage signaling immediately
+            this.currentSignalMethod = 1;
+            this.connectionHealth.currentMethod = 'localStorage';
+        }
     }
 
     async startCall() {
@@ -43,100 +163,175 @@ class FallbackVoiceCall {
             return;
         }
 
-        console.log('Starting fallback call...');
+        console.log('🚀 Starting enhanced fallback call...');
         updateCallStatus('Initiating call...');
+        connectionAttempts = 0;
+        fallbackLevel = 0;
 
-        try {
-            // Enhanced audio constraints for cross-device compatibility
-            const audioConstraints = {
-                audio: {
-                    echoCancellation: true,
-                    noiseSuppression: true,
-                    autoGainControl: true,
-                    sampleRate: 44100,
-                    channelCount: 1
+        return this.attemptCallWithFallback();
+    }
+
+    async attemptCallWithFallback() {
+        const maxAttempts = rtcConfigs.length;
+        
+        while (fallbackLevel < maxAttempts && connectionAttempts < maxConnectionAttempts) {
+            try {
+                connectionAttempts++;
+                console.log(`📞 Call attempt ${connectionAttempts} using fallback level ${fallbackLevel}`);
+                
+                const success = await this.initializeCall(fallbackLevel);
+                if (success) {
+                    console.log(`✅ Call established with fallback level ${fallbackLevel}`);
+                    return true;
                 }
-            };
-
-            // iOS/Safari specific adjustments
-            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-            const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
-            
-            if (isIOS || isSafari) {
-                console.log('📱 Detected iOS/Safari, adjusting audio constraints');
-                audioConstraints.audio.sampleRate = 48000;
-                audioConstraints.audio.latency = 0.1;
+            } catch (error) {
+                console.error(`❌ Call attempt ${connectionAttempts} failed:`, error);
+                updateCallStatus(`Attempt ${connectionAttempts} failed, trying alternative...`);
             }
 
-            // Get user media with retry mechanism
-            let retries = 3;
-            while (retries > 0) {
-                try {
-                    localStream = await navigator.mediaDevices.getUserMedia(audioConstraints);
-                    console.log('✅ Got local audio stream on attempt', 4 - retries);
-                    break;
-                } catch (error) {
-                    retries--;
-                    if (retries === 0) throw error;
-                    console.log('⚠️ Retrying getUserMedia, attempts left:', retries);
-                    await new Promise(resolve => setTimeout(resolve, 1000));
-                }
+            // Try next fallback level
+            fallbackLevel++;
+            if (fallbackLevel < maxAttempts) {
+                await new Promise(resolve => setTimeout(resolve, 2000));
             }
-
-            // Create peer connection with enhanced configuration
-            localConnection = new RTCPeerConnection(rtcConfig);
-
-            // Add local stream
-            localStream.getTracks().forEach(track => {
-                localConnection.addTrack(track, localStream);
-                console.log('Added track:', track.kind, track.label);
-            });
-
-            // Create data channel for signaling
-            dataChannel = localConnection.createDataChannel('signaling', {
-                ordered: true
-            });
-
-            // Set up event handlers
-            this.setupConnectionHandlers(localConnection, true);
-
-            // Create offer with enhanced options
-            const offerOptions = {
-                offerToReceiveAudio: true,
-                offerToReceiveVideo: false,
-                voiceActivityDetection: true
-            };
-
-            const offer = await localConnection.createOffer(offerOptions);
-            await localConnection.setLocalDescription(offer);
-
-            // Send offer through signaling
-            this.sendSignal({
-                type: 'offer',
-                offer: offer,
-                from: this.currentPageType,
-                timestamp: Date.now(),
-                deviceType: isIOS ? 'ios' : isSafari ? 'safari' : 'other'
-            });
-
-            this.isActive = true;
-            updateCallButtons(true);
-            updateCallStatus('Calling...');
-            logCall('outgoing', 'Fallback call initiated');
-
-        } catch (error) {
-            console.error('Failed to start fallback call:', error);
-            updateCallStatus('Call failed');
-            
-            let errorMessage = 'Failed to access microphone: ' + error.message;
-            if (error.name === 'NotAllowedError') {
-                errorMessage = 'Microphone access denied. Please allow microphone access and try again.';
-            } else if (error.name === 'NotFoundError') {
-                errorMessage = 'No microphone found. Please check your device settings.';
-            }
-            
-            showError(errorMessage);
         }
+
+        console.error('❌ All fallback attempts failed');
+        updateCallStatus('Call failed - All methods exhausted');
+        showError('Unable to establish call. Please check your network connection and try again.');
+        return false;
+    }
+
+    async initializeCall(level) {
+        // Enhanced audio constraints for cross-device compatibility
+        const audioConstraints = this.getAudioConstraints(level);
+
+        // Get user media with retry mechanism
+        localStream = await this.getUserMediaWithRetry(audioConstraints);
+
+        // Create peer connection with current fallback level configuration
+        localConnection = new RTCPeerConnection(rtcConfigs[level]);
+
+        // Add local stream
+        localStream.getTracks().forEach(track => {
+            localConnection.addTrack(track, localStream);
+            console.log(`Added track (level ${level}):`, track.kind, track.label);
+        });
+
+        // Create data channel for signaling
+        dataChannel = localConnection.createDataChannel('signaling', {
+            ordered: true,
+            maxRetransmits: level > 0 ? 5 : 3 // More retries for higher fallback levels
+        });
+
+        // Set up event handlers with enhanced error handling
+        this.setupConnectionHandlers(localConnection, true, level);
+
+        // Create offer with enhanced options
+        const offerOptions = {
+            offerToReceiveAudio: true,
+            offerToReceiveVideo: false,
+            voiceActivityDetection: true
+        };
+
+        const offer = await localConnection.createOffer(offerOptions);
+        await localConnection.setLocalDescription(offer);
+
+        // Send offer through signaling with fallback info
+        this.sendSignal({
+            type: 'offer',
+            offer: offer,
+            from: this.currentPageType,
+            timestamp: Date.now(),
+            fallbackLevel: level,
+            deviceType: this.getDeviceType()
+        });
+
+        this.isActive = true;
+        updateCallButtons(true);
+        updateCallStatus(`Calling... (method ${level + 1})`);
+        logCall('outgoing', `Fallback call initiated (level ${level})`);
+
+        return true;
+    }
+
+    getAudioConstraints(level) {
+        const baseConstraints = {
+            audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true,
+                sampleRate: 44100,
+                channelCount: 1
+            }
+        };
+
+        // iOS/Safari specific adjustments
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+        const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+        
+        if (isIOS || isSafari) {
+            console.log('📱 Detected iOS/Safari, adjusting audio constraints');
+            baseConstraints.audio.sampleRate = 48000;
+            baseConstraints.audio.latency = 0.1;
+        }
+
+        // Adjust constraints based on fallback level
+        if (level > 0) {
+            baseConstraints.audio.sampleRate = Math.min(baseConstraints.audio.sampleRate, 24000);
+            baseConstraints.audio.channelCount = 1; // Force mono for better compatibility
+        }
+
+        if (level > 1) {
+            // Most basic settings for maximum compatibility
+            baseConstraints.audio = {
+                echoCancellation: false,
+                noiseSuppression: false,
+                autoGainControl: false
+            };
+        }
+
+        return baseConstraints;
+    }
+
+    async getUserMediaWithRetry(audioConstraints) {
+        let retries = 5;
+        let lastError = null;
+
+        while (retries > 0) {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia(audioConstraints);
+                console.log(`✅ Got local audio stream on attempt ${6 - retries}`);
+                return stream;
+            } catch (error) {
+                lastError = error;
+                retries--;
+                console.log(`⚠️ getUserMedia failed, ${retries} attempts left:`, error.message);
+                
+                if (retries > 0) {
+                    // Try with more relaxed constraints
+                    if (audioConstraints.audio.sampleRate) {
+                        audioConstraints.audio.sampleRate = Math.min(audioConstraints.audio.sampleRate, 22050);
+                    }
+                    await new Promise(resolve => setTimeout(resolve, 1000 * (6 - retries)));
+                }
+            }
+        }
+
+        throw lastError;
+    }
+
+    getDeviceType() {
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+        const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+        const isAndroid = /Android/.test(navigator.userAgent);
+        const isMobile = /Mobile|Tablet/.test(navigator.userAgent);
+
+        if (isIOS) return 'ios';
+        if (isSafari) return 'safari';
+        if (isAndroid) return 'android';
+        if (isMobile) return 'mobile';
+        return 'desktop';
     }
 
     async acceptCall(offer) {
@@ -216,62 +411,163 @@ class FallbackVoiceCall {
     sendSignal(data) {
         const targetPage = this.currentPageType === 'cucina' ? 'pizzeria' : 'cucina';
         
-        // Add retry mechanism for WebSocket
-        const sendViaWebSocket = (retries = 3) => {
-            if (window.socket && window.socket.readyState === WebSocket.OPEN) {
-                try {
-                    window.socket.send(JSON.stringify({
-                        action: 'webrtcSignal',
-                        targetPage: targetPage,
-                        signalData: data,
-                        timestamp: Date.now(),
-                        fromDevice: navigator.userAgent.includes('Mobile') ? 'mobile' : 'desktop'
-                    }));
-                    console.log('📡 WebRTC signal sent via WebSocket:', data.type, 'to', targetPage);
-                    return true;
-                } catch (error) {
-                    console.error('❌ WebSocket send failed:', error);
-                    if (retries > 0) {
-                        setTimeout(() => sendViaWebSocket(retries - 1), 1000);
-                    }
-                    return false;
+        // Add to retry queue for resilience
+        const signalId = `${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+        const signalPacket = {
+            id: signalId,
+            data: data,
+            targetPage: targetPage,
+            attempts: 0,
+            timestamp: Date.now(),
+            method: this.signalMethods[this.currentSignalMethod]
+        };
+
+        this.signalRetryQueue.push(signalPacket);
+        this.processSignalQueue();
+    }
+
+    async processSignalQueue() {
+        if (this.signalRetryQueue.length === 0) return;
+
+        const signal = this.signalRetryQueue[0];
+        const success = await this.sendSignalWithMethod(signal);
+
+        if (success) {
+            this.signalRetryQueue.shift();
+            console.log(`✅ Signal sent successfully (${signal.method}):`, signal.data.type);
+        } else {
+            signal.attempts++;
+            if (signal.attempts >= 3) {
+                console.warn(`❌ Signal failed after ${signal.attempts} attempts:`, signal.data.type);
+                this.signalRetryQueue.shift();
+                
+                // Try next signaling method
+                if (this.currentSignalMethod < this.signalMethods.length - 1) {
+                    this.escalateSignalingMethod();
                 }
-            } else if (retries > 0) {
-                console.log('🔄 WebSocket not ready, retrying...');
-                setTimeout(() => sendViaWebSocket(retries - 1), 1000);
-                return false;
+            } else {
+                console.log(`🔄 Retrying signal (attempt ${signal.attempts + 1}):`, signal.data.type);
+                setTimeout(() => this.processSignalQueue(), 2000 * signal.attempts);
             }
-            return false;
-        };
+        }
 
-        const sent = sendViaWebSocket();
+        // Process next signal in queue
+        if (this.signalRetryQueue.length > 0) {
+            setTimeout(() => this.processSignalQueue(), 100);
+        }
+    }
 
-        // Enhanced localStorage fallback with device info
-        const signalKey = `webrtc-signal-${targetPage}`;
-        const signalData = {
-            ...data,
-            deviceInfo: {
-                userAgent: navigator.userAgent,
-                timestamp: Date.now(),
-                isMobile: /Mobile|Tablet|iPad|iPhone|Android/.test(navigator.userAgent),
-                isIOS: /iPad|iPhone|iPod/.test(navigator.userAgent)
-            }
-        };
-        
-        localStorage.setItem(signalKey, JSON.stringify(signalData));
+    async sendSignalWithMethod(signalPacket) {
+        const { data, targetPage } = signalPacket;
+        const method = this.signalMethods[this.currentSignalMethod];
 
-        // Trigger storage event for same-origin pages
         try {
+            switch (method) {
+                case 'websocket':
+                    return await this.sendViaWebSocket(data, targetPage);
+                case 'localStorage':
+                    return await this.sendViaLocalStorage(data, targetPage);
+                case 'polling':
+                    return await this.sendViaPolling(data, targetPage);
+                default:
+                    return false;
+            }
+        } catch (error) {
+            console.error(`❌ Signal method ${method} failed:`, error);
+            return false;
+        }
+    }
+
+    async sendViaWebSocket(data, targetPage) {
+        if (!window.socket || window.socket.readyState !== WebSocket.OPEN) {
+            return false;
+        }
+
+        try {
+            const payload = {
+                action: 'webrtcSignal',
+                targetPage: targetPage,
+                signalData: data,
+                timestamp: Date.now(),
+                fromDevice: navigator.userAgent.includes('Mobile') ? 'mobile' : 'desktop',
+                fallbackLevel: fallbackLevel
+            };
+
+            window.socket.send(JSON.stringify(payload));
+            console.log('📡 WebRTC signal sent via WebSocket:', data.type, 'to', targetPage);
+            return true;
+        } catch (error) {
+            console.error('❌ WebSocket send failed:', error);
+            return false;
+        }
+    }
+
+    async sendViaLocalStorage(data, targetPage) {
+        try {
+            const signalKey = `webrtc-signal-${targetPage}`;
+            const signalData = {
+                ...data,
+                deviceInfo: {
+                    userAgent: navigator.userAgent,
+                    timestamp: Date.now(),
+                    isMobile: /Mobile|Tablet|iPad|iPhone|Android/.test(navigator.userAgent),
+                    isIOS: /iPad|iPhone|iPod/.test(navigator.userAgent),
+                    fallbackLevel: fallbackLevel
+                }
+            };
+            
+            localStorage.setItem(signalKey, JSON.stringify(signalData));
+
+            // Trigger storage event for same-origin pages
             window.dispatchEvent(new StorageEvent('storage', {
                 key: signalKey,
                 newValue: JSON.stringify(signalData)
             }));
-        } catch (e) {
-            console.log('Storage event dispatch failed:', e);
-        }
 
-        if (!sent) {
-            console.warn('⚠️ WebSocket unavailable, relying on localStorage fallback');
+            console.log('💾 WebRTC signal sent via localStorage:', data.type, 'to', targetPage);
+            return true;
+        } catch (error) {
+            console.error('❌ localStorage send failed:', error);
+            return false;
+        }
+    }
+
+    async sendViaPolling(data, targetPage) {
+        try {
+            // Use server API as last resort
+            const response = await fetch('/api/signal', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    action: 'webrtcSignal',
+                    targetPage: targetPage,
+                    signalData: data,
+                    timestamp: Date.now(),
+                    fromDevice: navigator.userAgent.includes('Mobile') ? 'mobile' : 'desktop'
+                })
+            });
+
+            if (response.ok) {
+                console.log('🌐 WebRTC signal sent via HTTP polling:', data.type, 'to', targetPage);
+                return true;
+            }
+            return false;
+        } catch (error) {
+            console.error('❌ HTTP polling send failed:', error);
+            return false;
+        }
+    }
+
+    retryBufferedSignals() {
+        if (this.signalBuffer.length > 0) {
+            console.log(`🔄 Retrying ${this.signalBuffer.length} buffered signals`);
+            this.signalBuffer.forEach(signal => {
+                this.signalRetryQueue.push(signal);
+            });
+            this.signalBuffer = [];
+            this.processSignalQueue();
         }
     }
 
