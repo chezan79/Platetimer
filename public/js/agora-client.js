@@ -278,9 +278,16 @@ async function joinChannel() {
         // Se c'è un errore di gateway o app ID, usa fallback WebRTC
         if (error.message.includes('CAN_NOT_GET_GATEWAY_SERVER') || 
             error.message.includes('INVALID_VENDOR_KEY') ||
-            error.message.includes('invalid vendor key')) {
+            error.message.includes('invalid vendor key') ||
+            error.message.includes('CAN_NOT_GET_GATEWAY_SERVER')) {
             
-            console.log('🔄 Utilizzando fallback WebRTC locale...');
+            console.log('🔄 Agora non disponibile, attivando sistema fallback...');
+            
+            // Attiva il sistema fallback se disponibile
+            if (window.fallbackVoiceCall && !window.fallbackVoiceCall.isInitialized) {
+                window.fallbackVoiceCall.initialize(currentPageType);
+            }
+            
             throw new Error('Agora service unavailable - using fallback communication');
         }
         
@@ -683,3 +690,12 @@ window.adjustVolume = adjustVolume;
 window.acceptCall = acceptCall;
 window.declineCall = declineCall;
 window.initializeAgoraClient = initializeAgoraClient;
+
+// Funzione per mostrare chiamata in arrivo (chiamata dalle pagine HTML)
+window.showIncomingCall = function() {
+    if (window.fallbackVoiceCall && window.fallbackVoiceCall.isInitialized) {
+        window.fallbackVoiceCall.showIncomingCall();
+    } else {
+        showIncomingCall();
+    }
+};
