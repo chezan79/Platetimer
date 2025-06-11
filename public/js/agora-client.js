@@ -264,7 +264,7 @@ async function createAndPublishAudio() {
     }
 }
 
-// Signal incoming call to other page
+// Signal incoming call to other page via WebSocket
 function signalIncomingCall() {
     const callData = {
         from: currentPageType,
@@ -273,12 +273,46 @@ function signalIncomingCall() {
         action: 'incoming-call'
     };
 
+    // Send via WebSocket for cross-device communication
+    if (window.socket && window.socket.readyState === WebSocket.OPEN) {
+        window.socket.send(JSON.stringify({
+            action: 'voiceCall',
+            callData: callData
+        }));
+        console.log('📞 Chiamata inviata via WebSocket:', callData);
+    }
+
+    // Keep localStorage as fallback for same-device
     localStorage.setItem('call-signal', JSON.stringify(callData));
 }
 
 // Listen for incoming calls
 function listenForIncomingCalls() {
-    // Listen for localStorage changes (simple signaling)
+    // Listen for WebSocket voice call messages
+    if (window.socket) {
+        const originalOnMessage = window.socket.onmessage;
+        window.socket.onmessage = function(event) {
+            // Call original handler first
+            if (originalOnMessage) {
+                originalOnMessage.call(this, event);
+            }
+            
+            try {
+                const data = JSON.parse(event.data);
+                if (data.action === 'voiceCall' && data.callData) {
+                    const callData = data.callData;
+                    if (callData.to === currentPageType && callData.action === 'incoming-call') {
+                        console.log('📞 Chiamata ricevuta via WebSocket:', callData);
+                        showIncomingCall();
+                    }
+                }
+            } catch (error) {
+                // Ignore parsing errors for non-voice call messages
+            }
+        };
+    }
+
+    // Listen for localStorage changes (fallback for same-device)
     window.addEventListener('storage', (event) => {
         if (event.key === 'call-signal') {
             const callData = JSON.parse(event.newValue);
@@ -397,6 +431,19 @@ async function endCall() {
 
         // Clear call signal
         localStorage.removeItem('call-signal');
+
+        // Signal call end via WebSocket
+        if (window.socket && window.socket.readyState === WebSocket.OPEN) {
+            window.socket.send(JSON.stringify({
+                action: 'voiceCall',
+                callData: {
+                    from: currentPageType,
+                    to: currentPageType === 'cucina' ? 'pizzeria' : 'cucina',
+                    timestamp: Date.now(),
+                    action: 'call-ended'
+                }
+            }));
+        }
 
         // Log call duration
         if (callStartTime) {

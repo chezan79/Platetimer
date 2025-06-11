@@ -728,6 +728,92 @@ wss.on('connection', (ws, req) => {
                 } else {
                     console.log('⚠️ Client non assegnato a nessuna room per annullamento pausa insalata');
                 }
+
+            } else if (data.action === 'voiceCall') {
+                // Gestione segnalazione chiamate vocali cross-device
+                if (!data.callData || typeof data.callData !== 'object') {
+                    console.log('⚠️ Dati chiamata vocale non validi');
+                    return;
+                }
+
+                const callData = data.callData;
+                const validPageTypes = ['cucina', 'pizzeria'];
+                
+                if (!callData.from || !validPageTypes.includes(callData.from)) {
+                    console.log('⚠️ Tipo pagina origine chiamata non valido');
+                    return;
+                }
+
+                if (!callData.to || !validPageTypes.includes(callData.to)) {
+                    console.log('⚠️ Tipo pagina destinazione chiamata non valido');
+                    return;
+                }
+
+                if (!callData.action || !['incoming-call', 'call-ended', 'call-accepted', 'call-declined'].includes(callData.action)) {
+                    console.log('⚠️ Azione chiamata non valida');
+                    return;
+                }
+
+                // Invia la segnalazione solo ai client della stessa room che sono sulla pagina di destinazione
+                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    const voiceCallMessage = JSON.stringify({
+                        action: 'voiceCall',
+                        callData: callData
+                    });
+
+                    let sentCount = 0;
+                    roomClients.forEach((client) => {
+                        // Invia solo ai client sulla pagina di destinazione (escludendo il mittente)
+                        if (client.readyState === WebSocket.OPEN && 
+                            client.pageType === callData.to && 
+                            client !== ws) {
+                            client.send(voiceCallMessage);
+                            sentCount++;
+                        }
+                    });
+
+                    console.log(`📞 Segnalazione chiamata vocale inviata: ${callData.from} → ${callData.to} (${callData.action}) - ${sentCount} destinatari in room "${ws.companyRoom}"`);
+                } else {
+                    console.log('⚠️ Client non assegnato a nessuna room per chiamata vocale');
+                }
+
+            } else if (data.action === 'webrtcSignal') {
+                // Gestione segnali WebRTC per chiamate peer-to-peer
+                if (!data.targetPage || !data.signalData) {
+                    console.log('⚠️ Dati segnale WebRTC non validi');
+                    return;
+                }
+
+                const validPageTypes = ['cucina', 'pizzeria'];
+                if (!validPageTypes.includes(data.targetPage)) {
+                    console.log('⚠️ Tipo pagina target WebRTC non valido');
+                    return;
+                }
+
+                // Invia il segnale WebRTC solo ai client sulla pagina target
+                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    const webrtcMessage = JSON.stringify({
+                        action: 'webrtcSignal',
+                        targetPage: data.targetPage,
+                        signalData: data.signalData
+                    });
+
+                    let sentCount = 0;
+                    roomClients.forEach((client) => {
+                        if (client.readyState === WebSocket.OPEN && 
+                            client.pageType === data.targetPage && 
+                            client !== ws) {
+                            client.send(webrtcMessage);
+                            sentCount++;
+                        }
+                    });
+
+                    console.log(`📡 Segnale WebRTC inviato a pagina "${data.targetPage}": ${sentCount} destinatari in room "${ws.companyRoom}"`);
+                } else {
+                    console.log('⚠️ Client non assegnato a nessuna room per segnale WebRTC');
+                }
             }
         } catch (error) {
             console.error('❌ Errore nel parsing del messaggio:', error);

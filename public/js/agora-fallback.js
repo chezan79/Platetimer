@@ -159,6 +159,18 @@ class FallbackVoiceCall {
 
     sendSignal(data) {
         const targetPage = this.currentPageType === 'cucina' ? 'pizzeria' : 'cucina';
+        
+        // Send via WebSocket for cross-device communication
+        if (window.socket && window.socket.readyState === WebSocket.OPEN) {
+            window.socket.send(JSON.stringify({
+                action: 'webrtcSignal',
+                targetPage: targetPage,
+                signalData: data
+            }));
+            console.log('📡 WebRTC signal sent via WebSocket:', data);
+        }
+
+        // Keep localStorage as fallback
         const signalKey = `webrtc-signal-${targetPage}`;
         localStorage.setItem(signalKey, JSON.stringify(data));
 
@@ -172,7 +184,30 @@ class FallbackVoiceCall {
     listenForSignaling() {
         const signalKey = `webrtc-signal-${this.currentPageType}`;
 
-        // Listen for localStorage changes
+        // Listen for WebSocket WebRTC signals
+        if (window.socket) {
+            const originalOnMessage = window.socket.onmessage;
+            window.socket.onmessage = function(event) {
+                // Call original handler first
+                if (originalOnMessage) {
+                    originalOnMessage.call(this, event);
+                }
+                
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.action === 'webrtcSignal' && 
+                        data.targetPage === this.currentPageType && 
+                        data.signalData) {
+                        console.log('📡 WebRTC signal received via WebSocket:', data.signalData);
+                        this.handleSignal(data.signalData);
+                    }
+                } catch (error) {
+                    // Ignore parsing errors
+                }
+            }.bind(this);
+        }
+
+        // Listen for localStorage changes (fallback)
         window.addEventListener('storage', async (event) => {
             if (event.key === signalKey && event.newValue) {
                 const signal = JSON.parse(event.newValue);
