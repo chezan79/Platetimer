@@ -335,7 +335,7 @@ class FallbackVoiceCall {
                     const now = Date.now();
                     const signalAge = now - (signal.timestamp || signal.deviceInfo?.timestamp || 0);
                     
-                    if (signalAge < 30000) { // 30 second timeout
+                    if (signalAge < 60000) { // 60 second timeout (era 30)
                         console.log('📡 Processing periodic WebRTC signal:', signal.type);
                         this.handleSignal(signal);
                     } else {
@@ -347,7 +347,16 @@ class FallbackVoiceCall {
                     localStorage.removeItem(signalKey); // Clear corrupted signal
                 }
             }
-        }, 2000); // Check every 2 seconds instead of 1
+
+            // Monitora stato WebSocket e riconnetti se necessario
+            if (window.socket && window.socket.readyState === WebSocket.CLOSED) {
+                console.log('🔄 WebSocket disconnesso, tentativo riconnessione...');
+                // Trigghera riconnessione se esiste una funzione globale
+                if (typeof window.connectWebSocket === 'function') {
+                    window.connectWebSocket();
+                }
+            }
+        }, 5000); // Check every 5 seconds (era 2)
     }
 
     async handleSignal(signal) {
