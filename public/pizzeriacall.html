@@ -94,6 +94,40 @@
             // Initialize fallback system
             window.fallbackVoiceCall.initialize('pizzeria');
 
+            // Inizializza WebSocket per segnalazione chiamate
+            const nomeAzienda = localStorage.getItem('nomeAzienda');
+            if (nomeAzienda) {
+                // Crea connessione WebSocket
+                const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const wsUrl = `${wsProtocol}//${window.location.host}/ws`;
+                window.ws = new WebSocket(wsUrl);
+                
+                window.ws.onopen = function() {
+                    console.log('🔗 Pizzeria WebSocket connesso');
+                    // Unisciti alla room dell'azienda
+                    window.ws.send(JSON.stringify({ 
+                        action: 'joinRoom', 
+                        companyName: nomeAzienda 
+                    }));
+                    // Entra nella pagina pizzeria
+                    window.ws.send(JSON.stringify({ 
+                        action: 'joinPage', 
+                        pageType: 'pizzeria' 
+                    }));
+                };
+                
+                window.ws.onmessage = function(event) {
+                    const data = JSON.parse(event.data);
+                    if (data.action === 'connectionConfirmed') {
+                        console.log('✅ Pizzeria: Conferma connessione ricevuta:', data.message);
+                    }
+                };
+                
+                window.ws.onerror = function(error) {
+                    console.error('❌ Errore WebSocket Pizzeria:', error);
+                };
+            }
+
             // Also try Agora if available
             setTimeout(() => {
                 initializeAgoraClient('pizzeria');

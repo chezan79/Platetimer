@@ -94,6 +94,40 @@
             // Initialize fallback system
             window.fallbackVoiceCall.initialize('cucina');
 
+            // Inizializza WebSocket per segnalazione chiamate
+            const nomeAzienda = localStorage.getItem('nomeAzienda');
+            if (nomeAzienda) {
+                // Crea connessione WebSocket
+                const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const wsUrl = `${wsProtocol}//${window.location.host}/ws`;
+                window.ws = new WebSocket(wsUrl);
+                
+                window.ws.onopen = function() {
+                    console.log('🔗 Cucina WebSocket connesso');
+                    // Unisciti alla room dell'azienda
+                    window.ws.send(JSON.stringify({ 
+                        action: 'joinRoom', 
+                        companyName: nomeAzienda 
+                    }));
+                    // Entra nella pagina cucina
+                    window.ws.send(JSON.stringify({ 
+                        action: 'joinPage', 
+                        pageType: 'cucina' 
+                    }));
+                };
+                
+                window.ws.onmessage = function(event) {
+                    const data = JSON.parse(event.data);
+                    if (data.action === 'connectionConfirmed') {
+                        console.log('✅ Cucina: Conferma connessione ricevuta:', data.message);
+                    }
+                };
+                
+                window.ws.onerror = function(error) {
+                    console.error('❌ Errore WebSocket Cucina:', error);
+                };
+            }
+
             // Also try Agora if available
             setTimeout(() => {
                 initializeAgoraClient('cucina');

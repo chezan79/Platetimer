@@ -6,6 +6,7 @@ let currentPageType = null;
 let isCallActive = false;
 let isMuted = false;
 let callStartTime = null;
+let currentCallId = null;
 
 // Configuration
 const AGORA_CONFIG = {
@@ -40,6 +41,9 @@ async function initializeAgoraClient(pageType) {
 
         // Listen for incoming calls
         listenForIncomingCalls();
+
+        // Setup WebSocket call listeners
+        setTimeout(setupWebSocketCallListeners, 1000);
 
         console.log(`${pageType} client initialized successfully`);
         console.log('Using App ID:', AGORA_CONFIG.appId);
@@ -168,6 +172,7 @@ async function initiateCall() {
 
         // Signal the other page about incoming call
         console.log('Signaling incoming call...');
+        currentCallId = Date.now().toString();
         signalIncomingCall();
 
         isCallActive = true;
@@ -217,51 +222,79 @@ async function createAndPublishAudio() {
     }
 }
 
-// Signal incoming call to other page
+// Signal incoming call to other page via WebSocket
 function signalIncomingCall() {
     const callData = {
+        action: 'incoming-call',
         from: currentPageType,
         to: currentPageType === 'cucina' ? 'pizzeria' : 'cucina',
-        timestamp: Date.now(),
-        action: 'incoming-call'
+        callId: Date.now().toString(),
+        timestamp: Date.now()
     };
 
-    localStorage.setItem('call-signal', JSON.stringify(callData));
-}
-
-// Listen for incoming calls
-function listenForIncomingCalls() {
-    // Listen for localStorage changes (simple signaling)
-    window.addEventListener('storage', (event) => {
-        if (event.key === 'call-signal') {
-            const callData = JSON.parse(event.newValue);
-            if (callData && callData.to === currentPageType && callData.action === 'incoming-call') {
-                showIncomingCall();
-            }
-        }
-    });
-
-    // Also check on page focus (for same-origin pages)
-    window.addEventListener('focus', () => {
-        checkForIncomingCall();
-    });
-
-    // Check periodically
-    setInterval(checkForIncomingCall, 1000);
-}
-
-// Check for incoming call
-function checkForIncomingCall() {
-    const callSignal = localStorage.getItem('call-signal');
-    if (callSignal) {
-        const callData = JSON.parse(callSignal);
-        if (callData.to === currentPageType && callData.action === 'incoming-call') {
-            const timeDiff = Date.now() - callData.timestamp;
-            if (timeDiff < 30000 && !isCallActive) { // Call valid for 30 seconds
-                showIncomingCall();
-            }
-        }
+    // Invia tramite WebSocket se disponibile
+    if (window.ws && window.ws.readyState === WebSocket.OPEN) {
+        window.ws.send(JSON.stringify(callData));
+        console.log('📞 Segnalazione chiamata inviata via WebSocket:', callData);
+    } else {
+        console.error('❌ WebSocket non disponibile per segnalazione chiamata');
+        // Fallback a localStorage per compatibilità locale
+        localStorage.setItem('call-signal', JSON.stringify(callData));
     }
+}
+
+// Listen for incoming calls via WebSocket
+function listenForIncomingCalls() {
+    // Il WebSocket listener sarà gestito nella funzione setupWebSocketCallListeners()
+    console.log('📞 Sistema di ascolto chiamate inizializzato');
+}
+
+// Setup WebSocket listeners for call signaling
+function setupWebSocketCallListeners() {
+    if (!window.ws) {
+        console.error('❌ WebSocket non disponibile per chiamate');
+        return;
+    }
+
+    // Aggiungi listener per messaggi di chiamata
+    const originalOnMessage = window.ws.onmessage;
+    
+    window.ws.onmessage = function(event) {
+        // Chiama il gestore originale se esiste
+        if (originalOnMessage) {
+            originalOnMessage.call(this, event);
+        }
+
+        try {
+            const data = JSON.parse(event.data);
+            
+            // Gestisci messaggi di chiamata
+            if (data.action === 'incoming-call' && data.to === currentPageType && !isCallActive) {
+                currentCallId = data.callId;
+                showIncomingCall();
+                console.log('📞 Chiamata in arrivo ricevuta:', data);
+            }
+            else if (data.action === 'call-accepted' && data.callId === currentCallId) {
+                console.log('✅ Chiamata accettata confermata');
+                hideIncomingCall();
+            }
+            else if (data.action === 'call-declined' && data.callId === currentCallId) {
+                console.log('❌ Chiamata rifiutata confermata');
+                hideIncomingCall();
+                if (isCallActive) {
+                    endCall();
+                }
+            }
+            else if (data.action === 'call-ended' && data.callId === currentCallId) {
+                console.log('📞 Chiamata terminata confermata');
+                if (isCallActive) {
+                    endCall();
+                }
+            }
+        } catch (error) {
+            // Ignora errori di parsing per messaggi non JSON
+        }
+    };
 }
 
 // Show incoming call UI
@@ -294,8 +327,14 @@ async function acceptCall() {
         updateCallButtons(true);
         updateCallStatus('Call active');
 
-        // Clear the call signal
-        localStorage.removeItem('call-signal');
+        // Invia conferma accettazione via WebSocket
+        if (window.ws && window.ws.readyState === WebSocket.OPEN && currentCallId) {
+            window.ws.send(JSON.stringify({
+                action: 'call-accepted',
+                callId: currentCallId,
+                timestamp: Date.now()
+            }));
+        }
 
         logCall('incoming', 'Call accepted');
 
@@ -309,8 +348,18 @@ async function acceptCall() {
 // Decline incoming call
 function declineCall() {
     hideIncomingCall();
-    localStorage.removeItem('call-signal');
+    
+    // Invia conferma rifiuto via WebSocket
+    if (window.ws && window.ws.readyState === WebSocket.OPEN && currentCallId) {
+        window.ws.send(JSON.stringify({
+            action: 'call-declined',
+            callId: currentCallId,
+            timestamp: Date.now()
+        }));
+    }
+    
     logCall('missed', 'Call declined');
+    currentCallId = null;
 }
 
 // Hide incoming call UI
@@ -348,8 +397,16 @@ async function endCall() {
         updateCallButtons(false);
         updateCallStatus('Call ended');
 
-        // Clear call signal
-        localStorage.removeItem('call-signal');
+        // Invia conferma fine chiamata via WebSocket
+        if (window.ws && window.ws.readyState === WebSocket.OPEN && currentCallId) {
+            const duration = callStartTime ? Math.floor((Date.now() - callStartTime) / 1000) : 0;
+            window.ws.send(JSON.stringify({
+                action: 'call-ended',
+                callId: currentCallId,
+                duration: duration,
+                timestamp: Date.now()
+            }));
+        }
 
         // Log call duration
         if (callStartTime) {
@@ -357,6 +414,8 @@ async function endCall() {
             logCall('completed', `Call duration: ${formatDuration(duration)}`);
             callStartTime = null;
         }
+        
+        currentCallId = null;
 
         setTimeout(() => {
             updateCallStatus('Ready to call');

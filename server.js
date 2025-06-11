@@ -728,6 +728,131 @@ wss.on('connection', (ws, req) => {
                 } else {
                     console.log('⚠️ Client non assegnato a nessuna room per annullamento pausa insalata');
                 }
+
+            } else if (data.action === 'incoming-call') {
+                // Validazione chiamata in arrivo
+                if (!data.from || !data.to) {
+                    console.log('⚠️ Dati chiamata incompleti');
+                    return;
+                }
+
+                const validPageTypes = ['cucina', 'pizzeria'];
+                if (!validPageTypes.includes(data.from) || !validPageTypes.includes(data.to)) {
+                    console.log('⚠️ Tipo pagina chiamata non valido');
+                    return;
+                }
+
+                // Invia segnalazione chiamata a tutti i client della room
+                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    const incomingCallMessage = JSON.stringify({
+                        action: 'incoming-call',
+                        from: data.from,
+                        to: data.to,
+                        timestamp: Date.now(),
+                        callId: data.callId || Date.now().toString()
+                    });
+
+                    let sentCount = 0;
+                    roomClients.forEach((client) => {
+                        if (client.readyState === WebSocket.OPEN) {
+                            client.send(incomingCallMessage);
+                            sentCount++;
+                        }
+                    });
+
+                    console.log(`📞 Segnalazione chiamata inviata alla room "${ws.companyRoom}" (${sentCount}/${roomClients.size} client): ${data.from} → ${data.to}`);
+                } else {
+                    console.log('⚠️ Client non assegnato a nessuna room per chiamata');
+                }
+
+            } else if (data.action === 'call-accepted') {
+                // Validazione accettazione chiamata
+                if (!data.callId) {
+                    console.log('⚠️ ID chiamata mancante per accettazione');
+                    return;
+                }
+
+                // Invia conferma accettazione a tutti i client della room
+                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    const acceptedMessage = JSON.stringify({
+                        action: 'call-accepted',
+                        callId: data.callId,
+                        timestamp: Date.now()
+                    });
+
+                    let sentCount = 0;
+                    roomClients.forEach((client) => {
+                        if (client.readyState === WebSocket.OPEN) {
+                            client.send(acceptedMessage);
+                            sentCount++;
+                        }
+                    });
+
+                    console.log(`✅ Accettazione chiamata inviata alla room "${ws.companyRoom}" (${sentCount}/${roomClients.size} client): ID ${data.callId}`);
+                } else {
+                    console.log('⚠️ Client non assegnato a nessuna room per accettazione chiamata');
+                }
+
+            } else if (data.action === 'call-declined') {
+                // Validazione rifiuto chiamata
+                if (!data.callId) {
+                    console.log('⚠️ ID chiamata mancante per rifiuto');
+                    return;
+                }
+
+                // Invia conferma rifiuto a tutti i client della room
+                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    const declinedMessage = JSON.stringify({
+                        action: 'call-declined',
+                        callId: data.callId,
+                        timestamp: Date.now()
+                    });
+
+                    let sentCount = 0;
+                    roomClients.forEach((client) => {
+                        if (client.readyState === WebSocket.OPEN) {
+                            client.send(declinedMessage);
+                            sentCount++;
+                        }
+                    });
+
+                    console.log(`❌ Rifiuto chiamata inviato alla room "${ws.companyRoom}" (${sentCount}/${roomClients.size} client): ID ${data.callId}`);
+                } else {
+                    console.log('⚠️ Client non assegnato a nessuna room per rifiuto chiamata');
+                }
+
+            } else if (data.action === 'call-ended') {
+                // Validazione fine chiamata
+                if (!data.callId) {
+                    console.log('⚠️ ID chiamata mancante per fine chiamata');
+                    return;
+                }
+
+                // Invia conferma fine chiamata a tutti i client della room
+                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    const endedMessage = JSON.stringify({
+                        action: 'call-ended',
+                        callId: data.callId,
+                        duration: data.duration || 0,
+                        timestamp: Date.now()
+                    });
+
+                    let sentCount = 0;
+                    roomClients.forEach((client) => {
+                        if (client.readyState === WebSocket.OPEN) {
+                            client.send(endedMessage);
+                            sentCount++;
+                        }
+                    });
+
+                    console.log(`📞 Fine chiamata inviata alla room "${ws.companyRoom}" (${sentCount}/${roomClients.size} client): ID ${data.callId}`);
+                } else {
+                    console.log('⚠️ Client non assegnato a nessuna room per fine chiamata');
+                }
             }
         } catch (error) {
             console.error('❌ Errore nel parsing del messaggio:', error);
