@@ -316,29 +316,75 @@ class CountdownLocalStorage {
         return backup;
     }
 
-    // Ripristina da backup
+    // Ripristina da backup con recovery intelligente
     restoreFromBackup() {
         try {
             const backup = localStorage.getItem(`${this.storageKey}-backup`);
             if (backup) {
                 const backupData = JSON.parse(backup);
                 
-                // Verifica che il backup non sia troppo vecchio (max 5 minuti)
-                if (Date.now() - backupData.timestamp < 300000) {
+                // Verifica che il backup non sia troppo vecchio (max 10 minuti per recovery automatico)
+                const backupAge = Date.now() - backupData.timestamp;
+                if (backupAge < 600000) { // 10 minuti invece di 5
+                    let restoredCount = 0;
+                    
                     Object.values(backupData.countdowns).forEach(countdown => {
-                        if (typeof window.syncCountdownFromStorage === 'function') {
-                            window.syncCountdownFromStorage(countdown);
+                        // Calcola tempo rimanente attuale
+                        const elapsed = Math.floor(backupAge / 1000);
+                        const currentTimeRemaining = Math.max(0, countdown.currentTimeRemaining - elapsed);
+                        
+                        if (currentTimeRemaining > 0) {
+                            if (typeof window.syncCountdownFromStorage === 'function') {
+                                const updatedCountdown = {
+                                    ...countdown,
+                                    currentTimeRemaining: currentTimeRemaining,
+                                    timeRemaining: countdown.timeRemaining - elapsed
+                                };
+                                window.syncCountdownFromStorage(updatedCountdown);
+                                restoredCount++;
+                            }
                         }
                     });
 
-                    console.log(`✅ Ripristinati ${Object.keys(backupData.countdowns).length} countdown da backup`);
-                    return true;
+                    console.log(`✅ Recovery backup: ${restoredCount}/${Object.keys(backupData.countdowns).length} countdown ripristinati`);
+                    return restoredCount > 0;
+                } else {
+                    console.log(`⏰ Backup troppo vecchio: ${Math.floor(backupAge/60000)} minuti`);
                 }
             }
         } catch (error) {
             console.error('❌ Errore ripristino backup countdown:', error);
         }
         
+        return false;
+    }
+
+    // Nuovo metodo per recovery automatico
+    performAutoRecovery() {
+        console.log('🔄 Esecuzione auto-recovery countdown...');
+        
+        const activeCountdowns = this.getActiveCountdowns();
+        const recoveredCount = Object.keys(activeCountdowns).length;
+        
+        if (recoveredCount > 0) {
+            console.log(`🔄 Auto-recovery: trovati ${recoveredCount} countdown attivi`);
+            
+            Object.values(activeCountdowns).forEach(countdown => {
+                if (countdown.currentTimeRemaining > 0) {
+                    if (typeof window.syncCountdownFromStorage === 'function') {
+                        window.syncCountdownFromStorage(countdown);
+                    }
+                }
+            });
+            
+            // Crea nuovo backup aggiornato
+            this.createBackup();
+            
+            console.log(`✅ Auto-recovery completato: ${recoveredCount} countdown`);
+            return true;
+        }
+        
+        console.log('📭 Nessun countdown da recuperare');
         return false;
     }
 

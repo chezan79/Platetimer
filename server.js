@@ -827,6 +827,46 @@ wss.on('connection', (ws, req) => {
                     console.log('⚠️ Client non assegnato a nessuna room per chiamata vocale');
                 }
 
+            } else if (data.action === 'requestSync') {
+                // Gestione richieste di sincronizzazione countdown
+                console.log(`🔄 Richiesta sincronizzazione da ${data.pageType || 'unknown'}`);
+                
+                if (ws.companyRoom && activeCountdowns.has(ws.companyRoom)) {
+                    const companyCountdowns = activeCountdowns.get(ws.companyRoom);
+                    let syncedCount = 0;
+                    
+                    companyCountdowns.forEach((countdown, tableNumber) => {
+                        const currentTime = Date.now();
+                        const elapsed = Math.floor((currentTime - countdown.startTime) / 1000);
+                        const remainingTime = Math.max(0, countdown.initialDuration - elapsed);
+                        
+                        if (remainingTime > 0) {
+                            const syncMessage = {
+                                action: 'startCountdown',
+                                tableNumber: countdown.tableNumber,
+                                timeRemaining: remainingTime,
+                                destination: countdown.destination,
+                                isSync: true,
+                                timestamp: currentTime
+                            };
+                            
+                            ws.send(JSON.stringify(syncMessage));
+                            syncedCount++;
+                        }
+                    });
+                    
+                    console.log(`📡 Sincronizzazione completata: ${syncedCount} countdown inviati a ${data.pageType}`);
+                    
+                    // Invia conferma sincronizzazione
+                    ws.send(JSON.stringify({
+                        action: 'syncComplete',
+                        syncedCount: syncedCount,
+                        timestamp: Date.now()
+                    }));
+                } else {
+                    console.log(`📭 Nessun countdown da sincronizzare per room ${ws.companyRoom}`);
+                }
+
             } else if (data.action === 'webrtcSignal') {
                 // Enhanced WebRTC signal handling for cross-device calls
                 if (!data.targetPage || !data.signalData) {

@@ -736,16 +736,52 @@
                     // Avvia heartbeat
                     startHeartbeat();
 
-                    // Recupera countdown da localStorage dopo riconnessione
+                    // Recovery automatico migliorato dopo riconnessione
                     setTimeout(() => {
-                        const stats = countdownStorage.getStats();
-                        console.log(`📊 localStorage stats dopo riconnessione:`, stats);
+                        console.log('🔄 Avvio recovery automatico countdown...');
                         
-                        if (stats.active > 0) {
-                            console.log(`🔄 Recupero ${stats.active} countdown attivi da localStorage`);
-                            countdownStorage.syncCountdownsToUI();
+                        // 1. Statistiche attuali
+                        const stats = countdownStorage.getStats();
+                        console.log(`📊 localStorage stats:`, stats);
+                        
+                        // 2. Recupera countdown attivi dal localStorage
+                        const activeCountdowns = countdownStorage.getActiveCountdowns();
+                        const localCountdownCount = Object.keys(activeCountdowns).length;
+                        
+                        // 3. Confronta con countdown già presenti in UI
+                        const currentUICountdowns = countdowns.length;
+                        
+                        console.log(`🔍 Recovery check: ${localCountdownCount} localStorage, ${currentUICountdowns} UI`);
+                        
+                        if (localCountdownCount > currentUICountdowns) {
+                            console.log(`🔄 Recupero ${localCountdownCount - currentUICountdowns} countdown mancanti`);
+                            
+                            // Sincronizza solo i countdown mancanti
+                            Object.values(activeCountdowns).forEach(countdown => {
+                                const exists = countdowns.some(c => 
+                                    c.tableNumber == countdown.tableNumber && 
+                                    c.destination === countdown.destination
+                                );
+                                
+                                if (!exists && countdown.currentTimeRemaining > 0) {
+                                    console.log(`✅ Recovery countdown: Tavolo ${countdown.tableNumber}, ${countdown.destination}`);
+                                    startCountdownVisual(countdown.tableNumber, countdown.currentTimeRemaining, countdown.destination);
+                                }
+                            });
                         }
-                    }, 2000);
+                        
+                        // 4. Invia richiesta di sincronizzazione al server
+                        if (ws.readyState === WebSocket.OPEN) {
+                            ws.send(JSON.stringify({
+                                action: 'requestSync',
+                                pageType: 'cucina',
+                                timestamp: Date.now()
+                            }));
+                            console.log('📡 Richiesta sincronizzazione server inviata');
+                        }
+                        
+                        console.log('✅ Recovery automatico completato');
+                    }, 1500);
 
                     // Unisciti alla room con un piccolo delay per stabilizzare la connessione
                     setTimeout(() => {
