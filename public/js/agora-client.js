@@ -28,13 +28,14 @@ async function initializeAgoraClient(pageType) {
     // Check if Agora is enabled from server config
     if (window.AGORA_CONFIG && window.AGORA_CONFIG.agoraEnabled === false) {
         console.log('⚠️ Agora disabilitato - utilizzando solo sistema fallback');
-        updateConnectionStatus('disconnected', 'Voice calls disabled (Agora not configured)');
-        // Disable call buttons
-        const callButton = document.getElementById('callButton');
-        if (callButton) {
-            callButton.disabled = true;
-            callButton.innerHTML = '<i class="fas fa-phone-slash"></i> Voice calls unavailable';
-        }
+        activateFallbackSystem();
+        return;
+    }
+
+    // Check if Agora is explicitly disabled
+    if (window.AGORA_DISABLED) {
+        console.log('⚠️ Agora disabilitato globalmente - utilizzando sistema fallback');
+        activateFallbackSystem();
         return;
     }
 
@@ -93,6 +94,40 @@ function getAgoraAppId() {
         return window.AGORA_CONFIG.agoraAppId;
     }
     return window.AGORA_APP_ID || 'test-app-id-placeholder';
+}
+
+// Activate fallback system completely
+function activateFallbackSystem() {
+    console.log('🔄 Attivazione completa sistema fallback...');
+    
+    // Attiva il sistema fallback
+    if (window.fallbackVoiceCall) {
+        if (!window.fallbackVoiceCall.isInitialized) {
+            window.fallbackVoiceCall.initialize(currentPageType);
+        }
+        
+        // Sostituisci le funzioni globali con quelle fallback
+        window.initiateCall = window.fallbackInitiateCall;
+        window.endCall = window.fallbackEndCall;
+        window.toggleMute = window.fallbackToggleMute;
+        window.acceptCall = window.fallbackAcceptCall;
+        window.declineCall = window.fallbackDeclineCall;
+        
+        updateConnectionStatus('connected', 'Fallback communication system active');
+        updateCallStatus('Ready to call (fallback mode)');
+        
+        console.log('✅ Sistema fallback completamente attivato');
+        
+        // Aggiorna i bottoni per indicare modalità fallback
+        const callButton = document.getElementById('callButton');
+        if (callButton && callButton.innerHTML.includes('Voice calls unavailable')) {
+            callButton.disabled = false;
+            callButton.innerHTML = '<i class="fas fa-phone"></i> Call Pizzeria (Fallback)';
+        }
+    } else {
+        console.error('❌ Sistema fallback non disponibile');
+        updateConnectionStatus('disconnected', 'Voice calls unavailable');
+    }
 }
 
 // Generate Agora token
@@ -275,17 +310,34 @@ async function joinChannel() {
     } catch (error) {
         console.error('❌ Errore join channel Agora:', error);
         
-        // Se c'è un errore di gateway o app ID, usa fallback WebRTC
+        // Se c'è un errore di gateway, app ID, o servizio non disponibile, usa fallback WebRTC
         if (error.message.includes('CAN_NOT_GET_GATEWAY_SERVER') || 
             error.message.includes('INVALID_VENDOR_KEY') ||
             error.message.includes('invalid vendor key') ||
-            error.message.includes('CAN_NOT_GET_GATEWAY_SERVER')) {
+            error.message.includes('AgoraRTCError') ||
+            error.message.includes('NETWORK_ERROR') ||
+            error.message.includes('service unavailable')) {
             
             console.log('🔄 Agora non disponibile, attivando sistema fallback...');
             
+            // Disabilita completamente Agora e usa solo fallback
+            window.AGORA_DISABLED = true;
+            
             // Attiva il sistema fallback se disponibile
-            if (window.fallbackVoiceCall && !window.fallbackVoiceCall.isInitialized) {
-                window.fallbackVoiceCall.initialize(currentPageType);
+            if (window.fallbackVoiceCall) {
+                if (!window.fallbackVoiceCall.isInitialized) {
+                    window.fallbackVoiceCall.initialize(currentPageType);
+                }
+                
+                // Sostituisci le funzioni globali con quelle fallback
+                window.initiateCall = window.fallbackInitiateCall;
+                window.endCall = window.fallbackEndCall;
+                window.toggleMute = window.fallbackToggleMute;
+                window.acceptCall = window.fallbackAcceptCall;
+                window.declineCall = window.fallbackDeclineCall;
+                
+                console.log('✅ Sistema fallback attivato per le chiamate');
+                updateConnectionStatus('connected', 'Using fallback communication system');
             }
             
             throw new Error('Agora service unavailable - using fallback communication');

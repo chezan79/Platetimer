@@ -117,7 +117,15 @@
 
                     // Inizializza Agora dopo connessione WebSocket
                     setTimeout(() => {
-                        initializeAgoraClient('cucina');
+                        try {
+                            initializeAgoraClient('cucina');
+                        } catch (error) {
+                            console.error('❌ Errore inizializzazione Agora:', error);
+                            // Fallback a sistema fallback se Agora fallisce
+                            if (window.fallbackVoiceCall && !window.fallbackVoiceCall.isInitialized) {
+                                window.fallbackVoiceCall.initialize('cucina');
+                            }
+                        }
                     }, 500);
                 };
                 
