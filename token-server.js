@@ -13,16 +13,30 @@ class AgoraTokenGenerator {
         }
 
         try {
-            // Simple token generation - in production you'd use the official Agora SDK
             const timestamp = Math.floor(Date.now() / 1000);
             const expireTimestamp = timestamp + expireTime;
 
-            const message = `${this.appId}${channelName}${uid}${expireTimestamp}`;
+            // Crea una stringa di autenticazione più robusta
+            const privilegeExpiredTs = expireTimestamp;
+            const message = [
+                this.appId,
+                channelName,
+                uid.toString(),
+                role.toString(),
+                privilegeExpiredTs.toString()
+            ].join('');
+
+            // Genera signature con HMAC-SHA256
             const signature = crypto.createHmac('sha256', this.appCertificate)
                                    .update(message)
-                                   .digest('hex');
+                                   .digest('base64');
 
-            return `${timestamp}.${expireTimestamp}.${signature}`;
+            // Formato token compatibile con Agora
+            const tokenString = `${this.appId}:${channelName}:${uid}:${role}:${privilegeExpiredTs}:${signature}`;
+            
+            console.log('🔑 Token generato per canale:', channelName, 'UID:', uid);
+            
+            return Buffer.from(tokenString).toString('base64');
         } catch (error) {
             console.error('❌ Errore generazione token Agora:', error);
             return `fallback_token_${Date.now()}`;

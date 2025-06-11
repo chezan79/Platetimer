@@ -65,6 +65,36 @@ function getAgoraAppId() {
     return window.AGORA_APP_ID || process.env.AGORA_APP_ID || 'your-agora-app-id-here';
 }
 
+// Generate Agora token
+async function generateAgoraToken() {
+    try {
+        const uid = currentPageType === 'cucina' ? 1 : 2;
+        const response = await fetch('/api/generate-token', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                channelName: AGORA_CONFIG.channel,
+                uid: uid,
+                role: 1,
+                expireTime: 3600
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to generate token');
+        }
+
+        const data = await response.json();
+        console.log('✅ Token Agora generato:', data.token.substring(0, 20) + '...');
+        return data.token;
+    } catch (error) {
+        console.error('❌ Errore generazione token:', error);
+        return null;
+    }
+}
+
 // Apply Agora configuration
 function applyAgoraConfig(config) {
     if (config.websocketUrl) {
@@ -195,13 +225,21 @@ async function initiateCall() {
 // Join Agora channel
 async function joinChannel() {
     const uid = currentPageType === 'cucina' ? 1 : 2;
+    
+    // Genera un token dinamico
+    const token = await generateAgoraToken();
+    if (!token) {
+        throw new Error('Unable to generate Agora token');
+    }
+
     console.log('Attempting to join channel with:', {
         appId: AGORA_CONFIG.appId,
         channel: AGORA_CONFIG.channel,
-        uid: uid
+        uid: uid,
+        token: token.substring(0, 20) + '...'
     });
 
-    await agoraClient.join(AGORA_CONFIG.appId, AGORA_CONFIG.channel, AGORA_CONFIG.token, uid);
+    await agoraClient.join(AGORA_CONFIG.appId, AGORA_CONFIG.channel, token, uid);
     console.log('Joined channel successfully with UID:', uid);
 }
 
