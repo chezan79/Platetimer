@@ -4,12 +4,18 @@ let remoteConnection = null;
 let localStream = null;
 let dataChannel = null;
 
-// WebRTC configuration
+// Enhanced WebRTC configuration for cross-device compatibility
 const rtcConfig = {
     iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' }
-    ]
+        { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun2.l.google.com:19302' },
+        { urls: 'stun:stun3.l.google.com:19302' },
+        { urls: 'stun:stun4.l.google.com:19302' }
+    ],
+    iceCandidatePoolSize: 10,
+    bundlePolicy: 'max-bundle',
+    rtcpMuxPolicy: 'require'
 };
 
 // Fallback voice call system
@@ -41,34 +47,76 @@ class FallbackVoiceCall {
         updateCallStatus('Initiating call...');
 
         try {
-            // Get user media
-            localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            console.log('Got local audio stream');
+            // Enhanced audio constraints for cross-device compatibility
+            const audioConstraints = {
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true,
+                    sampleRate: 44100,
+                    channelCount: 1
+                }
+            };
 
-            // Create peer connection
+            // iOS/Safari specific adjustments
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+            const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+            
+            if (isIOS || isSafari) {
+                console.log('📱 Detected iOS/Safari, adjusting audio constraints');
+                audioConstraints.audio.sampleRate = 48000;
+                audioConstraints.audio.latency = 0.1;
+            }
+
+            // Get user media with retry mechanism
+            let retries = 3;
+            while (retries > 0) {
+                try {
+                    localStream = await navigator.mediaDevices.getUserMedia(audioConstraints);
+                    console.log('✅ Got local audio stream on attempt', 4 - retries);
+                    break;
+                } catch (error) {
+                    retries--;
+                    if (retries === 0) throw error;
+                    console.log('⚠️ Retrying getUserMedia, attempts left:', retries);
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+            }
+
+            // Create peer connection with enhanced configuration
             localConnection = new RTCPeerConnection(rtcConfig);
 
             // Add local stream
             localStream.getTracks().forEach(track => {
                 localConnection.addTrack(track, localStream);
+                console.log('Added track:', track.kind, track.label);
             });
 
             // Create data channel for signaling
-            dataChannel = localConnection.createDataChannel('signaling');
+            dataChannel = localConnection.createDataChannel('signaling', {
+                ordered: true
+            });
 
             // Set up event handlers
             this.setupConnectionHandlers(localConnection, true);
 
-            // Create offer
-            const offer = await localConnection.createOffer();
+            // Create offer with enhanced options
+            const offerOptions = {
+                offerToReceiveAudio: true,
+                offerToReceiveVideo: false,
+                voiceActivityDetection: true
+            };
+
+            const offer = await localConnection.createOffer(offerOptions);
             await localConnection.setLocalDescription(offer);
 
-            // Send offer through localStorage signaling
+            // Send offer through signaling
             this.sendSignal({
                 type: 'offer',
                 offer: offer,
                 from: this.currentPageType,
-                timestamp: Date.now()
+                timestamp: Date.now(),
+                deviceType: isIOS ? 'ios' : isSafari ? 'safari' : 'other'
             });
 
             this.isActive = true;
@@ -79,7 +127,15 @@ class FallbackVoiceCall {
         } catch (error) {
             console.error('Failed to start fallback call:', error);
             updateCallStatus('Call failed');
-            showError('Failed to access microphone: ' + error.message);
+            
+            let errorMessage = 'Failed to access microphone: ' + error.message;
+            if (error.name === 'NotAllowedError') {
+                errorMessage = 'Microphone access denied. Please allow microphone access and try again.';
+            } else if (error.name === 'NotFoundError') {
+                errorMessage = 'No microphone found. Please check your device settings.';
+            }
+            
+            showError(errorMessage);
         }
     }
 
@@ -160,31 +216,69 @@ class FallbackVoiceCall {
     sendSignal(data) {
         const targetPage = this.currentPageType === 'cucina' ? 'pizzeria' : 'cucina';
         
-        // Send via WebSocket for cross-device communication
-        if (window.socket && window.socket.readyState === WebSocket.OPEN) {
-            window.socket.send(JSON.stringify({
-                action: 'webrtcSignal',
-                targetPage: targetPage,
-                signalData: data
+        // Add retry mechanism for WebSocket
+        const sendViaWebSocket = (retries = 3) => {
+            if (window.socket && window.socket.readyState === WebSocket.OPEN) {
+                try {
+                    window.socket.send(JSON.stringify({
+                        action: 'webrtcSignal',
+                        targetPage: targetPage,
+                        signalData: data,
+                        timestamp: Date.now(),
+                        fromDevice: navigator.userAgent.includes('Mobile') ? 'mobile' : 'desktop'
+                    }));
+                    console.log('📡 WebRTC signal sent via WebSocket:', data.type, 'to', targetPage);
+                    return true;
+                } catch (error) {
+                    console.error('❌ WebSocket send failed:', error);
+                    if (retries > 0) {
+                        setTimeout(() => sendViaWebSocket(retries - 1), 1000);
+                    }
+                    return false;
+                }
+            } else if (retries > 0) {
+                console.log('🔄 WebSocket not ready, retrying...');
+                setTimeout(() => sendViaWebSocket(retries - 1), 1000);
+                return false;
+            }
+            return false;
+        };
+
+        const sent = sendViaWebSocket();
+
+        // Enhanced localStorage fallback with device info
+        const signalKey = `webrtc-signal-${targetPage}`;
+        const signalData = {
+            ...data,
+            deviceInfo: {
+                userAgent: navigator.userAgent,
+                timestamp: Date.now(),
+                isMobile: /Mobile|Tablet|iPad|iPhone|Android/.test(navigator.userAgent),
+                isIOS: /iPad|iPhone|iPod/.test(navigator.userAgent)
+            }
+        };
+        
+        localStorage.setItem(signalKey, JSON.stringify(signalData));
+
+        // Trigger storage event for same-origin pages
+        try {
+            window.dispatchEvent(new StorageEvent('storage', {
+                key: signalKey,
+                newValue: JSON.stringify(signalData)
             }));
-            console.log('📡 WebRTC signal sent via WebSocket:', data);
+        } catch (e) {
+            console.log('Storage event dispatch failed:', e);
         }
 
-        // Keep localStorage as fallback
-        const signalKey = `webrtc-signal-${targetPage}`;
-        localStorage.setItem(signalKey, JSON.stringify(data));
-
-        // Also trigger storage event for same-origin pages
-        window.dispatchEvent(new StorageEvent('storage', {
-            key: signalKey,
-            newValue: JSON.stringify(data)
-        }));
+        if (!sent) {
+            console.warn('⚠️ WebSocket unavailable, relying on localStorage fallback');
+        }
     }
 
     listenForSignaling() {
         const signalKey = `webrtc-signal-${this.currentPageType}`;
 
-        // Listen for WebSocket WebRTC signals
+        // Enhanced WebSocket listener with better error handling
         if (window.socket) {
             const originalOnMessage = window.socket.onmessage;
             window.socket.onmessage = function(event) {
@@ -198,36 +292,62 @@ class FallbackVoiceCall {
                     if (data.action === 'webrtcSignal' && 
                         data.targetPage === this.currentPageType && 
                         data.signalData) {
-                        console.log('📡 WebRTC signal received via WebSocket:', data.signalData);
+                        console.log('📡 WebRTC signal received via WebSocket:', data.signalData.type, 'from device:', data.fromDevice || 'unknown');
                         this.handleSignal(data.signalData);
                     }
                 } catch (error) {
-                    // Ignore parsing errors
+                    // Ignore parsing errors for non-WebRTC messages
                 }
             }.bind(this);
+
+            // Monitor WebSocket connection status
+            window.socket.addEventListener('close', () => {
+                console.log('🔌 WebSocket closed, WebRTC signals will use localStorage fallback');
+            });
+
+            window.socket.addEventListener('error', (error) => {
+                console.error('❌ WebSocket error:', error);
+            });
         }
 
-        // Listen for localStorage changes (fallback)
+        // Enhanced localStorage listener with device compatibility
         window.addEventListener('storage', async (event) => {
             if (event.key === signalKey && event.newValue) {
-                const signal = JSON.parse(event.newValue);
-                await this.handleSignal(signal);
-                // Clear the signal
-                localStorage.removeItem(signalKey);
+                try {
+                    const signal = JSON.parse(event.newValue);
+                    console.log('📡 WebRTC signal received via localStorage:', signal.type, 'from device:', signal.deviceInfo?.isMobile ? 'mobile' : 'desktop');
+                    await this.handleSignal(signal);
+                    // Clear the signal after processing
+                    localStorage.removeItem(signalKey);
+                } catch (error) {
+                    console.error('Error processing localStorage signal:', error);
+                    localStorage.removeItem(signalKey); // Clear corrupted signal
+                }
             }
         });
 
-        // Check periodically for signals
+        // Check periodically for signals with enhanced validation
         setInterval(() => {
             const signalData = localStorage.getItem(signalKey);
             if (signalData) {
-                const signal = JSON.parse(signalData);
-                if (Date.now() - signal.timestamp < 30000) { // 30 second timeout
-                    this.handleSignal(signal);
+                try {
+                    const signal = JSON.parse(signalData);
+                    const now = Date.now();
+                    const signalAge = now - (signal.timestamp || signal.deviceInfo?.timestamp || 0);
+                    
+                    if (signalAge < 30000) { // 30 second timeout
+                        console.log('📡 Processing periodic WebRTC signal:', signal.type);
+                        this.handleSignal(signal);
+                    } else {
+                        console.log('🗑️ Removing expired WebRTC signal:', signal.type, 'age:', Math.floor(signalAge/1000), 'seconds');
+                    }
+                    localStorage.removeItem(signalKey);
+                } catch (error) {
+                    console.error('Error in periodic signal check:', error);
+                    localStorage.removeItem(signalKey); // Clear corrupted signal
                 }
-                localStorage.removeItem(signalKey);
             }
-        }, 1000);
+        }, 2000); // Check every 2 seconds instead of 1
     }
 
     async handleSignal(signal) {

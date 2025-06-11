@@ -779,7 +779,7 @@ wss.on('connection', (ws, req) => {
                 }
 
             } else if (data.action === 'webrtcSignal') {
-                // Gestione segnali WebRTC per chiamate peer-to-peer
+                // Enhanced WebRTC signal handling for cross-device calls
                 if (!data.targetPage || !data.signalData) {
                     console.log('⚠️ Dati segnale WebRTC non validi');
                     return;
@@ -791,26 +791,48 @@ wss.on('connection', (ws, req) => {
                     return;
                 }
 
-                // Invia il segnale WebRTC solo ai client sulla pagina target
+                // Validate signal data
+                const signalType = data.signalData.type;
+                if (!signalType || !['offer', 'answer', 'ice-candidate'].includes(signalType)) {
+                    console.log('⚠️ Tipo segnale WebRTC non valido:', signalType);
+                    return;
+                }
+
+                // Send WebRTC signal to target page clients
                 if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
                     const roomClients = companyRooms.get(ws.companyRoom);
                     const webrtcMessage = JSON.stringify({
                         action: 'webrtcSignal',
                         targetPage: data.targetPage,
-                        signalData: data.signalData
+                        signalData: data.signalData,
+                        fromDevice: data.fromDevice || 'unknown',
+                        timestamp: data.timestamp || Date.now(),
+                        signalId: `${ws.companyRoom}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`
                     });
 
                     let sentCount = 0;
+                    let targetClients = 0;
+                    
                     roomClients.forEach((client) => {
-                        if (client.readyState === WebSocket.OPEN && 
-                            client.pageType === data.targetPage && 
-                            client !== ws) {
-                            client.send(webrtcMessage);
-                            sentCount++;
+                        if (client.pageType === data.targetPage) {
+                            targetClients++;
+                            if (client.readyState === WebSocket.OPEN && client !== ws) {
+                                try {
+                                    client.send(webrtcMessage);
+                                    sentCount++;
+                                } catch (sendError) {
+                                    console.error('❌ Errore invio segnale WebRTC:', sendError);
+                                }
+                            }
                         }
                     });
 
-                    console.log(`📡 Segnale WebRTC inviato a pagina "${data.targetPage}": ${sentCount} destinatari in room "${ws.companyRoom}"`);
+                    console.log(`📡 Segnale WebRTC "${signalType}" inviato a pagina "${data.targetPage}": ${sentCount}/${targetClients} destinatari in room "${ws.companyRoom}"`);
+                    
+                    // Log details for debugging
+                    if (sentCount === 0 && targetClients > 0) {
+                        console.warn(`⚠️ Segnale WebRTC non consegnato: ${targetClients} client target trovati ma nessuna connessione attiva`);
+                    }
                 } else {
                     console.log('⚠️ Client non assegnato a nessuna room per segnale WebRTC');
                 }

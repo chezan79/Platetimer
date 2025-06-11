@@ -94,6 +94,12 @@
     <script>
         // Initialize the page as 'pizzeria'
         window.addEventListener('DOMContentLoaded', function() {
+            // Detect device type for better UX
+            const isMobile = /Mobile|Tablet|iPad|iPhone|Android/.test(navigator.userAgent);
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+            
+            console.log('📱 Device info:', { isMobile, isIOS, userAgent: navigator.userAgent });
+            
             // Initialize fallback system
             window.fallbackVoiceCall.initialize('pizzeria');
 
@@ -101,6 +107,22 @@
             setTimeout(() => {
                 initializeAgoraClient('pizzeria');
             }, 500);
+            
+            // Add mobile-specific optimizations
+            if (isMobile) {
+                document.body.style.touchAction = 'manipulation';
+                
+                // iOS specific fixes
+                if (isIOS) {
+                    // Request permission on first touch
+                    document.addEventListener('touchstart', function requestPermission() {
+                        navigator.mediaDevices.getUserMedia({ audio: true })
+                            .then(() => console.log('✅ Audio permission granted'))
+                            .catch(() => console.log('❌ Audio permission denied'));
+                        document.removeEventListener('touchstart', requestPermission);
+                    }, { once: true });
+                }
+            }
         });
     </script>
 </body>
