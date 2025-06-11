@@ -319,7 +319,7 @@ window.fallbackVoiceCall = {
         this.currentPageType = pageType;
         this.isInitialized = true;
         console.log(`📞 Sistema fallback inizializzato per ${pageType}`);
-        
+
         // Aggiorna l'UI per indicare che stiamo usando il fallback
         this.updateConnectionStatus('connected', 'Using fallback communication');
     },
@@ -490,7 +490,7 @@ window.fallbackVoiceCall = {
         this.peerConnection.ontrack = (event) => {
             console.log('📞 Stream remoto ricevuto');
             this.remoteStream = event.streams[0];
-            
+
             // Riproduci audio remoto
             const audioElement = document.createElement('audio');
             audioElement.srcObject = this.remoteStream;
@@ -623,7 +623,7 @@ window.addEventListener('DOMContentLoaded', function() {
     // Listener per messaggi WebSocket relativi alle chiamate
     if (window.ws) {
         const originalOnMessage = window.ws.onmessage;
-        
+
         window.ws.onmessage = function(event) {
             if (originalOnMessage) {
                 originalOnMessage.call(this, event);
@@ -631,12 +631,12 @@ window.addEventListener('DOMContentLoaded', function() {
 
             try {
                 const data = JSON.parse(event.data);
-                
+
                 if (window.fallbackVoiceCall && window.fallbackVoiceCall.isInitialized) {
                     if (data.action === 'incoming-call' && 
                         data.to === window.fallbackVoiceCall.currentPageType && 
                         !window.fallbackVoiceCall.isCallActive) {
-                        
+
                         window.fallbackVoiceCall.currentCallId = data.callId;
                         window.fallbackVoiceCall.showIncomingCall();
                         console.log('📞 Chiamata fallback in arrivo:', data);
