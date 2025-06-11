@@ -878,20 +878,20 @@
             // SOLUZIONE N°2: PRIORITÀ ASSOLUTA PER "CUCINA"
             // La destinazione "cucina" ha sempre priorità, indipendentemente dall'ordine di arrivo
             const existingCountdownIndex = countdowns.findIndex(c => c.tableNumber == tableNumber);
-
+            
             if (existingCountdownIndex !== -1) {
                 const existing = countdowns[existingCountdownIndex];
-
+                
                 // Se il nuovo countdown NON è "cucina" ma esiste già "cucina", ignora il nuovo
                 if (destination !== 'cucina' && existing.destination === 'cucina') {
                     console.log(`🎯 PRIORITÀ CUCINA: Tavolo ${tableNumber} - Ignoro ${destination}, mantengo cucina esistente`);
                     return;
                 }
-
+                
                 // Se il nuovo countdown È "cucina", sostituisci SEMPRE (anche se esiste già cucina)
                 // Se nessuno dei due è "cucina", sostituisci normalmente
                 console.log(`🔄 Sostituisco countdown tavolo ${tableNumber}: ${existing.destination} → ${destination}`);
-
+                
                 clearInterval(existing.interval);
                 if (existing.element && existing.element.parentNode) {
                     existing.element.parentNode.removeChild(existing.element);
@@ -2302,7 +2302,8 @@
             // Aggiungi animazione CSS se non esiste
             if (!document.getElementById('pausaInsalataAnimations')) {
                 const style = document.createElement('style');
-                style.id = 'pausaInsalataAnimations';                    style.textContent = `
+                style.id = 'pausaInsalataAnimations';
+                style.textContent = `
                     @keyframes pausaInsalataPulse {
                         0%, 100% { transform: translate(-50%, -50%) scale(1); }
                         50% { transform: translate(-50%, -50%) scale(1.05); }
@@ -2519,46 +2520,6 @@
                 toggleControls();
             }
         });
-
-        // Gestione countdown locale persistente
-        window.CountdownLocalStorage = {
-            save: function(countdowns) {
-                try {
-                    const serializable = countdowns.map(c => ({
-                        tableNumber: c.tableNumber,
-                        timeRemaining: c.timeRemaining,
-                        destination: c.destination,
-                        startTime: Date.now() - ((c.initialTime || c.timeRemaining) - c.timeRemaining) * 1000
-                    }));
-                    localStorage.setItem('cucina-countdowns', JSON.stringify(serializable));
-                } catch (error) {
-                    console.error('Errore salvataggio countdown:', error);
-                }
-            },
-            load: function() {
-                try {
-                    const stored = localStorage.getItem('cucina-countdowns');
-                    if (!stored) return [];
-
-                    const parsed = JSON.parse(stored);
-                    return parsed.filter(c => {
-                        const elapsed = Math.floor((Date.now() - c.startTime) / 1000);
-                        return elapsed < (c.initialTime || c.timeRemaining);
-                    });
-                } catch (error) {
-                    console.error('Errore caricamento countdown:', error);
-                    return [];
-                }
-            }
-        };
-
-        // Fallback globale per CountdownLocalStorage se non definito
-        if (typeof CountdownLocalStorage === 'undefined') {
-            window.CountdownLocalStorage = {
-                save: function() { console.log('CountdownLocalStorage fallback - save'); },
-                load: function() { console.log('CountdownLocalStorage fallback - load'); return []; }
-            };
-        }
     </script>
     <script src="company-header.js"></script>
 </body>

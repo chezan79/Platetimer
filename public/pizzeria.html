@@ -201,14 +201,6 @@
             }
         }
 
-        // Fallback globale per CountdownLocalStorage se non definito
-        if (typeof CountdownLocalStorage === 'undefined') {
-            window.CountdownLocalStorage = {
-                save: function() { console.log('CountdownLocalStorage fallback - save'); },
-                load: function() { console.log('CountdownLocalStorage fallback - load'); return []; }
-            };
-        }
-
         // Sistema WebSocket con riconnessione automatica
         let ws = null;
         let reconnectInterval = null;
@@ -235,16 +227,16 @@
 
                     startHeartbeat();
 
-                    const nomeAzienda = localStorage.getItem('userCompany');
-            if (nomeAzienda) {
-                console.log('Nome azienda dal localStorage:', nomeAzienda);
+                    const companyName = localStorage.getItem('userCompany');
+            if (companyName) {
+                console.log('Nome azienda dal localStorage:', companyName);
 
                 // Unisciti alla room aziendale
                 ws.send(JSON.stringify({
                     action: 'joinRoom',
-                    companyName: nomeAzienda
+                    companyName: companyName
                 }));
-                console.log(`✅ Connesso alla room: ${nomeAzienda}`);
+                console.log(`✅ Connesso alla room: ${companyName}`);
 
                 // Informa il server che stiamo entrando nella pagina pizzeria
                 ws.send(JSON.stringify({
@@ -280,7 +272,7 @@
                         if (data.action === 'startCountdown') {
                             console.log('📥 Countdown ricevuto in pizzeria:', data);
                             console.log(`🔍 Destinazione ricevuta: "${data.destination}", Tavolo: ${data.tableNumber}`);
-
+                            
                             // PIZZERIA: Mostra SOLO i countdown con destinazione "pizzeria"
                             if (data.destination && data.destination === 'pizzeria') {
                                 console.log(`✅ Countdown accettato per pizzeria - Tavolo: ${data.tableNumber}`);
@@ -719,7 +711,7 @@
             // Converti in base64 e invia
             const reader = new FileReader();
             reader.onloadend = () => {
-                const audioDataBase64 = reader.result.split(',')[1]; // Rimuovi prefix data:audio/webm;base64,
+                const audioDataBase64 = reader.result.split(',')[1]; // Rimuovi prefisso data:audio/webm;base64,
 
                 statusDiv.textContent = '✅ Invio...';
                 statusDiv.style.color = '#28a745';
@@ -1057,7 +1049,7 @@
             }
         }
 
-
+        
 
         // Sistema pausa cucina
         let pausaAttiva = false;
@@ -1508,7 +1500,8 @@
                 <button onclick="this.parentElement.remove()" 
                         style="background: #ffc107; color: #856404; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer; font-weight: 600;">
                     OK
-                </button            `;
+                </button>
+            `;
 
             document.body.appendChild(warningDiv);
 

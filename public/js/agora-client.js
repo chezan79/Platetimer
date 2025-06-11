@@ -6,17 +6,12 @@ let currentPageType = null;
 let isCallActive = false;
 let isMuted = false;
 let callStartTime = null;
-let currentCallId = null;
 
 // Configuration
 const AGORA_CONFIG = {
     appId: '', // Will be set from environment variable
     channel: 'cucina-pizzeria-channel',
     token: null, // For development, using null token
-    // Chat Service Configuration
-    chatAppKey: '711353965#1560458',
-    chatOrgName: '711353965',
-    chatAppName: '1560458',
     websocketUrl: 'msync-api-71.chat.agora.io',
     restApiUrl: 'a71.chat.agora.io'
 };
@@ -25,32 +20,11 @@ const AGORA_CONFIG = {
 async function initializeAgoraClient(pageType) {
     currentPageType = pageType;
 
-    // Check if Agora is enabled from server config
-    if (window.AGORA_CONFIG && window.AGORA_CONFIG.agoraEnabled === false) {
-        console.log('⚠️ Agora disabilitato - utilizzando solo sistema fallback');
-        activateFallbackSystem();
-        return;
-    }
-
-    // Check if Agora is explicitly disabled
-    if (window.AGORA_DISABLED) {
-        console.log('⚠️ Agora disabilitato globalmente - utilizzando sistema fallback');
-        activateFallbackSystem();
-        return;
-    }
-
     // Get Agora App ID from environment variable or use default
     AGORA_CONFIG.appId = getAgoraAppId();
 
-    if (!AGORA_CONFIG.appId || AGORA_CONFIG.appId === 'not-configured' || AGORA_CONFIG.appId === 'test-app-id-placeholder') {
-        console.log('⚠️ Agora App ID non configurato - utilizzando solo WebSocket per messaggi');
-        updateConnectionStatus('disconnected', 'Voice calls disabled (App ID not configured)');
-        // Disable call buttons but keep other functionality
-        const callButton = document.getElementById('callButton');
-        if (callButton) {
-            callButton.disabled = true;
-            callButton.innerHTML = '<i class="fas fa-phone-slash"></i> Configure Agora App ID';
-        }
+    if (!AGORA_CONFIG.appId || AGORA_CONFIG.appId === 'not-configured') {
+        showError('Agora App ID not configured. Please check your Agora project settings.');
         return;
     }
 
@@ -67,97 +41,24 @@ async function initializeAgoraClient(pageType) {
         // Listen for incoming calls
         listenForIncomingCalls();
 
-        // Setup WebSocket call listeners
-        setTimeout(setupWebSocketCallListeners, 1000);
-
         console.log(`${pageType} client initialized successfully`);
         console.log('Using App ID:', AGORA_CONFIG.appId);
 
+        // Show configuration warning
+        if (AGORA_CONFIG.appId.includes('ccdaa7')) {
+            console.warn('⚠️ This App ID may require token authentication. If calls fail, please configure your Agora project for testing mode or provide a token server.');
+        }
+
     } catch (error) {
         console.error('Failed to initialize Agora client:', error);
-        console.log('🔄 Fallback: Agora non disponibile, usando solo WebSocket');
-        updateConnectionStatus('disconnected', 'Voice calls unavailable - check Agora configuration');
-        
-        // Disable call buttons
-        const callButton = document.getElementById('callButton');
-        if (callButton) {
-            callButton.disabled = true;
-            callButton.innerHTML = '<i class="fas fa-phone-slash"></i> Voice service error';
-        }
+        showError('Failed to initialize voice calling system: ' + error.message);
     }
 }
 
-// Get Agora App ID from environment variable or use fallback
+// Get Agora App ID from environment or use fallback
 function getAgoraAppId() {
-    // Use the App ID from window configuration first, then fallback
-    if (window.AGORA_CONFIG && window.AGORA_CONFIG.agoraAppId) {
-        return window.AGORA_CONFIG.agoraAppId;
-    }
-    return window.AGORA_APP_ID || 'test-app-id-placeholder';
-}
-
-// Activate fallback system completely
-function activateFallbackSystem() {
-    console.log('🔄 Attivazione completa sistema fallback...');
-    
-    // Attiva il sistema fallback
-    if (window.fallbackVoiceCall) {
-        if (!window.fallbackVoiceCall.isInitialized) {
-            window.fallbackVoiceCall.initialize(currentPageType);
-        }
-        
-        // Sostituisci le funzioni globali con quelle fallback
-        window.initiateCall = window.fallbackInitiateCall;
-        window.endCall = window.fallbackEndCall;
-        window.toggleMute = window.fallbackToggleMute;
-        window.acceptCall = window.fallbackAcceptCall;
-        window.declineCall = window.fallbackDeclineCall;
-        
-        updateConnectionStatus('connected', 'Fallback communication system active');
-        updateCallStatus('Ready to call (fallback mode)');
-        
-        console.log('✅ Sistema fallback completamente attivato');
-        
-        // Aggiorna i bottoni per indicare modalità fallback
-        const callButton = document.getElementById('callButton');
-        if (callButton && callButton.innerHTML.includes('Voice calls unavailable')) {
-            callButton.disabled = false;
-            callButton.innerHTML = '<i class="fas fa-phone"></i> Call Pizzeria (Fallback)';
-        }
-    } else {
-        console.error('❌ Sistema fallback non disponibile');
-        updateConnectionStatus('disconnected', 'Voice calls unavailable');
-    }
-}
-
-// Generate Agora token
-async function generateAgoraToken() {
-    try {
-        const uid = currentPageType === 'cucina' ? 1 : 2;
-        const response = await fetch('/api/generate-token', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                channelName: AGORA_CONFIG.channel,
-                uid: uid,
-                role: 1,
-                expireTime: 3600
-            })
-        });
-
-        if (!response.ok) {
-            throw new Error('Failed to generate token');
-        }
-
-        const data = await response.json();
-        console.log('✅ Token Agora generato:', data.token.substring(0, 20) + '...');
-        return data.token;
-    } catch (error) {
-        console.error('❌ Errore generazione token:', error);
-        return null;
-    }
+    // Use the App ID from environment variable
+    return window.AGORA_APP_ID || process.env.AGORA_APP_ID || 'your-agora-app-id-here';
 }
 
 // Apply Agora configuration
@@ -245,36 +146,28 @@ function handleConnectionStateChange(state) {
 // Initiate a call
 async function initiateCall() {
     if (isCallActive) {
-        console.log('⚠️ Chiamata già attiva, terminazione chiamata precedente...');
-        await endCall();
-        // Aspetta un momento per la pulizia completa
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        console.log('Call already active, ignoring');
+        return;
     }
 
-    console.log('📞 Inizializzazione nuova chiamata...');
-    console.log('🔑 Agora App ID:', getAgoraAppId());
+    console.log('Starting call initiation...');
+    console.log('Agora App ID:', getAgoraAppId());
 
     try {
-        // Reset stato iniziale
-        isCallActive = false;
-        currentCallId = null;
-        callStartTime = null;
-        
         updateCallStatus('Initiating call...');
 
         // Join the channel
-        console.log('🔗 Unione al canale...');
+        console.log('Joining channel...');
         await joinChannel();
-        console.log('✅ Canale unito con successo');
+        console.log('Channel joined successfully');
 
         // Create and publish local audio track
-        console.log('🎤 Creazione track audio...');
+        console.log('Creating audio track...');
         await createAndPublishAudio();
-        console.log('✅ Track audio creato e pubblicato');
+        console.log('Audio track created and published');
 
         // Signal the other page about incoming call
-        console.log('📡 Segnalazione chiamata in arrivo...');
-        currentCallId = Date.now().toString();
+        console.log('Signaling incoming call...');
         signalIncomingCall();
 
         isCallActive = true;
@@ -283,91 +176,28 @@ async function initiateCall() {
         updateCallStatus('Calling...');
 
         logCall('outgoing', 'Call initiated');
-        console.log('📞 Chiamata iniziata con successo - ID:', currentCallId);
+        console.log('Call initiated successfully');
 
     } catch (error) {
-        console.error('❌ Errore inizializzazione chiamata:', error);
-        console.error('📋 Dettagli errore:', error.stack);
-        
-        // Cleanup in caso di errore
-        isCallActive = false;
-        currentCallId = null;
-        callStartTime = null;
-        
+        console.error('Failed to initiate call:', error);
+        console.error('Error details:', error.stack);
         showError('Failed to start call: ' + error.message);
         updateCallStatus('Call failed');
         updateCallButtons(false);
-        
-        // Prova fallback se disponibile
-        if (window.fallbackVoiceCall && window.fallbackVoiceCall.isInitialized) {
-            console.log('🔄 Tentativo con sistema fallback...');
-            setTimeout(() => {
-                if (window.fallbackInitiateCall) {
-                    window.fallbackInitiateCall();
-                }
-            }, 1000);
-        }
     }
 }
 
 // Join Agora channel
 async function joinChannel() {
     const uid = currentPageType === 'cucina' ? 1 : 2;
+    console.log('Attempting to join channel with:', {
+        appId: AGORA_CONFIG.appId,
+        channel: AGORA_CONFIG.channel,
+        uid: uid
+    });
 
-    try {
-        // Genera un token dinamico
-        const token = await generateAgoraToken();
-        if (!token) {
-            throw new Error('Unable to generate Agora token');
-        }
-
-        console.log('Attempting to join channel with:', {
-            appId: AGORA_CONFIG.appId,
-            channel: AGORA_CONFIG.channel,
-            uid: uid,
-            token: token.substring(0, 20) + '...'
-        });
-
-        await agoraClient.join(AGORA_CONFIG.appId, AGORA_CONFIG.channel, token, uid);
-        console.log('Joined channel successfully with UID:', uid);
-    } catch (error) {
-        console.error('❌ Errore join channel Agora:', error);
-        
-        // Se c'è un errore di gateway, app ID, o servizio non disponibile, usa fallback WebRTC
-        if (error.message.includes('CAN_NOT_GET_GATEWAY_SERVER') || 
-            error.message.includes('INVALID_VENDOR_KEY') ||
-            error.message.includes('invalid vendor key') ||
-            error.message.includes('AgoraRTCError') ||
-            error.message.includes('NETWORK_ERROR') ||
-            error.message.includes('service unavailable')) {
-            
-            console.log('🔄 Agora non disponibile, attivando sistema fallback...');
-            
-            // Disabilita completamente Agora e usa solo fallback
-            window.AGORA_DISABLED = true;
-            
-            // Attiva il sistema fallback se disponibile
-            if (window.fallbackVoiceCall) {
-                if (!window.fallbackVoiceCall.isInitialized) {
-                    window.fallbackVoiceCall.initialize(currentPageType);
-                }
-                
-                // Sostituisci le funzioni globali con quelle fallback
-                window.initiateCall = window.fallbackInitiateCall;
-                window.endCall = window.fallbackEndCall;
-                window.toggleMute = window.fallbackToggleMute;
-                window.acceptCall = window.fallbackAcceptCall;
-                window.declineCall = window.fallbackDeclineCall;
-                
-                console.log('✅ Sistema fallback attivato per le chiamate');
-                updateConnectionStatus('connected', 'Using fallback communication system');
-            }
-            
-            throw new Error('Agora service unavailable - using fallback communication');
-        }
-        
-        throw error;
-    }
+    await agoraClient.join(AGORA_CONFIG.appId, AGORA_CONFIG.channel, AGORA_CONFIG.token, uid);
+    console.log('Joined channel successfully with UID:', uid);
 }
 
 // Create and publish local audio track
@@ -387,100 +217,51 @@ async function createAndPublishAudio() {
     }
 }
 
-// Signal incoming call to other page via WebSocket
+// Signal incoming call to other page
 function signalIncomingCall() {
-    if (!currentCallId) {
-        console.error('❌ Nessun ID chiamata disponibile per segnalazione');
-        return;
-    }
-
     const callData = {
-        action: 'incoming-call',
         from: currentPageType,
         to: currentPageType === 'cucina' ? 'pizzeria' : 'cucina',
-        callId: currentCallId,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        action: 'incoming-call'
     };
 
-    // Invia tramite WebSocket se disponibile
-    if (window.ws && window.ws.readyState === WebSocket.OPEN) {
-        window.ws.send(JSON.stringify(callData));
-        console.log('📞 Segnalazione chiamata inviata via WebSocket:', {
-            from: callData.from,
-            to: callData.to,
-            callId: callData.callId
-        });
-    } else {
-        console.error('❌ WebSocket non disponibile per segnalazione chiamata - Stato:', 
-                     window.ws ? window.ws.readyState : 'WebSocket non esistente');
-        
-        // Tentativo di riconnessione WebSocket se necessario
-        if (!window.ws || window.ws.readyState === WebSocket.CLOSED) {
-            console.log('🔄 Tentativo riconnessione WebSocket per chiamata...');
-            // Se esiste una funzione di riconnessione, chiamala
-            if (window.reconnectWebSocket) {
-                window.reconnectWebSocket();
-            }
-        }
-        
-        // Fallback a localStorage per compatibilità locale
-        localStorage.setItem('call-signal', JSON.stringify(callData));
-        console.log('💾 Segnalazione salvata in localStorage come fallback');
-    }
+    localStorage.setItem('call-signal', JSON.stringify(callData));
 }
 
-// Listen for incoming calls via WebSocket
+// Listen for incoming calls
 function listenForIncomingCalls() {
-    // Il WebSocket listener sarà gestito nella funzione setupWebSocketCallListeners()
-    console.log('📞 Sistema di ascolto chiamate inizializzato');
+    // Listen for localStorage changes (simple signaling)
+    window.addEventListener('storage', (event) => {
+        if (event.key === 'call-signal') {
+            const callData = JSON.parse(event.newValue);
+            if (callData && callData.to === currentPageType && callData.action === 'incoming-call') {
+                showIncomingCall();
+            }
+        }
+    });
+
+    // Also check on page focus (for same-origin pages)
+    window.addEventListener('focus', () => {
+        checkForIncomingCall();
+    });
+
+    // Check periodically
+    setInterval(checkForIncomingCall, 1000);
 }
 
-// Setup WebSocket listeners for call signaling
-function setupWebSocketCallListeners() {
-    if (!window.ws) {
-        console.error('❌ WebSocket non disponibile per chiamate');
-        return;
-    }
-
-    // Aggiungi listener per messaggi di chiamata
-    const originalOnMessage = window.ws.onmessage;
-
-    window.ws.onmessage = function(event) {
-        // Chiama il gestore originale se esiste
-        if (originalOnMessage) {
-            originalOnMessage.call(this, event);
-        }
-
-        try {
-            const data = JSON.parse(event.data);
-
-            // Gestisci messaggi di chiamata
-            if (data.action === 'incoming-call' && data.to === currentPageType && !isCallActive) {
-                currentCallId = data.callId;
+// Check for incoming call
+function checkForIncomingCall() {
+    const callSignal = localStorage.getItem('call-signal');
+    if (callSignal) {
+        const callData = JSON.parse(callSignal);
+        if (callData.to === currentPageType && callData.action === 'incoming-call') {
+            const timeDiff = Date.now() - callData.timestamp;
+            if (timeDiff < 30000 && !isCallActive) { // Call valid for 30 seconds
                 showIncomingCall();
-                console.log('📞 Chiamata in arrivo ricevuta:', data);
             }
-            else if (data.action === 'call-accepted' && data.callId === currentCallId) {
-                console.log('✅ Chiamata accettata confermata');
-                hideIncomingCall();
-            }
-            else if (data.action === 'call-declined' && data.callId === currentCallId) {
-                console.log('❌ Chiamata rifiutata confermata');
-                hideIncomingCall();
-                if (isCallActive) {
-                    endCall();
-                }
-            }
-            else if (data.action === 'call-ended' && data.callId === currentCallId) {
-                console.log('📞 Chiamata terminata confermata');
-                if (isCallActive) {
-                    endCall();
-                }
-            }
-        } catch (error) {
-            // Ignora errori di parsing per messaggi non JSON
         }
-    };
+    }
 }
 
 // Show incoming call UI
@@ -513,14 +294,8 @@ async function acceptCall() {
         updateCallButtons(true);
         updateCallStatus('Call active');
 
-        // Invia conferma accettazione via WebSocket
-        if (window.ws && window.ws.readyState === WebSocket.OPEN && currentCallId) {
-            window.ws.send(JSON.stringify({
-                action: 'call-accepted',
-                callId: currentCallId,
-                timestamp: Date.now()
-            }));
-        }
+        // Clear the call signal
+        localStorage.removeItem('call-signal');
 
         logCall('incoming', 'Call accepted');
 
@@ -534,18 +309,8 @@ async function acceptCall() {
 // Decline incoming call
 function declineCall() {
     hideIncomingCall();
-
-    // Invia conferma rifiuto via WebSocket
-    if (window.ws && window.ws.readyState === WebSocket.OPEN && currentCallId) {
-        window.ws.send(JSON.stringify({
-            action: 'call-declined',
-            callId: currentCallId,
-            timestamp: Date.now()
-        }));
-    }
-
+    localStorage.removeItem('call-signal');
     logCall('missed', 'Call declined');
-    currentCallId = null;
 }
 
 // Hide incoming call UI
@@ -558,62 +323,33 @@ function hideIncomingCall() {
 // End call
 async function endCall() {
     try {
-        console.log('🔚 Terminazione chiamata iniziata...');
         updateCallStatus('Ending call...');
-
-        // Nascondi UI chiamata in arrivo se visibile
-        hideIncomingCall();
 
         // Leave the channel
         if (agoraClient) {
-            try {
-                await agoraClient.leave();
-                console.log('✅ Canale Agora abbandonato');
-            } catch (leaveError) {
-                console.warn('⚠️ Errore abbandonando canale Agora:', leaveError);
-            }
+            await agoraClient.leave();
         }
 
         // Stop and close local audio track
         if (localAudioTrack) {
-            try {
-                localAudioTrack.stop();
-                localAudioTrack.close();
-                localAudioTrack = null;
-                console.log('✅ Audio locale fermato');
-            } catch (audioError) {
-                console.warn('⚠️ Errore fermando audio locale:', audioError);
-            }
+            localAudioTrack.stop();
+            localAudioTrack.close();
+            localAudioTrack = null;
         }
 
         // Stop remote audio track
         if (remoteAudioTrack) {
-            try {
-                remoteAudioTrack.stop();
-                remoteAudioTrack = null;
-                console.log('✅ Audio remoto fermato');
-            } catch (audioError) {
-                console.warn('⚠️ Errore fermando audio remoto:', audioError);
-            }
+            remoteAudioTrack.stop();
+            remoteAudioTrack = null;
         }
 
-        // Reset tutti gli stati
         isCallActive = false;
         isMuted = false;
         updateCallButtons(false);
         updateCallStatus('Call ended');
 
-        // Invia conferma fine chiamata via WebSocket
-        if (window.ws && window.ws.readyState === WebSocket.OPEN && currentCallId) {
-            const duration = callStartTime ? Math.floor((Date.now() - callStartTime) / 1000) : 0;
-            window.ws.send(JSON.stringify({
-                action: 'call-ended',
-                callId: currentCallId,
-                duration: duration,
-                timestamp: Date.now()
-            }));
-            console.log('📞 Conferma fine chiamata inviata via WebSocket');
-        }
+        // Clear call signal
+        localStorage.removeItem('call-signal');
 
         // Log call duration
         if (callStartTime) {
@@ -622,24 +358,12 @@ async function endCall() {
             callStartTime = null;
         }
 
-        currentCallId = null;
-        console.log('🔚 Chiamata terminata completamente');
-
         setTimeout(() => {
             updateCallStatus('Ready to call');
         }, 2000);
 
     } catch (error) {
-        console.error('❌ Errore terminazione chiamata:', error);
-        // Forza reset stato anche in caso di errore
-        isCallActive = false;
-        isMuted = false;
-        currentCallId = null;
-        callStartTime = null;
-        localAudioTrack = null;
-        remoteAudioTrack = null;
-        updateCallButtons(false);
-        updateCallStatus('Call ended with errors');
+        console.error('Error ending call:', error);
         showError('Error ending call: ' + error.message);
     }
 }
@@ -817,20 +541,3 @@ window.adjustVolume = adjustVolume;
 window.acceptCall = acceptCall;
 window.declineCall = declineCall;
 window.initializeAgoraClient = initializeAgoraClient;
-
-// Fallback per CountdownLocalStorage se non definito
-if (typeof CountdownLocalStorage === 'undefined') {
-    window.CountdownLocalStorage = {
-        save: function() { console.log('CountdownLocalStorage placeholder - save'); },
-        load: function() { console.log('CountdownLocalStorage placeholder - load'); return []; }
-    };
-}
-
-// Funzione per mostrare chiamata in arrivo (chiamata dalle pagine HTML)
-window.showIncomingCall = function() {
-    if (window.fallbackVoiceCall && window.fallbackVoiceCall.isInitialized) {
-        window.fallbackVoiceCall.showIncomingCall();
-    } else {
-        showIncomingCall();
-    }
-};

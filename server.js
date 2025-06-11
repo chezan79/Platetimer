@@ -728,131 +728,6 @@ wss.on('connection', (ws, req) => {
                 } else {
                     console.log('⚠️ Client non assegnato a nessuna room per annullamento pausa insalata');
                 }
-
-            } else if (data.action === 'incoming-call') {
-                // Validazione chiamata in arrivo
-                if (!data.from || !data.to) {
-                    console.log('⚠️ Dati chiamata incompleti');
-                    return;
-                }
-
-                const validPageTypes = ['cucina', 'pizzeria'];
-                if (!validPageTypes.includes(data.from) || !validPageTypes.includes(data.to)) {
-                    console.log('⚠️ Tipo pagina chiamata non valido');
-                    return;
-                }
-
-                // Invia segnalazione chiamata a tutti i client della room
-                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
-                    const roomClients = companyRooms.get(ws.companyRoom);
-                    const incomingCallMessage = JSON.stringify({
-                        action: 'incoming-call',
-                        from: data.from,
-                        to: data.to,
-                        timestamp: Date.now(),
-                        callId: data.callId || Date.now().toString()
-                    });
-
-                    let sentCount = 0;
-                    roomClients.forEach((client) => {
-                        if (client.readyState === WebSocket.OPEN) {
-                            client.send(incomingCallMessage);
-                            sentCount++;
-                        }
-                    });
-
-                    console.log(`📞 Segnalazione chiamata inviata alla room "${ws.companyRoom}" (${sentCount}/${roomClients.size} client): ${data.from} → ${data.to}`);
-                } else {
-                    console.log('⚠️ Client non assegnato a nessuna room per chiamata');
-                }
-
-            } else if (data.action === 'call-accepted') {
-                // Validazione accettazione chiamata
-                if (!data.callId) {
-                    console.log('⚠️ ID chiamata mancante per accettazione');
-                    return;
-                }
-
-                // Invia conferma accettazione a tutti i client della room
-                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
-                    const roomClients = companyRooms.get(ws.companyRoom);
-                    const acceptedMessage = JSON.stringify({
-                        action: 'call-accepted',
-                        callId: data.callId,
-                        timestamp: Date.now()
-                    });
-
-                    let sentCount = 0;
-                    roomClients.forEach((client) => {
-                        if (client.readyState === WebSocket.OPEN) {
-                            client.send(acceptedMessage);
-                            sentCount++;
-                        }
-                    });
-
-                    console.log(`✅ Accettazione chiamata inviata alla room "${ws.companyRoom}" (${sentCount}/${roomClients.size} client): ID ${data.callId}`);
-                } else {
-                    console.log('⚠️ Client non assegnato a nessuna room per accettazione chiamata');
-                }
-
-            } else if (data.action === 'call-declined') {
-                // Validazione rifiuto chiamata
-                if (!data.callId) {
-                    console.log('⚠️ ID chiamata mancante per rifiuto');
-                    return;
-                }
-
-                // Invia conferma rifiuto a tutti i client della room
-                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
-                    const roomClients = companyRooms.get(ws.companyRoom);
-                    const declinedMessage = JSON.stringify({
-                        action: 'call-declined',
-                        callId: data.callId,
-                        timestamp: Date.now()
-                    });
-
-                    let sentCount = 0;
-                    roomClients.forEach((client) => {
-                        if (client.readyState === WebSocket.OPEN) {
-                            client.send(declinedMessage);
-                            sentCount++;
-                        }
-                    });
-
-                    console.log(`❌ Rifiuto chiamata inviato alla room "${ws.companyRoom}" (${sentCount}/${roomClients.size} client): ID ${data.callId}`);
-                } else {
-                    console.log('⚠️ Client non assegnato a nessuna room per rifiuto chiamata');
-                }
-
-            } else if (data.action === 'call-ended') {
-                // Validazione fine chiamata
-                if (!data.callId) {
-                    console.log('⚠️ ID chiamata mancante per fine chiamata');
-                    return;
-                }
-
-                // Invia conferma fine chiamata a tutti i client della room
-                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
-                    const roomClients = companyRooms.get(ws.companyRoom);
-                    const endedMessage = JSON.stringify({
-                        action: 'call-ended',
-                        callId: data.callId,
-                        duration: data.duration || 0,
-                        timestamp: Date.now()
-                    });
-
-                    let sentCount = 0;
-                    roomClients.forEach((client) => {
-                        if (client.readyState === WebSocket.OPEN) {
-                            client.send(endedMessage);
-                            sentCount++;
-                        }
-                    });
-
-                    console.log(`📞 Fine chiamata inviata alla room "${ws.companyRoom}" (${sentCount}/${roomClients.size} client): ID ${data.callId}`);
-                } else {
-                    console.log('⚠️ Client non assegnato a nessuna room per fine chiamata');
-                }
             }
         } catch (error) {
             console.error('❌ Errore nel parsing del messaggio:', error);
@@ -1012,34 +887,19 @@ try {
 
 // Endpoint per configurazione Agora
 app.get('/api/config', (req, res) => {
-    // Usa un App ID di test più sicuro o quello dalle variabili d'ambiente
-    const appId = process.env.AGORA_APP_ID || 'test-mode-disabled';
-    
-    // Se non c'è un App ID valido configurato, disabilita Agora
-    const isValidAppId = appId && appId !== 'test-mode-disabled' && appId.length > 10;
-    
     res.json({
-        agoraAppId: isValidAppId ? appId : null,
-        agoraToken: process.env.AGORA_TOKEN || null,
-        agoraEnabled: isValidAppId,
-        // Chat Service Configuration  
-        chatAppKey: '711353965#1560458',
-        chatOrgName: '711353965',
-        chatAppName: '1560458',
-        websocketUrl: 'msync-api-71.chat.agora.io',
-        restApiUrl: 'a71.chat.agora.io'
+        agoraAppId: process.env.AGORA_APP_ID || 'your-agora-app-id',
+        agoraToken: process.env.AGORA_TOKEN || null
     });
-    
-    if (isValidAppId) {
-        console.log('📡 Configurazione Agora inviata - App ID:', appId);
-    } else {
-        console.log('⚠️ Agora disabilitato - App ID non configurato correttamente');
-    }
 });
 
 // Endpoint per generazione token Agora
 app.post('/api/generate-token', (req, res) => {
     try {
+        if (!AgoraTokenGenerator) {
+            return res.status(500).json({ error: 'Token generator not available' });
+        }
+
         const { channelName, uid, role = 1, expireTime = 3600 } = req.body;
 
         if (!channelName || !uid) {
@@ -1053,49 +913,18 @@ app.post('/api/generate-token', (req, res) => {
             return res.status(500).json({ error: 'Agora App ID not configured' });
         }
 
-        if (!appCertificate) {
-            console.warn('⚠️ App Certificate non configurato, usando token semplificato');
-            // Token semplificato per testing quando non c'è certificate
-            const simpleToken = `${Date.now()}_${appId}_${channelName}_${uid}`;
-            return res.json({
-                token: simpleToken,
-                channelName: channelName,
-                uid: uid,
-                expireTime: expireTime,
-                warning: 'Using simplified token - configure AGORA_APP_CERTIFICATE for production'
-            });
-        }
+        const tokenGenerator = new AgoraTokenGenerator(appId, appCertificate);
+        const token = tokenGenerator.generateToken(channelName, uid, role, expireTime);
 
-        // Usa il generatore se disponibile
-        if (AgoraTokenGenerator) {
-            const tokenGenerator = new AgoraTokenGenerator(appId, appCertificate);
-            const token = tokenGenerator.generateToken(channelName, uid, role, expireTime);
-
-            console.log('✅ Token Agora generato per:', channelName, 'UID:', uid);
-
-            res.json({
-                token: token,
-                channelName: channelName,
-                uid: uid,
-                expireTime: expireTime
-            });
-        } else {
-            // Fallback a token basico
-            const basicToken = crypto.createHash('sha256')
-                .update(`${appId}${appCertificate}${channelName}${uid}${Date.now()}`)
-                .digest('hex');
-
-            res.json({
-                token: basicToken,
-                channelName: channelName,
-                uid: uid,
-                expireTime: expireTime,
-                type: 'basic'
-            });
-        }
+        res.json({
+            token: token,
+            channelName: channelName,
+            uid: uid,
+            expireTime: expireTime
+        });
     } catch (error) {
         console.error('❌ Errore generazione token:', error);
-        res.status(500).json({ error: 'Failed to generate token: ' + error.message });
+        res.status(500).json({ error: 'Failed to generate token' });
     }
 });
 

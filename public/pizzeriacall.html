@@ -24,17 +24,17 @@
             </div>
 
             <div class="controls-section">
-                <button id="callButton" class="btn btn-call" onclick="window.initiateCall ? window.initiateCall() : fallbackInitiateCall()">
+                <button id="callButton" class="btn btn-call" onclick="fallbackInitiateCall()">
                     <i class="fas fa-phone"></i>
                     Call Cucina
                 </button>
 
-                <button id="hangupButton" class="btn btn-hangup" onclick="window.endCall ? window.endCall() : fallbackEndCall()" disabled>
+                <button id="hangupButton" class="btn btn-hangup" onclick="fallbackEndCall()" disabled>
                     <i class="fas fa-phone-slash"></i>
                     End Call
                 </button>
 
-                <button id="muteButton" class="btn btn-mute" onclick="window.toggleMute ? window.toggleMute() : fallbackToggleMute()" disabled>
+                <button id="muteButton" class="btn btn-mute" onclick="fallbackToggleMute()" disabled>
                     <i class="fas fa-microphone"></i>
                     Mute
                 </button>
@@ -50,11 +50,11 @@
                 <div class="incoming-call-content">
                     <h3><i class="fas fa-phone-volume"></i> Incoming Call from Cucina</h3>
                     <div class="incoming-call-buttons">
-                        <button class="btn btn-accept" onclick="window.acceptCall ? window.acceptCall() : fallbackAcceptCall()">
+                        <button class="btn btn-accept" onclick="fallbackAcceptCall()">
                             <i class="fas fa-phone"></i>
                             Accept
                         </button>
-                        <button class="btn btn-decline" onclick="window.declineCall ? window.declineCall() : fallbackDeclineCall()">
+                        <button class="btn btn-decline" onclick="declineCall()">
                             <i class="fas fa-phone-slash"></i>
                             Decline
                         </button>
@@ -94,59 +94,10 @@
             // Initialize fallback system
             window.fallbackVoiceCall.initialize('pizzeria');
 
-            // Inizializza WebSocket per segnalazione chiamate
-            const nomeAzienda = localStorage.getItem('nomeAzienda');
-            if (nomeAzienda) {
-                // Crea connessione WebSocket
-                const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-                const wsUrl = `${wsProtocol}//${window.location.host}/ws`;
-                window.ws = new WebSocket(wsUrl);
-                
-                window.ws.onopen = function() {
-                    console.log('🔗 Pizzeria WebSocket connesso');
-                    // Unisciti alla room dell'azienda
-                    window.ws.send(JSON.stringify({ 
-                        action: 'joinRoom', 
-                        companyName: nomeAzienda 
-                    }));
-                    // Entra nella pagina pizzeria
-                    window.ws.send(JSON.stringify({ 
-                        action: 'joinPage', 
-                        pageType: 'pizzeria' 
-                    }));
-
-                    // Inizializza Agora dopo connessione WebSocket
-                    setTimeout(() => {
-                        initializeAgoraClient('pizzeria');
-                    }, 500);
-                };
-                
-                window.ws.onmessage = function(event) {
-                    const data = JSON.parse(event.data);
-                    if (data.action === 'connectionConfirmed') {
-                        console.log('✅ Pizzeria: Conferma connessione ricevuta:', data.message);
-                    }
-                    // Gestisci messaggi di segnalazione chiamate
-                    else if (data.action === 'incoming-call' && data.to === 'pizzeria') {
-                        console.log('📞 Chiamata in arrivo per Pizzeria:', data);
-                        if (window.showIncomingCall) {
-                            window.showIncomingCall();
-                        }
-                    }
-                    else if (data.action === 'call-accepted' || data.action === 'call-declined' || data.action === 'call-ended') {
-                        console.log('📞 Stato chiamata aggiornato:', data);
-                    }
-                };
-                
-                window.ws.onerror = function(error) {
-                    console.error('❌ Errore WebSocket Pizzeria:', error);
-                };
-            } else {
-                // Inizializza Agora anche senza WebSocket
-                setTimeout(() => {
-                    initializeAgoraClient('pizzeria');
-                }, 500);
-            }
+            // Also try Agora if available
+            setTimeout(() => {
+                initializeAgoraClient('pizzeria');
+            }, 500);
         });
     </script>
 </body>
