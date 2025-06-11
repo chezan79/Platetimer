@@ -69,6 +69,314 @@ class FallbackVoiceCall {
         this.signalBuffer = [];
         this.signalRetryQueue = [];
     }
+}
+
+// Sistema localStorage per sincronizzazione countdown
+class CountdownLocalStorage {
+    constructor() {
+        this.companyName = localStorage.getItem('userCompany') || 'default';
+        this.storageKey = `countdown-${this.companyName}`;
+        this.syncInterval = null;
+        this.lastSync = Date.now();
+        
+        // Avvia sincronizzazione automatica
+        this.startAutoSync();
+        
+        // Listener per cambiamenti storage da altre schede
+        window.addEventListener('storage', this.handleStorageChange.bind(this));
+    }
+
+    // Salva countdown nel localStorage
+    saveCountdown(tableNumber, timeRemaining, destination, startTime = Date.now()) {
+        try {
+            const countdowns = this.getCountdowns();
+            const countdownKey = `${tableNumber}_${destination}`;
+            
+            countdowns[countdownKey] = {
+                tableNumber: tableNumber,
+                timeRemaining: timeRemaining,
+                destination: destination,
+                startTime: startTime,
+                lastUpdate: Date.now(),
+                source: window.location.pathname
+            };
+
+            localStorage.setItem(this.storageKey, JSON.stringify(countdowns));
+            console.log(`💾 Countdown salvato in localStorage: Tavolo ${tableNumber}, ${destination}`);
+            
+            // Notifica altre schede dello stesso sito
+            this.broadcastCountdownUpdate('add', countdowns[countdownKey]);
+            
+            return true;
+        } catch (error) {
+            console.error('❌ Errore salvataggio countdown localStorage:', error);
+            return false;
+        }
+    }
+
+    // Rimuovi countdown dal localStorage
+    removeCountdown(tableNumber, destination = null) {
+        try {
+            const countdowns = this.getCountdowns();
+            let removed = false;
+
+            // Se destination specificata, rimuovi solo quella
+            if (destination) {
+                const countdownKey = `${tableNumber}_${destination}`;
+                if (countdowns[countdownKey]) {
+                    delete countdowns[countdownKey];
+                    removed = true;
+                }
+            } else {
+                // Rimuovi tutti i countdown per il tavolo
+                Object.keys(countdowns).forEach(key => {
+                    if (key.startsWith(`${tableNumber}_`)) {
+                        delete countdowns[key];
+                        removed = true;
+                    }
+                });
+            }
+
+            if (removed) {
+                localStorage.setItem(this.storageKey, JSON.stringify(countdowns));
+                console.log(`🗑️ Countdown rimosso da localStorage: Tavolo ${tableNumber}`);
+                
+                // Notifica altre schede
+                this.broadcastCountdownUpdate('remove', { tableNumber, destination });
+            }
+
+            return removed;
+        } catch (error) {
+            console.error('❌ Errore rimozione countdown localStorage:', error);
+            return false;
+        }
+    }
+
+    // Ottieni tutti i countdown attivi
+    getCountdowns() {
+        try {
+            const stored = localStorage.getItem(this.storageKey);
+            return stored ? JSON.parse(stored) : {};
+        } catch (error) {
+            console.error('❌ Errore lettura countdown localStorage:', error);
+            return {};
+        }
+    }
+
+    // Ottieni countdown aggiornati con tempo rimanente calcolato
+    getActiveCountdowns() {
+        const countdowns = this.getCountdowns();
+        const now = Date.now();
+        const activeCountdowns = {};
+
+        Object.keys(countdowns).forEach(key => {
+            const countdown = countdowns[key];
+            const elapsed = Math.floor((now - countdown.startTime) / 1000);
+            const remainingTime = countdown.timeRemaining - elapsed;
+
+            if (remainingTime > -30) { // 30 secondi di grazia dopo scadenza
+                activeCountdowns[key] = {
+                    ...countdown,
+                    currentTimeRemaining: Math.max(0, remainingTime),
+                    isExpired: remainingTime <= 0
+                };
+            }
+        });
+
+        return activeCountdowns;
+    }
+
+    // Pulisci countdown scaduti
+    cleanupExpiredCountdowns() {
+        const countdowns = this.getCountdowns();
+        const now = Date.now();
+        let hasChanges = false;
+
+        Object.keys(countdowns).forEach(key => {
+            const countdown = countdowns[key];
+            const elapsed = Math.floor((now - countdown.startTime) / 1000);
+            const remainingTime = countdown.timeRemaining - elapsed;
+
+            // Rimuovi countdown scaduti da più di 2 minuti
+            if (remainingTime < -120) {
+                delete countdowns[key];
+                hasChanges = true;
+                console.log(`🧹 Cleanup countdown scaduto: ${key}`);
+            }
+        });
+
+        if (hasChanges) {
+            localStorage.setItem(this.storageKey, JSON.stringify(countdowns));
+        }
+
+        return hasChanges;
+    }
+
+    // Sincronizza countdown da localStorage con UI
+    syncCountdownsToUI() {
+        const activeCountdowns = this.getActiveCountdowns();
+        
+        // Per ogni countdown attivo in localStorage, verifica se esiste in UI
+        Object.values(activeCountdowns).forEach(countdown => {
+            if (typeof window.syncCountdownFromStorage === 'function') {
+                window.syncCountdownFromStorage(countdown);
+            }
+        });
+
+        console.log(`🔄 Sincronizzati ${Object.keys(activeCountdowns).length} countdown da localStorage`);
+    }
+
+    // Avvia sincronizzazione automatica
+    startAutoSync() {
+        if (this.syncInterval) {
+            clearInterval(this.syncInterval);
+        }
+
+        this.syncInterval = setInterval(() => {
+            this.cleanupExpiredCountdowns();
+            
+            // Sincronizza solo se l'ultima sincronizzazione è più vecchia di 5 secondi
+            if (Date.now() - this.lastSync > 5000) {
+                this.syncCountdownsToUI();
+                this.lastSync = Date.now();
+            }
+        }, 10000); // Ogni 10 secondi
+
+        console.log('⏰ Auto-sync localStorage avviato ogni 10 secondi');
+    }
+
+    // Gestisci cambiamenti storage da altre schede/dispositivi
+    handleStorageChange(event) {
+        if (event.key === this.storageKey && event.newValue) {
+            console.log('📡 Rilevato cambiamento countdown da altra scheda');
+            
+            setTimeout(() => {
+                this.syncCountdownsToUI();
+            }, 500); // Piccolo delay per evitare conflitti
+        }
+
+        // Gestisci anche segnali di broadcast
+        if (event.key && event.key.startsWith('countdown-broadcast-')) {
+            try {
+                const broadcastData = JSON.parse(event.newValue);
+                this.handleBroadcastMessage(broadcastData);
+            } catch (error) {
+                console.error('❌ Errore parsing broadcast countdown:', error);
+            }
+        }
+    }
+
+    // Invia messaggio broadcast ad altre schede
+    broadcastCountdownUpdate(action, countdownData) {
+        try {
+            const broadcastKey = `countdown-broadcast-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+            const broadcastMessage = {
+                action: action,
+                countdown: countdownData,
+                timestamp: Date.now(),
+                source: window.location.pathname
+            };
+
+            localStorage.setItem(broadcastKey, JSON.stringify(broadcastMessage));
+
+            // Rimuovi il messaggio dopo 2 secondi per evitare accumulo
+            setTimeout(() => {
+                localStorage.removeItem(broadcastKey);
+            }, 2000);
+
+        } catch (error) {
+            console.error('❌ Errore broadcast countdown:', error);
+        }
+    }
+
+    // Gestisci messaggi broadcast da altre schede
+    handleBroadcastMessage(broadcastData) {
+        if (broadcastData.source === window.location.pathname) {
+            return; // Ignora messaggi dalla stessa pagina
+        }
+
+        console.log(`📻 Broadcast ricevuto da ${broadcastData.source}:`, broadcastData.action);
+
+        if (typeof window.handleCountdownBroadcast === 'function') {
+            window.handleCountdownBroadcast(broadcastData);
+        }
+    }
+
+    // Backup completo per fallback WebSocket
+    createBackup() {
+        const backup = {
+            countdowns: this.getActiveCountdowns(),
+            timestamp: Date.now(),
+            source: window.location.pathname
+        };
+
+        localStorage.setItem(`${this.storageKey}-backup`, JSON.stringify(backup));
+        console.log('💾 Backup countdown creato per fallback WebSocket');
+        
+        return backup;
+    }
+
+    // Ripristina da backup
+    restoreFromBackup() {
+        try {
+            const backup = localStorage.getItem(`${this.storageKey}-backup`);
+            if (backup) {
+                const backupData = JSON.parse(backup);
+                
+                // Verifica che il backup non sia troppo vecchio (max 5 minuti)
+                if (Date.now() - backupData.timestamp < 300000) {
+                    Object.values(backupData.countdowns).forEach(countdown => {
+                        if (typeof window.syncCountdownFromStorage === 'function') {
+                            window.syncCountdownFromStorage(countdown);
+                        }
+                    });
+
+                    console.log(`✅ Ripristinati ${Object.keys(backupData.countdowns).length} countdown da backup`);
+                    return true;
+                }
+            }
+        } catch (error) {
+            console.error('❌ Errore ripristino backup countdown:', error);
+        }
+        
+        return false;
+    }
+
+    // Pulisci tutto il localStorage per l'azienda
+    clearAll() {
+        try {
+            localStorage.removeItem(this.storageKey);
+            localStorage.removeItem(`${this.storageKey}-backup`);
+            
+            // Rimuovi anche vecchi broadcast messages
+            Object.keys(localStorage).forEach(key => {
+                if (key.startsWith('countdown-broadcast-')) {
+                    localStorage.removeItem(key);
+                }
+            });
+
+            console.log('🧹 localStorage countdown pulito completamente');
+            return true;
+        } catch (error) {
+            console.error('❌ Errore pulizia localStorage:', error);
+            return false;
+        }
+    }
+
+    // Statistiche localStorage
+    getStats() {
+        const countdowns = this.getCountdowns();
+        const activeCountdowns = this.getActiveCountdowns();
+        
+        return {
+            total: Object.keys(countdowns).length,
+            active: Object.keys(activeCountdowns).length,
+            expired: Object.keys(countdowns).length - Object.keys(activeCountdowns).length,
+            storageSize: new Blob([localStorage.getItem(this.storageKey) || '']).size,
+            lastSync: this.lastSync
+        };
+    }
+}
 
     async initialize(pageType) {
         this.currentPageType = pageType;

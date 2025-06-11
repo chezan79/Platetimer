@@ -520,6 +520,81 @@
         // Array per memorizzare i countdown
         const countdowns = [];
 
+        // Inizializza sistema localStorage per countdown
+        const countdownStorage = new CountdownLocalStorage();
+
+        // Funzione per sincronizzare countdown da localStorage
+        window.syncCountdownFromStorage = function(countdownData) {
+            const existingIndex = countdowns.findIndex(c => 
+                c.tableNumber == countdownData.tableNumber && 
+                c.destination === countdownData.destination
+            );
+
+            if (existingIndex === -1 && countdownData.currentTimeRemaining > 0) {
+                // Aggiungi nuovo countdown da localStorage
+                console.log(`📥 Sincronizzazione countdown da localStorage: Tavolo ${countdownData.tableNumber}, ${countdownData.destination}`);
+                startCountdownVisual(countdownData.tableNumber, countdownData.currentTimeRemaining, countdownData.destination);
+                
+                // Salva anche nel localStorage per aggiornare timestamp
+                countdownStorage.saveCountdown(
+                    countdownData.tableNumber, 
+                    countdownData.currentTimeRemaining, 
+                    countdownData.destination,
+                    Date.now() - (countdownData.timeRemaining - countdownData.currentTimeRemaining) * 1000
+                );
+            }
+        };
+
+        // Gestisci broadcast da altre schede
+        window.handleCountdownBroadcast = function(broadcastData) {
+            if (broadcastData.action === 'add') {
+                const countdown = broadcastData.countdown;
+                console.log(`📻 Broadcast: Nuovo countdown da altra scheda - Tavolo ${countdown.tableNumber}`);
+                
+                const existingIndex = countdowns.findIndex(c => 
+                    c.tableNumber == countdown.tableNumber && 
+                    c.destination === countdown.destination
+                );
+
+                if (existingIndex === -1) {
+                    // Calcola tempo rimanente attuale
+                    const elapsed = Math.floor((Date.now() - countdown.startTime) / 1000);
+                    const remainingTime = countdown.timeRemaining - elapsed;
+                    
+                    if (remainingTime > 0) {
+                        startCountdownVisual(countdown.tableNumber, remainingTime, countdown.destination);
+                    }
+                }
+            } else if (broadcastData.action === 'remove') {
+                console.log(`📻 Broadcast: Rimozione countdown da altra scheda - Tavolo ${broadcastData.countdown.tableNumber}`);
+                
+                const countdownIndex = countdowns.findIndex(c => 
+                    c.tableNumber == broadcastData.countdown.tableNumber
+                );
+                
+                if (countdownIndex !== -1) {
+                    const countdown = countdowns[countdownIndex];
+                    clearInterval(countdown.interval);
+                    if (countdown.element && countdown.element.parentNode) {
+                        countdown.element.parentNode.removeChild(countdown.element);
+                    }
+                    countdowns.splice(countdownIndex, 1);
+                }
+            }
+        };
+
+        // Ripristina countdown da localStorage all'avvio
+        setTimeout(() => {
+            console.log('🔄 Ripristino countdown da localStorage...');
+            countdownStorage.syncCountdownsToUI();
+            
+            // Se WebSocket non connesso, usa solo localStorage
+            if (!isConnected) {
+                console.log('📱 WebSocket disconnesso, modalità solo localStorage attiva');
+                countdownStorage.restoreFromBackup();
+            }
+        }, 1000);
+
         // Gestione tastiera virtuale
         keyboard.addEventListener('click', (event) => {
             if (event.target.classList.contains('key')) {
@@ -660,6 +735,17 @@
 
                     // Avvia heartbeat
                     startHeartbeat();
+
+                    // Recupera countdown da localStorage dopo riconnessione
+                    setTimeout(() => {
+                        const stats = countdownStorage.getStats();
+                        console.log(`📊 localStorage stats dopo riconnessione:`, stats);
+                        
+                        if (stats.active > 0) {
+                            console.log(`🔄 Recupero ${stats.active} countdown attivi da localStorage`);
+                            countdownStorage.syncCountdownsToUI();
+                        }
+                    }, 2000);
 
                     // Unisciti alla room con un piccolo delay per stabilizzare la connessione
                     setTimeout(() => {
@@ -855,6 +941,9 @@
         function startCountdown(minutes, tableNumber, destination) {
             let timeRemaining = minutes * 60;
 
+            // Salva SEMPRE nel localStorage (anche con WebSocket attivo)
+            countdownStorage.saveCountdown(tableNumber, timeRemaining, destination);
+
             if (ws && ws.readyState === WebSocket.OPEN) {
                 const message = {
                     action: 'startCountdown',
@@ -866,7 +955,10 @@
                 ws.send(JSON.stringify(message));
             } else {
                 console.error('❌ WebSocket non connesso, stato:', ws ? ws.readyState : 'null');
-                alert('⚠️ Connessione persa. Il countdown verrà avviato localmente. Riconnessione in corso...');
+                console.log('📱 Utilizzando localStorage come fallback per countdown');
+                
+                // Crea backup per altre pagine
+                countdownStorage.createBackup();
             }
 
             startCountdownVisual(tableNumber, timeRemaining, destination);
@@ -1025,7 +1117,10 @@
         function eliminaCountdown(tableNumber) {
             console.log(`🗑️ Richiesta eliminazione countdown da cucina: Tavolo ${tableNumber}`);
 
-            // Invia eliminazione via WebSocket
+            // Rimuovi SEMPRE da localStorage (anche con WebSocket attivo)
+            countdownStorage.removeCountdown(tableNumber);
+
+            // Invia eliminazione via WebSocket se connesso
             if (ws && ws.readyState === WebSocket.OPEN) {
                 const deleteMessage = {
                     action: 'deleteCountdown',
@@ -1034,20 +1129,19 @@
                 ws.send(JSON.stringify(deleteMessage));
                 console.log(`📤 Eliminazione countdown inviata da cucina via WebSocket: Tavolo ${tableNumber}`);
             } else {
-                console.error('❌ WebSocket non connesso per eliminazione countdown in cucina');
-                alert('❌ Connessione persa. Impossibile eliminare il countdown.');
+                console.log('📱 WebSocket disconnesso, eliminazione solo localStorage');
+            }
 
-                // Fallback: rimuovi solo localmente se WebSocket non disponibile
-                const countdownIndex = countdowns.findIndex(c => c.tableNumber == tableNumber);
-                if (countdownIndex !== -1) {
-                    const countdown = countdowns[countdownIndex];
-                    clearInterval(countdown.interval);
-                    if (countdown.element && countdown.element.parentNode) {
-                        countdown.element.parentNode.removeChild(countdown.element);
-                    }
-                    countdowns.splice(countdownIndex, 1);
-                    console.log(`🗑️ Countdown tavolo ${tableNumber} eliminato solo localmente (WebSocket disconnesso)`);
+            // Rimuovi sempre dalla UI locale
+            const countdownIndex = countdowns.findIndex(c => c.tableNumber == tableNumber);
+            if (countdownIndex !== -1) {
+                const countdown = countdowns[countdownIndex];
+                clearInterval(countdown.interval);
+                if (countdown.element && countdown.element.parentNode) {
+                    countdown.element.parentNode.removeChild(countdown.element);
                 }
+                countdowns.splice(countdownIndex, 1);
+                console.log(`🗑️ Countdown tavolo ${tableNumber} eliminato dalla UI`);
             }
         }
 
