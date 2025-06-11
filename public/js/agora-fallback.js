@@ -1,3 +1,4 @@
+
 // Multi-level fallback voice communication system
 let localConnection = null;
 let remoteConnection = null;
@@ -52,24 +53,6 @@ const rtcConfigs = [
         iceTransportPolicy: 'relay'
     }
 ];
-
-// Enhanced fallback voice call system with multi-level recovery
-class FallbackVoiceCall {
-    constructor() {
-        this.isActive = false;
-        this.isMuted = false;
-        this.currentPageType = null;
-        this.connectionHealth = {
-            lastSuccessfulConnection: null,
-            failedAttempts: 0,
-            currentMethod: 'websocket'
-        };
-        this.signalMethods = ['websocket', 'localStorage', 'polling'];
-        this.currentSignalMethod = 0;
-        this.signalBuffer = [];
-        this.signalRetryQueue = [];
-    }
-}
 
 // Sistema localStorage per sincronizzazione countdown
 class CountdownLocalStorage {
@@ -423,6 +406,23 @@ class CountdownLocalStorage {
         };
     }
 }
+
+// Enhanced fallback voice call system with multi-level recovery
+class FallbackVoiceCall {
+    constructor() {
+        this.isActive = false;
+        this.isMuted = false;
+        this.currentPageType = null;
+        this.connectionHealth = {
+            lastSuccessfulConnection: null,
+            failedAttempts: 0,
+            currentMethod: 'websocket'
+        };
+        this.signalMethods = ['websocket', 'localStorage', 'polling'];
+        this.currentSignalMethod = 0;
+        this.signalBuffer = [];
+        this.signalRetryQueue = [];
+    }
 
     async initialize(pageType) {
         this.currentPageType = pageType;
@@ -1111,3 +1111,39 @@ window.fallbackEndCall = async function() {
 window.fallbackToggleMute = async function() {
     await window.fallbackVoiceCall.toggleMute();
 };
+
+// Stub functions to prevent errors if UI functions don't exist
+function updateConnectionStatus(status, message) {
+    console.log(`Connection status: ${status} - ${message}`);
+}
+
+function updateCallStatus(message) {
+    console.log(`Call status: ${message}`);
+}
+
+function updateCallButtons(callActive) {
+    console.log(`Call buttons: ${callActive ? 'active' : 'inactive'}`);
+}
+
+function updateMuteButton(muted) {
+    console.log(`Mute button: ${muted ? 'muted' : 'unmuted'}`);
+}
+
+function showError(message) {
+    console.error(`Error: ${message}`);
+}
+
+function logCall(type, message) {
+    console.log(`Call log (${type}): ${message}`);
+}
+
+function hideIncomingCall() {
+    const incomingCallElement = document.getElementById('incomingCall');
+    if (incomingCallElement) {
+        incomingCallElement.style.display = 'none';
+    }
+}
+
+function playRingtone() {
+    console.log('Playing ringtone...');
+}
