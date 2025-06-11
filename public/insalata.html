@@ -184,6 +184,14 @@
     </div>
 
     <script>
+        // Fallback globale per CountdownLocalStorage se non definito
+        if (typeof CountdownLocalStorage === 'undefined') {
+            window.CountdownLocalStorage = {
+                save: function() { console.log('CountdownLocalStorage fallback - save'); },
+                load: function() { console.log('CountdownLocalStorage fallback - load'); return []; }
+            };
+        }
+
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
         const countdowns = [];
@@ -1276,7 +1284,7 @@
             }, 3000);
         }
 
-        
+
 
         function mostraPausaInsalata(data) {
             // Rimuovi messaggio precedente se esiste
@@ -1468,6 +1476,13 @@ function mostraAvvisoPaginaOccupata(data) {
 
         // Inizializza la pagina quando il DOM è caricato
         document.addEventListener('DOMContentLoaded', function() {
+            // Fallback globale per CountdownLocalStorage se non definito
+            if (typeof CountdownLocalStorage === 'undefined') {
+                window.CountdownLocalStorage = {
+                    save: function() { console.log('CountdownLocalStorage fallback - save'); },
+                    load: function() { console.log('CountdownLocalStorage fallback - load'); return []; }
+                };
+            }
             const companyName = localStorage.getItem('userCompany');
             if (companyName) {
                 console.log('Nome azienda dal localStorage:', companyName);
