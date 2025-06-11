@@ -1015,7 +1015,13 @@ app.get('/api/config', (req, res) => {
     const appId = process.env.AGORA_APP_ID || 'ccdaa712e9d241f090343b2c56320edd';
     res.json({
         agoraAppId: appId,
-        agoraToken: process.env.AGORA_TOKEN || null
+        agoraToken: process.env.AGORA_TOKEN || null,
+        // Chat Service Configuration
+        chatAppKey: '711353965#1560458',
+        chatOrgName: '711353965',
+        chatAppName: '1560458',
+        websocketUrl: 'msync-api-71.chat.agora.io',
+        restApiUrl: 'a71.chat.agora.io'
     });
     console.log('📡 Configurazione Agora inviata - App ID:', appId);
 });

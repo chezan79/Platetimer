@@ -13,6 +13,10 @@ const AGORA_CONFIG = {
     appId: '', // Will be set from environment variable
     channel: 'cucina-pizzeria-channel',
     token: null, // For development, using null token
+    // Chat Service Configuration
+    chatAppKey: '711353965#1560458',
+    chatOrgName: '711353965',
+    chatAppName: '1560458',
     websocketUrl: 'msync-api-71.chat.agora.io',
     restApiUrl: 'a71.chat.agora.io'
 };
