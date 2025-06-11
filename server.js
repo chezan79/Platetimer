@@ -1012,18 +1012,29 @@ try {
 
 // Endpoint per configurazione Agora
 app.get('/api/config', (req, res) => {
-    const appId = process.env.AGORA_APP_ID || 'ccdaa712e9d241f090343b2c56320edd';
+    // Usa un App ID di test più sicuro o quello dalle variabili d'ambiente
+    const appId = process.env.AGORA_APP_ID || 'test-mode-disabled';
+    
+    // Se non c'è un App ID valido configurato, disabilita Agora
+    const isValidAppId = appId && appId !== 'test-mode-disabled' && appId.length > 10;
+    
     res.json({
-        agoraAppId: appId,
+        agoraAppId: isValidAppId ? appId : null,
         agoraToken: process.env.AGORA_TOKEN || null,
-        // Chat Service Configuration
+        agoraEnabled: isValidAppId,
+        // Chat Service Configuration  
         chatAppKey: '711353965#1560458',
         chatOrgName: '711353965',
         chatAppName: '1560458',
         websocketUrl: 'msync-api-71.chat.agora.io',
         restApiUrl: 'a71.chat.agora.io'
     });
-    console.log('📡 Configurazione Agora inviata - App ID:', appId);
+    
+    if (isValidAppId) {
+        console.log('📡 Configurazione Agora inviata - App ID:', appId);
+    } else {
+        console.log('⚠️ Agora disabilitato - App ID non configurato correttamente');
+    }
 });
 
 // Endpoint per generazione token Agora

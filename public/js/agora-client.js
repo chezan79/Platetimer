@@ -25,11 +25,31 @@ const AGORA_CONFIG = {
 async function initializeAgoraClient(pageType) {
     currentPageType = pageType;
 
+    // Check if Agora is enabled from server config
+    if (window.AGORA_CONFIG && window.AGORA_CONFIG.agoraEnabled === false) {
+        console.log('⚠️ Agora disabilitato - utilizzando solo sistema fallback');
+        updateConnectionStatus('disconnected', 'Voice calls disabled (Agora not configured)');
+        // Disable call buttons
+        const callButton = document.getElementById('callButton');
+        if (callButton) {
+            callButton.disabled = true;
+            callButton.innerHTML = '<i class="fas fa-phone-slash"></i> Voice calls unavailable';
+        }
+        return;
+    }
+
     // Get Agora App ID from environment variable or use default
     AGORA_CONFIG.appId = getAgoraAppId();
 
-    if (!AGORA_CONFIG.appId || AGORA_CONFIG.appId === 'not-configured') {
-        showError('Agora App ID not configured. Please check your Agora project settings.');
+    if (!AGORA_CONFIG.appId || AGORA_CONFIG.appId === 'not-configured' || AGORA_CONFIG.appId === 'test-app-id-placeholder') {
+        console.log('⚠️ Agora App ID non configurato - utilizzando solo WebSocket per messaggi');
+        updateConnectionStatus('disconnected', 'Voice calls disabled (App ID not configured)');
+        // Disable call buttons but keep other functionality
+        const callButton = document.getElementById('callButton');
+        if (callButton) {
+            callButton.disabled = true;
+            callButton.innerHTML = '<i class="fas fa-phone-slash"></i> Configure Agora App ID';
+        }
         return;
     }
 
@@ -52,14 +72,17 @@ async function initializeAgoraClient(pageType) {
         console.log(`${pageType} client initialized successfully`);
         console.log('Using App ID:', AGORA_CONFIG.appId);
 
-        // Show configuration warning
-        if (AGORA_CONFIG.appId.includes('ccdaa7')) {
-            console.warn('⚠️ This App ID may require token authentication. If calls fail, please configure your Agora project for testing mode or provide a token server.');
-        }
-
     } catch (error) {
         console.error('Failed to initialize Agora client:', error);
-        showError('Failed to initialize voice calling system: ' + error.message);
+        console.log('🔄 Fallback: Agora non disponibile, usando solo WebSocket');
+        updateConnectionStatus('disconnected', 'Voice calls unavailable - check Agora configuration');
+        
+        // Disable call buttons
+        const callButton = document.getElementById('callButton');
+        if (callButton) {
+            callButton.disabled = true;
+            callButton.innerHTML = '<i class="fas fa-phone-slash"></i> Voice service error';
+        }
     }
 }
 
@@ -69,7 +92,7 @@ function getAgoraAppId() {
     if (window.AGORA_CONFIG && window.AGORA_CONFIG.agoraAppId) {
         return window.AGORA_CONFIG.agoraAppId;
     }
-    return window.AGORA_APP_ID || 'ccdaa712e9d241f090343b2c56320edd';
+    return window.AGORA_APP_ID || 'test-app-id-placeholder';
 }
 
 // Generate Agora token
@@ -233,21 +256,36 @@ async function initiateCall() {
 async function joinChannel() {
     const uid = currentPageType === 'cucina' ? 1 : 2;
 
-    // Genera un token dinamico
-    const token = await generateAgoraToken();
-    if (!token) {
-        throw new Error('Unable to generate Agora token');
+    try {
+        // Genera un token dinamico
+        const token = await generateAgoraToken();
+        if (!token) {
+            throw new Error('Unable to generate Agora token');
+        }
+
+        console.log('Attempting to join channel with:', {
+            appId: AGORA_CONFIG.appId,
+            channel: AGORA_CONFIG.channel,
+            uid: uid,
+            token: token.substring(0, 20) + '...'
+        });
+
+        await agoraClient.join(AGORA_CONFIG.appId, AGORA_CONFIG.channel, token, uid);
+        console.log('Joined channel successfully with UID:', uid);
+    } catch (error) {
+        console.error('❌ Errore join channel Agora:', error);
+        
+        // Se c'è un errore di gateway o app ID, usa fallback WebRTC
+        if (error.message.includes('CAN_NOT_GET_GATEWAY_SERVER') || 
+            error.message.includes('INVALID_VENDOR_KEY') ||
+            error.message.includes('invalid vendor key')) {
+            
+            console.log('🔄 Utilizzando fallback WebRTC locale...');
+            throw new Error('Agora service unavailable - using fallback communication');
+        }
+        
+        throw error;
     }
-
-    console.log('Attempting to join channel with:', {
-        appId: AGORA_CONFIG.appId,
-        channel: AGORA_CONFIG.channel,
-        uid: uid,
-        token: token.substring(0, 20) + '...'
-    });
-
-    await agoraClient.join(AGORA_CONFIG.appId, AGORA_CONFIG.channel, token, uid);
-    console.log('Joined channel successfully with UID:', uid);
 }
 
 // Create and publish local audio track
