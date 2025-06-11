@@ -743,6 +743,14 @@ window.acceptCall = acceptCall;
 window.declineCall = declineCall;
 window.initializeAgoraClient = initializeAgoraClient;
 
+// Fallback per CountdownLocalStorage se non definito
+if (typeof CountdownLocalStorage === 'undefined') {
+    window.CountdownLocalStorage = {
+        save: function() { console.log('CountdownLocalStorage placeholder - save'); },
+        load: function() { console.log('CountdownLocalStorage placeholder - load'); return []; }
+    };
+}
+
 // Funzione per mostrare chiamata in arrivo (chiamata dalle pagine HTML)
 window.showIncomingCall = function() {
     if (window.fallbackVoiceCall && window.fallbackVoiceCall.isInitialized) {
