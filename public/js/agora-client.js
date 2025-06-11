@@ -245,28 +245,35 @@ function handleConnectionStateChange(state) {
 // Initiate a call
 async function initiateCall() {
     if (isCallActive) {
-        console.log('Call already active, ignoring');
-        return;
+        console.log('⚠️ Chiamata già attiva, terminazione chiamata precedente...');
+        await endCall();
+        // Aspetta un momento per la pulizia completa
+        await new Promise(resolve => setTimeout(resolve, 1000));
     }
 
-    console.log('Starting call initiation...');
-    console.log('Agora App ID:', getAgoraAppId());
+    console.log('📞 Inizializzazione nuova chiamata...');
+    console.log('🔑 Agora App ID:', getAgoraAppId());
 
     try {
+        // Reset stato iniziale
+        isCallActive = false;
+        currentCallId = null;
+        callStartTime = null;
+        
         updateCallStatus('Initiating call...');
 
         // Join the channel
-        console.log('Joining channel...');
+        console.log('🔗 Unione al canale...');
         await joinChannel();
-        console.log('Channel joined successfully');
+        console.log('✅ Canale unito con successo');
 
         // Create and publish local audio track
-        console.log('Creating audio track...');
+        console.log('🎤 Creazione track audio...');
         await createAndPublishAudio();
-        console.log('Audio track created and published');
+        console.log('✅ Track audio creato e pubblicato');
 
         // Signal the other page about incoming call
-        console.log('Signaling incoming call...');
+        console.log('📡 Segnalazione chiamata in arrivo...');
         currentCallId = Date.now().toString();
         signalIncomingCall();
 
@@ -276,14 +283,30 @@ async function initiateCall() {
         updateCallStatus('Calling...');
 
         logCall('outgoing', 'Call initiated');
-        console.log('Call initiated successfully');
+        console.log('📞 Chiamata iniziata con successo - ID:', currentCallId);
 
     } catch (error) {
-        console.error('Failed to initiate call:', error);
-        console.error('Error details:', error.stack);
+        console.error('❌ Errore inizializzazione chiamata:', error);
+        console.error('📋 Dettagli errore:', error.stack);
+        
+        // Cleanup in caso di errore
+        isCallActive = false;
+        currentCallId = null;
+        callStartTime = null;
+        
         showError('Failed to start call: ' + error.message);
         updateCallStatus('Call failed');
         updateCallButtons(false);
+        
+        // Prova fallback se disponibile
+        if (window.fallbackVoiceCall && window.fallbackVoiceCall.isInitialized) {
+            console.log('🔄 Tentativo con sistema fallback...');
+            setTimeout(() => {
+                if (window.fallbackInitiateCall) {
+                    window.fallbackInitiateCall();
+                }
+            }, 1000);
+        }
     }
 }
 
@@ -366,22 +389,43 @@ async function createAndPublishAudio() {
 
 // Signal incoming call to other page via WebSocket
 function signalIncomingCall() {
+    if (!currentCallId) {
+        console.error('❌ Nessun ID chiamata disponibile per segnalazione');
+        return;
+    }
+
     const callData = {
         action: 'incoming-call',
         from: currentPageType,
         to: currentPageType === 'cucina' ? 'pizzeria' : 'cucina',
-        callId: Date.now().toString(),
+        callId: currentCallId,
         timestamp: Date.now()
     };
 
     // Invia tramite WebSocket se disponibile
     if (window.ws && window.ws.readyState === WebSocket.OPEN) {
         window.ws.send(JSON.stringify(callData));
-        console.log('📞 Segnalazione chiamata inviata via WebSocket:', callData);
+        console.log('📞 Segnalazione chiamata inviata via WebSocket:', {
+            from: callData.from,
+            to: callData.to,
+            callId: callData.callId
+        });
     } else {
-        console.error('❌ WebSocket non disponibile per segnalazione chiamata');
+        console.error('❌ WebSocket non disponibile per segnalazione chiamata - Stato:', 
+                     window.ws ? window.ws.readyState : 'WebSocket non esistente');
+        
+        // Tentativo di riconnessione WebSocket se necessario
+        if (!window.ws || window.ws.readyState === WebSocket.CLOSED) {
+            console.log('🔄 Tentativo riconnessione WebSocket per chiamata...');
+            // Se esiste una funzione di riconnessione, chiamala
+            if (window.reconnectWebSocket) {
+                window.reconnectWebSocket();
+            }
+        }
+        
         // Fallback a localStorage per compatibilità locale
         localStorage.setItem('call-signal', JSON.stringify(callData));
+        console.log('💾 Segnalazione salvata in localStorage come fallback');
     }
 }
 
@@ -514,26 +558,46 @@ function hideIncomingCall() {
 // End call
 async function endCall() {
     try {
+        console.log('🔚 Terminazione chiamata iniziata...');
         updateCallStatus('Ending call...');
+
+        // Nascondi UI chiamata in arrivo se visibile
+        hideIncomingCall();
 
         // Leave the channel
         if (agoraClient) {
-            await agoraClient.leave();
+            try {
+                await agoraClient.leave();
+                console.log('✅ Canale Agora abbandonato');
+            } catch (leaveError) {
+                console.warn('⚠️ Errore abbandonando canale Agora:', leaveError);
+            }
         }
 
         // Stop and close local audio track
         if (localAudioTrack) {
-            localAudioTrack.stop();
-            localAudioTrack.close();
-            localAudioTrack = null;
+            try {
+                localAudioTrack.stop();
+                localAudioTrack.close();
+                localAudioTrack = null;
+                console.log('✅ Audio locale fermato');
+            } catch (audioError) {
+                console.warn('⚠️ Errore fermando audio locale:', audioError);
+            }
         }
 
         // Stop remote audio track
         if (remoteAudioTrack) {
-            remoteAudioTrack.stop();
-            remoteAudioTrack = null;
+            try {
+                remoteAudioTrack.stop();
+                remoteAudioTrack = null;
+                console.log('✅ Audio remoto fermato');
+            } catch (audioError) {
+                console.warn('⚠️ Errore fermando audio remoto:', audioError);
+            }
         }
 
+        // Reset tutti gli stati
         isCallActive = false;
         isMuted = false;
         updateCallButtons(false);
@@ -548,6 +612,7 @@ async function endCall() {
                 duration: duration,
                 timestamp: Date.now()
             }));
+            console.log('📞 Conferma fine chiamata inviata via WebSocket');
         }
 
         // Log call duration
@@ -558,13 +623,23 @@ async function endCall() {
         }
 
         currentCallId = null;
+        console.log('🔚 Chiamata terminata completamente');
 
         setTimeout(() => {
             updateCallStatus('Ready to call');
         }, 2000);
 
     } catch (error) {
-        console.error('Error ending call:', error);
+        console.error('❌ Errore terminazione chiamata:', error);
+        // Forza reset stato anche in caso di errore
+        isCallActive = false;
+        isMuted = false;
+        currentCallId = null;
+        callStartTime = null;
+        localAudioTrack = null;
+        remoteAudioTrack = null;
+        updateCallButtons(false);
+        updateCallStatus('Call ended with errors');
         showError('Error ending call: ' + error.message);
     }
 }
