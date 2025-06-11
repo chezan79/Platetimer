@@ -24,17 +24,17 @@
             </div>
 
             <div class="controls-section">
-                <button id="callButton" class="btn btn-call" onclick="fallbackInitiateCall()">
+                <button id="callButton" class="btn btn-call" onclick="window.initiateCall ? window.initiateCall() : fallbackInitiateCall()">
                     <i class="fas fa-phone"></i>
                     Call Pizzeria
                 </button>
 
-                <button id="hangupButton" class="btn btn-hangup" onclick="fallbackEndCall()" disabled>
+                <button id="hangupButton" class="btn btn-hangup" onclick="window.endCall ? window.endCall() : fallbackEndCall()" disabled>
                     <i class="fas fa-phone-slash"></i>
                     End Call
                 </button>
 
-                <button id="muteButton" class="btn btn-mute" onclick="fallbackToggleMute()" disabled>
+                <button id="muteButton" class="btn btn-mute" onclick="window.toggleMute ? window.toggleMute() : fallbackToggleMute()" disabled>
                     <i class="fas fa-microphone"></i>
                     Mute
                 </button>
@@ -50,11 +50,11 @@
                 <div class="incoming-call-content">
                     <h3><i class="fas fa-phone-volume"></i> Incoming Call from Pizzeria</h3>
                     <div class="incoming-call-buttons">
-                        <button class="btn btn-accept" onclick="fallbackAcceptCall()">
+                        <button class="btn btn-accept" onclick="window.acceptCall ? window.acceptCall() : fallbackAcceptCall()">
                             <i class="fas fa-phone"></i>
                             Accept
                         </button>
-                        <button class="btn btn-decline" onclick="declineCall()">
+                        <button class="btn btn-decline" onclick="window.declineCall ? window.declineCall() : fallbackDeclineCall()">
                             <i class="fas fa-phone-slash"></i>
                             Decline
                         </button>
@@ -114,6 +114,11 @@
                         action: 'joinPage', 
                         pageType: 'cucina' 
                     }));
+
+                    // Inizializza Agora dopo connessione WebSocket
+                    setTimeout(() => {
+                        initializeAgoraClient('cucina');
+                    }, 500);
                 };
                 
                 window.ws.onmessage = function(event) {
@@ -126,12 +131,12 @@
                 window.ws.onerror = function(error) {
                     console.error('❌ Errore WebSocket Cucina:', error);
                 };
+            } else {
+                // Inizializza Agora anche senza WebSocket
+                setTimeout(() => {
+                    initializeAgoraClient('cucina');
+                }, 500);
             }
-
-            // Also try Agora if available
-            setTimeout(() => {
-                initializeAgoraClient('cucina');
-            }, 500);
         });
     </script>
 </body>
