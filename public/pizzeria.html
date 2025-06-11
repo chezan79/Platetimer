@@ -201,6 +201,14 @@
             }
         }
 
+        // Fallback globale per CountdownLocalStorage se non definito
+        if (typeof CountdownLocalStorage === 'undefined') {
+            window.CountdownLocalStorage = {
+                save: function() { console.log('CountdownLocalStorage fallback - save'); },
+                load: function() { console.log('CountdownLocalStorage fallback - load'); return []; }
+            };
+        }
+
         // Sistema WebSocket con riconnessione automatica
         let ws = null;
         let reconnectInterval = null;
@@ -227,24 +235,16 @@
 
                     startHeartbeat();
 
-                    // Fallback globale per CountdownLocalStorage se non definito
-        if (typeof CountdownLocalStorage === 'undefined') {
-            window.CountdownLocalStorage = {
-                save: function() { console.log('CountdownLocalStorage fallback - save'); },
-                load: function() { console.log('CountdownLocalStorage fallback - load'); return []; }
-            };
-        }
-
-        const nomeAzienda = localStorage.getItem('userCompany');
-            if (companyName) {
-                console.log('Nome azienda dal localStorage:', companyName);
+                    const nomeAzienda = localStorage.getItem('userCompany');
+            if (nomeAzienda) {
+                console.log('Nome azienda dal localStorage:', nomeAzienda);
 
                 // Unisciti alla room aziendale
                 ws.send(JSON.stringify({
                     action: 'joinRoom',
-                    companyName: companyName
+                    companyName: nomeAzienda
                 }));
-                console.log(`✅ Connesso alla room: ${companyName}`);
+                console.log(`✅ Connesso alla room: ${nomeAzienda}`);
 
                 // Informa il server che stiamo entrando nella pagina pizzeria
                 ws.send(JSON.stringify({
