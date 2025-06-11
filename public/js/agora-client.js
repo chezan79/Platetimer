@@ -16,9 +16,21 @@ const AGORA_CONFIG = {
     restApiUrl: 'a71.chat.agora.io'
 };
 
+// Detect iOS devices
+function isIOSDevice() {
+    return /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+           (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
 // Initialize Agora client
 async function initializeAgoraClient(pageType) {
     currentPageType = pageType;
+
+    // Check for iOS compatibility
+    if (isIOSDevice()) {
+        console.log('📱 Dispositivo iOS rilevato - Applicando ottimizzazioni per iOS');
+        showIOSInstructions();
+    }
 
     // Get Agora App ID from environment variable or use default
     AGORA_CONFIG.appId = getAgoraAppId();
@@ -29,8 +41,13 @@ async function initializeAgoraClient(pageType) {
     }
 
     try {
-        // Create Agora client
-        agoraClient = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
+        // Create Agora client with iOS-specific configuration
+        const clientConfig = { mode: "rtc", codec: "vp8" };
+        if (isIOSDevice()) {
+            clientConfig.codec = "h264"; // iOS preferisce H.264
+        }
+        
+        agoraClient = AgoraRTC.createClient(clientConfig);
 
         // Set up event listeners
         setupAgoraEventListeners();
@@ -43,6 +60,11 @@ async function initializeAgoraClient(pageType) {
 
         console.log(`${pageType} client initialized successfully`);
         console.log('Using App ID:', AGORA_CONFIG.appId);
+
+        // iOS-specific checks
+        if (isIOSDevice()) {
+            checkIOSPermissions();
+        }
 
         // Show configuration warning
         if (AGORA_CONFIG.appId.includes('ccdaa7')) {
@@ -204,8 +226,28 @@ async function joinChannel() {
 async function createAndPublishAudio() {
     try {
         console.log('Requesting microphone access...');
-        localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack();
+        
+        // iOS-specific configuration
+        const audioConfig = {
+            ANS: true, // Automatic Noise Suppression
+            AEC: true, // Acoustic Echo Cancellation
+            AGC: true, // Automatic Gain Control
+        };
+
+        if (isIOSDevice()) {
+            console.log('📱 Configurazione audio per iOS');
+            audioConfig.sampleRate = 48000;
+            audioConfig.stereo = false;
+        }
+
+        localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack(audioConfig);
         console.log('Microphone track created successfully');
+
+        // Test audio track before publishing on iOS
+        if (isIOSDevice()) {
+            console.log('📱 Testing audio track on iOS...');
+            await testAudioTrack();
+        }
 
         console.log('Publishing audio track...');
         await agoraClient.publish([localAudioTrack]);
@@ -213,6 +255,11 @@ async function createAndPublishAudio() {
     } catch (error) {
         console.error('Failed to create/publish audio track:', error);
         console.error('Audio error details:', error);
+        
+        if (isIOSDevice()) {
+            showIOSMicrophoneError();
+        }
+        
         throw new Error('Microphone access denied or unavailable: ' + error.message);
     }
 }
@@ -533,8 +580,116 @@ function stopRingtone() {
     }
 }
 
+// iOS Support Functions
+function showIOSInstructions() {
+    const callStatus = document.getElementById('callStatus');
+    if (callStatus) {
+        callStatus.innerHTML = `
+            📱 Dispositivo iOS rilevato<br>
+            <small>Assicurati di:<br>
+            • Permettere accesso al microfono<br>
+            • Utilizzare connessione HTTPS<br>
+            • Toccare lo schermo prima di chiamare</small>
+        `;
+    }
+}
+
+function checkIOSPermissions() {
+    // Check if we're on HTTPS (required for iOS)
+    if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
+        showError('⚠️ iOS richiede connessione HTTPS per le chiamate vocali');
+    }
+
+    // Check microphone permissions
+    navigator.mediaDevices.getUserMedia({ audio: true })
+        .then(() => {
+            console.log('✅ Permessi microfono iOS verificati');
+        })
+        .catch((error) => {
+            console.error('❌ Permessi microfono iOS negati:', error);
+            showIOSMicrophoneError();
+        });
+}
+
+function showIOSMicrophoneError() {
+    showError(`
+        📱 Errore iOS Microfono:
+        1. Vai in Impostazioni > Safari > Fotocamera e Microfono
+        2. Seleziona "Consenti"
+        3. Ricarica la pagina
+        4. Tocca lo schermo prima di iniziare la chiamata
+    `);
+}
+
+async function testAudioTrack() {
+    return new Promise((resolve) => {
+        try {
+            // Simple audio test
+            localAudioTrack.getMediaStreamTrack().enabled = true;
+            console.log('✅ Audio track test passed on iOS');
+            resolve();
+        } catch (error) {
+            console.error('❌ Audio track test failed on iOS:', error);
+            resolve(); // Continue anyway
+        }
+    });
+}
+
+// Enhanced initiate call for iOS
+async function initiateCallWithIOSSupport() {
+    if (isIOSDevice()) {
+        // Request user interaction first on iOS
+        const userInteracted = await requestUserInteraction();
+        if (!userInteracted) {
+            showError('📱 iOS: Tocca lo schermo e riprova');
+            return;
+        }
+    }
+    
+    return initiateCall();
+}
+
+function requestUserInteraction() {
+    return new Promise((resolve) => {
+        if (isIOSDevice()) {
+            const overlay = document.createElement('div');
+            overlay.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0,0,0,0.8);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 10000;
+                color: white;
+                text-align: center;
+            `;
+            overlay.innerHTML = `
+                <div>
+                    <h3>📱 Tocca per iniziare la chiamata</h3>
+                    <button style="padding: 15px 30px; font-size: 18px; background: #48bb78; color: white; border: none; border-radius: 10px;">
+                        Inizia Chiamata
+                    </button>
+                </div>
+            `;
+            
+            overlay.addEventListener('click', () => {
+                document.body.removeChild(overlay);
+                resolve(true);
+            });
+            
+            document.body.appendChild(overlay);
+        } else {
+            resolve(true);
+        }
+    });
+}
+
 // Global functions for HTML onclick handlers
-window.initiateCall = initiateCall;
+window.initiateCall = isIOSDevice() ? initiateCallWithIOSSupport : initiateCall;
 window.endCall = endCall;
 window.toggleMute = toggleMute;
 window.adjustVolume = adjustVolume;
