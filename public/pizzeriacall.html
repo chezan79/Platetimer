@@ -2,10 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="format-detection" content="telephone=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pizzeria - Voice Call System</title>
     <link rel="stylesheet" href="css/call-interface.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
@@ -94,12 +91,6 @@
     <script>
         // Initialize the page as 'pizzeria'
         window.addEventListener('DOMContentLoaded', function() {
-            // Detect device type for better UX
-            const isMobile = /Mobile|Tablet|iPad|iPhone|Android/.test(navigator.userAgent);
-            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-            
-            console.log('📱 Device info:', { isMobile, isIOS, userAgent: navigator.userAgent });
-            
             // Initialize fallback system
             window.fallbackVoiceCall.initialize('pizzeria');
 
@@ -107,22 +98,6 @@
             setTimeout(() => {
                 initializeAgoraClient('pizzeria');
             }, 500);
-            
-            // Add mobile-specific optimizations
-            if (isMobile) {
-                document.body.style.touchAction = 'manipulation';
-                
-                // iOS specific fixes
-                if (isIOS) {
-                    // Request permission on first touch
-                    document.addEventListener('touchstart', function requestPermission() {
-                        navigator.mediaDevices.getUserMedia({ audio: true })
-                            .then(() => console.log('✅ Audio permission granted'))
-                            .catch(() => console.log('❌ Audio permission denied'));
-                        document.removeEventListener('touchstart', requestPermission);
-                    }, { once: true });
-                }
-            }
         });
     </script>
 </body>

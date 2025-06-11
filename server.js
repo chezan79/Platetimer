@@ -63,55 +63,6 @@ app.post('/api/voice-message', (req, res) => {
 
 // Endpoint Stripe rimossi - ora usiamo Stripe Buy Button direttamente
 
-// Endpoint per signaling HTTP come fallback finale
-app.post('/api/signal', (req, res) => {
-    try {
-        const { action, targetPage, signalData, timestamp, fromDevice } = req.body;
-
-        if (action !== 'webrtcSignal' || !targetPage || !signalData) {
-            return res.status(400).json({ error: 'Invalid signal data' });
-        }
-
-        // Find target clients for HTTP polling fallback
-        let targetClients = 0;
-        let sentCount = 0;
-
-        companyRooms.forEach((roomClients, companyName) => {
-            roomClients.forEach((client) => {
-                if (client.pageType === targetPage && client.readyState === WebSocket.OPEN) {
-                    targetClients++;
-                    try {
-                        client.send(JSON.stringify({
-                            action: 'webrtcSignal',
-                            targetPage: targetPage,
-                            signalData: signalData,
-                            fromDevice: fromDevice || 'http-fallback',
-                            timestamp: timestamp || Date.now(),
-                            method: 'http-polling'
-                        }));
-                        sentCount++;
-                    } catch (sendError) {
-                        console.error('❌ HTTP fallback signal send failed:', sendError);
-                    }
-                }
-            });
-        });
-
-        console.log(`🌐 HTTP fallback signal sent: ${signalData.type} to ${targetPage} (${sentCount}/${targetClients} targets)`);
-
-        res.json({
-            success: true,
-            targetClients: targetClients,
-            sentCount: sentCount,
-            method: 'http-polling'
-        });
-
-    } catch (error) {
-        console.error('❌ HTTP signal endpoint error:', error);
-        res.status(500).json({ error: 'Signal processing failed' });
-    }
-});
-
 // Endpoint per il riconoscimento vocale
 app.post('/api/speech-to-text', async (req, res) => {
     try {
@@ -249,11 +200,11 @@ wss.on('connection', (ws, req) => {
                     return;
                 }
 
-                // Rate limiting meno restrittivo: max 10 messaggi per 5 secondi
+                // Rate limiting più rigoroso: max 5 messaggi per 2 secondi
                 const now = Date.now();
-                if (now - ws.lastMessageTime < 200) { // 200ms tra messaggi (era 400ms)
+                if (now - ws.lastMessageTime < 400) { // 400ms tra messaggi
                     ws.messageCount++;
-                    if (ws.messageCount > 10) { // Era 5, ora 10
+                    if (ws.messageCount > 5) {
                         console.log('⚠️ Rate limit superato, messaggio scartato');
                         return;
                     }
@@ -777,154 +728,6 @@ wss.on('connection', (ws, req) => {
                 } else {
                     console.log('⚠️ Client non assegnato a nessuna room per annullamento pausa insalata');
                 }
-
-            } else if (data.action === 'voiceCall') {
-                // Gestione segnalazione chiamate vocali cross-device
-                if (!data.callData || typeof data.callData !== 'object') {
-                    console.log('⚠️ Dati chiamata vocale non validi');
-                    return;
-                }
-
-                const callData = data.callData;
-                const validPageTypes = ['cucina', 'pizzeria'];
-                
-                if (!callData.from || !validPageTypes.includes(callData.from)) {
-                    console.log('⚠️ Tipo pagina origine chiamata non valido');
-                    return;
-                }
-
-                if (!callData.to || !validPageTypes.includes(callData.to)) {
-                    console.log('⚠️ Tipo pagina destinazione chiamata non valido');
-                    return;
-                }
-
-                if (!callData.action || !['incoming-call', 'call-ended', 'call-accepted', 'call-declined'].includes(callData.action)) {
-                    console.log('⚠️ Azione chiamata non valida');
-                    return;
-                }
-
-                // Invia la segnalazione solo ai client della stessa room che sono sulla pagina di destinazione
-                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
-                    const roomClients = companyRooms.get(ws.companyRoom);
-                    const voiceCallMessage = JSON.stringify({
-                        action: 'voiceCall',
-                        callData: callData
-                    });
-
-                    let sentCount = 0;
-                    roomClients.forEach((client) => {
-                        // Invia solo ai client sulla pagina di destinazione (escludendo il mittente)
-                        if (client.readyState === WebSocket.OPEN && 
-                            client.pageType === callData.to && 
-                            client !== ws) {
-                            client.send(voiceCallMessage);
-                            sentCount++;
-                        }
-                    });
-
-                    console.log(`📞 Segnalazione chiamata vocale inviata: ${callData.from} → ${callData.to} (${callData.action}) - ${sentCount} destinatari in room "${ws.companyRoom}"`);
-                } else {
-                    console.log('⚠️ Client non assegnato a nessuna room per chiamata vocale');
-                }
-
-            } else if (data.action === 'requestSync') {
-                // Gestione richieste di sincronizzazione countdown
-                console.log(`🔄 Richiesta sincronizzazione da ${data.pageType || 'unknown'}`);
-                
-                if (ws.companyRoom && activeCountdowns.has(ws.companyRoom)) {
-                    const companyCountdowns = activeCountdowns.get(ws.companyRoom);
-                    let syncedCount = 0;
-                    
-                    companyCountdowns.forEach((countdown, tableNumber) => {
-                        const currentTime = Date.now();
-                        const elapsed = Math.floor((currentTime - countdown.startTime) / 1000);
-                        const remainingTime = Math.max(0, countdown.initialDuration - elapsed);
-                        
-                        if (remainingTime > 0) {
-                            const syncMessage = {
-                                action: 'startCountdown',
-                                tableNumber: countdown.tableNumber,
-                                timeRemaining: remainingTime,
-                                destination: countdown.destination,
-                                isSync: true,
-                                timestamp: currentTime
-                            };
-                            
-                            ws.send(JSON.stringify(syncMessage));
-                            syncedCount++;
-                        }
-                    });
-                    
-                    console.log(`📡 Sincronizzazione completata: ${syncedCount} countdown inviati a ${data.pageType}`);
-                    
-                    // Invia conferma sincronizzazione
-                    ws.send(JSON.stringify({
-                        action: 'syncComplete',
-                        syncedCount: syncedCount,
-                        timestamp: Date.now()
-                    }));
-                } else {
-                    console.log(`📭 Nessun countdown da sincronizzare per room ${ws.companyRoom}`);
-                }
-
-            } else if (data.action === 'webrtcSignal') {
-                // Enhanced WebRTC signal handling for cross-device calls
-                if (!data.targetPage || !data.signalData) {
-                    console.log('⚠️ Dati segnale WebRTC non validi');
-                    return;
-                }
-
-                const validPageTypes = ['cucina', 'pizzeria'];
-                if (!validPageTypes.includes(data.targetPage)) {
-                    console.log('⚠️ Tipo pagina target WebRTC non valido');
-                    return;
-                }
-
-                // Validate signal data
-                const signalType = data.signalData.type;
-                if (!signalType || !['offer', 'answer', 'ice-candidate'].includes(signalType)) {
-                    console.log('⚠️ Tipo segnale WebRTC non valido:', signalType);
-                    return;
-                }
-
-                // Send WebRTC signal to target page clients
-                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
-                    const roomClients = companyRooms.get(ws.companyRoom);
-                    const webrtcMessage = JSON.stringify({
-                        action: 'webrtcSignal',
-                        targetPage: data.targetPage,
-                        signalData: data.signalData,
-                        fromDevice: data.fromDevice || 'unknown',
-                        timestamp: data.timestamp || Date.now(),
-                        signalId: `${ws.companyRoom}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`
-                    });
-
-                    let sentCount = 0;
-                    let targetClients = 0;
-                    
-                    roomClients.forEach((client) => {
-                        if (client.pageType === data.targetPage) {
-                            targetClients++;
-                            if (client.readyState === WebSocket.OPEN && client !== ws) {
-                                try {
-                                    client.send(webrtcMessage);
-                                    sentCount++;
-                                } catch (sendError) {
-                                    console.error('❌ Errore invio segnale WebRTC:', sendError);
-                                }
-                            }
-                        }
-                    });
-
-                    console.log(`📡 Segnale WebRTC "${signalType}" inviato a pagina "${data.targetPage}": ${sentCount}/${targetClients} destinatari in room "${ws.companyRoom}"`);
-                    
-                    // Log details for debugging
-                    if (sentCount === 0 && targetClients > 0) {
-                        console.warn(`⚠️ Segnale WebRTC non consegnato: ${targetClients} client target trovati ma nessuna connessione attiva`);
-                    }
-                } else {
-                    console.log('⚠️ Client non assegnato a nessuna room per segnale WebRTC');
-                }
             }
         } catch (error) {
             console.error('❌ Errore nel parsing del messaggio:', error);
@@ -979,15 +782,15 @@ wss.on('connection', (ws, req) => {
         });
     });
 
-// Heartbeat meno aggressivo per ridurre disconnessioni
+// Heartbeat ottimizzato - meno frequente per ridurre carico
 setInterval(() => {
     const now = Date.now();
     let activeClients = 0;
 
     wss.clients.forEach((ws) => {
         if (ws.readyState === WebSocket.OPEN) {
-            // Ping solo se non ha fatto pong negli ultimi 90 secondi (era 45)
-            if (now - ws.lastPong > 90000) {
+            // Solo se non ha fatto pong negli ultimi 45 secondi
+            if (now - ws.lastPong > 45000) {
                 ws.send(JSON.stringify({ action: 'ping', timestamp: now }));
                 ws.lastPing = now;
             }
@@ -998,17 +801,17 @@ setInterval(() => {
     if (activeClients > 0) {
         console.log(`💓 Heartbeat per ${activeClients} client attivi`);
     }
-}, 60000); // Ogni 60 secondi (era 30)
+}, 30000); // Ogni 30 secondi
 
-// Pulizia meno aggressiva per evitare disconnessioni premature
+// Pulizia periodica ottimizzata - più frequente per evitare accumulo
 setInterval(() => {
     const now = Date.now();
 
-    // Pulisci connessioni WebSocket morte (aumentato timeout a 180 secondi)
+    // Pulisci connessioni WebSocket morte (nessun pong per più di 60 secondi)
     let deadConnections = 0;
     wss.clients.forEach((ws) => {
-        if (now - ws.lastPong > 180000) { // 3 minuti senza pong (era 1 minuto)
-            console.log(`🗑️ Connessione morta rilevata dopo 3 minuti, terminazione...`);
+        if (now - ws.lastPong > 60000) { // 60 secondi senza pong
+            console.log(`🗑️ Connessione morta rilevata, terminazione...`);
             ws.terminate();
             deadConnections++;
         }
@@ -1016,7 +819,7 @@ setInterval(() => {
 
     // Pulisci rate limiter scaduti
     for (const [clientId, limit] of rateLimiter.entries()) {
-        if (now > limit.resetTime + 300000) { // 5 minuti di grazia (era 2)
+        if (now > limit.resetTime + 120000) { // 2 minuti di grazia
             rateLimiter.delete(clientId);
         }
     }
@@ -1028,7 +831,7 @@ setInterval(() => {
             const elapsed = Math.floor((now - countdown.startTime) / 1000);
             const remainingTime = countdown.initialDuration - elapsed;
 
-            if (remainingTime <= -60) { // 1 minuto dopo la scadenza (era 30 secondi)
+            if (remainingTime <= -30) { // 30 secondi dopo la scadenza
                 companyCountdowns.delete(tableNumber);
                 console.log(`🗑️ Countdown scaduto rimosso: Azienda "${companyName}", Tavolo ${tableNumber}`);
             } else {
@@ -1044,7 +847,7 @@ setInterval(() => {
     if (deadConnections > 0 || totalActiveCountdowns > 20) {
         console.log(`🧹 Cleanup: ${deadConnections} conn. morte, ${rateLimiter.size} rate limits, ${totalActiveCountdowns} countdown, ${wss.clients.size} client`);
     }
-}, 120000); // Ogni 2 minuti (era 1 minuto)
+}, 60000); // Ogni 1 minuto
 
 // Gestione errori globali per prevenire crash
 process.on('uncaughtException', (error) => {
