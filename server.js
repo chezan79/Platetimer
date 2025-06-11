@@ -1012,10 +1012,12 @@ try {
 
 // Endpoint per configurazione Agora
 app.get('/api/config', (req, res) => {
+    const appId = process.env.AGORA_APP_ID || 'ccdaa712e9d241f090343b2c56320edd';
     res.json({
-        agoraAppId: process.env.AGORA_APP_ID || 'your-agora-app-id',
+        agoraAppId: appId,
         agoraToken: process.env.AGORA_TOKEN || null
     });
+    console.log('📡 Configurazione Agora inviata - App ID:', appId);
 });
 
 // Endpoint per generazione token Agora

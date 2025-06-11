@@ -59,10 +59,13 @@ async function initializeAgoraClient(pageType) {
     }
 }
 
-// Get Agora App ID from environment or use fallback
+// Get Agora App ID from environment variable or use fallback
 function getAgoraAppId() {
-    // Use the App ID from environment variable
-    return window.AGORA_APP_ID || process.env.AGORA_APP_ID || 'your-agora-app-id-here';
+    // Use the App ID from window configuration first, then fallback
+    if (window.AGORA_CONFIG && window.AGORA_CONFIG.agoraAppId) {
+        return window.AGORA_CONFIG.agoraAppId;
+    }
+    return window.AGORA_APP_ID || 'ccdaa712e9d241f090343b2c56320edd';
 }
 
 // Generate Agora token
@@ -225,7 +228,7 @@ async function initiateCall() {
 // Join Agora channel
 async function joinChannel() {
     const uid = currentPageType === 'cucina' ? 1 : 2;
-    
+
     // Genera un token dinamico
     const token = await generateAgoraToken();
     if (!token) {
@@ -296,7 +299,7 @@ function setupWebSocketCallListeners() {
 
     // Aggiungi listener per messaggi di chiamata
     const originalOnMessage = window.ws.onmessage;
-    
+
     window.ws.onmessage = function(event) {
         // Chiama il gestore originale se esiste
         if (originalOnMessage) {
@@ -305,7 +308,7 @@ function setupWebSocketCallListeners() {
 
         try {
             const data = JSON.parse(event.data);
-            
+
             // Gestisci messaggi di chiamata
             if (data.action === 'incoming-call' && data.to === currentPageType && !isCallActive) {
                 currentCallId = data.callId;
@@ -386,7 +389,7 @@ async function acceptCall() {
 // Decline incoming call
 function declineCall() {
     hideIncomingCall();
-    
+
     // Invia conferma rifiuto via WebSocket
     if (window.ws && window.ws.readyState === WebSocket.OPEN && currentCallId) {
         window.ws.send(JSON.stringify({
@@ -395,7 +398,7 @@ function declineCall() {
             timestamp: Date.now()
         }));
     }
-    
+
     logCall('missed', 'Call declined');
     currentCallId = null;
 }
@@ -452,7 +455,7 @@ async function endCall() {
             logCall('completed', `Call duration: ${formatDuration(duration)}`);
             callStartTime = null;
         }
-        
+
         currentCallId = null;
 
         setTimeout(() => {
