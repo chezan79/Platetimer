@@ -109,7 +109,7 @@
                         action: 'joinRoom', 
                         companyName: nomeAzienda 
                     }));
-                    // Entra nella pagina cucina
+                    // Entra nella pagina cucina per chiamate
                     window.ws.send(JSON.stringify({ 
                         action: 'joinPage', 
                         pageType: 'cucina' 
@@ -126,12 +126,27 @@
                     if (data.action === 'connectionConfirmed') {
                         console.log('✅ Cucina: Conferma connessione ricevuta:', data.message);
                     }
+                    // Gestisci messaggi di segnalazione chiamate
+                    else if (data.action === 'incoming-call' && data.to === 'cucina') {
+                        console.log('📞 Chiamata in arrivo per Cucina:', data);
+                        if (window.showIncomingCall) {
+                            window.showIncomingCall();
+                        }
+                    }
+                    else if (data.action === 'call-accepted' || data.action === 'call-declined' || data.action === 'call-ended') {
+                        console.log('📞 Stato chiamata aggiornato:', data);
+                    }
                 };
                 
                 window.ws.onerror = function(error) {
                     console.error('❌ Errore WebSocket Cucina:', error);
                 };
+
+                window.ws.onclose = function() {
+                    console.log('🔌 WebSocket Cucina disconnesso');
+                };
             } else {
+                console.warn('⚠️ Nome azienda non trovato, inizializzando Agora senza WebSocket');
                 // Inizializza Agora anche senza WebSocket
                 setTimeout(() => {
                     initializeAgoraClient('cucina');
