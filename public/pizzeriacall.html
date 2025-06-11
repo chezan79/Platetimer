@@ -126,6 +126,16 @@
                     if (data.action === 'connectionConfirmed') {
                         console.log('✅ Pizzeria: Conferma connessione ricevuta:', data.message);
                     }
+                    // Gestisci messaggi di segnalazione chiamate
+                    else if (data.action === 'incoming-call' && data.to === 'pizzeria') {
+                        console.log('📞 Chiamata in arrivo per Pizzeria:', data);
+                        if (window.showIncomingCall) {
+                            window.showIncomingCall();
+                        }
+                    }
+                    else if (data.action === 'call-accepted' || data.action === 'call-declined' || data.action === 'call-ended') {
+                        console.log('📞 Stato chiamata aggiornato:', data);
+                    }
                 };
                 
                 window.ws.onerror = function(error) {
