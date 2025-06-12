@@ -276,7 +276,7 @@ wss.on('connection', (ws, req) => {
 
                 console.log(`✅ Client aggiunto alla room: ${companyName} (${companyRooms.get(companyName).size} client)`);
 
-                // Invia tutti i countdown attivi al nuovo client
+                // Invia tutti i countdown attivi al nuovo client (Soluzione 1 - con destinazioni multiple)
                 if (activeCountdowns.has(companyName)) {
                     const companyCountdowns = activeCountdowns.get(companyName);
                     const countdownsToDelete = [];
@@ -288,14 +288,17 @@ wss.on('connection', (ws, req) => {
                         const remainingTime = Math.max(0, countdown.initialDuration - elapsed);
 
                         if (remainingTime > 0) {
-                            const syncMessage = {
-                                action: 'startCountdown',
-                                tableNumber: tableNumber,
-                                timeRemaining: remainingTime,
-                                destination: countdown.destination
-                            };
-                            ws.send(JSON.stringify(syncMessage));
-                            console.log(`📡 Countdown sincronizzato inviato: Tavolo ${tableNumber}, Destinazione: ${countdown.destination}, ${Math.floor(remainingTime/60)}:${(remainingTime%60).toString().padStart(2, '0')}`);
+                            // Invia un countdown per ogni destinazione
+                            countdown.destinations.forEach(destination => {
+                                const syncMessage = {
+                                    action: 'startCountdown',
+                                    tableNumber: tableNumber,
+                                    timeRemaining: remainingTime,
+                                    destination: destination
+                                };
+                                ws.send(JSON.stringify(syncMessage));
+                                console.log(`📡 Countdown sincronizzato inviato: Tavolo ${tableNumber}, Destinazione: ${destination}, ${Math.floor(remainingTime/60)}:${(remainingTime%60).toString().padStart(2, '0')}`);
+                            });
                         } else {
                             // Marca per eliminazione i countdown scaduti
                             countdownsToDelete.push(tableNumber);
@@ -333,15 +336,15 @@ wss.on('connection', (ws, req) => {
 
                     console.log(`📄 Client entrato in pagina ${data.pageType}: ${samePageClients.length} altri utenti già presenti`);
 
-                    // Sincronizza countdown specifici per la pagina - per tutte le pagine inclusa pizzeria
+                    // Sincronizza countdown specifici per la pagina (Soluzione 1 - filtro per destinazioni)
                     if (ws.companyRoom && activeCountdowns.has(ws.companyRoom)) {
                         const companyCountdowns = activeCountdowns.get(ws.companyRoom);
                         const countdownsToDelete = [];
                         let syncedCount = 0;
 
                         companyCountdowns.forEach((countdown, tableNumber) => {
-                            // Filtra countdown per la pagina specifica
-                            if (countdown.destination === data.pageType) {
+                            // Filtra countdown che includono la destinazione della pagina corrente
+                            if (countdown.destinations.includes(data.pageType)) {
                                 const currentTime = Date.now();
                                 const elapsed = Math.floor((currentTime - countdown.startTime) / 1000);
                                 const remainingTime = Math.max(0, countdown.initialDuration - elapsed);
@@ -351,7 +354,7 @@ wss.on('connection', (ws, req) => {
                                         action: 'startCountdown',
                                         tableNumber: tableNumber,
                                         timeRemaining: remainingTime,
-                                        destination: countdown.destination
+                                        destination: data.pageType
                                     };
                                     ws.send(JSON.stringify(syncMessage));
                                     syncedCount++;
@@ -423,22 +426,42 @@ wss.on('connection', (ws, req) => {
                     return;
                 }
 
-                // Memorizza il countdown attivo
+                // Memorizza il countdown attivo con logica unificata (Soluzione 1)
                 if (ws.companyRoom) {
                     if (!activeCountdowns.has(ws.companyRoom)) {
                         activeCountdowns.set(ws.companyRoom, new Map());
                     }
 
                     const companyCountdowns = activeCountdowns.get(ws.companyRoom);
-                    const countdownKey = `${data.tableNumber}_${destination}`; // Chiave combinata
-                    companyCountdowns.set(countdownKey, {
-                        startTime: Date.now(),
-                        initialDuration: data.timeRemaining,
-                        tableNumber: data.tableNumber,
-                        destination: destination
-                    });
+                    const tableKey = data.tableNumber.toString(); // Chiave semplice: solo numero tavolo
+                    
+                    // Verifica se esiste già un countdown per questo tavolo
+                    if (companyCountdowns.has(tableKey)) {
+                        const existingCountdown = companyCountdowns.get(tableKey);
+                        
+                        // Aggiungi la destinazione se non è già presente
+                        if (!existingCountdown.destinations.includes(destination)) {
+                            existingCountdown.destinations.push(destination);
+                            console.log(`📝 Aggiunta destinazione "${destination}" al tavolo ${data.tableNumber} esistente. Destinazioni: [${existingCountdown.destinations.join(', ')}]`);
+                        } else {
+                            console.log(`⚠️ Destinazione "${destination}" già presente per tavolo ${data.tableNumber}, aggiornato il countdown`);
+                        }
+                        
+                        // Aggiorna il tempo con il nuovo countdown (l'ultimo ricevuto)
+                        existingCountdown.startTime = Date.now();
+                        existingCountdown.initialDuration = data.timeRemaining;
+                    } else {
+                        // Crea nuovo countdown con array di destinazioni
+                        companyCountdowns.set(tableKey, {
+                            startTime: Date.now(),
+                            initialDuration: data.timeRemaining,
+                            tableNumber: data.tableNumber,
+                            destinations: [destination] // Array di destinazioni
+                        });
+                        console.log(`💾 Nuovo countdown creato per tavolo ${data.tableNumber} con destinazione: [${destination}]`);
+                    }
 
-                    console.log(`💾 Countdown memorizzato per azienda "${ws.companyRoom}": Tavolo ${data.tableNumber}, Destinazione: ${destination}`);
+                    console.log(`💾 Countdown memorizzato per azienda "${ws.companyRoom}": Tavolo ${data.tableNumber}, Destinazioni totali: [${companyCountdowns.get(tableKey).destinations.join(', ')}]`);
                 }
 
                 // Invia solo ai client della stessa room/azienda
@@ -469,29 +492,21 @@ wss.on('connection', (ws, req) => {
                     return;
                 }
 
-                // Rimuovi TUTTI i countdown per questo tavolo dalla memoria del server PRIMA di inviare
+                // Rimuovi countdown dalla memoria del server (Soluzione 1 - chiave unificata)
                 if (ws.companyRoom && activeCountdowns.has(ws.companyRoom)) {
                     const companyCountdowns = activeCountdowns.get(ws.companyRoom);
-                    let removedCount = 0;
-
-                    // Crea un array delle chiavi da rimuovere per evitare modifiche durante l'iterazione
-                    const keysToRemove = [];
-                    for (const [key, countdown] of companyCountdowns.entries()) {
-                        // Controlla sia la chiave combinata che il tableNumber nel countdown
-                        if (key.startsWith(`${data.tableNumber}_`) || 
-                            countdown.tableNumber.toString() === data.tableNumber.toString()) {
-                            keysToRemove.push(key);
-                        }
+                    const tableKey = data.tableNumber.toString();
+                    
+                    if (companyCountdowns.has(tableKey)) {
+                        const removedCountdown = companyCountdowns.get(tableKey);
+                        companyCountdowns.delete(tableKey);
+                        
+                        console.log(`🗑️ Countdown tavolo ${data.tableNumber} rimosso dalla memoria server`);
+                        console.log(`📋 Destinazioni eliminate: [${removedCountdown.destinations.join(', ')}]`);
+                        console.log(`📊 Countdown rimanenti per azienda "${ws.companyRoom}": ${companyCountdowns.size}`);
+                    } else {
+                        console.log(`⚠️ Nessun countdown trovato per tavolo ${data.tableNumber} nella memoria server`);
                     }
-
-                    // Rimuovi tutte le chiavi trovate
-                    keysToRemove.forEach(key => {
-                        companyCountdowns.delete(key);
-                        removedCount++;
-                    });
-
-                    console.log(`🗑️ ${removedCount} countdown rimossi dalla memoria server: Azienda "${ws.companyRoom}", Tavolo ${data.tableNumber}`);
-                    console.log(`📊 Countdown rimanenti per azienda "${ws.companyRoom}": ${companyCountdowns.size}`);
                 }
 
                 // Invia eliminazione a tutti i client della room (incluso chi ha eliminato per conferma)
@@ -824,7 +839,7 @@ setInterval(() => {
         }
     }
 
-    // Pulisci countdown scaduti
+    // Pulisci countdown scaduti (Soluzione 1 - con destinazioni multiple)
     let totalActiveCountdowns = 0;
     activeCountdowns.forEach((companyCountdowns, companyName) => {
         companyCountdowns.forEach((countdown, tableNumber) => {
@@ -833,7 +848,7 @@ setInterval(() => {
 
             if (remainingTime <= -30) { // 30 secondi dopo la scadenza
                 companyCountdowns.delete(tableNumber);
-                console.log(`🗑️ Countdown scaduto rimosso: Azienda "${companyName}", Tavolo ${tableNumber}`);
+                console.log(`🗑️ Countdown scaduto rimosso: Azienda "${companyName}", Tavolo ${tableNumber}, Destinazioni: [${countdown.destinations.join(', ')}]`);
             } else {
                 totalActiveCountdowns++;
             }
