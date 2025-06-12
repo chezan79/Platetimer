@@ -24,17 +24,17 @@
             </div>
 
             <div class="controls-section">
-                <button id="callButton" class="btn btn-call" onclick="fallbackInitiateCall()">
+                <button id="callButton" class="btn btn-call" onclick="initiateCall()">
                     <i class="fas fa-phone"></i>
                     Call Cucina
                 </button>
 
-                <button id="hangupButton" class="btn btn-hangup" onclick="fallbackEndCall()" disabled>
+                <button id="hangupButton" class="btn btn-hangup" onclick="endCall()" disabled>
                     <i class="fas fa-phone-slash"></i>
                     End Call
                 </button>
 
-                <button id="muteButton" class="btn btn-mute" onclick="fallbackToggleMute()" disabled>
+                <button id="muteButton" class="btn btn-mute" onclick="toggleMute()" disabled>
                     <i class="fas fa-microphone"></i>
                     Mute
                 </button>
@@ -50,7 +50,7 @@
                 <div class="incoming-call-content">
                     <h3><i class="fas fa-phone-volume"></i> Incoming Call from Cucina</h3>
                     <div class="incoming-call-buttons">
-                        <button class="btn btn-accept" onclick="fallbackAcceptCall()">
+                        <button class="btn btn-accept" onclick="acceptCall()">
                             <i class="fas fa-phone"></i>
                             Accept
                         </button>
@@ -91,12 +91,14 @@
     <script>
         // Initialize the page as 'pizzeria'
         window.addEventListener('DOMContentLoaded', function() {
-            // Initialize fallback system
-            window.fallbackVoiceCall.initialize('pizzeria');
-
-            // Also try Agora if available
+            // Wait for config to load then initialize Agora
             setTimeout(() => {
-                initializeAgoraClient('pizzeria');
+                if (window.AGORA_APP_ID) {
+                    initializeAgoraClient('pizzeria');
+                } else {
+                    console.log('Waiting for Agora config...');
+                    setTimeout(() => initializeAgoraClient('pizzeria'), 1000);
+                }
             }, 500);
         });
     </script>

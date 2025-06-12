@@ -58,7 +58,7 @@ async function initializeAgoraClient(pageType) {
 // Get Agora App ID from environment or use fallback
 function getAgoraAppId() {
     // Use the App ID from environment variable
-    return window.AGORA_APP_ID || process.env.AGORA_APP_ID || 'your-agora-app-id-here';
+    return window.AGORA_APP_ID || 'not-configured';
 }
 
 // Apply Agora configuration
