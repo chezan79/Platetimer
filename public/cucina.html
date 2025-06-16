@@ -55,7 +55,7 @@
             align-items: center;
         }
 
-        /* Container per i countdown - ora occupa tutta la larghezza e altezza disponibile */
+        /* Container per i countdown - spazio fisso con controlli sempre visibili */
         #bottomContainer {
             width: 95%;
             margin: 20px auto;
@@ -66,21 +66,11 @@
             display: flex;
             flex-direction: column;
             overflow-y: auto;
-            max-height: calc(100vh - 200px);
-            min-height: calc(100vh - 250px);
+            max-height: calc(100vh - 450px);
+            min-height: calc(100vh - 500px);
         }
 
-        /* Stile per la transizione del container controlli */
-        #topContainer {
-            transition: all 0.5s ease-in-out;
-            transform-origin: top center;
-        }
-
-        #topContainer.hidden {
-            opacity: 0;
-            transform: translateY(-20px) scale(0.95);
-            pointer-events: none;
-        }
+        
 
         /* Container messaggi - più largo e meno alto */
         #messagesContainer {
@@ -395,16 +385,8 @@
         <button onclick="window.location.href='index.html'" style="padding: 6px 12px; background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500; transition: transform 0.2s, box-shadow 0.2s;">🚪 Esci</button>
     </div>
 
-    <!-- Pulsante toggle per mostrare/nascondere i controlli -->
-    <div style="position: absolute; top: 120px; left: 20px; z-index: 600;">
-        <button id="toggleControlsBtn" onclick="toggleControls()" 
-                style="padding: 8px 16px; background: linear-gradient(135deg, #007bff 0%, #0056b3 100%); color: white; border: none; border-radius: 20px; cursor: pointer; font-size: 14px; font-weight: 600; box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3); transition: all 0.3s ease;">
-            📱 Mostra Controlli
-        </button>
-    </div>
-
-    <!-- Container principale in alto - riconoscimento vocale, tastiera e durata in orizzontale (ora collassabile) -->
-    <div id="topContainer" style="display: none; margin-top: 60px;">
+    <!-- Container principale in alto - riconoscimento vocale, tastiera e durata in orizzontale (sempre visibile) -->
+    <div id="topContainer" style="margin-top: 60px;">
         <!-- Sezione riconoscimento vocale -->
         <div id="voiceSection">
             <h2 style="color: #333; text-align: center; margin-bottom: 15px; font-size: 18px;">🎤 Comando Vocale</h2>
@@ -2470,56 +2452,7 @@
             }, 5000);
         }
 
-        // Sistema toggle controlli
-        let controlsVisible = false;
-
-        function toggleControls() {
-            const topContainer = document.getElementById('topContainer');
-            const toggleBtn = document.getElementById('toggleControlsBtn');
-            const bottomContainer = document.getElementById('bottomContainer');
-
-            if (!controlsVisible) {
-                // Mostra i controlli
-                topContainer.style.display = 'flex';
-                setTimeout(() => {
-                    topContainer.classList.remove('hidden');
-                }, 10);
-
-                toggleBtn.textContent = '📱 Controlli Aperti';
-                toggleBtn.style.background = 'linear-gradient(135deg, #28a745 0%, #20c997 100%)';
-
-                // Riduce lo spazio per i countdown
-                bottomContainer.style.maxHeight = 'calc(100vh - 450px)';
-                bottomContainer.style.minHeight = 'calc(100vh - 500px)';
-
-                controlsVisible = true;
-                console.log('📱 Controlli mostrati');
-            } else {
-                // Nascondi i controlli
-                topContainer.classList.add('hidden');
-                setTimeout(() => {
-                    topContainer.style.display = 'none';
-                }, 500);
-
-                toggleBtn.textContent = '📱 Mostra Controlli';
-                toggleBtn.style.background = 'linear-gradient(135deg, #007bff 0%, #0056b3 100%)';
-
-                // Aumenta lo spazio per i countdown
-                bottomContainer.style.maxHeight = 'calc(100vh - 200px)';
-                bottomContainer.style.minHeight = 'calc(100vh - 250px)';
-
-                controlsVisible = false;
-                console.log('📱 Controlli nascosti');
-            }
-        }
-
-        // Scorciatoia da tastiera per toggle controlli (Ctrl + Spazio)
-        document.addEventListener('keydown', function(event) {
-            if (event.ctrlKey && event.code === 'Space') {
-                event.preventDefault();
-                toggleControls();
-            }
-        });
+        
     </script>
     <script src="company-header.js"></script>
 </body>
