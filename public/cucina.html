@@ -11,54 +11,54 @@
             padding: 20px;
             padding-top: 120px;
             display: flex;
-            flex-direction: column;
+            flex-direction: row;
             gap: 20px;
             position: relative;
         }
 
-        /* Container principale per riconoscimento vocale e tastiera - in alto orizzontale */
+        /* Container principale per controlli - a sinistra verticale */
         #topContainer {
-            width: 90%;
-            margin: 0 auto;
+            width: 400px;
+            flex-shrink: 0;
             background: white;
             padding: 20px;
             border-radius: 10px;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
             display: flex;
-            flex-direction: row;
-            align-items: flex-start;
-            justify-content: space-between;
+            flex-direction: column;
             gap: 30px;
+            height: fit-content;
+            position: sticky;
+            top: 140px;
         }
 
         /* Sezione riconoscimento vocale */
         #voiceSection {
-            flex: 1;
             display: flex;
             flex-direction: column;
             align-items: center;
+            width: 100%;
         }
 
         /* Sezione tastiera e input */
         #keyboardSection {
-            flex: 1;
             display: flex;
             flex-direction: column;
             align-items: center;
+            width: 100%;
         }
 
         /* Sezione selezione durata */
         #durationSection {
-            flex: 1;
             display: flex;
             flex-direction: column;
             align-items: center;
+            width: 100%;
         }
 
-        /* Container per i countdown - spazio fisso con controlli sempre visibili */
+        /* Container per i countdown - posizionato a destra più centrale */
         #bottomContainer {
-            width: 95%;
-            margin: 20px auto;
+            flex: 1;
             background: white;
             padding: 20px;
             border-radius: 10px;
@@ -66,20 +66,20 @@
             display: flex;
             flex-direction: column;
             overflow-y: auto;
-            max-height: calc(100vh - 450px);
-            min-height: calc(100vh - 500px);
+            max-height: calc(100vh - 140px);
+            min-height: calc(100vh - 200px);
         }
 
         
 
-        /* Container messaggi - più largo e meno alto */
+        /* Container messaggi - posizionato sopra i countdown */
         #messagesContainer {
             position: fixed;
-            top: 20px;
-            right: 20px;
-            width: 400px;
-            max-width: 400px;
-            max-height: 300px;
+            top: 140px;
+            right: 40px;
+            width: 350px;
+            max-width: 350px;
+            max-height: 250px;
             z-index: 500;
         }
 
@@ -385,8 +385,8 @@
         <button onclick="window.location.href='index.html'" style="padding: 6px 12px; background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500; transition: transform 0.2s, box-shadow 0.2s;">🚪 Esci</button>
     </div>
 
-    <!-- Container principale in alto - riconoscimento vocale, tastiera e durata in orizzontale (sempre visibile) -->
-    <div id="topContainer" style="margin-top: 60px;">
+    <!-- Container controlli a sinistra verticale (sempre visibile) -->
+    <div id="topContainer">
         <!-- Sezione riconoscimento vocale -->
         <div id="voiceSection">
             <h2 style="color: #333; text-align: center; margin-bottom: 15px; font-size: 18px;">🎤 Comando Vocale</h2>
@@ -404,7 +404,7 @@
         <!-- Sezione tastiera e input -->
         <div id="keyboardSection">
             <h2 style="color: #333; text-align: center; margin-bottom: 15px; font-size: 18px;">🔢 Tastiera</h2>
-            <input type="text" id="numeroTavolo" pattern="[0-9]*" inputmode="numeric" placeholder="Numero Tavolo" readonly style="width: 80%; margin-bottom: 15px;">
+            <input type="text" id="numeroTavolo" pattern="[0-9]*" inputmode="numeric" placeholder="Numero Tavolo" readonly style="width: 90%; margin-bottom: 15px;">
             <div id="keyboard">
                 <div class="key">1</div>
                 <div class="key">2</div>
@@ -424,7 +424,7 @@
         <div id="destinationSection">
             <h2 style="color: #333; text-align: center; margin-bottom: 15px; font-size: 18px;">🎯 Destinazione</h2>
             <div id="destinationSelection">
-                <div style="display: flex; flex-direction: column; gap: 8px; max-width: 240px;">
+                <div style="display: flex; flex-direction: column; gap: 8px; width: 100%;">
                     <button class="destination-button" data-destination="cucina" style="background: linear-gradient(135deg, #28a745 0%, #98FB98 100%); color: #212529;">🍳 Cucina</button>
                     <button class="destination-button" data-destination="pizzeria" style="background: linear-gradient(135deg, #ffc107 0%, #FFE4C4 100%); color: #212529;">🍕 Pizzeria</button>
                     <button class="destination-button" data-destination="insalata" style="background: linear-gradient(135deg, #ff6b35 0%, #B0E0E6 100%); color: #212529;">🥗 Insalata</button>
@@ -436,7 +436,7 @@
         <div id="durationSection">
             <h2 style="color: #333; text-align: center; margin-bottom: 15px; font-size: 18px;">⏱️ Durata</h2>
             <div id="durationSelection">
-                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; max-width: 240px;">
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; width: 100%;">
                     <button class="duration-button" data-minutes="4" disabled>4 Min</button>
                     <button class="duration-button" data-minutes="5" disabled>5 Min</button>
                     <button class="duration-button" data-minutes="6" disabled>6 Min</button>
@@ -449,11 +449,9 @@
                 </div>
             </div>
         </div>
-
-
     </div>
 
-    <!-- Container in basso per i countdown -->
+    <!-- Container countdown a destra più centrale -->
     <div id="bottomContainer">
         <h1 style="color: #333; text-align: center; margin-bottom: 20px; font-size: 24px;">🍳 Cucina</h1>
         <div id="countdownList"></div>
