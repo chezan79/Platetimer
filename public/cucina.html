@@ -387,20 +387,6 @@
 
     <!-- Container controlli a sinistra verticale (sempre visibile) -->
     <div id="topContainer">
-        <!-- Sezione riconoscimento vocale -->
-        <div id="voiceSection">
-            <h2 style="color: #333; text-align: center; margin-bottom: 15px; font-size: 18px;">🎤 Comando Vocale</h2>
-            <button onclick="toggleContinuousVoice()" id="voice-button" style="padding: 10px 20px; background-color: #DCDCDC; color: #696969; border: none; border-radius: 5px; cursor: pointer; transition: all 0.3s ease; font-size: 16px; font-weight: 600;">
-                🎤 Attiva Comando vocale
-            </button>
-            <div id="voice-status" style="margin-top: 8px; font-size: 12px; color: #666; min-height: 20px; text-align: center;">
-                "tavolo" seguito dal numero e minuti
-            </div>
-            <div id="voice-indicator" style="margin-top: 5px; font-size: 12px; color: #999; text-align: center;">
-                🔴 Voce disattivata
-            </div>
-        </div>
-
         <!-- Sezione tastiera e input -->
         <div id="keyboardSection">
             <h2 style="color: #333; text-align: center; margin-bottom: 15px; font-size: 18px;">🔢 Tastiera</h2>
@@ -447,6 +433,20 @@
                     <button class="duration-button" data-minutes="12" disabled>12 Min</button>
                     <button class="duration-button" data-minutes="15" disabled>15 Min</button>
                 </div>
+            </div>
+        </div>
+
+        <!-- Sezione riconoscimento vocale -->
+        <div id="voiceSection">
+            <h2 style="color: #333; text-align: center; margin-bottom: 15px; font-size: 18px;">🎤 Comando Vocale</h2>
+            <button onclick="toggleContinuousVoice()" id="voice-button" style="padding: 10px 20px; background-color: #DCDCDC; color: #696969; border: none; border-radius: 5px; cursor: pointer; transition: all 0.3s ease; font-size: 16px; font-weight: 600;">
+                🎤 Attiva Comando vocale
+            </button>
+            <div id="voice-status" style="margin-top: 8px; font-size: 12px; color: #666; min-height: 20px; text-align: center;">
+                "tavolo" seguito dal numero e minuti
+            </div>
+            <div id="voice-indicator" style="margin-top: 5px; font-size: 12px; color: #999; text-align: center;">
+                🔴 Voce disattivata
             </div>
         </div>
     </div>
