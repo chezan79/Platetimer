@@ -290,9 +290,9 @@
 
                     showMessage('register-message', 'Registrazione completata con successo!', false);
 
-                    // Reindirizza alla pagina subscription dopo 2 secondi
+                    // Reindirizza alla pagina home dopo 2 secondi
                     setTimeout(() => {
-                        window.location.href = 'home.html';
+                        window.location.href = '/home.html';
                     }, 2000);
 
                 } catch (error) {
@@ -342,7 +342,7 @@
 
                     // Login riuscito - reindirizza alla home
                     console.log('✅ Login effettuato con successo');
-                    window.location.href = 'home.html';
+                    window.location.href = '/home.html';
 
                 } catch (error) {
                     console.error('Errore durante il login:', error);
