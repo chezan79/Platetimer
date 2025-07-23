@@ -246,9 +246,26 @@
                 const password = document.getElementById('register-password').value;
                 const confirmPassword = document.getElementById('register-confirm-password').value;
 
+                // Debug: mostra i valori
+                console.log('🔍 Dati inseriti:', {
+                    firstName: firstName,
+                    lastName: lastName,
+                    company: company,
+                    email: email,
+                    passwordLength: password.length
+                });
+
                 // Validazione campi
                 if (!firstName || !lastName) {
                     showMessage('register-message', 'Per favore inserisci nome e cognome', true);
+                    return;
+                }
+
+                // Validazione email più rigorosa
+                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                if (!emailRegex.test(email)) {
+                    showMessage('register-message', 'Inserisci un indirizzo email valido', true);
+                    console.log('❌ Email non valida:', email);
                     return;
                 }
 
@@ -262,6 +279,8 @@
                     showMessage('register-message', 'La password deve essere di almeno 6 caratteri', true);
                     return;
                 }
+
+                console.log('✅ Tutte le validazioni passate, creando utente...');
 
                 try {
                     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
@@ -296,6 +315,10 @@
 
                 } catch (error) {
                     console.error('Errore durante la registrazione:', error);
+                    console.error('Codice errore:', error.code);
+                    console.error('Messaggio errore:', error.message);
+                    console.error('Email utilizzata:', email);
+                    
                     let errorMessage = 'Si è verificato un errore durante la registrazione';
 
                     switch (error.code) {
@@ -306,8 +329,10 @@
                             errorMessage = 'La password è troppo debole';
                             break;
                         case 'auth/invalid-email':
-                            errorMessage = 'Email non valida';
+                            errorMessage = `Email non valida: "${email}". Controlla che sia scritta correttamente.`;
                             break;
+                        default:
+                            errorMessage = `Errore: ${error.message}`;
                     }
 
                     showMessage('register-message', errorMessage, true);
