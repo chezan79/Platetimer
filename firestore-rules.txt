@@ -8,10 +8,9 @@ service cloud.firestore {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
     
-    // Regole per i countdown - solo utenti autenticati della stessa azienda
+    // Regole per i countdown - solo utenti autenticati
     match /countdowns/{companyId}/{document=**} {
-      allow read, write: if request.auth != null && 
-                           resource.data.company == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.company;
+      allow read, write: if request.auth != null;
     }
     
     // Regole generali per documenti pubblici (se necessari)

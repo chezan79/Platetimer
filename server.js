@@ -61,7 +61,7 @@ app.post('/api/voice-message', (req, res) => {
     }
 });
 
-// Endpoint Stripe rimossi - ora usiamo Stripe Buy Button direttamente
+// Payment functionality removed
 
 // Endpoint per il riconoscimento vocale
 app.post('/api/speech-to-text', async (req, res) => {

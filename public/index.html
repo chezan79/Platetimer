@@ -292,7 +292,7 @@
 
                     // Reindirizza alla pagina subscription dopo 2 secondi
                     setTimeout(() => {
-                        window.location.href = 'subscription.html';
+                        window.location.href = 'home.html';
                     }, 2000);
 
                 } catch (error) {
@@ -340,10 +340,9 @@
 
                     showMessage('login-message', 'Accesso effettuato con successo!', false);
 
-                    // Reindirizza alla home dopo 1 secondo
-                    setTimeout(() => {
-                        window.location.href = 'home.html';
-                    }, 1000);
+                    // Login riuscito - reindirizza alla home
+                    console.log('✅ Login effettuato con successo');
+                    window.location.href = 'home.html';
 
                 } catch (error) {
                     console.error('Errore durante il login:', error);
