@@ -14,7 +14,7 @@ const wss = new WebSocket.Server({
 });
 
 // Modalità manutenzione - impostare su true per attivare
-const MAINTENANCE_MODE = true; // Cambiare a true per attivare la manutenzione
+const MAINTENANCE_MODE = false; // Cambiare a true per attivare la manutenzione
 
 // Middleware per modalità manutenzione
 app.use((req, res, next) => {
