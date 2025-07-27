@@ -13,6 +13,31 @@ const wss = new WebSocket.Server({
     path: '/ws' // Percorso per le connessioni WebSocket
 });
 
+// Modalità manutenzione - impostare su true per attivare
+const MAINTENANCE_MODE = true; // Cambiare a true per attivare la manutenzione
+
+// Middleware per modalità manutenzione
+app.use((req, res, next) => {
+    if (MAINTENANCE_MODE) {
+        // Permetti solo l'accesso alla pagina di manutenzione e ai suoi assets
+        if (req.path === '/maintenance.html' || 
+            req.path.startsWith('/css/') || 
+            req.path.startsWith('/js/') || 
+            req.path.startsWith('/images/') ||
+            req.path.endsWith('.css') ||
+            req.path.endsWith('.js') ||
+            req.path.endsWith('.png') ||
+            req.path.endsWith('.jpg') ||
+            req.path.endsWith('.ico')) {
+            return next();
+        }
+        
+        // Reindirizza tutto il resto alla pagina di manutenzione
+        return res.redirect('/maintenance.html');
+    }
+    next();
+});
+
 // Serve i file statici dalla directory "public"
 app.use(express.static('public'));
 
@@ -168,6 +193,18 @@ function checkRateLimit(clientId) {
 wss.on('connection', (ws, req) => {
     const clientIp = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
     console.log(`🔗 Nuova connessione WebSocket da IP: ${clientIp}`);
+
+    // Verifica modalità manutenzione
+    if (MAINTENANCE_MODE) {
+        console.log('🚫 Connessione WebSocket rifiutata - modalità manutenzione attiva');
+        ws.send(JSON.stringify({
+            action: 'maintenanceMode',
+            message: 'Sistema in manutenzione. Connessioni temporaneamente disabilitate.',
+            redirectTo: '/maintenance.html'
+        }));
+        ws.close(1001, 'Sistema in manutenzione');
+        return;
+    }
 
     ws.companyRoom = null; // Inizialmente non assegnato a nessuna room
     ws.pageType = null; // Tipo di pagina (cucina, pizzeria, insalata)
