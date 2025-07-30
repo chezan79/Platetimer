@@ -1,0 +1,2454 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Cucina</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        body {
+            background: linear-gradient(135deg, #F0FFFF 0%, #E6E6FA 100%);
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            padding-top: 120px;
+            display: flex;
+            flex-direction: row;
+            gap: 20px;
+            position: relative;
+        }
+
+        /* Container principale per controlli - a sinistra verticale */
+        #topContainer {
+            width: 350px;
+            flex-shrink: 0;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+            height: fit-content;
+            position: sticky;
+            top: 150px;
+        }
+
+        /* Sezione riconoscimento vocale */
+        #voiceSection {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+        }
+
+        /* Sezione tastiera e input */
+        #keyboardSection {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+        }
+
+        /* Sezione selezione durata */
+        #durationSection {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+        }
+
+        /* Container per i countdown - posizionato a destra più centrale */
+        #bottomContainer {
+            flex: 1;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            max-height: calc(100vh - 140px);
+            min-height: calc(100vh - 200px);
+        }
+
+        
+
+        /* Container messaggi - posizionato sopra i countdown */
+        #messagesContainer {
+            position: fixed;
+            top: 140px;
+            right: 40px;
+            width: 350px;
+            max-width: 350px;
+            max-height: 250px;
+            z-index: 500;
+        }
+
+        h1, h2 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            font-size: 28px;
+            font-weight: 300;
+        }
+
+        h2 {
+            font-size: 20px;
+        }
+
+        input[type="text"] {
+            width: 60%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+            margin: 10px 0;
+            box-sizing: border-box;
+            text-align: center;
+        }
+
+        #keyboard {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 6px;
+            max-width: 240px;
+            margin: 0 auto;
+        }
+
+        .key {
+            padding: 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            font-size: 16px;
+            text-align: center;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            border: none;
+        }
+
+        .destination-button {
+            padding: 8px 12px;
+            margin: 3px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: transform 0.2s, background-color 0.3s, box-shadow 0.2s;
+            font-weight: 600;
+            font-size: 14px;
+            min-width: 60px;
+        }
+
+        .destination-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .destination-button.selected {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            border: 3px solid #333;
+            position: relative;
+        }
+
+        .destination-button.selected::after {
+            content: '✓';
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background: #28a745;
+            color: white;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+            border: 2px solid white;
+        }
+
+        .duration-button {
+            padding: 8px 12px;
+            margin: 3px;
+            background: linear-gradient(135deg, 	#696969 0%, #A9A9A9 100%);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: transform 0.2s, background-color 0.3s, box-shadow 0.2s;
+            font-weight: 600;
+            font-size: 14px;
+            min-width: 60px;
+        }
+
+        .duration-button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(40, 167, 69, 0.3);
+        }
+
+        .duration-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            background: linear-gradient(135deg, #cccccc 0%, #cccccc 100%);
+        }
+
+        #countdownList {
+            width: 100%;
+            max-height: 60vh;
+            overflow-y: auto;
+        }
+
+        .countdown-item {
+            margin: 5px 0;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background-color: #f8f9fa;
+            transition: background-color 0.3s, transform 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            min-height: 50px;
+            max-height: 65px;
+        }
+
+        .countdown-item:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .countdown-table {
+            flex: 1;
+            text-align: left;
+        }
+
+        .countdown-time {
+            flex: 2;
+            text-align: center;
+            font-size: 16px;
+            color: #d9534f;
+            font-weight: bold;
+        }
+
+        .countdown-delete {
+            flex: 1;
+            text-align: right;
+        }
+
+        .countdown-item h3 {
+            margin: 0;
+            color: #333;
+            font-size: 22px;
+        }
+
+        .countdown-item p {
+            margin: 0;
+            font-size: 22px;
+            color: #d9534f;
+            font-weight: bold;
+        }
+
+        button {
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #98FB98 0%, #98FB98 100%);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin: 10px 5px;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(108, 117, 125, 0.3);
+        }
+
+        button[style*="background-color: #A9A9A9"] {
+            background: linear-gradient(135deg, #A9A9A9 0%, #A9A9A9 100%) !important;
+        }
+
+        /* Classi specifiche per il pulsante vocale con massima priorità */
+        #voice-button.voice-active {
+            background: #28a745 !important;
+            background-color: #28a745 !important;
+            color: white !important;
+        }
+
+        #voice-button.voice-inactive {
+            background: #DCDCDC !important;
+            background-color: #DCDCDC !important;
+            color: #696969 !important;
+        }
+
+        /* Rimuovi tutti i gradienti dal pulsante vocale */
+        #voice-button.voice-active,
+        #voice-button.voice-inactive {
+            background-image: none !important;
+        }
+
+        .delete-btn {
+            background: #DCDCDC !important;
+            background-color: #DCDCDC !important;
+            color: #696969 !important;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            flex-shrink: 0;
+            height: fit-content;
+            background-image: none !important;
+        }
+
+        .delete-btn:hover {
+            background: #A9A9A9 !important;
+            background-color: #A9A9A9 !important;
+            transform: translateY(-1px);
+        }
+
+                    @keyframes slideDown {
+                        from { opacity: 0; transform: translateX(-50%) translateY(-20px); }
+                        to { opacity: 1; transform: translateX(-50%) translateY(0); }
+                    }
+                    @keyframes slideInRight {
+                        from { opacity: 0; transform: translateX(20px); }
+                        to { opacity: 1; transform: translateX(0); }
+                    }
+                    @keyframes slideOutRight {
+                        from { opacity: 1; transform: translateX(0); }
+                        to { opacity: 0; transform: translateX(20px); }
+                    }
+    </style>
+</head>
+<body>
+    <!-- Nome Azienda centralizzato -->
+    <div id="company-header" style="position: absolute; top: 20px; left: 20px; z-index: 1000; padding: 10px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; border-left: 4px solid #28a745;">
+        <h4 id="company-name" style="margin: 0; color: #333; font-weight: 600;">Nome Azienda</h4>
+    </div>
+
+    <!-- Container superiore con messaggi vocali e controlli pausa -->
+    <div style="position: absolute; top: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 15px; z-index: 500;">
+
+        <!-- Sistema messaggio vocale con scelta destinazione -->
+        <div style="text-align: center; padding: 8px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; border-left: 4px solid #007bff; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); min-width: 280px;">
+            <div style="display: flex; justify-content: center; align-items: center; gap: 6px; flex-wrap: nowrap;">
+                <button class="destination-button-voice" data-destination="pizzeria" style="padding: 6px 12px; background: linear-gradient(135deg, #ffc107 0%, #FFE4C4 100%); color: #212529; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
+                    🍕 Pizzeria
+                </button>
+                <button class="destination-button-voice" data-destination="insalata" style="padding: 6px 12px; background: linear-gradient(135deg, #17a2b8 0%, #B0E0E6 100%); color: #212529; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
+                    🥗 Insalata
+                </button>
+                <button 
+                    onclick="toggleVoiceRecording()" 
+                    id="voice-message-button" 
+                    style="padding: 6px 12px; background: linear-gradient(135deg, #007bff 0%, #0056b3 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; white-space: nowrap;">
+                    🎤 5s
+                </button>
+                
+            </div>
+            <div id="voice-message-status" style="margin-top: 4px; font-size: 10px; color: #666; min-height: 12px;">
+            </div>
+            <div id="selected-destinations-voice" style="margin-top: 2px; font-size: 10px; color: #007bff; font-weight: 600;">
+            </div>
+        </div>
+
+        <!-- Container controllo pausa cucina -->
+        <div style="text-align: center; padding: 8px; background: linear-gradient(135deg, #ffe6e6 0%, #ffcccc 100%); border-radius: 8px; border-left: 4px solid #dc3545; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); min-width: 200px;">
+            <div style="margin-bottom: 4px; color: #721c24; font-size: 12px; font-weight: 600;">⏸️ Pausa Cucina</div>
+            <div style="display: flex; justify-content: center; align-items: center; gap: 6px; flex-wrap: wrap;">
+                <button id="pause-10-btn" onclick="inviaMessaggioPausa(10)" 
+                        style="padding: 6px 12px; background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%); color: #212529; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
+                    ⏸️ 10min
+                </button>
+                <button id="pause-15-btn" onclick="inviaMessaggioPausa(15)" 
+                        style="padding: 6px 12px; background: linear-gradient(135deg, #fd7e14 0%, #e8690c 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; white-space: nowrap;">
+                    ⏸️ 15min
+                </button>
+            </div>
+            <div id="pause-status" style="margin-top: 4px; font-size: 10px; color: #721c24; min-height: 12px; text-align: center;">
+            </div>
+        </div>
+    </div>
+
+    <div style="position: absolute; top: 20px; right: 20px; z-index: 1000; display: flex; gap: 10px;">
+        <button onclick="window.location.href='home.html'" style="padding: 6px 12px; background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500; transition: transform 0.2s, box-shadow 0.2s;">🏠 Home</button>
+        <button onclick="window.location.href='index.html'" style="padding: 6px 12px; background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500; transition: transform 0.2s, box-shadow 0.2s;">🚪 Esci</button>
+    </div>
+
+    <!-- Container controlli a sinistra verticale (sempre visibile) -->
+    <div id="topContainer">
+        <!-- Sezione tastiera e input -->
+        <div id="keyboardSection">
+            <h2 style="color: #333; text-align: center; margin-bottom: 15px; font-size: 18px;">🔢 Tastiera</h2>
+            <input type="text" id="numeroTavolo" pattern="[0-9]*" inputmode="numeric" placeholder="Numero Tavolo" readonly style="width: 90%; margin-bottom: 15px;">
+            <div id="keyboard">
+                <div class="key">1</div>
+                <div class="key">2</div>
+                <div class="key">3</div>
+                <div class="key">4</div>
+                <div class="key">5</div>
+                <div class="key">C</div>
+                <div class="key">6</div>
+                <div class="key">7</div>
+                <div class="key">8</div>
+                <div class="key">9</div>
+                <div class="key">0</div>
+            </div>
+        </div>
+
+        <!-- Sezione selezione destinazione -->
+        <div id="destinationSection">
+            <h2 style="color: #333; text-align: center; margin-bottom: 15px; font-size: 18px;">🎯 Destinazione</h2>
+            <div id="destinationSelection">
+                <div style="display: flex; flex-direction: column; gap: 8px; width: 100%;">
+                    <button class="destination-button" data-destination="cucina" style="background: linear-gradient(135deg, #28a745 0%, #98FB98 100%); color: #212529;">🍳 Cucina</button>
+                    <button class="destination-button" data-destination="pizzeria" style="background: linear-gradient(135deg, #ffc107 0%, #FFE4C4 100%); color: #212529;">🍕 Pizzeria</button>
+                    <button class="destination-button" data-destination="insalata" style="background: linear-gradient(135deg, #ff6b35 0%, #B0E0E6 100%); color: #212529;">🥗 Insalata</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sezione selezione durata -->
+        <div id="durationSection">
+            <h2 style="color: #333; text-align: center; margin-bottom: 15px; font-size: 18px;">⏱️ Durata</h2>
+            <div id="durationSelection">
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; width: 100%;">
+                    <button class="duration-button" data-minutes="4" disabled>4 Min</button>
+                    <button class="duration-button" data-minutes="5" disabled>5 Min</button>
+                    <button class="duration-button" data-minutes="6" disabled>6 Min</button>
+                    <button class="duration-button" data-minutes="7" disabled>7 Min</button>
+                    <button class="duration-button" data-minutes="8" disabled>8 Min</button>
+                    <button class="duration-button" data-minutes="9" disabled>9 Min</button>
+                    <button class="duration-button" data-minutes="10" disabled>10 Min</button>
+                    <button class="duration-button" data-minutes="12" disabled>12 Min</button>
+                    <button class="duration-button" data-minutes="15" disabled>15 Min</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sezione riconoscimento vocale -->
+        <div id="voiceSection">
+            <h2 style="color: #333; text-align: center; margin-bottom: 15px; font-size: 18px;">🎤 Comando Vocale</h2>
+            <button onclick="toggleContinuousVoice()" id="voice-button" style="padding: 10px 20px; background-color: #DCDCDC; color: #696969; border: none; border-radius: 5px; cursor: pointer; transition: all 0.3s ease; font-size: 16px; font-weight: 600;">
+                🎤 Attiva Comando vocale
+            </button>
+            <div id="voice-status" style="margin-top: 8px; font-size: 12px; color: #666; min-height: 20px; text-align: center;">
+                "tavolo" seguito dal numero e minuti
+            </div>
+            <div id="voice-indicator" style="margin-top: 5px; font-size: 12px; color: #999; text-align: center;">
+                🔴 Voce disattivata
+            </div>
+        </div>
+    </div>
+
+    <!-- Container countdown a destra più centrale -->
+    <div id="bottomContainer">
+        <h1 style="color: #333; text-align: center; margin-bottom: 20px; font-size: 24px;">🍳 Cucina</h1>
+        <div id="countdownList"></div>
+    </div>
+
+    <!-- Container dedicato per i messaggi della pizzeria - posizionato in alto a destra (inizialmente nascosto) -->
+    <div id="messagesContainer" style="background: white; padding: 15px; border-radius: 10px; box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15); display: none; flex-direction: column; max-height: 60vh; overflow-y: auto;">
+        <div id="voice-messages-container" style="padding: 12px; background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-radius: 8px; border-left: 4px solid #2196f3;">
+            <h3 style="margin: 0 0 12px 0; color: #1976d2; font-size: 16px;">📢 Messaggi Pizzeria</h3>
+            <div id="voice-messages-list">
+                <!-- I messaggi appariranno qui dinamicamente -->
+            </div>
+        </div>
+    </div>
+
+    <audio id="alertSound" src="alerte-346112.mp3" preload="auto"></audio>
+    <audio id="zeroSound" src="costa-rica-eas-alarm-346194.mp3" preload="auto"></audio>
+
+    <script>
+        // Verifica disponibilità audio all'avvio
+        document.addEventListener('DOMContentLoaded', () => {
+            const audio = document.getElementById('alertSound');
+            const zeroAudio = document.getElementById('zeroSound');
+
+            audio.addEventListener('error', () => {
+                console.log('⚠️ File alert.mp3 non trovato. Verrà usato solo feedback visivo.');
+            });
+            audio.addEventListener('canplaythrough', () => {
+                console.log('✅ Audio alert.mp3 caricato correttamente');
+            });
+
+            zeroAudio.addEventListener('error', () => {
+                console.log('⚠️ File costa-rica-eas-alarm-346194.mp3 non trovato.');
+            });
+            zeroAudio.addEventListener('canplaythrough', () => {
+                console.log('✅ Audio costa-rica-eas-alarm-346194.mp3 caricato correttamente');
+            });
+        });
+
+        // Selezione elementi
+        const numeroTavoloInput = document.getElementById('numeroTavolo');
+        const keyboard = document.getElementById('keyboard');
+        const durationSelection = document.getElementById('durationSelection');
+        const countdownList = document.getElementById('countdownList');
+
+        // Array per memorizzare i countdown
+        const countdowns = [];
+
+        // Gestione tastiera virtuale
+        keyboard.addEventListener('click', (event) => {
+            if (event.target.classList.contains('key')) {
+                const key = event.target.textContent;
+                if (key === 'C') {
+                    numeroTavoloInput.value = '';
+                } else {
+                    numeroTavoloInput.value += key;
+                }
+            }
+        });
+
+        // Array per memorizzare le destinazioni selezionate
+        let selectedDestinations = [];
+
+        // Gestione selezione multipla destinazioni
+        const destinationSelection = document.getElementById('destinationSelection');
+        destinationSelection.addEventListener('click', (event) => {
+            if (event.target.classList.contains('destination-button')) {
+                const destination = event.target.getAttribute('data-destination');
+
+                // Toggle della selezione
+                if (event.target.classList.contains('selected')) {
+                    // Rimuovi dalla selezione
+                    event.target.classList.remove('selected');
+                    selectedDestinations = selectedDestinations.filter(d => d !== destination);
+                } else {
+                    // Aggiungi alla selezione
+                    event.target.classList.add('selected');
+                    selectedDestinations.push(destination);
+                }
+
+                // Abilita i pulsanti durata solo se almeno una destinazione è selezionata
+                const hasDestinations = selectedDestinations.length > 0;
+                document.querySelectorAll('.duration-button').forEach(btn => {
+                    btn.disabled = !hasDestinations;
+                });
+
+                console.log('Destinazioni selezionate:', selectedDestinations);
+
+                // Aggiorna il feedback visivo
+                updateDestinationFeedback();
+            }
+        });
+
+        // Gestione selezione durata e avvio countdown
+        durationSelection.addEventListener('click', (event) => {
+            if (event.target.classList.contains('duration-button') && !event.target.disabled) {
+                const minutes = parseInt(event.target.getAttribute('data-minutes'));
+                const tableNumber = numeroTavoloInput.value;
+
+                if (tableNumber !== '') {
+                    if (selectedDestinations.length > 0) {
+                        // Avvia countdown per ogni destinazione selezionata
+                        selectedDestinations.forEach(destination => {
+                            startCountdown(minutes, tableNumber, destination);
+                        });
+
+                        numeroTavoloInput.value = '';
+
+                        // Resetta la selezione dopo l'invio
+                        resetSelection();
+
+                        // Feedback di conferma
+                        showConfirmationMessage(tableNumber, selectedDestinations, minutes);
+                    } else {
+                        alert('Seleziona almeno una destinazione (Cucina, Pizzeria o Insalata)');
+                    }
+                } else {
+                    alert('Inserisci prima il numero del tavolo');
+                }
+            }
+        });
+
+        // Funzione per resettare la selezione
+        function resetSelection() {
+            selectedDestinations = [];
+            document.querySelectorAll('.destination-button').forEach(btn => {
+                btn.classList.remove('selected');
+            });
+            document.querySelectorAll('.duration-button').forEach(btn => {
+                btn.disabled = true;
+            });
+            updateDestinationFeedback();
+        }
+
+        // Funzione per aggiornare il feedback visivo delle destinazioni
+        function updateDestinationFeedback() {
+            const sectionTitle = document.querySelector('#destinationSection h2');
+            if (selectedDestinations.length === 0) {
+                sectionTitle.textContent = '🎯 Destinazione';
+            } else if (selectedDestinations.length === 1) {
+                const icons = {'cucina': '🍳', 'pizzeria': '🍕', 'insalata': '🥗'};
+                sectionTitle.textContent = `🎯 ${icons[selectedDestinations[0]]} ${selectedDestinations[0].charAt(0).toUpperCase() + selectedDestinations[0].slice(1)}`;
+            } else {
+                sectionTitle.textContent = `🎯 ${selectedDestinations.length} Destinazioni`;
+            }
+        }
+
+        // Funzione per mostrare messaggio di conferma
+        function showConfirmationMessage(tableNumber, destinations, minutes) {
+            const statusDiv = document.getElementById('voice-status');
+            const icons = {'cucina': '🍳', 'pizzeria': '🍕', 'insalata': '🥗'};
+            const destList = destinations.map(d => `${icons[d]} ${d.charAt(0).toUpperCase() + d.slice(1)}`).join(', ');
+
+            statusDiv.textContent = `✅ Tavolo ${tableNumber}: ${minutes}min → ${destList}`;
+            statusDiv.style.color = '#28a745';
+
+            setTimeout(() => {
+                if (!isContinuousListening) {
+                    statusDiv.textContent = '"tavolo" seguito dal numero e minuti';
+                    statusDiv.style.color = '#666';
+                }
+            }, 3000);
+        }
+
+        // Sistema WebSocket con riconnessione automatica
+        let ws = null;
+        let reconnectInterval = null;
+        let heartbeatInterval = null;
+        let isConnected = false;
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        let lastPong = 0;
+
+        function connectWebSocket() {
+            try {
+                                ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+
+                ws.onopen = () => {
+                    console.log('🔗 WebSocket connesso');
+                    isConnected = true;
+
+                    // Pulisci eventuali tentativi di riconnessione
+                    if (reconnectInterval) {
+                        clearInterval(reconnectInterval);
+                        reconnectInterval = null;
+                    }
+
+                    // Avvia heartbeat
+                    startHeartbeat();
+
+                    // Unisciti alla room con un piccolo delay per stabilizzare la connessione
+                    setTimeout(() => {
+                            const companyName = localStorage.getItem('userCompany') || 'Nome Azienda';
+                            const joinMessage = {
+                                action: 'joinRoom',
+                                companyName: companyName
+                            };
+
+                            if (ws.readyState === WebSocket.OPEN) {
+                                ws.send(JSON.stringify(joinMessage));
+                                console.log(`✅ Connesso alla room: ${companyName}`);
+
+                                // Informa il server che questo client è sulla pagina cucina
+                                setTimeout(() => {
+                                    if (ws.readyState === WebSocket.OPEN) {
+                                        ws.send(JSON.stringify({
+                                            action: 'joinPage',
+                                            pageType: 'cucina'
+                                        }));
+                                        console.log('📄 Informato server: pagina cucina');
+                                    }
+                                }, 200);
+                            }
+                        }, 100);
+
+                    // Mostra stato connessione
+                    updateConnectionStatus(true);
+                };
+
+                ws.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+
+                        if (data.action === 'pong') {
+                            console.log('💓 Pong ricevuto dal server');
+                            // Reset del timeout di riconnessione se presente
+                            if (reconnectInterval) {
+                                clearInterval(reconnectInterval);
+                                reconnectInterval = null;
+                            }
+                            return;
+                        } else if (data.action === 'ping') {
+                            // Rispondi al ping del server
+                            if (ws && ws.readyState === WebSocket.OPEN) {
+                                ws.send(JSON.stringify({ action: 'pong', timestamp: Date.now() }));
+                            }
+                            return;
+                        } else if (data.action === 'connectionConfirmed') {
+                            console.log('✅ Conferma connessione ricevuta:', data.message);
+                            return;
+                        } else if (data.action === 'startCountdown') {
+                            console.log('📥 Countdown ricevuto via WebSocket:', data);
+                            console.log(`🔍 Destinazione ricevuta: "${data.destination}", Tavolo: ${data.tableNumber}`);
+
+                            // Mostra il countdown in cucina SOLO se la destinazione è esplicitamente "cucina"
+                            // CUCINA: Mostra TUTTI i countdown (pannello di controllo centrale)
+                            console.log(`✅ Countdown accettato per cucina - Tavolo: ${data.tableNumber}`);
+                            startCountdownVisual(data.tableNumber, data.timeRemaining, data.destination);
+                        } else if (data.action === 'deleteCountdown') {
+                            console.log('📥 Eliminazione countdown ricevuta via WebSocket:', data);
+                            const countdownIndex = countdowns.findIndex(c => c.tableNumber == data.tableNumber);
+                            if (countdownIndex !== -1) {
+                                const countdown = countdowns[countdownIndex];
+                                clearInterval(countdown.interval);
+                                if (countdown.element && countdown.element.parentNode) {
+                                    countdown.element.parentNode.removeChild(countdown.element);
+                                }
+                                countdowns.splice(countdownIndex, 1);
+                                console.log(`🗑️ Countdown tavolo ${data.tableNumber} eliminato da altro client`);
+                            }
+                        } else if (data.action === 'voiceMessage') {
+                            console.log('📢 Messaggio vocale ricevuto in cucina:', data);
+                            console.log('📍 Destinazione del messaggio:', data.destination);
+                            // Mostra solo i messaggi destinati alla cucina
+                            if (data.destination === 'cucina') {
+                                console.log('✅ Messaggio vocale accettato per cucina');
+                                displayVoiceMessage(data);
+                            } else {
+                                console.log(`🚫 Messaggio vocale ignorato - Destinazione: ${data.destination}`);
+                            }
+                        } else if (data.action === 'deleteVoiceMessage') {
+                            console.log('🗑️ Eliminazione messaggio vocale ricevuta:', data);
+                            removeVoiceMessage(data.messageId);
+                        } else if (data.action === 'pausaCucina') {
+                            console.log('⏸️ Messaggio pausa cucina ricevuto in CUCINA:', data);
+                            console.log(`⏸️ Dettagli pausa: ${data.durataMinuti} minuti da ${data.from}`);
+                            gestisciPausaCucina(data);
+                        } else if (data.action === 'annullaPausaCucina') {
+                            console.log('❌ Messaggio annullamento pausa ricevuto in CUCINA:', data);
+                            annullaPausaCucina();
+                        } else if (data.action === 'pausaInsalata') {
+                            console.log('⏸️ Messaggio pausa insalata ricevuto in CUCINA:', data);
+                            console.log(`⏸️ Dettagli pausa: ${data.durataMinuti} minuti da ${data.from}`);
+                            mostraPausaInsalata(data);
+                        } else if (data.action === 'annullaPausaInsalata') {
+                            console.log('❌ Messaggio annullamento pausa insalata ricevuto in CUCINA:', data);
+                            nascondePausaInsalata();
+                        } else if (data.action === 'pageOccupied') {
+                            console.warn('⚠️ La pagina è già occupata da un altro utente!', data.message);
+                            mostraAvvisoPaginaOccupata(data);
+                        } else if (data.action === 'newUserJoined') {
+                            console.log('🎉 Nuovo utente è entrato nella pagina:', data.message);
+                            mostraAvvisoNuovoUtente(data);
+                        }
+                    } catch (error) {
+                        console.error('Errore nel parsing del messaggio WebSocket:', error);
+                    }
+                };
+
+                ws.onclose = (event) => {
+                    console.log(`🔌 WebSocket disconnesso: ${event.code} - ${event.reason}`);
+                    isConnected = false;
+                    stopHeartbeat();
+                    updateConnectionStatus(false);
+
+                    // Avvia riconnessione automatica
+                    if (!reconnectInterval) {
+                        console.log('🔄 Avvio riconnessione automatica...');
+                        reconnectInterval = setInterval(() => {
+                            console.log('🔄 Tentativo di riconnessione...');
+                            connectWebSocket();
+                        }, 3000);
+                    }
+                };
+
+                ws.onerror = (error) => {
+                    console.error('❌ Errore WebSocket:', error);
+                };
+
+            } catch (error) {
+                console.error('❌ Errore creazione WebSocket:', error);
+                isConnected = false;
+                updateConnectionStatus(false);
+            }
+        }
+
+        function startHeartbeat() {
+            heartbeatInterval = setInterval(() => {
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ action: 'pong', timestamp: Date.now() }));
+                } else if (ws && ws.readyState !== WebSocket.CONNECTING) {
+                    console.log('🔄 Connessione persa durante heartbeat, riconnetto...');
+                    connectWebSocket();
+                }
+            }, 15000); // Pong ogni 15 secondi
+        }
+
+        function stopHeartbeat() {
+            if (heartbeatInterval) {
+                clearInterval(heartbeatInterval);
+                heartbeatInterval = null;
+            }
+        }
+
+        function updateConnectionStatus(connected) {
+            const statusElement = document.getElementById('connection-status');
+            if (!statusElement) {
+                // Crea elemento status se non esiste
+                const status = document.createElement('div');
+                status.id = 'connection-status';
+                status.style.cssText = `
+                    position: fixed;
+                    bottom: 20px;
+                    right: 20px;
+                    z-index: 1001;
+                    padding: 8px 12px;
+                    border-radius: 6px;
+                    font-size: 12px;
+                    font-weight: 600;
+                    transition: all 0.3s ease;
+                `;
+                document.body.appendChild(status);
+            }
+
+            const status = document.getElementById('connection-status');
+            if (connected) {
+                status.textContent = '🟢 Connesso';
+                status.style.backgroundColor = '#d4edda';
+                status.style.color = '#155724';
+                status.style.border = '1px solid #c3e6cb';
+            } else {
+                status.textContent = '🔴 Disconnesso - Riconnessione...';
+                status.style.backgroundColor = '#f8d7da';
+                status.style.color = '#721c24';
+                status.style.border = '1px solid #f5c6cb';
+            }
+        }
+
+        // Inizializza connessione
+        connectWebSocket();
+
+        function startCountdown(minutes, tableNumber, destination) {
+            let timeRemaining = minutes * 60;
+
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                const message = {
+                    action: 'startCountdown',
+                    tableNumber: tableNumber,
+                    timeRemaining: timeRemaining,
+                    destination: destination
+                };
+                console.log('📤 Invio countdown via WebSocket:', message);
+                ws.send(JSON.stringify(message));
+            } else {
+                console.error('❌ WebSocket non connesso, stato:', ws ? ws.readyState : 'null');
+                alert('⚠️ Connessione persa. Il countdown verrà avviato localmente. Riconnessione in corso...');
+            }
+
+            startCountdownVisual(tableNumber, timeRemaining, destination);
+        }
+
+        function startCountdownVisual(tableNumber, timeRemaining, destination) {
+            console.log(`🎯 CUCINA - Creazione countdown per tavolo ${tableNumber}, destinazione: "${destination}"`);
+
+            // SOLUZIONE N°2: PRIORITÀ ASSOLUTA PER "CUCINA"
+            // La destinazione "cucina" ha sempre priorità, indipendentemente dall'ordine di arrivo
+            const existingCountdownIndex = countdowns.findIndex(c => c.tableNumber == tableNumber);
+            
+            if (existingCountdownIndex !== -1) {
+                const existing = countdowns[existingCountdownIndex];
+                
+                // Se il nuovo countdown NON è "cucina" ma esiste già "cucina", ignora il nuovo
+                if (destination !== 'cucina' && existing.destination === 'cucina') {
+                    console.log(`🎯 PRIORITÀ CUCINA: Tavolo ${tableNumber} - Ignoro ${destination}, mantengo cucina esistente`);
+                    return;
+                }
+                
+                // Se il nuovo countdown È "cucina", sostituisci SEMPRE (anche se esiste già cucina)
+                // Se nessuno dei due è "cucina", sostituisci normalmente
+                console.log(`🔄 Sostituisco countdown tavolo ${tableNumber}: ${existing.destination} → ${destination}`);
+                
+                clearInterval(existing.interval);
+                if (existing.element && existing.element.parentNode) {
+                    existing.element.parentNode.removeChild(existing.element);
+                }
+                countdowns.splice(existingCountdownIndex, 1);
+            }
+
+            const countdown = {
+                tableNumber,
+                timeRemaining,
+                destination: destination,
+                element: null,
+                interval: null
+            };
+
+            // Icone per destinazioni
+            const destinationIcons = {
+                'cucina': '🍳',
+                'pizzeria': '🍕',
+                'insalata': '🥗'
+            };
+
+            // PASSO 2: Colori specifici - Verde chiaro per cucina, bianco per altri
+            const destinationColors = {
+                'cucina': '#d4edda',      // Verde chiaro per cucina
+                'pizzeria': '#ffffff',    // Base bianca per pizzeria
+                'insalata': '#ffffff'     // Base bianca per insalata
+            };
+
+            const countdownItem = document.createElement('div');
+            countdownItem.classList.add('countdown-item');
+            countdownItem.style.backgroundColor = destinationColors[destination] || '#ffffff';
+            countdownItem.innerHTML = `
+                <div class="countdown-table">
+                    <h3>${destinationIcons[destination]} Tavolo ${tableNumber}</h3>
+                    <small style="color: #666; text-transform: capitalize;">${destination}</small>
+                </div>
+                <div class="countdown-time">
+                    <p>${formatTime(timeRemaining)}</p>
+                </div>
+                <div class="countdown-delete">
+                    <button onclick="eliminaCountdown(${tableNumber})" class="delete-btn">
+                        🗑️ Elimina
+                    </button>
+                </div>
+            `;
+            countdown.element = countdownItem;
+
+            countdowns.push(countdown);
+            countdownList.appendChild(countdownItem);
+            sortCountdowns();
+
+            countdown.interval = setInterval(() => {
+                countdown.timeRemaining--;
+
+                if (countdown.timeRemaining <= 0) {
+                    clearInterval(countdown.interval);
+                    countdown.element.style.backgroundColor = '#ff4444';
+                    countdown.element.querySelector('p').textContent = 'Tempo scaduto!';
+
+                    const zeroAudio = document.getElementById('zeroSound');
+                    if (zeroAudio) {
+                        zeroAudio.play().catch(e => {
+                            console.log('⚠️ Errore riproduzione audio a zero:', e);
+                            alert(`🚨 TEMPO SCADUTO - Tavolo ${countdown.tableNumber}!`);
+                        });
+                    } else {
+                        console.log('⚠️ Elemento audio per zero non trovato');
+                        alert(`🚨 TEMPO SCADUTO - Tavolo ${countdown.tableNumber}!`);
+                    }
+
+                    setTimeout(() => {
+                        if (countdownList.contains(countdown.element)) {
+                            countdownList.removeChild(countdown.element);
+                            const index = countdowns.indexOf(countdown);
+                            if (index > -1) countdowns.splice(index, 1);
+                        }
+                    }, 45000);
+                    return;
+                }
+
+                if (countdown.timeRemaining === 60) {
+                    countdown.element.style.backgroundColor = '#ffeb3b';
+
+                    const audio = document.getElementById('alertSound');
+                    if (audio) {
+                        audio.play().catch(e => {
+                            console.log('⚠️ Errore audio:', e);
+                            countdown.element.style.border = '3px solid #ff0000';
+                            countdown.element.style.animation = 'blink 1s infinite';
+
+                            if (!document.getElementById('blinkStyle')) {
+                                const style = document.createElement('style');
+                                style.id = 'blinkStyle';
+                                style.textContent = `
+                                    @keyframes blink {
+                                        0%, 50% { opacity: 1; }
+                                        51%, 100% { opacity: 0.5; }
+                                    }
+                                `;
+                                document.head.appendChild(style);
+                            }
+                        });
+                    } else {
+                        console.log('⚠️ Elemento audio non trovato');
+                        countdown.element.style.border = '3px solid #ff0000';
+                        alert(`⏰ ATTENZIONE: Tavolo ${countdown.tableNumber} - 1 MINUTO RIMANENTE!`);
+                    }
+                }
+
+                const timeElement = countdown.element.querySelector('p');
+                if (timeElement) {
+                    timeElement.textContent = `Tempo rimanente: ${formatTime(countdown.timeRemaining)}`;
+                }
+
+                if (countdown.timeRemaining % 5 === 0) {
+                    sortCountdowns();
+                }
+            }, 1000);
+        }
+
+        function sortCountdowns() {
+            countdowns.sort((a, b) => a.timeRemaining - b.timeRemaining);
+            const container = document.getElementById('countdownList');
+            container.innerHTML = '';
+            countdowns.forEach(countdown => {
+                container.appendChild(countdown.element);
+            });
+        }
+
+        function eliminaCountdown(tableNumber) {
+            console.log(`🗑️ Richiesta eliminazione countdown da cucina: Tavolo ${tableNumber}`);
+
+            // Invia eliminazione via WebSocket
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                const deleteMessage = {
+                    action: 'deleteCountdown',
+                    tableNumber: tableNumber
+                };
+                ws.send(JSON.stringify(deleteMessage));
+                console.log(`📤 Eliminazione countdown inviata da cucina via WebSocket: Tavolo ${tableNumber}`);
+            } else {
+                console.error('❌ WebSocket non connesso per eliminazione countdown in cucina');
+                alert('❌ Connessione persa. Impossibile eliminare il countdown.');
+
+                // Fallback: rimuovi solo localmente se WebSocket non disponibile
+                const countdownIndex = countdowns.findIndex(c => c.tableNumber == tableNumber);
+                if (countdownIndex !== -1) {
+                    const countdown = countdowns[countdownIndex];
+                    clearInterval(countdown.interval);
+                    if (countdown.element && countdown.element.parentNode) {
+                        countdown.element.parentNode.removeChild(countdown.element);
+                    }
+                    countdowns.splice(countdownIndex, 1);
+                    console.log(`🗑️ Countdown tavolo ${tableNumber} eliminato solo localmente (WebSocket disconnesso)`);
+                }
+            }
+        }
+
+        function formatTime(seconds) {
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = seconds % 60;
+            return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+        }
+
+        // Sistema riconoscimento vocale continuo
+        let continuousRecognition;
+        let isContinuousListening = false;
+        let isProcessingCommand = false;
+
+        const WAKE_WORDS = ['tavolo'];
+
+        async function toggleContinuousVoice() {
+            console.log('🎯 Toggle voce premuto, stato attuale:', isContinuousListening);
+
+            if (isContinuousListening) {
+                stopContinuousListening();
+            } else {
+                await startContinuousListening();
+            }
+        }
+
+        window.toggleContinuousVoice = toggleContinuousVoice;
+
+        function stopContinuousListening() {
+            if (continuousRecognition) {
+                continuousRecognition.stop();
+                isContinuousListening = false;
+                updateVoiceUI(false);
+                console.log('🛑 Riconoscimento vocale continuo fermato');
+            }
+        }
+
+        async function startContinuousListening() {
+            if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+                alert('Il riconoscimento vocale non è supportato in questo browser. Usa Chrome.');
+                return;
+            }
+
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                stream.getTracks().forEach(track => track.stop());
+            } catch (error) {
+                console.error('Errore accesso microfono:', error);
+                const statusDiv = document.getElementById('voice-status');
+                statusDiv.textContent = '❌ Impossibile accedere al microfono. Verifica i permessi del browser.';
+                statusDiv.style.color = '#dc3545';
+                return;
+            }
+
+            isContinuousListening = true;
+            isProcessingCommand = false;
+            updateVoiceUI(true);
+            createNewRecognition();
+            console.log('🎤 Riconoscimento vocale continuo avviato - Dì "tavolo"');
+        }
+
+        function processContinuousCommand(command) {
+            console.log('🎧 Comando ricevuto:', command);
+
+            // Cerca la parola "tavolo" nel comando
+            const tavoloIndex = command.indexOf('tavolo');
+            if (tavoloIndex === -1) {
+                const statusDiv = document.getElementById('voice-status');
+                statusDiv.textContent = 'Dì "tavolo" seguito dal numero e minuti';
+                statusDiv.style.color = '#666';
+                return;
+            }
+
+            // Estrae il comando dopo "tavolo"
+            const commandAfterTavolo = command.substring(tavoloIndex).trim();
+            console.log(`🎯 Parola "tavolo" rilevata! Comando completo: "${commandAfterTavolo}"`);
+
+            console.log('🛑 STOP immediato del riconoscimento per elaborare comando...');
+            try {
+                continuousRecognition.stop();
+            } catch (e) {
+                console.log('Stop error (ignorato):', e);
+            }
+
+            isProcessingCommand = true;
+            const statusDiv = document.getElementById('voice-status');
+            const indicatorDiv = document.getElementById('voice-indicator');
+
+            statusDiv.textContent = `🎯 Comando in elaborazione: "${commandAfterTavolo}"`;
+            statusDiv.style.color = '#ff6600';
+            indicatorDiv.textContent = '🟡 Elaborando comando...';
+
+            playBeep();
+
+            if (commandAfterTavolo) {
+                parseVoiceCommand(commandAfterTavolo);
+            } else {
+                statusDiv.textContent = '❌ Nessun comando dopo "tavolo"';
+                statusDiv.style.color = '#dc3545';
+            }
+
+            setTimeout(() => {
+                console.log('🔄 RICREO completamente il riconoscimento...');
+                isProcessingCommand = false;
+
+                if (isContinuousListening) {
+                    statusDiv.textContent = 'Dì "tavolo" seguito dal numero e minuti';
+                    statusDiv.style.color = '#DCDCDC';
+                    indicatorDiv.textContent = '🟢 In ascolto continuo...';
+                    restartRecognitionFromScratch();
+                }
+            }, 1500);
+        }
+
+        function restartRecognitionFromScratch() {
+            console.log('🏗️ Ricreando riconoscimento da zero...');
+
+            try {
+                if (continuousRecognition) {
+                    continuousRecognition.onresult = null;
+                    continuousRecognition.onerror = null;
+                    continuousRecognition.onend = null;
+                    continuousRecognition.stop();
+                    continuousRecognition = null;
+                }
+            } catch (e) {
+                console.log('Cleanup error (ignorato):', e);
+            }
+
+            setTimeout(() => {
+                if (isContinuousListening) {
+                    console.log('🚀 Creando nuovo riconoscimento...');
+                    createNewRecognition();
+                }
+            }, 300);
+        }
+
+        function createNewRecognition() {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            continuousRecognition = new SpeechRecognition();
+
+            continuousRecognition.lang = 'it-IT';
+            continuousRecognition.continuous = true;
+            continuousRecognition.interimResults = true;
+            continuousRecognition.maxAlternatives = 1;
+
+            continuousRecognition.onresult = function(event) {
+                let finalTranscript = '';
+                let interimTranscript = '';
+
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    const transcript = event.results[i][0].transcript;
+                    if (event.results[i].isFinal) {
+                        finalTranscript += transcript;
+                    } else {
+                        interimTranscript += transcript;
+                    }
+                }
+
+                const statusDiv = document.getElementById('voice-status');
+                if (interimTranscript && !isProcessingCommand) {
+                    statusDiv.textContent = `🎤 "${interimTranscript.trim()}"`;
+                    statusDiv.style.color = '#007bff';
+                }
+
+                if (finalTranscript && !isProcessingCommand) {
+                    processContinuousCommand(finalTranscript.toLowerCase().trim());
+                }
+            };
+
+            continuousRecognition.onerror = function(event) {
+                console.error('Errore riconoscimento:', event.error);
+                if (event.error === 'not-allowed') {
+                    const statusDiv = document.getElementById('voice-status');
+                    statusDiv.textContent = '❌ Permessi microfono negati';
+                    statusDiv.style.color = '#dc3545';
+                    stopContinuousListening();
+                }
+            };
+
+            continuousRecognition.onend = function() {
+                console.log('📴 Riconoscimento terminato, isListening:', isContinuousListening, 'isProcessing:', isProcessingCommand);
+
+                if (isContinuousListening && !isProcessingCommand) {
+                    console.log('🔄 Riavvio automatico...');
+                    setTimeout(() => {
+                        if (isContinuousListening && !isProcessingCommand) {
+                            try {
+                                continuousRecognition.start();
+                                console.log('✅ Riavviato automaticamente');
+                            } catch (error) {
+                                console.error('❌ Errore riavvio:', error);
+                                restartRecognitionFromScratch();
+                            }
+                        }
+                    }, 300);
+                }
+            };
+
+            try {
+                continuousRecognition.start();
+                console.log('✅ Nuovo riconoscimento avviato con successo');
+                console.log('🎤 Riconoscimento vocale continuo avviato - Dì "tavolo"');
+            } catch (error) {
+                console.error('❌ Errore avvio nuovo riconoscimento:', error);
+            }
+        }
+
+        function updateVoiceUI(isActive) {
+            const voiceButton = document.getElementById('voice-button');
+            const statusDiv = document.getElementById('voice-status');
+            const indicatorDiv = document.getElementById('voice-indicator');
+
+            if (isActive) {
+                // Rimuovi la classe inattiva e aggiungi quella attiva
+                voiceButton.classList.remove('voice-inactive');
+                voiceButton.classList.add('voice-active');
+                voiceButton.textContent = '🎤 Voce Attiva - STOP';
+
+                // Controlla se ci sono destinazioni selezionate per il messaggio appropriato
+                if (selectedDestinations.length > 0) {
+                    statusDiv.textContent = 'Dì "tavolo" seguito dal numero e minuti (es: "tavolo 5 otto minuti")';
+                    statusDiv.style.color = '#666';
+                } else {
+                    statusDiv.textContent = '⚠️ Seleziona prima una destinazione';
+                    statusDiv.style.color = '#ffc107';
+                }
+
+                indicatorDiv.textContent = '🟢 In ascolto continuo...';
+                indicatorDiv.style.color = '#28a745';
+            } else {
+                // Rimuovi la classe attiva e aggiungi quella inattiva
+                voiceButton.classList.remove('voice-active');
+                voiceButton.classList.add('voice-inactive');
+                voiceButton.textContent = '🎤 Attiva Comando vocale';
+                statusDiv.textContent = 'Dì "tavolo" seguito dal numero e minuti (es: "tavolo 5 otto minuti")';
+                statusDiv.style.color = '#666';
+                indicatorDiv.textContent = '🔴 Voce disattivata';
+                indicatorDiv.style.color = '#dc3545';
+            }
+        }
+
+        function playBeep() {
+            try {
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioContext.createOscillator();
+                const gain = audioContext.createGain();
+
+                oscillator.connect(gain);
+                gain.connect(audioContext.destination);
+
+                oscillator.frequency.value = 800;
+                gain.gain.setValueAtTime(0.1, audioContext.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+
+                oscillator.start(audioContext.currentTime);
+                oscillator.stop(audioContext.currentTime + 0.2);
+            } catch (error) {
+                console.log('Impossibile riprodurre beep:', error);
+            }
+        }
+
+        function parseVoiceCommand(command) {
+            console.log('🔍 Parsing comando:', command);
+
+            // Pattern semplificati per "tavolo X Y minuti"
+            const patterns = [
+                /tavolo\s+(\d+)\s+(\d+)\s+minut[oi]/i,
+                /tavolo\s+(\d+)\s+(\w+)\s+minut[oi]/i
+            ];
+
+            const numberWords = {
+                'uno': 1, 'due': 2, 'tre': 3, 'quattro': 4, 'cinque': 5,
+                'sei': 6, 'sette': 7, 'otto': 8, 'nove': 9, 'dieci': 10,
+                'undici': 11, 'dodici': 12, 'quindici': 15, 'venti': 20
+            };
+
+            for (const pattern of patterns) {
+                const match = command.match(pattern);
+                if (match) {
+                    const tableNumber = match[1];
+                    let minutes;
+
+                    // Controlla se il secondo gruppo è un numero o una parola
+                    if (patterns.indexOf(pattern) === 0) {
+                        minutes = parseInt(match[2]);
+                    } else {
+                        minutes = numberWords[match[2].toLowerCase()];
+                    }
+
+                    if (tableNumber && minutes) {
+                        console.log(`✅ Comando riconosciuto: Tavolo ${tableNumber}, ${minutes} minuti`);
+
+                        document.getElementById('numeroTavolo').value = tableNumber;
+
+                         // Verifica se è stata selezionata una destinazione
+                        if (selectedDestinations.length === 0) {
+                            const statusDiv = document.getElementById('voice-status');
+                            statusDiv.textContent = '⚠️ Seleziona prima una destinazione';
+                            statusDiv.style.color = '#ffc107';
+                            return false;
+                        }
+
+                        // Per il comando vocale, usa automaticamente "cucina" come destinazione di default
+                        // Se ci sono destinazioni selezionate manualmente, usale; altrimenti usa cucina
+                        if (selectedDestinations.length > 0) {
+                            selectedDestinations.forEach(destination => {
+                                startCountdown(minutes, tableNumber, destination);
+                            });
+                            showConfirmationMessage(tableNumber, selectedDestinations, minutes);
+                        } else {
+                            startCountdown(minutes, tableNumber, 'cucina');
+                        }
+
+                        // 🧹 Pulisce automaticamente l'input e le destinazioni dopo il comando vocale
+                        setTimeout(() => {
+                            document.getElementById('numeroTavolo').value = '';
+                            console.log('🧹 Input tavolo pulito automaticamente dopo comando vocale');
+
+                            // Reset selezione destinazioni anche per comando vocale
+                            resetSelection();
+                            console.log('🧹 Destinazioni resettate automaticamente dopo comando vocale');
+                        }, 500);
+
+                        const statusDiv = document.getElementById('voice-status');
+                        statusDiv.textContent = `✅ Countdown avviato: Tavolo ${tableNumber}, ${minutes} min`;
+                        statusDiv.style.color = '#28a745';
+
+                        return true;
+                    }
+                }
+            }
+
+            const statusDiv = document.getElementById('voice-status');
+            statusDiv.textContent = `❌ Comando non riconosciuto: "${command}"`;
+            statusDiv.style.color = '#dc3545';
+
+            console.log('❌ Pattern non trovato per:', command);
+            return false;
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🎤 Pagina caricata - Riconoscimento vocale continuo disponibile');
+
+            setInterval(() => {
+                if (isContinuousListening && continuousRecognition) {
+                    const states = ['INACTIVE', 'STARTING', 'ACTIVE'];
+                    const stateText = states[continuousRecognition.readyState] || `UNKNOWN(${continuousRecognition.readyState})`;
+                    console.log(`🔍 Debug vocale: listening=${isContinuousListening}, processing=${isProcessingCommand}, state=${stateText}`);
+
+                    if (continuousRecognition && continuousRecognition.readyState === 0 && !isProcessingCommand) {
+                        console.log('🔄 Riconoscimento inattivo, riavvio...');
+                        restartRecognitionFromScratch();
+                    }
+                }
+            }, 5000);
+        });
+
+        function setCompanyName(name) {
+            localStorage.setItem('userCompany', name);
+            document.getElementById('company-name').textContent = name;
+            console.log('Nome azienda impostato:', name);
+        }
+
+        // Sistema messaggio vocale con registrazione audio per cucina
+        let voiceRecognition = null;
+        let isRecordingMessage = false;
+        let currentTranscript = '';
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let selectedDestinationsVoice = [];
+
+        // Gestione selezione destinazioni per messaggi vocali
+        document.addEventListener('DOMContentLoaded', function() {
+            const destinationButtonsVoice = document.querySelectorAll('.destination-button-voice');
+
+            destinationButtonsVoice.forEach(button => {
+                button.addEventListener('click', function() {
+                    const destination = this.getAttribute('data-destination');
+
+                    // Toggle singola destinazione
+                    if (selectedDestinationsVoice.includes(destination)) {
+                        selectedDestinationsVoice = selectedDestinationsVoice.filter(d => d !== destination);
+                        this.classList.remove('selected');
+                    } else {
+                        selectedDestinationsVoice.push(destination);
+                        this.classList.add('selected');
+                    }
+
+                    updateDestinationDisplayVoice();
+                    console.log('Destinazioni selezionate per messaggi vocali in cucina:', selectedDestinationsVoice);
+                });
+            });
+
+            // Stile per pulsanti selezionati messaggi vocali
+            const styleVoice = document.createElement('style');
+            styleVoice.textContent = `
+                .destination-button-voice {
+                    transition: transform 0.2s, background-color 0.3s, box-shadow 0.2s;
+                    min-width: 60px;
+                }
+
+                .destination-button-voice:hover {
+                    transform: translateY(-2px);
+                    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+                }
+
+                .destination-button-voice.selected {
+                    transition: transform 0.2s, background-color 0.3s, box-shadow 0.2s;
+                    min-width: 60px;
+                    transform: translateY(-2px);
+                    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+                    border: 3px solid #333 !important;
+                    position: relative;
+                }
+
+                .destination-button-voice.selected::after {
+                    content: '✓';
+                    position: absolute;
+                    top: -5px;
+                    right: -5px;
+                    background: #28a745;
+                    color: white;
+                    border-radius: 50%;
+                    width: 20px;
+                    height: 20px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 12px;
+                    font-weight: bold;
+                    border: 2px solid white;
+                }
+            `;
+            document.head.appendChild(styleVoice);
+        });
+
+        function updateDestinationDisplayVoice() {
+            const displayDiv = document.getElementById('selected-destinations-voice');
+            if (selectedDestinationsVoice.length === 0) {
+                displayDiv.textContent = '';
+            } else {
+                const icons = { 'pizzeria': '🍕', 'insalata': '🥗' };
+                const destNames = { 'pizzeria': 'Pizzeria', 'insalata': 'Insalata' };
+                const destName = destNames[selectedDestinationsVoice[0]] || selectedDestinationsVoice[0];
+                displayDiv.textContent = `${icons[selectedDestinationsVoice[0]]} ${destName}`;
+            }
+        }
+
+        async function toggleVoiceRecording() {
+            // Previeni avvio multiplo
+            if (isRecordingMessage) {
+                console.log('⚠️ Registrazione già in corso in cucina, ignorato');
+                return;
+            }
+
+            // Verifica destinazioni selezionate
+            if (selectedDestinationsVoice.length === 0) {
+                alert('⚠️ Seleziona almeno una destinazione prima di registrare!');
+                return;
+            }
+
+            try {
+                // Avvia registrazione audio
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream, {
+                    mimeType: 'audio/webm;codecs=opus'
+                });
+                audioChunks = [];
+
+                mediaRecorder.ondataavailable = event => {
+                    audioChunks.push(event.data);
+                };
+
+                mediaRecorder.onstop = () => {
+                    // Ferma tutti i track del microfono
+                    stream.getTracks().forEach(track => track.stop());
+                    // Elabora l'audio registrato
+                    processRecordedAudio();
+                };
+
+                mediaRecorder.start();
+                console.log('🎤 Registrazione audio pura avviata per 5 secondi in cucina');
+
+                isRecordingMessage = true;
+                updateVoiceMessageUI(true);
+
+                const statusDiv = document.getElementById('voice-message-status');
+                statusDiv.textContent = '🎤 Registrando...';
+                statusDiv.style.color = '#dc3545';
+
+                startCountdownRecording(5);
+
+                // Auto-stop dopo 5 secondi
+                setTimeout(() => {
+                    if (isRecordingMessage && mediaRecorder.state === 'recording') {
+                        mediaRecorder.stop();
+                    }
+                }, 5000);
+
+            } catch (error) {
+                console.error('❌ Errore accesso microfono in cucina:', error);
+                alert('❌ Impossibile accedere al microfono. Verifica i permessi.');
+                isRecordingMessage = false;
+                updateVoiceMessageUI(false);
+                return;
+            }
+        }
+
+        function startCountdownRecording(seconds) {
+            let remaining = seconds;
+            const statusDiv = document.getElementById('voice-message-status');
+
+            const countdownInterval = setInterval(() => {
+                remaining--;
+                if (remaining > 0) {
+                    statusDiv.textContent = `🎤 ${remaining}s`;
+                } else {
+                    clearInterval(countdownInterval);
+                }
+            }, 1000);
+        }
+
+        function processRecordedAudio() {
+            isRecordingMessage = false;
+            updateVoiceMessageUI(false);
+
+            const statusDiv = document.getElementById('voice-message-status');
+            statusDiv.textContent = '🔄 Elaborando...';
+            statusDiv.style.color = '#ffc107';
+
+            if (audioChunks.length === 0) {
+                statusDiv.textContent = '⚠️ Riprova';
+                statusDiv.style.color = '#ffc107';
+
+                setTimeout(() => {
+                    statusDiv.textContent = '';
+                    statusDiv.style.color = '#666';
+                }, 3000);
+                return;
+            }
+
+            // Crea blob audio
+            const audioBlob = new Blob(audioChunks, { type: 'audio/webm;codecs=opus' });
+
+            // Verifica dimensione audio
+            if (audioBlob.size < 1000) {
+                statusDiv.textContent = '⚠️ Parla più forte';
+                statusDiv.style.color = '#ffc107';
+
+                setTimeout(() => {
+                    statusDiv.textContent = '';
+                    statusDiv.style.color = '#666';
+                }, 3000);
+                return;
+            }
+
+            console.log(`🎤 Audio cucina: ${audioBlob.size} bytes, tipo: ${audioBlob.type}`);
+
+            // Converti in base64 e invia
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                const audioDataBase64 = reader.result.split(',')[1];
+
+                statusDiv.textContent = '✅ Invio...';
+                statusDiv.style.color = '#28a745';
+
+                sendVoiceAudioMessage(audioDataBase64, audioBlob.size);
+            };
+
+            reader.onerror = () => {
+                console.error('❌ Errore audio in cucina');
+                statusDiv.textContent = '❌ Errore';
+                statusDiv.style.color = '#dc3545';
+            };
+
+            reader.readAsDataURL(audioBlob);
+        }
+
+        function updateVoiceMessageUI(isRecording) {
+            const button = document.getElementById('voice-message-button');
+            const statusDiv = document.getElementById('voice-message-status');
+
+            if (isRecording) {
+                button.textContent = '🔴 Registrando...';
+                button.style.background = 'linear-gradient(135deg, #dc3545 0%, #c82333 100%)';
+                button.style.transform = 'scale(1.05)';
+                button.disabled = true;
+            } else {
+                button.textContent = '🎤 5s';
+                button.style.background = 'linear-gradient(135deg, #007bff 0%, #0056b3 100%)';
+                button.style.transform = 'scale(1)';
+                button.disabled = false;
+
+                setTimeout(() => {
+                    if (!isRecordingMessage) {
+                        statusDiv.textContent = '';
+                        statusDiv.style.color = '#666';
+                    }
+                }, 3000);
+            }
+        }
+
+        function sendVoiceAudioMessage(audioDataBase64, audioSize) {
+            const messageId = Date.now().toString();
+            const currentTime = new Date().toLocaleTimeString('it-IT');
+
+            // Invia a tutte le destinazioni selezionate
+            selectedDestinationsVoice.forEach(destination => {
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    const voiceMessageData = {
+                        action: 'voiceMessage',
+                        message: `Messaggio vocale da Cucina (${Math.round(audioSize/1024)}KB)`,
+                        messageId: `${messageId}_${destination}`,
+                        from: 'Cucina',
+                        destination: destination,
+                        audioData: audioDataBase64,
+                        hasAudio: true,
+                        audioSize: audioSize,
+                        timestamp: currentTime
+                    };
+
+                    ws.send(JSON.stringify(voiceMessageData));
+                    console.log(`📢 🎤 Inviato da cucina a ${destination}: ${Math.round(audioSize/1024)}KB`);
+                } else {
+                    console.error('❌ WebSocket non connesso in cucina');
+                    alert('❌ Connessione persa.');
+                    return;
+                }
+            });
+
+            const statusDiv = document.getElementById('voice-message-status');
+            const destText = selectedDestinationsVoice.length === 1 ? 
+                selectedDestinationsVoice[0] : 
+                `${selectedDestinationsVoice.length} destinazioni`;
+
+            statusDiv.textContent = `✅ A ${destText}! (${Math.round(audioSize/1024)}KB)`;
+            statusDiv.style.color = '#28a745';
+
+            // Reset delle destinazioni selezionate
+            selectedDestinationsVoice = [];
+            document.querySelectorAll('.destination-button-voice').forEach(btn => {
+                btn.classList.remove('selected');
+            });
+            updateDestinationDisplayVoice();
+
+            // Pulisci lo stato
+            audioChunks = [];
+            mediaRecorder = null;
+
+            setTimeout(() => {
+                statusDiv.textContent = '';
+                statusDiv.style.color = '#666';
+            }, 3000);
+        }
+
+        // Gestione messaggi vocali
+        function displayVoiceMessage(messageData) {
+            const messagesList = document.getElementById('voice-messages-list');
+            const messagesContainerElement = document.getElementById('messagesContainer');
+
+            // 🎯 Mostra il container dei messaggi quando arriva il primo messaggio
+            if (messagesContainerElement.style.display === 'none') {
+                messagesContainerElement.style.display = 'flex';
+                console.log('📦 Container messaggi mostrato');
+            }
+
+            // Crea elemento messaggio
+            const messageElement = document.createElement('div');
+            messageElement.id = `voice-message-${messageData.messageId}`;
+            messageElement.style.cssText = `
+                background: white;
+                padding: 12px;
+                margin: 8px 0;
+                border-radius: 6px;
+                border-left: 3px solid #2196f3;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                display: flex;
+                flex-direction: column;
+                animation: slideIn 0.3s ease-out;
+            `;
+
+            // Crea contenuto con audio se disponibile
+            let audioControls = '';
+            if (messageData.hasAudio && messageData.audioData) {
+                const audioId = `audio-${messageData.messageId}`;
+                const audioSize = messageData.audioSize ? `(${Math.round(messageData.audioSize/1024)}KB)` : '';
+                audioControls = `
+                    <div style="margin: 8px 0; background: #f0f8ff; padding: 8px; border-radius: 4px; border: 1px solid #1976d2;">
+                        <div style="font-size: 12px; color: #1976d2; margin-bottom: 4px;">🎤 Messaggio Audio ${audioSize}</div>
+                        <audio id="${audioId}" controls style="width: 100%; height: 35px;">
+                            <source src="data:audio/webm;base64,${messageData.audioData}" type="audio/webm">
+                            <source src="data:audio/wav;base64,${messageData.audioData}" type="audio/wav">
+                            Il tuo browser non supporta l'audio.
+                        </audio>
+                        <div style="margin-top: 4px;">
+                            <button onclick="playVoiceMessage('${audioId}')" 
+                                    style="background: #28a745; color: white; border: none; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-size: 11px; margin-right: 5px;">
+                                🔊 Riproduci
+                            </button>
+                            <button onclick="replayVoiceMessage('${audioId}')" 
+                                    style="background: #17a2b8; color: white; border: none; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-size: 11px;">
+                                🔄 Ripeti
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }
+
+            messageElement.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                    <div style="flex: 1;">
+                        <div style="font-weight: 600; color: #1976d2; font-size: 14px; margin-bottom: 4px;">
+                            ${messageData.from} - ${messageData.timestamp}
+                        </div>
+                        <div style="color: #333; font-size: 16px; line-height: 1.4; margin-bottom: 8px;">
+                            ${messageData.message}
+                        </div>
+                        ${audioControls}
+                    </div>
+                    <button onclick="deleteVoiceMessage('${messageData.messageId}')" 
+                            style="background: #f44336; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; margin-left: 10px; transition: background 0.2s; align-self: flex-start;">
+                        🗑️ Elimina
+                    </button>
+                </div>
+            `;
+
+            // Aggiungi animazione CSS se non esiste
+            if (!document.getElementById('messageAnimations')) {
+                const style = document.createElement('style');
+                style.id = 'messageAnimations';
+                style.textContent = `
+                    @keyframes slideIn {
+                        from { opacity: 0; transform: translateX(-20px); }
+                        to { opacity: 1; transform: translateX(0); }
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+
+            messagesList.appendChild(messageElement);
+
+            // 🔊 Riproduci allarme per nuovo messaggio dalla pizzeria
+            const messageAlert = document.getElementById('alertSound');
+            if (messageAlert) {
+                messageAlert.play().catch(error => {
+                    console.log('⚠️ Errore riproduzione allarme messaggio:', error);
+
+                    // Fallback: suono generato se l'audio non funziona
+                    try {
+                        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                        const oscillator = audioContext.createOscillator();
+                        const gain = audioContext.createGain();
+
+                        oscillator.connect(gain);
+                        gain.connect(audioContext.destination);
+
+                        // Due beep per distinguere dai countdown
+                        oscillator.frequency.value = 1000;
+                        gain.gain.setValueAtTime(0.1, audioContext.currentTime);
+                        gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+
+                        oscillator.start(audioContext.currentTime);
+                        oscillator.stop(audioContext.currentTime + 0.2);
+
+                        // Secondo beep
+                        setTimeout(() => {
+                            const oscillator2 = audioContext.createOscillator();
+                            const gain2 = audioContext.createGain();
+                            oscillator2.connect(gain2);
+                            gain2.connect(audioContext.destination);
+                            oscillator2.frequency.value = 1200;
+                            gain2.gain.setValueAtTime(0.1, audioContext.currentTime);
+                            gain2.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+                            oscillator2.start(audioContext.currentTime);
+                            oscillator2.stop(audioContext.currentTime + 0.2);
+                        }, 300);
+                    } catch (synthError) {
+                        console.log('Impossibile riprodurre allarme sintetico:', synthError);
+                    }
+                });
+            } else {
+                console.log('⚠️ File audio alerte-346112.mp3 non trovato');
+            }
+
+            // Animazione visiva per attirare l'attenzione
+            const messagesContainer = document.getElementById('voice-messages-container');
+            messagesContainer.style.border = '2px solid #ff6b6b';
+            messagesContainer.style.animation = 'pulse 2s ease-in-out 3';
+
+            // Aggiungi CSS per l'animazione pulse se non esiste
+            if (!document.getElementById('pulseAnimation')) {
+                const style = document.createElement('style');
+                style.id = 'pulseAnimation';
+                style.textContent = `
+                    @keyframes pulse {
+                        from { box-shadow: 0 0 0 0 rgba(255, 107, 107, 0.7); }
+                        70% { box-shadow: 0 0 0 10px rgba(255, 107, 107, 0); }
+                        100% { box-shadow: 0 0 0 0 rgba(255, 107, 107, 0); }
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+
+            // Rimuovi l'effetto visivo dopo qualche secondo
+            setTimeout(() => {
+                messagesContainer.style.border = 'none';
+                messagesContainer.style.animation = '';
+            }, 6000);
+
+            console.log(`📢 🔊 Messaggio vocale visualizzato con allarme: "${messageData.message}"`);
+
+            // 🔊 Auto-riproduzione se c'è audio
+            if (messageData.hasAudio && messageData.audioData) {
+                setTimeout(() => {
+                    const audioId = `audio-${messageData.messageId}`;
+                    playVoiceMessage(audioId);
+                }, 1000);
+            }
+
+            // ⏰ Auto-eliminazione dopo 60 secondi
+            setTimeout(() => {
+                const messageElement = document.getElementById(`voice-message-${messageData.messageId}`);
+                if (messageElement && messageElement.parentNode) {
+                    console.log(`🕐 Auto-eliminazione messaggio vocale dopo 60s: ID ${messageData.messageId}`);
+
+                    // Animazione di uscita
+                    messageElement.style.animation = 'slideOut 0.3s ease-out';
+
+                    setTimeout(() => {
+                        if (messageElement && messageElement.parentNode) {
+                            messageElement.parentNode.removeChild(messageElement);
+
+                            // Nascondi container se non ci sono più messaggi
+                            const messagesList = document.getElementById('voice-messages-list');
+                            const messagesContainerElement = document.getElementById('messagesContainer');
+
+                            if (messagesList.children.length === 0) {
+                                messagesContainerElement.style.display = 'none';
+                                console.log('📦 Container messaggi nascosto (auto-eliminazione)');
+                            }
+                        }
+                    }, 300);
+                }
+            }, 60000); // 60 secondi
+        }
+
+        function playVoiceMessage(audioId) {
+            const audioElement = document.getElementById(audioId);
+            if (audioElement) {
+                audioElement.currentTime = 0; // Riavvolgi all'inizio
+                audioElement.play().catch(error => {
+                    console.log('⚠️ Errore riproduzione audio messaggio:', error);
+                    alert('⚠️ Impossibile riprodurre l\'audio. Clicca sui controlli audio.');
+                });
+            }
+        }
+
+        function replayVoiceMessage(audioId) {
+            const audioElement = document.getElementById(audioId);
+            if (audioElement) {
+                audioElement.currentTime = 0;
+                audioElement.play().catch(error => {
+                    console.log('⚠️ Errore riproduzione audio messaggio:', error);
+                });
+            }
+        }
+
+        function deleteVoiceMessage(messageId) {
+            // Invia eliminazione via WebSocket
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                const deleteMessage = {
+                    action: 'deleteVoiceMessage',
+                    messageId: messageId
+                };
+                ws.send(JSON.stringify(deleteMessage));
+                console.log(`📤 Eliminazione messaggio vocale inviata: ID ${messageId}`);
+            } else {
+                console.error('❌ WebSocket non connesso per eliminazione messaggio vocale');
+            }
+
+            // Rimuovi localmente
+            removeVoiceMessage(messageId);
+        }
+
+        function removeVoiceMessage(messageId) {
+            const messageElement = document.getElementById(`voice-message-${messageId}`);
+            if (messageElement) {
+                messageElement.style.animation = 'slideOut 0.3s ease-out';
+
+                // Aggiungi animazione di uscita se non esiste
+                if (!document.getElementById('slideOutAnimation')) {
+                    const style = document.createElement('style');
+                    style.id = 'slideOutAnimation';
+                    style.textContent = `
+                        @keyframes slideOut {
+                            from { opacity: 1; transform: translateX(0); }
+                            to { opacity: 0; transform: translateX(20px); }
+                        }
+                    `;
+                    document.head.appendChild(style);
+                }
+
+                setTimeout(() => {
+                    if (messageElement && messageElement.parentNode) {
+                        messageElement.parentNode.removeChild(messageElement);
+                    }
+
+                    // 🎯 Se non ci sono più messaggi, nascondi il container
+                    const messagesList = document.getElementById('voice-messages-list');
+                    const messagesContainerElement = document.getElementById('messagesContainer');
+
+                    if (messagesList.children.length === 0) {
+                        messagesContainerElement.style.display = 'none';
+                        console.log('📦 Container messaggi nascosto (nessun messaggio)');
+                    }
+                }, 300);
+
+                console.log(`🗑️ Messaggio vocale eliminato: ID ${messageId}`);
+            }
+        }
+
+        // Sistema pausa dalla pizzeria
+        let pausaCucinaAttiva = false;
+        let pausaCucinaTimer = null;
+
+        function gestisciPausaCucina(pausaData) {
+            console.log('🎯 CUCINA - Inizio gestione pausa cucina:', pausaData);
+            console.log(`⏸️ Dati ricevuti: ${pausaData.durataMinuti}min da ${pausaData.from} alle ${pausaData.timestamp}`);
+
+            if (pausaCucinaAttiva) {
+                console.log('⚠️ Pausa cucina già attiva, ignorato');
+                return;
+            }
+
+            const durataMinuti = pausaData.durataMinuti;
+            const from = pausaData.from || 'Pizzeria';
+
+            console.log(`✅ CUCINA - Avvio pausa per ${durataMinuti} minuti da ${from}`);
+
+            // SOLO messaggio centrale - rimuove duplicazioni
+            mostraMessaggioPausaCucina(pausaData);
+
+            console.log('🎯 CUCINA - Gestione pausa completata');
+        }
+
+
+
+        function mostraMessaggioPausaCucina(pausaData) {
+            // Rimuovi messaggio precedente se esiste
+            const existingMessage = document.getElementById('pausa-cucina-message');
+            if (existingMessage) {
+                existingMessage.remove();
+            }
+
+            // Crea elemento messaggio pausa con formato uniforme
+            const pausaElement = document.createElement('div');
+            pausaElement.id = 'pausa-cucina-message';
+            pausaElement.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+                color: white;
+                padding: 25px;
+                border-radius: 15px;
+                box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3);
+                z-index: 2000;
+                text-align: center;
+                border: 3px solid #a71e2a;
+                min-width: 350px;
+                font-family: Arial, sans-serif;
+                animation: pausaPulse 2s ease-in-out infinite;
+            `;
+
+            // Aggiungi animazione CSS se non esiste
+            if (!document.getElementById('pausaCucinaAnimations')) {
+                const style = document.createElement('style');
+                style.id = 'pausaCucinaAnimations';
+                style.textContent = `
+                    @keyframes pausaPulse {
+                        0%, 100% { transform: translate(-50%, -50%) scale(1); }
+                        50% { transform: translate(-50%, -50%) scale(1.05); }
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+
+            let tempoRimanente = pausaData.durataMinuti * 60;
+
+            function aggiornaPausaCucinaDisplay() {
+                const minuti = Math.floor(tempoRimanente / 60);
+                const secondi = tempoRimanente % 60;
+
+                pausaElement.innerHTML = `
+                    <div style="font-size: 20px; font-weight: bold; margin-bottom: 10px;">
+                        ⏸️ PAUSA CUCINA ATTIVA
+                    </div>
+                    <div style="font-size: 16px; margin-bottom: 8px;">
+                        Richiesta da: ${pausaData.from}
+                    </div>
+                    <div style="font-size: 24px; font-weight: bold; color: #ffebee;">
+                        ${minuti}:${secondi.toString().padStart(2, '0')}
+                    </div>
+                    <div style="font-size: 14px; margin-top: 8px; opacity: 0.9;">
+                        Servizio temporaneamente sospeso
+                    </div>
+                `;
+
+                if (tempoRimanente > 0) {
+                    tempoRimanente--;
+                    setTimeout(aggiornaPausaCucinaDisplay, 1000);
+                } else {
+                    annullaPausaCucina();
+                }
+            }
+
+            document.body.appendChild(pausaElement);
+            aggiornaPausaCucinaDisplay();
+
+            // Riproduci allarme per pausa
+            const alertAudio = document.getElementById('alertSound');
+            if (alertAudio) {
+                alertAudio.play().catch(e => console.log('Errore audio pausa cucina:', e));
+            }
+
+            console.log(`🚨 Messaggio pausa cucina visualizzato in formato uniforme: ${pausaData.durataMinuti} minuti`);
+        }
+
+        function annullaPausaCucina() {
+            console.log('❌ Annullamento pausa cucina richiesto');
+
+            // Rimuovi SOLO il messaggio centrale
+            const pausaElement = document.getElementById('pausa-cucina-message');
+            if (pausaElement) {
+                if (!document.getElementById('pausaCucinaFadeOutAnimation')) {
+                    const style = document.createElement('style');
+                    style.id = 'pausaCucinaFadeOutAnimation';
+                    style.textContent = `
+                        @keyframes fadeOutCucina {
+                            from { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+                            to { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
+                        }
+                    `;
+                    document.head.appendChild(style);
+                }
+
+                pausaElement.style.animation = 'fadeOutCucina 0.5s ease-out';
+                setTimeout(() => {
+                    if (pausaElement && pausaElement.parentNode) {
+                        pausaElement.parentNode.removeChild(pausaElement);
+                    }
+                }, 500);
+            }
+
+            pausaCucinaAttiva = false;
+            console.log('❌ ✅ Pausa cucina annullata - Solo messaggio centrale rimosso');
+        }
+
+        // Sistema pausa cucina - funzioni per inviare pause dalla cucina
+        let pausaAttiva = false;
+        let pausaTimer = null;
+
+        function inviaMessaggioPausa(minuti) {
+            if (pausaAttiva) {
+                alert('⚠️ Una pausa è già attiva!');
+                return;
+            }
+
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                alert('❌ Connessione persa. Impossibile inviare pausa.');
+                return;
+            }
+
+            const conferma = confirm(`⏸️ Vuoi mettere in pausa la cucina per ${minuti} minuti?\n\nQuesto bloccherà temporaneamente i nuovi countdown.`);
+
+            if (!conferma) return;
+
+            console.log(`⏸️ Invio richiesta pausa cucina da CUCINA: ${minuti} minuti`);
+
+            // Invia messaggio di pausa
+            const messageId = Date.now().toString();
+            const pausaMessage = {
+                action: 'pausaCucina',
+                messageId: messageId,
+                durataMinuti: minuti,
+                from: 'Cucina',
+                timestamp: new Date().toLocaleTimeString('it-IT')
+            };
+
+            ws.send(JSON.stringify(pausaMessage));
+            console.log(`📤 Messaggio pausa inviato dalla cucina: ${minuti} minuti`);
+
+            // Avvia stato di pausa locale
+            avviaPausaLocale(minuti);
+        }
+
+        function avviaPausaLocale(minuti) {
+            pausaAttiva = true;
+            let secondiRimasti = minuti * 60;
+
+            // Disabilita i pulsanti pausa
+            document.getElementById('pause-10-btn').disabled = true;
+            document.getElementById('pause-15-btn').disabled = true;
+            document.getElementById('pause-10-btn').style.opacity = '0.5';
+            document.getElementById('pause-15-btn').style.opacity = '0.5';
+
+            // Crea e mostra il pulsante annulla pausa
+            const pauseContainer = document.getElementById('pause-10-btn').parentNode;
+            const annullaPausaBtn = document.createElement('button');
+            annullaPausaBtn.id = 'annulla-pausa-btn';
+            annullaPausaBtn.innerHTML = '❌ Annulla';
+            annullaPausaBtn.style.cssText = `
+                padding: 6px 12px; 
+                background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); 
+                color: white; 
+                border: none; 
+                border-radius: 6px; 
+                cursor: pointer; 
+                font-size: 12px; 
+                font-weight: 600; 
+                transition: all 0.3s ease; 
+                white-space: nowrap;
+                margin-top: 4px;
+            `;
+            annullaPausaBtn.onclick = annullaPausa;
+            pauseContainer.appendChild(annullaPausaBtn);
+
+            const statusDiv = document.getElementById('pause-status');
+
+            // Aggiorna il countdown della pausa
+            pausaTimer = setInterval(() => {
+                const minutiRim = Math.floor(secondiRimasti / 60);
+                const secondiRim = secondiRimasti % 60;
+
+                statusDiv.textContent = `⏸️ Pausa attiva: ${minutiRim}:${secondiRim.toString().padStart(2, '0')}`;
+                statusDiv.style.color = '#dc3545';
+                statusDiv.style.fontWeight = 'bold';
+
+                secondiRimasti--;
+
+                if (secondiRimasti < 0) {
+                    clearInterval(pausaTimer);
+                    terminaPausaLocale();
+                }
+            }, 1000);
+
+            console.log(`⏸️ Pausa locale avviata dalla cucina per ${minuti} minuti`);
+        }
+
+        function terminaPausaLocale() {
+            pausaAttiva = false;
+
+            if (pausaTimer) {
+                clearInterval(pausaTimer);
+                pausaTimer = null;
+            }
+
+            // Riabilita i pulsanti pausa
+            document.getElementById('pause-10-btn').disabled = false;
+            document.getElementById('pause-15-btn').disabled = false;
+            document.getElementById('pause-10-btn').style.opacity = '1';
+            document.getElementById('pause-15-btn').style.opacity = '1';
+
+            // Rimuovi il pulsante annulla pausa se esiste
+            const annullaPausaBtn = document.getElementById('annulla-pausa-btn');
+            if (annullaPausaBtn) {
+                annullaPausaBtn.remove();
+            }
+
+            const statusDiv = document.getElementById('pause-status');
+            statusDiv.textContent = '✅ Pausa terminata';
+            statusDiv.style.color = '#28a745';
+            statusDiv.style.fontWeight = 'normal';
+
+            // Pulisci il messaggio dopo 5 secondi
+            setTimeout(() => {
+                statusDiv.textContent = '';
+            }, 5000);
+
+            console.log('✅ Pausa locale terminata in cucina');
+        }
+
+        function annullaPausa() {
+            if (!pausaAttiva) {
+                return;
+            }
+
+            const conferma = confirm('❌ Vuoi davvero annullare la pausa?\n\nLa cucina tornerà immediatamente operativa.');
+
+            if (!conferma) return;
+
+            console.log('❌ Annullamento pausa richiesto dalla cucina');
+
+            // Invia messaggio di annullamento pausa
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                const annullaPausaMessage = {
+                    action: 'annullaPausaCucina',
+                    messageId: Date.now().toString(),
+                    from: 'Cucina',
+                    timestamp: new Date().toLocaleTimeString('it-IT')
+                };
+
+                ws.send(JSON.stringify(annullaPausaMessage));
+                console.log('📤 Messaggio annullamento pausa inviato dalla cucina');
+            }
+
+            // Termina pausa locale immediatamente
+            terminaPausaLocale();
+
+            const statusDiv = document.getElementById('pause-status');
+            statusDiv.textContent = '❌ Pausa annullata';
+            statusDiv.style.color = '#dc3545';
+            statusDiv.style.fontWeight = 'bold';
+
+            // Pulisci il messaggio dopo 3 secondi
+            setTimeout(() => {
+                statusDiv.textContent = '';
+            }, 3000);
+        }
+
+        // Gestione messaggi pausa insalata
+        function mostraPausaInsalata(pausaData) {
+            // Rimuovi messaggio precedente se esiste
+            const existingMessage = document.getElementById('pausa-insalata-message');
+            if (existingMessage) {
+                existingMessage.remove();
+            }
+
+            // Crea elemento messaggio pausa insalata con formato uniforme
+            const pausaElement = document.createElement('div');
+            pausaElement.id = 'pausa-insalata-message';
+            pausaElement.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+                color: white;
+                padding: 25px;
+                border-radius: 15px;
+                box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3);
+                z-index: 2000;
+                text-align: center;
+                border: 3px solid #a71e2a;
+                min-width: 350px;
+                font-family: Arial, sans-serif;
+                animation: pausaPulse 2s ease-in-out infinite;
+            `;
+
+            // Aggiungi animazione CSS se non esiste
+            if (!document.getElementById('pausaInsalataAnimations')) {
+                const style = document.createElement('style');
+                style.id = 'pausaInsalataAnimations';
+                style.textContent = `
+                    @keyframes pausaInsalataPulse {
+                        0%, 100% { transform: translate(-50%, -50%) scale(1); }
+                        50% { transform: translate(-50%, -50%) scale(1.05); }
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+
+            let tempoRimanente = pausaData.durataMinuti * 60;
+
+            function aggiornaPausaInsalataDisplay() {
+                const minuti = Math.floor(tempoRimanente / 60);
+                const secondi = tempoRimanente % 60;
+
+                pausaElement.innerHTML = `
+                    <div style="font-size: 20px; font-weight: bold; margin-bottom: 10px;">
+                        ⏸️ PAUSA INSALATA ATTIVA
+                    </div>
+                    <div style="font-size: 16px; margin-bottom: 8px;">
+                        Richiesta da: ${pausaData.from}
+                    </div>
+                    <div style="font-size: 24px; font-weight: bold; color: #ffebee;">
+                        ${minuti}:${secondi.toString().padStart(2, '0')}
+                    </div>
+                    <div style="font-size: 14px; margin-top: 8px; opacity: 0.9;">
+                        Servizio temporaneamente sospeso
+                    </div>
+                `;
+
+                if (tempoRimanente > 0) {
+                    tempoRimanente--;
+                    setTimeout(aggiornaPausaInsalataDisplay, 1000);
+                } else {
+                    nascondePausaInsalata();
+                }
+            }
+
+            document.body.appendChild(pausaElement);
+            aggiornaPausaInsalataDisplay();
+
+            // Riproduci allarme per pausa
+            const alertAudio = document.getElementById('alertSound');
+            if (alertAudio) {
+                alertAudio.play().catch(e => console.log('Errore audio pausa insalata in cucina:', e));
+            }
+
+            console.log(`⏸️ Messaggio pausa insalata mostrato in cucina: ${pausaData.durataMinuti} minuti`);
+        }
+
+        function nascondePausaInsalata() {
+            const pausaElement = document.getElementById('pausa-insalata-message');
+            if (pausaElement) {
+                // Aggiungi CSS per fadeOut se non esiste
+                if (!document.getElementById('pausaInsalataFadeOutAnimation')) {
+                    const style = document.createElement('style');
+                    style.id = 'pausaInsalataFadeOutAnimation';
+                    style.textContent = `
+                        @keyframes fadeOutInsalata {
+                            from { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+                            to { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
+                        }
+                    `;
+                    document.head.appendChild(style);
+                }
+
+                pausaElement.style.animation = 'fadeOutInsalata 0.5s ease-out';
+                setTimeout(() => {
+                    if (pausaElement && pausaElement.parentNode) {
+                        pausaElement.parentNode.removeChild(pausaElement);
+                    }
+                }, 500);
+            }
+            console.log('❌ Messaggio pausa insalata nascosto in cucina');
+        }
+
+        function mostraAvvisoPaginaOccupata(data) {
+            // Rimuovi eventuali avvisi precedenti
+            const existingWarning = document.getElementById('page-occupied-warning');
+            if (existingWarning) {
+                existingWarning.remove();
+            }
+
+            const warningDiv = document.createElement('div');
+            warningDiv.id = 'page-occupied-warning';
+            warningDiv.style.cssText = `
+                position: fixed;
+                top: 20px;
+                left: 50%;
+                transform: translateX(-50%);
+                z-index: 10000;
+                background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+                color: #856404;
+                padding: 15px 20px;
+                border-radius: 10px;
+                border: 2px solid #ffc107;
+                box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+                font-weight: 600;
+                text-align: center;
+                max-width: 500px;
+                animation: slideDown 0.5s ease-out;
+            `;
+
+            warningDiv.innerHTML = `
+                <div style="font-size: 16px; margin-bottom: 8px;">
+                    ⚠️ PAGINA GIÀ IN USO
+                </div>
+                <div style="font-size: 14px; margin-bottom: 10px;">
+                    ${data.message}
+                </div>
+                <button onclick="this.parentElement.remove()" 
+                        style="background: #ffc107; color: #856404; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer; font-weight: 600;">
+                    OK
+                </button>
+            `;
+
+            document.body.appendChild(warningDiv);
+
+            // Rimuovi automaticamente dopo 10 secondi
+            setTimeout(() => {
+                if (warningDiv && warningDiv.parentElement) {
+                    warningDiv.remove();
+                }
+            }, 10000);
+        }
+
+        function mostraAvvisoNuovoUtente(data) {
+            // Rimuovi eventuali avvisi precedenti
+            const existingNotice = document.getElementById('new-user-notice');
+            if (existingNotice) {
+                existingNotice.remove();
+            }
+
+            const noticeDiv = document.createElement('div');
+            noticeDiv.id = 'new-user-notice';
+            noticeDiv.style.cssText = `
+                position: fixed;
+                top: 80px;
+                right: 20px;
+                z-index: 9999;
+                background: linear-gradient(135deg, #d1ecf1 0%, #bee5eb 100%);
+                color: #0c5460;
+                padding: 12px 15px;
+                border-radius: 8px;
+                border-left: 4px solid #17a2b8;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+                font-size: 14px;
+                font-weight: 600;
+                max-width: 300px;
+                animation: slideInRight 0.5s ease-out;
+            `;
+
+            noticeDiv.innerHTML = `
+                <div>${data.message}</div>
+            `;
+
+            document.body.appendChild(noticeDiv);
+
+            // Rimuovi automaticamente dopo 5 secondi
+            setTimeout(() => {
+                if (noticeDiv && noticeDiv.parentElement) {
+                    noticeDiv.style.animation = 'slideOutRight 0.3s ease-in';
+                    setTimeout(() => noticeDiv.remove(), 300);
+                }
+            }, 5000);
+        }
+
+        
+    </script>
+    <script src="company-header.js"></script>
+</body>
+</html>
