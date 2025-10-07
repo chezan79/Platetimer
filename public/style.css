@@ -226,6 +226,15 @@ button[type="submit"]:hover {
 .cucina:hover {
   background: linear-gradient(135deg, #98FB98 0%, var(--cucina) 100%); }
 
+.sala {
+  background: linear-gradient(135deg, var(--sala) 0%, #ff6b6b 100%);
+  color: white;
+}
+
+.sala:hover {
+  background: linear-gradient(135deg, #ff6b6b 0%, var(--sala) 100%);
+}
+
 
 .pizzeria {
   background: linear-gradient(135deg, var(--pizzeria) 0%, #FFE4C4 100%);
