@@ -1,276 +1,647 @@
-
 <!DOCTYPE html>
-<html>
+<html lang="it">
 <head>
-    <title>Sala</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Controllo Attese - Sala</title>
     <link rel="stylesheet" href="style.css">
     <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
         body {
             background: linear-gradient(135deg, #F0FFFF 0%, #E6E6FA 100%);
             min-height: 100vh;
-            margin: 0;
             padding: 20px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
         }
-        
-        .countdown-container {
-            max-width: 800px;
-            width: 100%;
+
+        .header-container {
+            position: sticky;
+            top: 0;
+            z-index: 100;
             background: white;
-            padding: 40px;
+            padding: 20px;
             border-radius: 10px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
         }
-        
-        h1 {
+
+        .page-title {
             text-align: center;
             color: #333;
-            margin-bottom: 30px;
             font-size: 28px;
             font-weight: 300;
+            margin-bottom: 20px;
         }
-        
-        .countdown-item {
-            margin: 8px 0;
-            padding: 12px 15px;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            background-color: #f8f9fa;
-            transition: background-color 0.3s, transform 0.2s, box-shadow 0.2s;
+
+        .stats-bar {
             display: flex;
-            align-items: center;
-            justify-content: space-between;
-            min-height: 50px;
+            justify-content: space-around;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
         }
 
-        .countdown-item:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
-
-        .countdown-table {
-            flex: 0 0 auto;
-            margin-right: 15px;
-        }
-
-        .countdown-table h3 {
-            margin: 0;
-            color: #333;
-            font-size: 22px;
-            font-weight: 600;
-            white-space: nowrap;
-        }
-
-        .countdown-time {
+        .stat-item {
             flex: 1;
+            min-width: 150px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
             text-align: center;
         }
 
-        .countdown-time p {
-            margin: 0;
-            font-size: 22px;
-            color: #d9534f;
-            font-weight: bold;
+        .stat-label {
+            font-size: 12px;
+            opacity: 0.9;
+            margin-bottom: 5px;
         }
-        
-        button {
-            padding: 15px 30px;
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: 600;
+        }
+
+        .filters-container {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .search-input {
+            flex: 1;
+            min-width: 200px;
+            padding: 10px 15px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .filter-group {
+            display: flex;
+            gap: 8px;
+        }
+
+        .filter-btn {
+            padding: 8px 16px;
+            border: 2px solid #ddd;
+            background: white;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+
+        .filter-btn:hover {
+            background: #f0f0f0;
+        }
+
+        .filter-btn.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-color: #667eea;
+        }
+
+        .countdowns-container {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            min-height: 400px;
+        }
+
+        .table-header {
+            display: grid;
+            grid-template-columns: 100px 1fr 150px 120px 150px 100px;
+            gap: 15px;
+            padding: 12px 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            font-weight: 600;
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+
+        .countdown-row {
+            display: grid;
+            grid-template-columns: 100px 1fr 150px 120px 150px 100px;
+            gap: 15px;
+            padding: 15px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            transition: all 0.3s;
+            align-items: center;
+        }
+
+        .countdown-row:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .countdown-row.neutral {
+            background-color: #f8f9fa;
+            border-color: #ddd;
+        }
+
+        .countdown-row.warning {
+            background-color: #fff3cd;
+            border-color: #ffc107;
+        }
+
+        .countdown-row.critical {
+            background-color: #f8d7da;
+            border-color: #dc3545;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .table-number {
+            font-size: 20px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .station-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .station-badge.cucina {
+            background: linear-gradient(135deg, #28a745 0%, #98FB98 100%);
+            color: #212529;
+        }
+
+        .station-badge.pizzeria {
+            background: linear-gradient(135deg, #ffc107 0%, #FFE4C4 100%);
+            color: #212529;
+        }
+
+        .station-badge.insalata {
+            background: linear-gradient(135deg, #17a2b8 0%, #B0E0E6 100%);
+            color: #212529;
+        }
+
+        .time-display {
+            font-size: 22px;
+            font-weight: 700;
+            color: #d9534f;
+        }
+
+        .status-badge {
+            padding: 6px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            text-align: center;
+        }
+
+        .status-badge.active {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-badge.alert {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #999;
+        }
+
+        .empty-state-icon {
+            font-size: 64px;
+            margin-bottom: 20px;
+        }
+
+        .empty-state-text {
+            font-size: 18px;
+        }
+
+        .connection-status {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            z-index: 1000;
+            transition: all 0.3s;
+        }
+
+        .connection-status.connected {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .connection-status.disconnected {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .nav-buttons {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            gap: 10px;
+            z-index: 1000;
+        }
+
+        .nav-btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .nav-btn.home {
             background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%);
             color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 16px;
-            font-weight: 600;
-            transition: transform 0.2s, box-shadow 0.2s;
-            margin-top: 20px;
-            display: block;
-            margin-left: auto;
-            margin-right: auto;
         }
-        
-        button:hover {
+
+        .nav-btn.exit {
+            background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+            color: white;
+        }
+
+        .nav-btn:hover {
             transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(108, 117, 125, 0.3);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .company-header {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 1000;
+            padding: 12px 20px;
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-radius: 8px;
+            border-left: 4px solid #ffc107;
+        }
+
+        .company-name {
+            margin: 0;
+            color: #333;
+            font-weight: 600;
+            font-size: 16px;
+        }
+
+        @media (max-width: 768px) {
+            .table-header,
+            .countdown-row {
+                grid-template-columns: 1fr;
+                gap: 8px;
+            }
+
+            .table-header {
+                display: none;
+            }
+
+            .countdown-row > div::before {
+                content: attr(data-label);
+                font-weight: 600;
+                margin-right: 8px;
+                color: #666;
+            }
+
+            .stats-bar {
+                flex-direction: column;
+            }
+
+            .stat-item {
+                min-width: 100%;
+            }
+
+            .filters-container {
+                flex-direction: column;
+            }
+
+            .search-input {
+                width: 100%;
+            }
+
+            .filter-group {
+                width: 100%;
+                flex-wrap: wrap;
+            }
         }
     </style>
 </head>
 <body>
-    <!-- Nome Azienda fuori dal container in alto a sinistra -->
-    <div id="company-header" style="position: absolute; top: 20px; left: 20px; z-index: 1000; padding: 10px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; border-left: 4px solid #ffc107;">
-        <h4 id="company-name" style="margin: 0; color: #333; font-weight: 600;">Nome Azienda</h4>
+    <div class="company-header" id="company-header">
+        <h4 class="company-name" id="company-name">Nome Azienda</h4>
     </div>
 
-    <!-- Logo posizionato in alto al centro -->
-    <div style="position: absolute; top: 20px; left: 50%; transform: translateX(-50%); z-index: 1000;">
-        <a href="https://imgbox.com/Bt6wfdF9" target="_blank">
-            <img src="https://thumbs2.imgbox.com/3b/04/Bt6wfdF9_t.jpg" alt="MealMaster Logo" style="width: 120px; height: auto;">
-        </a>
+    <div class="nav-buttons">
+        <button class="nav-btn home" onclick="window.location.href='home.html'">🏠 Home</button>
+        <button class="nav-btn exit" onclick="window.location.href='index.html'">🚪 Esci</button>
     </div>
 
-    
-    
-    <div class="countdown-container">
-        <h1>🍽️ Sala</h1>
-        <div id="tavoli">
-            <!-- I countdown sincronizzati appariranno qui -->
+    <div class="header-container">
+        <h1 class="page-title">🍽️ Controllo Attese - Sala</h1>
+
+        <div class="stats-bar">
+            <div class="stat-item">
+                <div class="stat-label">Countdown Attivi</div>
+                <div class="stat-value" id="activeCount">0</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Tempo Medio Attesa</div>
+                <div class="stat-value" id="avgTime">0:00</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Tavoli in Attesa</div>
+                <div class="stat-value" id="tableCount">0</div>
+            </div>
         </div>
+
+        <div class="filters-container">
+            <input type="text" id="searchInput" class="search-input" placeholder="🔍 Cerca tavolo...">
+            
+            <div class="filter-group">
+                <button class="filter-btn active" data-filter="all">Tutti</button>
+                <button class="filter-btn" data-filter="cucina">🍳 Cucina</button>
+                <button class="filter-btn" data-filter="pizzeria">🍕 Pizzeria</button>
+                <button class="filter-btn" data-filter="insalata">🥗 Insalata</button>
+            </div>
         </div>
+    </div>
+
+    <div class="countdowns-container">
+        <div class="table-header">
+            <div>Tavolo</div>
+            <div>Stazioni</div>
+            <div>Ora Inizio</div>
+            <div>Tempo Rimasto</div>
+            <div>Durata Iniziale</div>
+            <div>Stato</div>
+        </div>
+        <div id="countdownsList"></div>
+    </div>
+
+    <div class="connection-status connected" id="connectionStatus">
+        🟢 Connesso
+    </div>
 
     <audio id="alertSound" src="alerte-346112.mp3" preload="auto"></audio>
-    <audio id="zeroSound" src="costa-rica-eas-alarm-346194.mp3" preload="auto"></audio>
-    
-    <!-- Tasto Home in alto a destra -->
-    <div style="position: absolute; top: 20px; right: 20px; z-index: 1000; display: flex; gap: 10px;">
-        <button onclick="window.location.href='home.html'" style="padding: 6px 12px; background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500; transition: transform 0.2s, box-shadow 0.2s;">🏠 Home</button>
-        <button onclick="window.location.href='index.html'" style="padding: 6px 12px; background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500; transition: transform 0.2s, box-shadow 0.2s;">🚪 Esci</button>
-    </div>
 
+    <script src="js/countdowns.js"></script>
+    <script src="company-header.js"></script>
     <script>
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
-        const countdowns = [];
+        let countdowns = [];
+        let activeFilter = 'all';
+        let searchTerm = '';
+        let subscription = null;
+        let updateInterval = null;
 
-        ws.onopen = () => {
-            // Unisciti alla room dell'azienda
-            const companyName = localStorage.getItem('userCompany') || 'Nome Azienda';
-            const joinMessage = {
-                action: 'joinRoom',
-                companyName: companyName
-            };
-            ws.send(JSON.stringify(joinMessage));
-            console.log(`Sala connessa alla room: ${companyName}`);
-        };
+        const companyName = localStorage.getItem('userCompany') || 'Nome Azienda';
 
-        function sortCountdowns() {
-            countdowns.sort((a, b) => a.timeRemaining - b.timeRemaining);
-            const container = document.getElementById('tavoli');
-            container.innerHTML = '';
-            countdowns.forEach(countdown => {
-                container.appendChild(countdown.element);
+        function initializePage() {
+            loadInitialCountdowns();
+            subscribeToUpdates();
+            startAutoRefresh();
+            setupEventListeners();
+        }
+
+        function loadInitialCountdowns() {
+            CountdownsModule.fetchActiveCountdowns(companyName)
+                .then(data => {
+                    countdowns = data;
+                    renderCountdowns();
+                    updateStatistics();
+                })
+                .catch(error => {
+                    console.error('Error loading countdowns:', error);
+                });
+        }
+
+        function subscribeToUpdates() {
+            subscription = CountdownsModule.subscribeCountdowns({
+                companyName: companyName,
+                onCountdownUpdate: (data) => {
+                    updateCountdown(data);
+                },
+                onCountdownDelete: (tableNumber) => {
+                    deleteCountdown(tableNumber);
+                },
+                onConnectionStatus: (connected) => {
+                    updateConnectionStatus(connected);
+                }
             });
         }
 
-        ws.onmessage = (event) => {
-            try {
-                const data = JSON.parse(event.data);
-                if (data.action === 'startCountdown') {
-                    startCountdown(data.tableNumber, data.timeRemaining);
-                } else if (data.action === 'deleteCountdown') {
-                    console.log(`🗑️ Eliminazione countdown in sala: Tavolo ${data.tableNumber}`);
-                    deleteCountdown(data.tableNumber);
-                }
-            } catch (error) {
-                console.error('Errore nel parsing del messaggio:', error);
-            }
-        };
-
-        function startCountdown(tableNumber, timeRemaining) {
-            // Rimuovi il vecchio countdown se esiste
-            const existingIndex = countdowns.findIndex(c => c.tableNumber == tableNumber);
-            if (existingIndex !== -1) {
-                clearInterval(countdowns[existingIndex].interval);
-                if (countdowns[existingIndex].element && countdowns[existingIndex].element.parentNode) {
-                    countdowns[existingIndex].element.parentNode.removeChild(countdowns[existingIndex].element);
-                }
-                countdowns.splice(existingIndex, 1);
-                console.log(`🔄 Countdown esistente per tavolo ${tableNumber} sostituito in sala`);
-            }
-
-            const countdownElement = document.createElement('div');
-            countdownElement.id = `countdown-${tableNumber}`;
-            countdownElement.classList.add('countdown-item');
-
-            let remainingTime = parseInt(timeRemaining);
-
-            const countdown = {
-                tableNumber: tableNumber,
-                timeRemaining: remainingTime,
-                element: countdownElement,
-                interval: null
-            };
-            countdown.interval = setInterval(() => {
-                // Decrementa PRIMA come in cucina.html
-                remainingTime--;
-                countdown.timeRemaining = remainingTime;
-                
-                if (remainingTime <= 0) {
-                    clearInterval(countdown.interval);
-                    countdownElement.style.backgroundColor = '#ff4444';
-                    countdownElement.innerHTML = `
-                        <div class="countdown-table">
-                            <h3>Tavolo ${tableNumber}</h3>
-                        </div>
-                        <div class="countdown-time">
-                            <p>Tempo scaduto!</p>
-                        </div>
-                    `;
-                    
-                    // Riproduce il suono personalizzato per countdown a zero
-                    const zeroAudio = document.getElementById('zeroSound');
-                    if (zeroAudio) {
-                        zeroAudio.play().catch(e => console.log('Errore audio countdown zero:', e));
-                    }
-                    
-                    setTimeout(() => {
-                        const index = countdowns.indexOf(countdown);
-                        if (index > -1) {
-                            countdowns.splice(index, 1);
-                            sortCountdowns();
-                        }
-                    }, 45000);
-                    return;
-                }
-
-                // Riordina ogni 5 secondi come in cucina.html
-                if (remainingTime % 5 === 0) {
-                    sortCountdowns();
-                }
-
-                if (remainingTime === 60) {
-                    countdownElement.style.backgroundColor = '#ffeb3b';
-                    const audio = document.getElementById('alertSound');
-                    if (audio) audio.play().catch(e => console.log('Errore audio:', e));
-                }
-
-                countdownElement.innerHTML = `
-                    <div class="countdown-table">
-                        <h3>Tavolo ${tableNumber}</h3>
-                    </div>
-                    <div class="countdown-time">
-                        <p>${formatTime(remainingTime)}</p>
-                    </div>
-                `;
+        function startAutoRefresh() {
+            updateInterval = setInterval(() => {
+                updateAllCountdowns();
             }, 1000);
+        }
 
-            countdowns.push(countdown);
-            sortCountdowns();
+        function updateAllCountdowns() {
+            const currentTime = Date.now();
+            
+            countdowns = countdowns.map(countdown => {
+                const elapsed = Math.floor((currentTime - countdown.startTime) / 1000);
+                const remainingTime = Math.max(0, countdown.initialDuration - elapsed);
+                
+                return {
+                    ...countdown,
+                    remainingTime: remainingTime,
+                    remainingTimeFormatted: CountdownsModule.formatTime(remainingTime)
+                };
+            }).filter(c => c.remainingTime > 0);
+
+            renderCountdowns();
+            updateStatistics();
+        }
+
+        function updateCountdown(data) {
+            const existingIndex = countdowns.findIndex(c => c.tableNumber == data.tableNumber);
+            
+            const newCountdown = {
+                tableNumber: data.tableNumber,
+                remainingTime: data.timeRemaining,
+                initialDuration: data.timeRemaining,
+                destinations: data.destination ? [data.destination] : [],
+                startedAt: new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
+                startTime: Date.now(),
+                endsAt: Date.now() + (data.timeRemaining * 1000),
+                status: 'active',
+                remainingTimeFormatted: CountdownsModule.formatTime(data.timeRemaining)
+            };
+
+            if (existingIndex !== -1) {
+                const existing = countdowns[existingIndex];
+                if (data.destination && !existing.destinations.includes(data.destination)) {
+                    existing.destinations.push(data.destination);
+                }
+                countdowns[existingIndex] = {
+                    ...existing,
+                    remainingTime: data.timeRemaining,
+                    initialDuration: data.timeRemaining,
+                    startTime: Date.now(),
+                    endsAt: Date.now() + (data.timeRemaining * 1000)
+                };
+            } else {
+                countdowns.push(newCountdown);
+            }
+
+            renderCountdowns();
+            updateStatistics();
         }
 
         function deleteCountdown(tableNumber) {
-            const countdownIndex = countdowns.findIndex(c => c.tableNumber == tableNumber);
-            if (countdownIndex !== -1) {
-                const countdown = countdowns[countdownIndex];
-                clearInterval(countdown.interval);
-                if (countdown.element && countdown.element.parentNode) {
-                    countdown.element.parentNode.removeChild(countdown.element);
-                }
-                countdowns.splice(countdownIndex, 1);
-                console.log(`🗑️ Countdown tavolo ${tableNumber} eliminato in sala via WebSocket`);
-                sortCountdowns();
+            countdowns = countdowns.filter(c => c.tableNumber != tableNumber);
+            renderCountdowns();
+            updateStatistics();
+        }
+
+        function renderCountdowns() {
+            const container = document.getElementById('countdownsList');
+            
+            let filtered = countdowns.filter(c => {
+                const matchesSearch = searchTerm === '' || 
+                    c.tableNumber.toString().includes(searchTerm);
+                
+                const matchesFilter = activeFilter === 'all' || 
+                    (c.destinations && c.destinations.includes(activeFilter));
+                
+                return matchesSearch && matchesFilter;
+            });
+
+            filtered.sort((a, b) => a.remainingTime - b.remainingTime);
+
+            if (filtered.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">🍽️</div>
+                        <div class="empty-state-text">Nessun countdown attivo</div>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = filtered.map(countdown => {
+                const alertLevel = CountdownsModule.getAlertLevel(countdown.remainingTime);
+                const statusClass = countdown.remainingTime < 120 ? 'alert' : 'active';
+                const initialTimeFormatted = CountdownsModule.formatTime(countdown.initialDuration);
+
+                const stationBadges = countdown.destinations && countdown.destinations.length > 0
+                    ? countdown.destinations.map(dest => 
+                        `<span class="station-badge ${dest}">${getStationIcon(dest)}</span>`
+                      ).join(' ')
+                    : '<span class="station-badge cucina">🍳</span>';
+
+                return `
+                    <div class="countdown-row ${alertLevel}">
+                        <div class="table-number" data-label="Tavolo:">T${countdown.tableNumber}</div>
+                        <div data-label="Stazioni:">${stationBadges}</div>
+                        <div data-label="Ora Inizio:">${countdown.startedAt}</div>
+                        <div class="time-display" data-label="Tempo Rimasto:">${countdown.remainingTimeFormatted}</div>
+                        <div data-label="Durata Iniziale:">${initialTimeFormatted}</div>
+                        <div data-label="Stato:">
+                            <span class="status-badge ${statusClass}">
+                                ${statusClass === 'alert' ? '🔥 Urgente' : '✅ Attivo'}
+                            </span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function getStationIcon(station) {
+            const icons = {
+                'cucina': '🍳 Cucina',
+                'pizzeria': '🍕 Pizzeria',
+                'insalata': '🥗 Insalata'
+            };
+            return icons[station] || station;
+        }
+
+        function updateStatistics() {
+            document.getElementById('activeCount').textContent = countdowns.length;
+            
+            const uniqueTables = new Set(countdowns.map(c => c.tableNumber)).size;
+            document.getElementById('tableCount').textContent = uniqueTables;
+
+            const avgTime = CountdownsModule.calculateAverageWaitTime(countdowns);
+            document.getElementById('avgTime').textContent = CountdownsModule.formatTime(avgTime);
+        }
+
+        function updateConnectionStatus(connected) {
+            const statusEl = document.getElementById('connectionStatus');
+            if (connected) {
+                statusEl.className = 'connection-status connected';
+                statusEl.innerHTML = '🟢 Connesso';
+            } else {
+                statusEl.className = 'connection-status disconnected';
+                statusEl.innerHTML = '🔴 Riconnessione...';
             }
         }
 
-        function formatTime(seconds) {
-            const minutes = Math.floor(seconds / 60);
-            const remainingSeconds = seconds % 60;
-            return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+        function setupEventListeners() {
+            const searchInput = document.getElementById('searchInput');
+            let debounceTimer;
+            
+            searchInput.addEventListener('input', (e) => {
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(() => {
+                    searchTerm = e.target.value.toLowerCase();
+                    renderCountdowns();
+                }, 150);
+            });
+
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    activeFilter = btn.dataset.filter;
+                    renderCountdowns();
+                });
+            });
         }
 
-        
+        window.addEventListener('load', initializePage);
+
+        window.addEventListener('beforeunload', () => {
+            if (subscription) {
+                subscription.disconnect();
+            }
+            if (updateInterval) {
+                clearInterval(updateInterval);
+            }
+        });
     </script>
-    <script src="company-header.js"></script>
 </body>
 </html>
