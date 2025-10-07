@@ -688,13 +688,15 @@
                             // Normalizza: trim + toLowerCase per case-insensitive
                             if (companyName) {
                                 companyName = companyName.trim().toLowerCase();
+                                // Forza l'aggiornamento del localStorage con il valore normalizzato
+                                localStorage.setItem('userCompany', companyName);
                             }
                             
                             // Se non c'è nome azienda, prova a recuperarlo dall'header
-                            if (!companyName || companyName === 'Nome Azienda') {
+                            if (!companyName || companyName === 'nome azienda') {
                                 const headerElement = document.getElementById('company-name');
                                 if (headerElement && headerElement.textContent !== 'Nome Azienda') {
-                                    companyName = headerElement.textContent;
+                                    companyName = headerElement.textContent.trim().toLowerCase();
                                     localStorage.setItem('userCompany', companyName);
                                 }
                             }

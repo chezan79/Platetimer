@@ -270,6 +270,9 @@
                             return;
                         }
                         companyName = companyName.trim().toLowerCase();
+                        // Forza l'aggiornamento del localStorage con il valore normalizzato
+                        localStorage.setItem('userCompany', companyName);
+                        
                         const joinMessage = {
                             action: 'joinRoom',
                             companyName: companyName

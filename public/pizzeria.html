@@ -271,6 +271,9 @@
             if (companyName) {
                 companyName = companyName.trim().toLowerCase();
                 console.log('Nome azienda dal localStorage (normalizzato):', companyName);
+                
+                // Forza l'aggiornamento del localStorage con il valore normalizzato
+                localStorage.setItem('userCompany', companyName);
 
                 // Unisciti alla room aziendale
                 ws.send(JSON.stringify({
