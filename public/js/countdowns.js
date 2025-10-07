@@ -214,7 +214,8 @@ const CountdownsModule = (() => {
         formatTime,
         groupByTable,
         getAlertLevel,
-        calculateAverageWaitTime
+        calculateAverageWaitTime,
+        getWebSocket: () => ws
     };
 })();
 
