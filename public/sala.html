@@ -473,7 +473,12 @@
         let subscription = null;
         let updateInterval = null;
 
-        const companyName = localStorage.getItem('userCompany') || 'Nome Azienda';
+        let companyName = localStorage.getItem('userCompany');
+        if (!companyName) {
+            alert('❌ Nome azienda non trovato. Effettua il login.');
+            window.location.href = 'index.html';
+        }
+        companyName = companyName.trim().toLowerCase();
 
         function initializePage() {
             loadInitialCountdowns();
@@ -776,11 +781,13 @@
             if (!voiceCallActive) {
                 try {
                     // Verifica che il nome azienda sia disponibile
-                    const currentCompanyName = localStorage.getItem('userCompany');
-                    if (!currentCompanyName || currentCompanyName === 'Nome Azienda') {
-                        alert('❌ Nome azienda non disponibile. Ricarica la pagina.');
+                    let currentCompanyName = localStorage.getItem('userCompany');
+                    if (!currentCompanyName) {
+                        alert('❌ Nome azienda non trovato. Effettua il login.');
                         return;
                     }
+                    
+                    currentCompanyName = currentCompanyName.trim().toLowerCase();
                     
                     btn.disabled = true;
                     btn.textContent = '⏳ Connessione...';

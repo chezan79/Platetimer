@@ -685,6 +685,11 @@
                     setTimeout(() => {
                             let companyName = localStorage.getItem('userCompany');
                             
+                            // Normalizza: trim + toLowerCase per case-insensitive
+                            if (companyName) {
+                                companyName = companyName.trim().toLowerCase();
+                            }
+                            
                             // Se non c'è nome azienda, prova a recuperarlo dall'header
                             if (!companyName || companyName === 'Nome Azienda') {
                                 const headerElement = document.getElementById('company-name');
@@ -2612,7 +2617,14 @@
                     btn.disabled = true;
                     btn.textContent = 'Connessione...';
                     
-                    const companyName = localStorage.getItem('userCompany') || 'Restaurant';
+                    let companyName = localStorage.getItem('userCompany');
+                    if (!companyName) {
+                        alert('❌ Nome azienda non trovato. Effettua il login.');
+                        btn.disabled = false;
+                        btn.textContent = '📞 Entra in Chiamata';
+                        return;
+                    }
+                    companyName = companyName.trim().toLowerCase();
                     const roomId = `${companyName}:voice`;
                     
                     await VoiceCall.joinVoice(roomId, 'CUCINA', ws);

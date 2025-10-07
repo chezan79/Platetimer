@@ -263,7 +263,13 @@
 
                     // Unisciti alla room con un piccolo delay per stabilizzare la connessione
                     setTimeout(() => {
-                        const companyName = localStorage.getItem('userCompany') || 'Nome Azienda';
+                        let companyName = localStorage.getItem('userCompany');
+                        if (!companyName) {
+                            alert('❌ Nome azienda non trovato. Effettua il login.');
+                            window.location.href = 'index.html';
+                            return;
+                        }
+                        companyName = companyName.trim().toLowerCase();
                         const joinMessage = {
                             action: 'joinRoom',
                             companyName: companyName
@@ -1600,7 +1606,14 @@ function mostraAvvisoPaginaOccupata(data) {
                     btn.disabled = true;
                     btn.textContent = 'Connessione...';
                     
-                    const companyName = localStorage.getItem('userCompany') || 'Restaurant';
+                    let companyName = localStorage.getItem('userCompany');
+                    if (!companyName) {
+                        alert('❌ Nome azienda non trovato. Effettua il login.');
+                        btn.disabled = false;
+                        btn.textContent = '📞 Entra in Chiamata';
+                        return;
+                    }
+                    companyName = companyName.trim().toLowerCase();
                     const roomId = `${companyName}:voice`;
                     
                     await VoiceCall.joinVoice(roomId, 'INSALATA', ws);

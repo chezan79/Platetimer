@@ -356,21 +356,22 @@
                     const userDoc = await getDoc(doc(db, "users", user.uid));
                     if (userDoc.exists()) {
                         const userData = userDoc.data();
-                        // Salva il nome dell'azienda nel localStorage
+                        // Salva il nome dell'azienda nel localStorage (normalizzato)
                         if (userData.company && userData.company.trim() !== '') {
-                            localStorage.setItem('userCompany', userData.company);
-                            console.log('✅ Nome azienda salvato nel localStorage:', userData.company);
+                            const normalizedCompany = userData.company.trim().toLowerCase();
+                            localStorage.setItem('userCompany', normalizedCompany);
+                            console.log('✅ Nome azienda salvato nel localStorage (normalizzato):', normalizedCompany);
                         } else {
                             console.warn('⚠️ Nessun nome azienda trovato per questo utente');
                             // Se non c'è un'azienda, usa il nome utente come fallback
-                            const fallbackName = userData.firstName + ' ' + userData.lastName;
+                            const fallbackName = (userData.firstName + ' ' + userData.lastName).trim().toLowerCase();
                             localStorage.setItem('userCompany', fallbackName);
-                            console.log('✅ Usato nome utente come fallback:', fallbackName);
+                            console.log('✅ Usato nome utente come fallback (normalizzato):', fallbackName);
                         }
                     } else {
                         console.error('❌ Documento utente non trovato in Firestore');
-                        // Fallback: usa l'email come nome azienda
-                        localStorage.setItem('userCompany', user.email.split('@')[0]);
+                        // Fallback: usa l'email come nome azienda (normalizzato)
+                        localStorage.setItem('userCompany', user.email.split('@')[0].toLowerCase());
                     }
 
                     showMessage('login-message', 'Accesso effettuato con successo!', false);

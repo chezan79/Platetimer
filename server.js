@@ -370,10 +370,16 @@ wss.on('connection', (ws, req) => {
                 // Validazione nome azienda
                 if (!data.companyName || typeof data.companyName !== 'string' || data.companyName.trim().length === 0) {
                     console.log('⚠️ Nome azienda non valido');
+                    ws.send(JSON.stringify({ 
+                        action: 'error', 
+                        message: 'Nome azienda non valido. Effettua il login.' 
+                    }));
                     return;
                 }
 
-                const companyName = data.companyName.trim();
+                // Normalizzazione: trim + toLowerCase per evitare problemi di case
+                const companyName = data.companyName.trim().toLowerCase();
+                console.log(`🔑 JoinRoom richiesto: "${data.companyName}" → normalizzato: "${companyName}"`);
 
                 // Rimuovi il client dalla room precedente se esistente
                 if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
@@ -867,10 +873,11 @@ wss.on('connection', (ws, req) => {
                     return;
                 }
 
-                ws.voiceRoom = data.room;
+                // Normalizza anche la voice room per case-insensitive matching
+                ws.voiceRoom = data.room.toLowerCase();
                 ws.voicePeerId = data.peerId;
 
-                console.log(`🎙️ [VOICE] Peer ${data.peerId} entrato nella room vocale: ${data.room}`);
+                console.log(`🎙️ [VOICE] Peer ${data.peerId} entrato nella room vocale: ${data.room} (normalizzato: ${ws.voiceRoom})`);
 
                 // Invia la lista dei peer esistenti al nuovo peer
                 if (companyRooms.has(ws.companyRoom)) {
@@ -878,7 +885,7 @@ wss.on('connection', (ws, req) => {
                     const existingPeers = [];
 
                     roomClients.forEach((client) => {
-                        if (client !== ws && client.voicePeerId && client.voiceRoom === data.room) {
+                        if (client !== ws && client.voicePeerId && client.voiceRoom === ws.voiceRoom) {
                             existingPeers.push(client.voicePeerId);
                         }
                     });

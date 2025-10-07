@@ -267,9 +267,10 @@
 
                     startHeartbeat();
 
-                    const companyName = localStorage.getItem('userCompany');
+                    let companyName = localStorage.getItem('userCompany');
             if (companyName) {
-                console.log('Nome azienda dal localStorage:', companyName);
+                companyName = companyName.trim().toLowerCase();
+                console.log('Nome azienda dal localStorage (normalizzato):', companyName);
 
                 // Unisciti alla room aziendale
                 ws.send(JSON.stringify({
@@ -1659,11 +1660,13 @@
             if (!voiceCallActive) {
                 try {
                     // Verifica che il nome azienda sia disponibile
-                    const currentCompanyName = localStorage.getItem('userCompany');
-                    if (!currentCompanyName || currentCompanyName === 'Nome Azienda') {
-                        alert('❌ Nome azienda non disponibile. Ricarica la pagina.');
+                    let currentCompanyName = localStorage.getItem('userCompany');
+                    if (!currentCompanyName) {
+                        alert('❌ Nome azienda non trovato. Effettua il login.');
                         return;
                     }
+                    
+                    currentCompanyName = currentCompanyName.trim().toLowerCase();
 
                     btn.disabled = true;
                     btn.textContent = '⏳ Connessione...';
