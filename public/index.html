@@ -359,13 +359,25 @@
                         // Salva il nome dell'azienda nel localStorage
                         if (userData.company && userData.company.trim() !== '') {
                             localStorage.setItem('userCompany', userData.company);
+                            console.log('✅ Nome azienda salvato nel localStorage:', userData.company);
+                        } else {
+                            console.warn('⚠️ Nessun nome azienda trovato per questo utente');
+                            // Se non c'è un'azienda, usa il nome utente come fallback
+                            const fallbackName = userData.firstName + ' ' + userData.lastName;
+                            localStorage.setItem('userCompany', fallbackName);
+                            console.log('✅ Usato nome utente come fallback:', fallbackName);
                         }
+                    } else {
+                        console.error('❌ Documento utente non trovato in Firestore');
+                        // Fallback: usa l'email come nome azienda
+                        localStorage.setItem('userCompany', user.email.split('@')[0]);
                     }
 
                     showMessage('login-message', 'Accesso effettuato con successo!', false);
 
                     // Login riuscito - reindirizza alla home
                     console.log('✅ Login effettuato con successo');
+                    console.log('📱 Nome azienda nel localStorage prima del redirect:', localStorage.getItem('userCompany'));
                     window.location.href = '/home.html';
 
                 } catch (error) {
