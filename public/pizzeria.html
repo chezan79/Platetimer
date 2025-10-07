@@ -171,6 +171,49 @@
 
     </div>
 
+    <!-- Voice Call Panel -->
+    <div id="voice-call-panel" style="position: fixed; bottom: 20px; left: 20px; z-index: 1000; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2); min-width: 280px; display: none;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+            <h4 style="margin: 0; color: #333; font-size: 16px;">🎙️ Chiamata Vocale</h4>
+            <button id="voice-close-btn" style="background: transparent; border: none; font-size: 18px; cursor: pointer; color: #999;">×</button>
+        </div>
+        
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+            <button id="voice-toggle-btn" style="padding: 10px; background: linear-gradient(135deg, #28a745 0%, #20c997 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; transition: all 0.3s;">
+                📞 Entra in Chiamata
+            </button>
+            
+            <div style="display: flex; gap: 8px;">
+                <button id="voice-mute-btn" disabled style="flex: 1; padding: 8px; background: #6c757d; color: white; border: none; border-radius: 6px; cursor: not-allowed; font-size: 13px; font-weight: 600; transition: all 0.3s;">
+                    🎤 Muto
+                </button>
+                <button id="voice-volume-btn" style="padding: 8px 12px; background: #17a2b8; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">
+                    🔊
+                </button>
+            </div>
+            
+            <div id="voice-volume-control" style="display: none; margin-top: 5px;">
+                <label style="font-size: 12px; color: #666;">Volume: <span id="voice-volume-value">100</span>%</label>
+                <input type="range" id="voice-volume-slider" min="0" max="100" value="100" style="width: 100%; margin-top: 5px;">
+            </div>
+            
+            <div id="voice-status" style="font-size: 12px; color: #666; text-align: center;">
+                Non connesso
+            </div>
+            
+            <div id="voice-peers" style="font-size: 11px; color: #999; text-align: center; min-height: 16px;">
+            </div>
+        </div>
+    </div>
+
+    <!-- Voice Call Toggle Button (always visible) -->
+    <button id="voice-panel-toggle" style="position: fixed; bottom: 20px; left: 20px; z-index: 999; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 50%; width: 56px; height: 56px; cursor: pointer; font-size: 24px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3); transition: transform 0.2s;">
+        🎙️
+    </button>
+
+    <!-- Container for remote audio elements -->
+    <div id="remote-audios" style="display: none;"></div>
+
     <div class="countdown-container">
         <h1>🍕 Pizzeria</h1>
 
@@ -1545,6 +1588,124 @@
 
 
     </script>
+    
+    <!-- Voice Call Module -->
+    <script src="js/voice-call.js"></script>
+    <script>
+        let voiceCallActive = false;
+
+        VoiceCall.init({
+            onStateChanged: (state) => {
+                const statusEl = document.getElementById('voice-status');
+                const muteBtn = document.getElementById('voice-mute-btn');
+                
+                if (state === 'connected') {
+                    statusEl.textContent = '🟢 Connesso';
+                    statusEl.style.color = '#28a745';
+                    muteBtn.disabled = false;
+                    muteBtn.style.cursor = 'pointer';
+                    muteBtn.style.background = '#28a745';
+                } else if (state === 'muted') {
+                    muteBtn.textContent = '🔇 Attiva';
+                    muteBtn.style.background = '#dc3545';
+                } else if (state === 'unmuted') {
+                    muteBtn.textContent = '🎤 Muto';
+                    muteBtn.style.background = '#28a745';
+                } else if (state === 'disconnected') {
+                    statusEl.textContent = 'Non connesso';
+                    statusEl.style.color = '#666';
+                    muteBtn.disabled = true;
+                    muteBtn.style.cursor = 'not-allowed';
+                    muteBtn.style.background = '#6c757d';
+                    muteBtn.textContent = '🎤 Muto';
+                } else if (state === 'error') {
+                    statusEl.textContent = '❌ Errore';
+                    statusEl.style.color = '#dc3545';
+                }
+            },
+            onPeersChanged: (peers) => {
+                const peersEl = document.getElementById('voice-peers');
+                if (peers.length === 0) {
+                    peersEl.textContent = 'Nessuno in chiamata';
+                } else {
+                    peersEl.textContent = `${peers.length} partecipante${peers.length > 1 ? 'i' : ''} in chiamata`;
+                }
+            },
+            onError: (error) => {
+                console.error('[VOICE ERROR]', error);
+                alert('Errore chiamata vocale: ' + error);
+            }
+        });
+
+        document.getElementById('voice-panel-toggle').addEventListener('click', () => {
+            const panel = document.getElementById('voice-call-panel');
+            const toggle = document.getElementById('voice-panel-toggle');
+            if (panel.style.display === 'none') {
+                panel.style.display = 'block';
+                toggle.style.display = 'none';
+            }
+        });
+
+        document.getElementById('voice-close-btn').addEventListener('click', () => {
+            const panel = document.getElementById('voice-call-panel');
+            const toggle = document.getElementById('voice-panel-toggle');
+            panel.style.display = 'none';
+            toggle.style.display = 'block';
+        });
+
+        document.getElementById('voice-toggle-btn').addEventListener('click', async () => {
+            const btn = document.getElementById('voice-toggle-btn');
+            
+            if (!voiceCallActive) {
+                try {
+                    btn.disabled = true;
+                    btn.textContent = 'Connessione...';
+                    
+                    const companyName = localStorage.getItem('userCompany') || 'Restaurant';
+                    const roomId = `${companyName}:voice`;
+                    
+                    await VoiceCall.joinVoice(roomId, 'PIZZERIA', ws);
+                    
+                    voiceCallActive = true;
+                    btn.textContent = '📞 Esci dalla Chiamata';
+                    btn.style.background = 'linear-gradient(135deg, #dc3545 0%, #c82333 100%)';
+                    btn.disabled = false;
+                } catch (error) {
+                    console.error('Error joining voice:', error);
+                    btn.disabled = false;
+                    btn.textContent = '📞 Entra in Chiamata';
+                    alert('Impossibile avviare la chiamata. Verifica i permessi del microfono.');
+                }
+            } else {
+                VoiceCall.leaveVoice();
+                voiceCallActive = false;
+                btn.textContent = '📞 Entra in Chiamata';
+                btn.style.background = 'linear-gradient(135deg, #28a745 0%, #20c997 100%)';
+            }
+        });
+
+        document.getElementById('voice-mute-btn').addEventListener('click', () => {
+            VoiceCall.toggleMute();
+        });
+
+        document.getElementById('voice-volume-btn').addEventListener('click', () => {
+            const volumeControl = document.getElementById('voice-volume-control');
+            volumeControl.style.display = volumeControl.style.display === 'none' ? 'block' : 'none';
+        });
+
+        document.getElementById('voice-volume-slider').addEventListener('input', (e) => {
+            const volume = e.target.value / 100;
+            VoiceCall.setVolume(volume);
+            document.getElementById('voice-volume-value').textContent = e.target.value;
+        });
+
+        window.addEventListener('beforeunload', () => {
+            if (voiceCallActive) {
+                VoiceCall.leaveVoice();
+            }
+        });
+    </script>
+    
     <script src="company-header.js"></script>
 
 

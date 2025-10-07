@@ -851,6 +851,156 @@ wss.on('connection', (ws, req) => {
                 } else {
                     console.log('⚠️ Client non assegnato a nessuna room per annullamento pausa insalata');
                 }
+            } else if (data.action === 'joinVoice') {
+                // WebRTC Voice Call: Join voice room
+                if (!data.room || !data.peerId) {
+                    console.log('⚠️ Room o peerId mancante per joinVoice');
+                    return;
+                }
+
+                ws.voiceRoom = data.room;
+                ws.voicePeerId = data.peerId;
+
+                console.log(`🎙️ [VOICE] Peer ${data.peerId} entrato nella room vocale: ${data.room}`);
+
+                // Invia la lista dei peer esistenti al nuovo peer
+                if (companyRooms.has(ws.companyRoom)) {
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    const existingPeers = [];
+
+                    roomClients.forEach((client) => {
+                        if (client !== ws && client.voicePeerId && client.voiceRoom === data.room) {
+                            existingPeers.push(client.voicePeerId);
+                        }
+                    });
+
+                    // Invia ai nuovi peer la lista dei peer esistenti
+                    ws.send(JSON.stringify({
+                        action: 'voicePeers',
+                        peers: existingPeers
+                    }));
+
+                    // Notifica gli altri peer del nuovo arrivo
+                    roomClients.forEach((client) => {
+                        if (client !== ws && client.voiceRoom === data.room && client.readyState === WebSocket.OPEN) {
+                            client.send(JSON.stringify({
+                                action: 'voicePeerJoined',
+                                peerId: data.peerId
+                            }));
+                        }
+                    });
+
+                    console.log(`🎙️ [VOICE] Peer ${data.peerId} sincronizzato con ${existingPeers.length} peer esistenti`);
+                }
+            } else if (data.action === 'offer') {
+                // WebRTC Voice Call: Forward offer
+                if (!data.to || !data.from || !data.sdp) {
+                    console.log('⚠️ Dati offer incompleti');
+                    return;
+                }
+
+                console.log(`🎙️ [VOICE] Forwarding offer da ${data.from} a ${data.to}`);
+
+                // Trova il destinatario e invia l'offer
+                if (companyRooms.has(ws.companyRoom)) {
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    roomClients.forEach((client) => {
+                        if (client.voicePeerId === data.to && client.readyState === WebSocket.OPEN) {
+                            client.send(JSON.stringify({
+                                action: 'offer',
+                                from: data.from,
+                                sdp: data.sdp
+                            }));
+                        }
+                    });
+                }
+            } else if (data.action === 'answer') {
+                // WebRTC Voice Call: Forward answer
+                if (!data.to || !data.from || !data.sdp) {
+                    console.log('⚠️ Dati answer incompleti');
+                    return;
+                }
+
+                console.log(`🎙️ [VOICE] Forwarding answer da ${data.from} a ${data.to}`);
+
+                // Trova il destinatario e invia l'answer
+                if (companyRooms.has(ws.companyRoom)) {
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    roomClients.forEach((client) => {
+                        if (client.voicePeerId === data.to && client.readyState === WebSocket.OPEN) {
+                            client.send(JSON.stringify({
+                                action: 'answer',
+                                from: data.from,
+                                sdp: data.sdp
+                            }));
+                        }
+                    });
+                }
+            } else if (data.action === 'ice-candidate') {
+                // WebRTC Voice Call: Forward ICE candidate
+                if (!data.to || !data.from || !data.candidate) {
+                    console.log('⚠️ Dati ICE candidate incompleti');
+                    return;
+                }
+
+                // Trova il destinatario e invia il candidato
+                if (companyRooms.has(ws.companyRoom)) {
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    roomClients.forEach((client) => {
+                        if (client.voicePeerId === data.to && client.readyState === WebSocket.OPEN) {
+                            client.send(JSON.stringify({
+                                action: 'ice-candidate',
+                                from: data.from,
+                                candidate: data.candidate
+                            }));
+                        }
+                    });
+                }
+            } else if (data.action === 'leaveVoice') {
+                // WebRTC Voice Call: Leave voice room
+                if (!data.peerId) {
+                    console.log('⚠️ PeerId mancante per leaveVoice');
+                    return;
+                }
+
+                console.log(`🎙️ [VOICE] Peer ${data.peerId} lascia la room vocale`);
+
+                // Notifica gli altri peer
+                if (companyRooms.has(ws.companyRoom)) {
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    roomClients.forEach((client) => {
+                        if (client !== ws && client.voiceRoom === ws.voiceRoom && client.readyState === WebSocket.OPEN) {
+                            client.send(JSON.stringify({
+                                action: 'voicePeerLeft',
+                                peerId: data.peerId
+                            }));
+                        }
+                    });
+                }
+
+                ws.voiceRoom = null;
+                ws.voicePeerId = null;
+            } else if (data.action === 'mute' || data.action === 'unmute') {
+                // WebRTC Voice Call: Mute/Unmute status
+                if (!data.peerId) {
+                    console.log('⚠️ PeerId mancante per mute/unmute');
+                    return;
+                }
+
+                console.log(`🎙️ [VOICE] Peer ${data.peerId} ${data.action === 'mute' ? 'muted' : 'unmuted'}`);
+
+                // Notifica gli altri peer dello stato mute
+                if (companyRooms.has(ws.companyRoom)) {
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    roomClients.forEach((client) => {
+                        if (client !== ws && client.voiceRoom === ws.voiceRoom && client.readyState === WebSocket.OPEN) {
+                            client.send(JSON.stringify({
+                                action: data.action,
+                                peerId: data.peerId
+                            }));
+                        }
+                    });
+                }
             }
         } catch (error) {
             console.error('❌ Errore nel parsing del messaggio:', error);
