@@ -79,6 +79,14 @@ web_modules/
 .env.production.local
 .env.local
 
+# Firebase service account keys
+*-firebase-adminsdk-*.json
+service-account-key.json
+
+# Google Cloud credentials
+google-credentials.json
+gcloud-key.json
+
 # parcel-bundler cache (https://parceljs.org/)
 .cache
 .parcel-cache
