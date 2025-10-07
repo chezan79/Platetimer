@@ -80,10 +80,11 @@
                             document.getElementById('user-display-name').textContent = `${userData.firstName} ${userData.lastName}`;
                         }
 
-                        // IMPORTANTE: Forza il salvataggio del nome azienda nel localStorage se presente
+                        // IMPORTANTE: Forza il salvataggio del nome azienda nel localStorage se presente (normalizzato)
                         if (userData.company && userData.company.trim() !== '') {
-                            localStorage.setItem('userCompany', userData.company.trim());
-                            console.log('✅ Nome azienda aggiornato nel localStorage:', userData.company.trim());
+                            const normalizedCompany = userData.company.trim().toLowerCase();
+                            localStorage.setItem('userCompany', normalizedCompany);
+                            console.log('✅ Nome azienda aggiornato nel localStorage (normalizzato):', normalizedCompany);
 
                             // Aggiorna il nome dell'azienda nell'interfaccia
                             if (document.getElementById('company-name')) {
@@ -91,10 +92,10 @@
                             }
                         } else {
                             console.warn('⚠️ Nessun nome azienda nel profilo Firestore');
-                            // Usa il nome utente come fallback
-                            const fallbackName = `${userData.firstName} ${userData.lastName}`;
+                            // Usa il nome utente come fallback (normalizzato)
+                            const fallbackName = `${userData.firstName} ${userData.lastName}`.trim().toLowerCase();
                             localStorage.setItem('userCompany', fallbackName);
-                            console.log('✅ Usato nome utente come fallback:', fallbackName);
+                            console.log('✅ Usato nome utente come fallback (normalizzato):', fallbackName);
                             if (document.getElementById('company-name')) {
                                 document.getElementById('company-name').textContent = fallbackName;
                             }
