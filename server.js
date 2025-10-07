@@ -308,9 +308,26 @@ wss.on('connection', (ws, req) => {
                     return;
                 }
 
+                let data;
+                try {
+                    data = JSON.parse(message);
+                } catch (parseError) {
+                    console.error('❌ Errore parsing JSON:', parseError.message);
+                    return;
+                }
+
                 // Rate limiting più rigoroso: max 5 messaggi per 2 secondi
+                // Escludi messaggi WebRTC (possono arrivare molto rapidamente durante handshake)
+                const isVoiceMessage = data.action && (
+                    data.action === 'ice-candidate' || 
+                    data.action === 'offer' || 
+                    data.action === 'answer' ||
+                    data.action === 'voice_join' ||
+                    data.action === 'voice_leave'
+                );
+                
                 const now = Date.now();
-                if (now - ws.lastMessageTime < 400) { // 400ms tra messaggi
+                if (!isVoiceMessage && now - ws.lastMessageTime < 400) { // 400ms tra messaggi
                     ws.messageCount++;
                     if (ws.messageCount > 5) {
                         console.log('⚠️ Rate limit superato, messaggio scartato');
@@ -319,14 +336,6 @@ wss.on('connection', (ws, req) => {
                 } else {
                     ws.messageCount = 0;
                     ws.lastMessageTime = now;
-                }
-
-                let data;
-                try {
-                    data = JSON.parse(message);
-                } catch (parseError) {
-                    console.error('❌ Errore parsing JSON:', parseError.message);
-                    return;
                 }
 
                 if (!data || typeof data !== 'object') {
