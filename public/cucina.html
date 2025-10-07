@@ -683,15 +683,25 @@
 
                     // Unisciti alla room con un piccolo delay per stabilizzare la connessione
                     setTimeout(() => {
-                            const companyName = localStorage.getItem('userCompany') || 'Nome Azienda';
+                            let companyName = localStorage.getItem('userCompany');
+                            
+                            // Se non c'è nome azienda, prova a recuperarlo dall'header
+                            if (!companyName || companyName === 'Nome Azienda') {
+                                const headerElement = document.getElementById('company-name');
+                                if (headerElement && headerElement.textContent !== 'Nome Azienda') {
+                                    companyName = headerElement.textContent;
+                                    localStorage.setItem('userCompany', companyName);
+                                }
+                            }
+                            
                             const joinMessage = {
                                 action: 'joinRoom',
-                                companyName: companyName
+                                companyName: companyName || 'Nome Azienda'
                             };
 
                             if (ws.readyState === WebSocket.OPEN) {
                                 ws.send(JSON.stringify(joinMessage));
-                                console.log(`✅ Connesso alla room: ${companyName}`);
+                                console.log(`✅ Connesso alla room: ${companyName || 'Nome Azienda'}`);
 
                                 // Informa il server che questo client è sulla pagina cucina
                                 setTimeout(() => {
@@ -784,6 +794,9 @@
                         } else if (data.action === 'newUserJoined') {
                             console.log('🎉 Nuovo utente è entrato nella pagina:', data.message);
                             mostraAvvisoNuovoUtente(data);
+                        } else if (data.action === 'userLeft') {
+                            console.log('👋 Un utente ha lasciato la pagina:', data.message);
+                            mostraAvvisoUtenteUscito(data);
                         }
                     } catch (error) {
                         console.error('Errore nel parsing del messaggio WebSocket:', error);
@@ -2488,6 +2501,40 @@
                     setTimeout(() => noticeDiv.remove(), 300);
                 }
             }, 5000);
+        }
+
+        function mostraAvvisoUtenteUscito(data) {
+            const noticeDiv = document.createElement('div');
+            noticeDiv.style.cssText = `
+                position: fixed;
+                top: 80px;
+                right: 20px;
+                z-index: 9999;
+                background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
+                color: #721c24;
+                padding: 12px 15px;
+                border-radius: 8px;
+                border-left: 4px solid #dc3545;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+                font-size: 14px;
+                font-weight: 600;
+                max-width: 300px;
+                animation: slideInRight 0.5s ease-out;
+            `;
+
+            noticeDiv.innerHTML = `
+                <div>👋 ${data.message}</div>
+            `;
+
+            document.body.appendChild(noticeDiv);
+
+            // Rimuovi automaticamente dopo 4 secondi
+            setTimeout(() => {
+                if (noticeDiv && noticeDiv.parentElement) {
+                    noticeDiv.style.animation = 'slideOutRight 0.3s ease-in';
+                    setTimeout(() => noticeDiv.remove(), 300);
+                }
+            }, 4000);
         }
 
         

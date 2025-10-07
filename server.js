@@ -1018,6 +1018,29 @@ wss.on('connection', (ws, req) => {
 
     ws.on('close', (code, reason) => {
             try {
+                // Notifica gli altri utenti se qualcuno lascia la stessa pagina
+                if (ws.companyRoom && ws.pageType && companyRooms.has(ws.companyRoom)) {
+                    const room = companyRooms.get(ws.companyRoom);
+                    const samePageClients = Array.from(room).filter(client => 
+                        client.pageType === ws.pageType && client !== ws && client.readyState === WebSocket.OPEN
+                    );
+
+                    if (samePageClients.length > 0) {
+                        const userLeftMessage = {
+                            action: 'userLeft',
+                            pageType: ws.pageType,
+                            remainingUsers: samePageClients.length,
+                            message: `Un utente ha lasciato la pagina ${ws.pageType.toUpperCase()} (${samePageClients.length} utente${samePageClients.length !== 1 ? 'i' : ''} rimanente${samePageClients.length !== 1 ? 'i' : ''})`
+                        };
+
+                        samePageClients.forEach(client => {
+                            client.send(JSON.stringify(userLeftMessage));
+                        });
+
+                        console.log(`👋 Notificato ${samePageClients.length} utenti dell'uscita dalla pagina ${ws.pageType}`);
+                    }
+                }
+
                 // Rimuovi il client dalla room quando si disconnette
                 if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
                     const room = companyRooms.get(ws.companyRoom);
