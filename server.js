@@ -141,6 +141,77 @@ app.post('/api/speech-to-text', async (req, res) => {
     }
 });
 
+// REST API endpoint to get active countdowns
+app.get('/api/countdowns', (req, res) => {
+    try {
+        const status = req.query.status || 'active';
+        const companyName = req.query.company;
+        
+        const result = [];
+        const currentTime = Date.now();
+        
+        // If company is specified, return only that company's countdowns
+        if (companyName && activeCountdowns.has(companyName)) {
+            const companyCountdowns = activeCountdowns.get(companyName);
+            
+            companyCountdowns.forEach((countdown, tableNumber) => {
+                const elapsed = Math.floor((currentTime - countdown.startTime) / 1000);
+                const remainingTime = Math.max(0, countdown.initialDuration - elapsed);
+                
+                if (status === 'active' && remainingTime > 0) {
+                    result.push({
+                        tableNumber: countdown.tableNumber,
+                        remainingTime: remainingTime,
+                        initialDuration: countdown.initialDuration,
+                        destinations: countdown.destinations,
+                        startedAt: new Date(countdown.startTime).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
+                        startTime: countdown.startTime,
+                        endsAt: countdown.startTime + (countdown.initialDuration * 1000),
+                        status: remainingTime > 0 ? 'active' : 'finished'
+                    });
+                }
+            });
+        } else {
+            // Return all companies' countdowns
+            activeCountdowns.forEach((companyCountdowns, company) => {
+                companyCountdowns.forEach((countdown, tableNumber) => {
+                    const elapsed = Math.floor((currentTime - countdown.startTime) / 1000);
+                    const remainingTime = Math.max(0, countdown.initialDuration - elapsed);
+                    
+                    if (status === 'active' && remainingTime > 0) {
+                        result.push({
+                            company: company,
+                            tableNumber: countdown.tableNumber,
+                            remainingTime: remainingTime,
+                            initialDuration: countdown.initialDuration,
+                            destinations: countdown.destinations,
+                            startedAt: new Date(countdown.startTime).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
+                            startTime: countdown.startTime,
+                            endsAt: countdown.startTime + (countdown.initialDuration * 1000),
+                            status: remainingTime > 0 ? 'active' : 'finished'
+                        });
+                    }
+                });
+            });
+        }
+        
+        res.json({
+            success: true,
+            countdowns: result,
+            count: result.length,
+            timestamp: currentTime
+        });
+        
+    } catch (error) {
+        console.error('❌ Errore API countdowns:', error);
+        res.status(500).json({ 
+            success: false,
+            error: 'Errore nel recupero dei countdown',
+            details: error.message 
+        });
+    }
+});
+
 // Store per le room delle aziende
 const companyRooms = new Map();
 
