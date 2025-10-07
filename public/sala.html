@@ -535,38 +535,42 @@
 
         function updateCountdown(data) {
             console.log('📥 Countdown ricevuto in sala:', data);
-            console.log(`🔍 Destinazione: "${data.destination}", Tavolo: ${data.tableNumber}`);
+            console.log(`🔍 Destinazione: "${data.destination}", Tavolo: ${data.tableNumber}, Tempo: ${data.timeRemaining}s`);
             
+            // Verifica se esiste già un countdown per questo tavolo
             const existingIndex = countdowns.findIndex(c => c.tableNumber == data.tableNumber);
             
-            const newCountdown = {
-                tableNumber: data.tableNumber,
-                remainingTime: data.timeRemaining,
-                initialDuration: data.timeRemaining,
-                destinations: data.destination ? [data.destination] : [],
-                startedAt: new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
-                startTime: Date.now(),
-                endsAt: Date.now() + (data.timeRemaining * 1000),
-                status: 'active',
-                remainingTimeFormatted: CountdownsModule.formatTime(data.timeRemaining)
-            };
-
             if (existingIndex !== -1) {
                 const existing = countdowns[existingIndex];
+                
+                // Aggiungi destinazione se non presente
                 if (data.destination && !existing.destinations.includes(data.destination)) {
                     existing.destinations.push(data.destination);
                     console.log(`📝 Destinazione "${data.destination}" aggiunta al tavolo ${data.tableNumber}. Destinazioni totali: [${existing.destinations.join(', ')}]`);
                 }
+                
                 // Aggiorna il tempo con il countdown più recente
-                countdowns[existingIndex] = {
-                    ...existing,
-                    remainingTime: data.timeRemaining,
-                    initialDuration: data.timeRemaining,
-                    startTime: Date.now(),
-                    endsAt: Date.now() + (data.timeRemaining * 1000)
-                };
+                existing.remainingTime = data.timeRemaining;
+                existing.initialDuration = data.timeRemaining;
+                existing.startTime = Date.now();
+                existing.endsAt = Date.now() + (data.timeRemaining * 1000);
+                existing.remainingTimeFormatted = CountdownsModule.formatTime(data.timeRemaining);
+                
                 console.log(`🔄 Countdown tavolo ${data.tableNumber} aggiornato in sala`);
             } else {
+                // Crea nuovo countdown
+                const newCountdown = {
+                    tableNumber: data.tableNumber,
+                    remainingTime: data.timeRemaining,
+                    initialDuration: data.timeRemaining,
+                    destinations: data.destination ? [data.destination] : ['cucina'],
+                    startedAt: new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
+                    startTime: Date.now(),
+                    endsAt: Date.now() + (data.timeRemaining * 1000),
+                    status: 'active',
+                    remainingTimeFormatted: CountdownsModule.formatTime(data.timeRemaining)
+                };
+                
                 countdowns.push(newCountdown);
                 console.log(`✅ Nuovo countdown tavolo ${data.tableNumber} aggiunto in sala con destinazione: [${data.destination}]`);
             }

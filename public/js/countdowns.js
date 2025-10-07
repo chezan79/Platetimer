@@ -109,10 +109,11 @@ const CountdownsModule = (() => {
                         }
 
                         if (data.action === 'startCountdown' && onCountdownUpdateCallback) {
+                            console.log('📥 [COUNTDOWNS.JS] Countdown received:', data);
                             onCountdownUpdateCallback({
                                 tableNumber: data.tableNumber,
                                 timeRemaining: data.timeRemaining,
-                                destination: data.destination,
+                                destination: data.destination || 'cucina',
                                 remainingTimeFormatted: formatTime(data.timeRemaining)
                             });
                         } else if (data.action === 'deleteCountdown' && onCountdownDeleteCallback) {
