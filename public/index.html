@@ -292,26 +292,31 @@
                         displayName: fullName
                     });
 
+                    // Determina il nome dell'azienda (o fallback al nome utente)
+                    const companyName = company && company.trim() !== '' ? company.trim() : fullName;
+
                     // Salva i dati dell'utente in Firestore
                     await setDoc(doc(db, "users", user.uid), {
                         firstName: firstName,
                         lastName: lastName,
-                        company: company || '',
+                        company: companyName,
                         email: email,
                         createdAt: new Date()
                     });
 
-                    // Salva il nome dell'azienda nel localStorage per l'intestazione
-                    if (company && company.trim() !== '') {
-                        localStorage.setItem('userCompany', company);
-                    }
+                    // Salva il nome dell'azienda nel localStorage
+                    localStorage.setItem('userCompany', companyName);
+                    console.log('✅ Nome azienda salvato nel localStorage durante registrazione:', companyName);
 
                     showMessage('register-message', 'Registrazione completata con successo!', false);
 
-                    // Reindirizza alla pagina home dopo 2 secondi
+                    // Attendi un momento per assicurarsi che localStorage sia salvato
+                    await new Promise(resolve => setTimeout(resolve, 100));
+
+                    // Reindirizza alla pagina home dopo 1 secondo
                     setTimeout(() => {
                         window.location.href = '/home.html';
-                    }, 2000);
+                    }, 1000);
 
                 } catch (error) {
                     console.error('Errore durante la registrazione:', error);
@@ -356,25 +361,27 @@
                     const userDoc = await getDoc(doc(db, "users", user.uid));
                     if (userDoc.exists()) {
                         const userData = userDoc.data();
-                        // Salva il nome dell'azienda nel localStorage (normalizzato)
+                        // Salva il nome dell'azienda nel localStorage (NON normalizzato - usa il nome originale)
                         if (userData.company && userData.company.trim() !== '') {
-                            const normalizedCompany = userData.company.trim().toLowerCase();
-                            localStorage.setItem('userCompany', normalizedCompany);
-                            console.log('✅ Nome azienda salvato nel localStorage (normalizzato):', normalizedCompany);
+                            localStorage.setItem('userCompany', userData.company.trim());
+                            console.log('✅ Nome azienda salvato nel localStorage:', userData.company.trim());
                         } else {
                             console.warn('⚠️ Nessun nome azienda trovato per questo utente');
                             // Se non c'è un'azienda, usa il nome utente come fallback
-                            const fallbackName = (userData.firstName + ' ' + userData.lastName).trim().toLowerCase();
+                            const fallbackName = (userData.firstName + ' ' + userData.lastName).trim();
                             localStorage.setItem('userCompany', fallbackName);
-                            console.log('✅ Usato nome utente come fallback (normalizzato):', fallbackName);
+                            console.log('✅ Usato nome utente come fallback:', fallbackName);
                         }
                     } else {
                         console.error('❌ Documento utente non trovato in Firestore');
-                        // Fallback: usa l'email come nome azienda (normalizzato)
-                        localStorage.setItem('userCompany', user.email.split('@')[0].toLowerCase());
+                        // Fallback: usa l'email come nome azienda
+                        localStorage.setItem('userCompany', user.email.split('@')[0]);
                     }
 
                     showMessage('login-message', 'Accesso effettuato con successo!', false);
+
+                    // Attendi un momento per assicurarsi che localStorage sia salvato
+                    await new Promise(resolve => setTimeout(resolve, 100));
 
                     // Login riuscito - reindirizza alla home
                     console.log('✅ Login effettuato con successo');

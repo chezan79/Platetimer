@@ -81,30 +81,39 @@
 
                         // IMPORTANTE: Forza il salvataggio del nome azienda nel localStorage se presente
                         if (userData.company && userData.company.trim() !== '') {
-                            localStorage.setItem('userCompany', userData.company);
-                            console.log('✅ Nome azienda aggiornato nel localStorage:', userData.company);
+                            localStorage.setItem('userCompany', userData.company.trim());
+                            console.log('✅ Nome azienda aggiornato nel localStorage:', userData.company.trim());
 
                             // Aggiorna il nome dell'azienda nell'interfaccia
                             if (document.getElementById('company-name')) {
-                                document.getElementById('company-name').textContent = userData.company;
+                                document.getElementById('company-name').textContent = userData.company.trim();
                             }
                         } else {
                             console.warn('⚠️ Nessun nome azienda nel profilo Firestore');
                             // Usa il nome utente come fallback
                             const fallbackName = `${userData.firstName} ${userData.lastName}`;
                             localStorage.setItem('userCompany', fallbackName);
+                            console.log('✅ Usato nome utente come fallback:', fallbackName);
                             if (document.getElementById('company-name')) {
                                 document.getElementById('company-name').textContent = fallbackName;
                             }
                         }
+
+                        // Aggiorna l'interfaccia dopo aver impostato il nome azienda
+                        updateCompanyName();
                     } else {
                         console.error('Documento utente non trovato');
+                        // Reindirizza al login se il documento non esiste
+                        window.location.href = 'index.html';
                     }
                 } catch (error) {
                     console.error("Errore nel recupero dei dati utente:", error);
+                    // In caso di errore, reindirizza al login
+                    window.location.href = 'index.html';
                 }
             } else {
                 // L'utente non è autenticato, reindirizza al login
+                console.log('❌ Utente non autenticato, reindirizzamento al login');
                 window.location.href = 'index.html';
             }
         });
@@ -124,19 +133,12 @@
                     if (companyName && companyName.trim() !== '') {
                         companyElement.textContent = companyName;
                     } else {
-                        // Fallback: mostra un nome predefinito se localStorage è vuoto o non valido
-                        console.warn('⚠️ localStorage "userCompany" vuoto o non valido. Utilizzo fallback.');
-                        companyElement.textContent = 'Nome Azienda';
-                        // Potrebbe essere utile reindirizzare al login o mostrare un messaggio di errore più evidente qui.
+                        // Mostra un messaggio temporaneo mentre i dati vengono caricati
+                        companyElement.textContent = 'Caricamento...';
                     }
                 }
 
                 console.log('Nome azienda dal localStorage:', companyName);
-                if (!companyName || companyName.trim() === '') {
-                    console.error('❌ Nome azienda non trovato nel localStorage all\'avvio della home!');
-                    // Potrebbe essere necessario forzare un reindirizzamento al login o mostrare un errore.
-                    // window.location.href = 'index.html'; // Opzionale: reindirizza se il nome azienda è critico
-                }
             }
 
             // Aggiorna immediatamente
