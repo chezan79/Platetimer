@@ -1,7 +1,28 @@
 const VoiceCall = (() => {
     const ICE_SERVERS = [
         { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' }
+        { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun2.l.google.com:19302' },
+        { urls: 'stun:stun3.l.google.com:19302' },
+        { urls: 'stun:stun4.l.google.com:19302' },
+        // Server STUN pubblici alternativi
+        { urls: 'stun:stun.relay.metered.ca:80' },
+        // Server TURN pubblici gratuiti (limitati ma funzionali)
+        {
+            urls: 'turn:openrelay.metered.ca:80',
+            username: 'openrelayproject',
+            credential: 'openrelayproject'
+        },
+        {
+            urls: 'turn:openrelay.metered.ca:443',
+            username: 'openrelayproject',
+            credential: 'openrelayproject'
+        },
+        {
+            urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+            username: 'openrelayproject',
+            credential: 'openrelayproject'
+        }
     ];
 
     const AUDIO_CONSTRAINTS = {
@@ -69,17 +90,29 @@ const VoiceCall = (() => {
     function createPeerConnection(remotePeerId) {
         log(`Creating peer connection to ${remotePeerId}`);
         
-        const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+        const pc = new RTCPeerConnection({ 
+            iceServers: ICE_SERVERS,
+            iceCandidatePoolSize: 10
+        });
 
         pc.onicecandidate = (event) => {
-            if (event.candidate && ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({
-                    action: 'ice-candidate',
-                    to: remotePeerId,
-                    from: myPeerId,
-                    candidate: event.candidate
-                }));
+            if (event.candidate) {
+                log(`ICE candidate found: ${event.candidate.type} - ${event.candidate.candidate}`);
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({
+                        action: 'ice-candidate',
+                        to: remotePeerId,
+                        from: myPeerId,
+                        candidate: event.candidate
+                    }));
+                }
+            } else {
+                log(`ICE gathering completed for ${remotePeerId}`);
             }
+        };
+        
+        pc.onicegatheringstatechange = () => {
+            log(`ICE gathering state: ${pc.iceGatheringState}`);
         };
 
         pc.ontrack = (event) => {
@@ -90,19 +123,34 @@ const VoiceCall = (() => {
         pc.onconnectionstatechange = () => {
             log(`Connection state with ${remotePeerId}: ${pc.connectionState}`);
             
-            if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+            if (pc.connectionState === 'connected') {
+                log(`✅ Successfully connected to ${remotePeerId}`);
+                updatePeersUI();
+            }
+            
+            if (pc.connectionState === 'failed') {
+                error(`Connection failed with ${remotePeerId}, attempting ICE restart`);
+                // Tenta ICE restart
+                pc.restartIce();
                 setTimeout(() => {
-                    if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
-                        log(`Attempting to reconnect with ${remotePeerId}`);
+                    if (pc.connectionState === 'failed') {
+                        log(`Removing failed connection with ${remotePeerId}`);
+                        peerConnections.delete(remotePeerId);
+                        removeRemoteAudio(remotePeerId);
+                        updatePeersUI();
+                    }
+                }, 5000);
+            }
+            
+            if (pc.connectionState === 'disconnected') {
+                setTimeout(() => {
+                    if (pc.connectionState === 'disconnected') {
+                        log(`Connection still disconnected, removing ${remotePeerId}`);
                         peerConnections.delete(remotePeerId);
                         removeRemoteAudio(remotePeerId);
                         updatePeersUI();
                     }
                 }, 3000);
-            }
-
-            if (pc.connectionState === 'connected') {
-                updatePeersUI();
             }
         };
 
@@ -152,11 +200,17 @@ const VoiceCall = (() => {
 
             const stream = await getLocalStream();
             stream.getTracks().forEach(track => {
+                log(`Adding local track to peer connection: ${track.kind}`);
                 pc.addTrack(track, stream);
             });
 
             await pc.setRemoteDescription(new RTCSessionDescription(offer));
-            const answer = await pc.createAnswer();
+            
+            const answer = await pc.createAnswer({
+                offerToReceiveAudio: true,
+                voiceActivityDetection: true
+            });
+            
             await pc.setLocalDescription(answer);
 
             if (ws && ws.readyState === WebSocket.OPEN) {

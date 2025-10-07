@@ -447,6 +447,10 @@
                 Non connesso
             </div>
             
+            <div id="voice-connection-quality" style="font-size: 11px; color: #999; text-align: center; margin-top: 5px;">
+                Qualità: --
+            </div>
+            
             <div id="voice-peers" style="font-size: 11px; color: #999; text-align: center; border-top: 1px solid #eee; padding-top: 8px; margin-top: 5px;">
                 Nessuno in chiamata
             </div>
@@ -699,6 +703,7 @@
         VoiceCall.init({
             onStateChanged: (state) => {
                 const statusEl = document.getElementById('voice-call-status');
+                const qualityEl = document.getElementById('voice-connection-quality');
                 const muteBtn = document.getElementById('voice-mute-btn');
                 
                 if (state === 'connected') {
@@ -707,6 +712,10 @@
                     muteBtn.disabled = false;
                     muteBtn.style.cursor = 'pointer';
                     muteBtn.style.background = '#28a745';
+                } else if (state === 'connecting') {
+                    statusEl.textContent = '🔄 Connessione in corso...';
+                    statusEl.style.color = '#ffc107';
+                    qualityEl.textContent = 'Qualità: Connessione...';
                 } else if (state === 'muted') {
                     muteBtn.textContent = '🔇 Attiva';
                     muteBtn.style.background = '#dc3545';
@@ -716,6 +725,7 @@
                 } else if (state === 'disconnected') {
                     statusEl.textContent = 'Non connesso';
                     statusEl.style.color = '#666';
+                    qualityEl.textContent = 'Qualità: --';
                     muteBtn.disabled = true;
                     muteBtn.style.cursor = 'not-allowed';
                     muteBtn.style.background = '#6c757d';
@@ -723,6 +733,7 @@
                 } else if (state === 'error') {
                     statusEl.textContent = '❌ Errore';
                     statusEl.style.color = '#dc3545';
+                    qualityEl.textContent = 'Qualità: Errore';
                 }
             },
             onPeersChanged: (peers) => {
