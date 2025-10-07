@@ -103,18 +103,20 @@
                         updateCompanyName();
                     } else {
                         console.error('Documento utente non trovato');
-                        // Reindirizza al login se il documento non esiste
-                        window.location.href = 'index.html';
+                        // Non reindirizzare automaticamente - dai il tempo all'utente di vedere l'errore
+                        alert('Errore: profilo utente non trovato. Contatta il supporto.');
                     }
                 } catch (error) {
                     console.error("Errore nel recupero dei dati utente:", error);
-                    // In caso di errore, reindirizza al login
-                    window.location.href = 'index.html';
+                    // Non reindirizzare automaticamente in caso di errore temporaneo
+                    alert('Errore temporaneo nel caricamento dei dati. Riprova.');
                 }
             } else {
                 // L'utente non è autenticato, reindirizza al login
                 console.log('❌ Utente non autenticato, reindirizzamento al login');
-                window.location.href = 'index.html';
+                setTimeout(() => {
+                    window.location.href = 'index.html';
+                }, 1000);
             }
         });
 

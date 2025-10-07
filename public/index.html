@@ -380,12 +380,28 @@
 
                     showMessage('login-message', 'Accesso effettuato con successo!', false);
 
-                    // Attendi un momento per assicurarsi che localStorage sia salvato
-                    await new Promise(resolve => setTimeout(resolve, 100));
-
-                    // Login riuscito - reindirizza alla home
+                    // Verifica che il nome azienda sia stato salvato
                     console.log('✅ Login effettuato con successo');
                     console.log('📱 Nome azienda nel localStorage prima del redirect:', localStorage.getItem('userCompany'));
+                    
+                    // Attendi che il localStorage sia definitivamente salvato
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    
+                    // Verifica finale
+                    const savedCompany = localStorage.getItem('userCompany');
+                    if (!savedCompany || savedCompany === 'null') {
+                        console.error('❌ Nome azienda non salvato correttamente, riprovo...');
+                        // Ultimo tentativo di salvataggio
+                        if (userDoc.exists()) {
+                            const userData = userDoc.data();
+                            const companyName = userData.company?.trim() || `${userData.firstName} ${userData.lastName}`;
+                            localStorage.setItem('userCompany', companyName);
+                            console.log('🔄 Secondo tentativo salvataggio:', companyName);
+                            await new Promise(resolve => setTimeout(resolve, 200));
+                        }
+                    }
+                    
+                    // Login riuscito - reindirizza alla home
                     window.location.href = '/home.html';
 
                 } catch (error) {
