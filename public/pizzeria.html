@@ -132,7 +132,7 @@
                     style="padding: 6px 12px; background: linear-gradient(135deg, #007bff 0%, #0056b3 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.3s ease; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; white-space: nowrap;">
                     🎤 5s
                 </button>
-                
+
             </div>
             <div id="voice-message-status" style="margin-top: 4px; font-size: 10px; color: #666; min-height: 12px;">
             </div>
@@ -177,12 +177,12 @@
             <h4 style="margin: 0; color: #333; font-size: 16px;">🎙️ Chiamata Vocale</h4>
             <button id="voice-close-btn" style="background: transparent; border: none; font-size: 18px; cursor: pointer; color: #999;">×</button>
         </div>
-        
+
         <div style="display: flex; flex-direction: column; gap: 10px;">
             <button id="voice-toggle-btn" style="padding: 10px; background: linear-gradient(135deg, #28a745 0%, #20c997 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; transition: all 0.3s;">
                 📞 Entra in Chiamata
             </button>
-            
+
             <div style="display: flex; gap: 8px;">
                 <button id="voice-mute-btn" disabled style="flex: 1; padding: 8px; background: #6c757d; color: white; border: none; border-radius: 6px; cursor: not-allowed; font-size: 13px; font-weight: 600; transition: all 0.3s;">
                     🎤 Muto
@@ -191,16 +191,16 @@
                     🔊
                 </button>
             </div>
-            
+
             <div id="voice-volume-control" style="display: none; margin-top: 5px;">
                 <label style="font-size: 12px; color: #666;">Volume: <span id="voice-volume-value">100</span>%</label>
                 <input type="range" id="voice-volume-slider" min="0" max="100" value="100" style="width: 100%; margin-top: 5px;">
             </div>
-            
+
             <div id="voice-status" style="font-size: 12px; color: #666; text-align: center;">
                 Non connesso
             </div>
-            
+
             <div id="voice-peers" style="font-size: 11px; color: #999; text-align: center; min-height: 16px;">
             </div>
         </div>
@@ -312,7 +312,7 @@
                         if (data.action === 'startCountdown') {
                             console.log('📥 Countdown ricevuto in pizzeria:', data);
                             console.log(`🔍 Destinazione ricevuta: "${data.destination}", Tavolo: ${data.tableNumber}, Tempo: ${data.timeRemaining}s`);
-                            
+
                             // PIZZERIA: Mostra countdown con destinazione "pizzeria" o aggiorna se esiste già
                             if (data.destination === 'pizzeria') {
                                 console.log(`✅ Countdown accettato per pizzeria - Tavolo: ${data.tableNumber}`);
@@ -982,7 +982,7 @@
                     }
                 });
             } else {
-                console.log('⚠️ File audio alerte-346112.mp3 non trovato in pizzeria');
+                console.log('⚠️ File audio aler te-346112.mp3 non trovato in pizzeria');
             }
 
             // Animazione visiva per attirare l'attenzione
@@ -1089,7 +1089,7 @@
             }
         }
 
-        
+
 
         // Sistema pausa cucina
         let pausaAttiva = false;
@@ -1588,7 +1588,7 @@
 
 
     </script>
-    
+
     <!-- Voice Call Module -->
     <script src="js/voice-call.js"></script>
     <script>
@@ -1598,7 +1598,7 @@
             onStateChanged: (state) => {
                 const statusEl = document.getElementById('voice-status');
                 const muteBtn = document.getElementById('voice-mute-btn');
-                
+
                 if (state === 'connected') {
                     statusEl.textContent = '🟢 Connesso';
                     statusEl.style.color = '#28a745';
@@ -1655,17 +1655,24 @@
 
         document.getElementById('voice-toggle-btn').addEventListener('click', async () => {
             const btn = document.getElementById('voice-toggle-btn');
-            
+
             if (!voiceCallActive) {
                 try {
+                    // Verifica che il nome azienda sia disponibile
+                    const currentCompanyName = localStorage.getItem('userCompany');
+                    if (!currentCompanyName || currentCompanyName === 'Nome Azienda') {
+                        alert('❌ Nome azienda non disponibile. Ricarica la pagina.');
+                        return;
+                    }
+
                     btn.disabled = true;
-                    btn.textContent = 'Connessione...';
-                    
-                    const companyName = localStorage.getItem('userCompany') || 'Restaurant';
-                    const roomId = `${companyName}:voice`;
-                    
-                    await VoiceCall.joinVoice(roomId, 'PIZZERIA', ws);
-                    
+                    btn.textContent = '⏳ Connessione...';
+
+                    const result = await VoiceCall.joinVoice(
+                        `${currentCompanyName}:voice`,
+                        'pizzeria',
+                        ws
+                    );
                     voiceCallActive = true;
                     btn.textContent = '📞 Esci dalla Chiamata';
                     btn.style.background = 'linear-gradient(135deg, #dc3545 0%, #c82333 100%)';
@@ -1705,7 +1712,7 @@
             }
         });
     </script>
-    
+
     <script src="company-header.js"></script>
 
 

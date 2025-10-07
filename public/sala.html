@@ -775,11 +775,18 @@
             
             if (!voiceCallActive) {
                 try {
+                    // Verifica che il nome azienda sia disponibile
+                    const currentCompanyName = localStorage.getItem('userCompany');
+                    if (!currentCompanyName || currentCompanyName === 'Nome Azienda') {
+                        alert('❌ Nome azienda non disponibile. Ricarica la pagina.');
+                        return;
+                    }
+                    
                     btn.disabled = true;
                     btn.textContent = '⏳ Connessione...';
                     
                     const result = await VoiceCall.joinVoice(
-                        `${companyName}:voice`,
+                        `${currentCompanyName}:voice`,
                         'sala',
                         CountdownsModule.getWebSocket()
                     );
