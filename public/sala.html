@@ -487,6 +487,9 @@
         }
 
         function updateCountdown(data) {
+            console.log('📥 Countdown ricevuto in sala:', data);
+            console.log(`🔍 Destinazione: "${data.destination}", Tavolo: ${data.tableNumber}`);
+            
             const existingIndex = countdowns.findIndex(c => c.tableNumber == data.tableNumber);
             
             const newCountdown = {
@@ -505,7 +508,9 @@
                 const existing = countdowns[existingIndex];
                 if (data.destination && !existing.destinations.includes(data.destination)) {
                     existing.destinations.push(data.destination);
+                    console.log(`📝 Destinazione "${data.destination}" aggiunta al tavolo ${data.tableNumber}. Destinazioni totali: [${existing.destinations.join(', ')}]`);
                 }
+                // Aggiorna il tempo con il countdown più recente
                 countdowns[existingIndex] = {
                     ...existing,
                     remainingTime: data.timeRemaining,
@@ -513,8 +518,10 @@
                     startTime: Date.now(),
                     endsAt: Date.now() + (data.timeRemaining * 1000)
                 };
+                console.log(`🔄 Countdown tavolo ${data.tableNumber} aggiornato in sala`);
             } else {
                 countdowns.push(newCountdown);
+                console.log(`✅ Nuovo countdown tavolo ${data.tableNumber} aggiunto in sala con destinazione: [${data.destination}]`);
             }
 
             renderCountdowns();
