@@ -6,6 +6,36 @@ A real-time restaurant order coordination system that manages countdowns for dis
 
 ## Recent Changes
 
+### October 7, 2025 - WebRTC Group Voice Call Feature
+- **Implemented WebRTC-based group audio call system** for inter-department communication
+  - Mesh P2P topology allowing Kitchen, Pizzeria, and Salad Bar to communicate via real-time audio
+  - WebSocket signaling for offer/answer/ICE candidate exchange
+  - Support for TURN/STUN servers for NAT traversal (configurable via environment variables)
+  - Automatic reconnection logic with exponential backoff
+  - Mute/unmute controls and volume adjustment per user
+  - Real-time peer connection status and participant count display
+  
+- **Created voice-call.js module** (`public/js/voice-call.js`)
+  - Manages local media streams (microphone access)
+  - Handles peer-to-peer connections using RTCPeerConnection API
+  - Implements connection state management and cleanup
+  - Remote audio element creation and management
+  - Graceful error handling for permission denials and connection failures
+  
+- **Added voice call UI to all station pages**
+  - Floating voice panel with minimal footprint (bottom corners)
+  - Toggle button (🎙️) to show/hide panel without disrupting workflow
+  - Join/leave call functionality with clear status indicators
+  - Mute button and volume slider for audio control
+  - Live participant counter showing active callers
+  - Color-coded status: green (connected), red (error), gray (disconnected)
+  
+- **Enhanced server.js with WebRTC signaling**
+  - New WebSocket actions: `voice_join`, `voice_offer`, `voice_answer`, `voice_ice_candidate`, `voice_leave`, `voice_mute`
+  - Room-based signaling ensures only same-company participants can communicate
+  - Broadcast mechanism for peer discovery and connection establishment
+  - Tracks active voice participants per room for cleanup
+
 ### October 7, 2025 - Sala (Dining Room) Monitoring Enhancement
 - **Added comprehensive sala.html page** for dining room staff to monitor all active countdowns
   - Real-time countdown display with automatic updates via WebSocket
@@ -103,6 +133,13 @@ Preferred communication style: Simple, everyday language.
 - Client → Server: `{ action: 'startCountdown', tableNumber, timeRemaining }`
 - Server → All Clients: Broadcast countdown updates with table number and remaining time
 - Heartbeat mechanism for connection health monitoring
+- **WebRTC Signaling Messages**:
+  - `voice_join`: Notify peers of new participant entering voice call
+  - `voice_offer`: Send WebRTC offer to establish peer connection
+  - `voice_answer`: Respond to offer to complete connection setup
+  - `voice_ice_candidate`: Exchange ICE candidates for NAT traversal
+  - `voice_leave`: Notify peers of participant leaving call
+  - `voice_mute`: Broadcast mute/unmute status to other participants
 
 **Response Format**: Standard JSON structure with `{ success: boolean, countdowns: [], error?: string }`
 
