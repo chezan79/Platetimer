@@ -6,16 +6,22 @@ const App = () => {
   const [ws, setWs] = useState(null);
 
   useEffect(() => {
-    // Connetti al WebSocket server
-    const socket = new WebSocket("ws://localhost:5000/ws");
+    // Costruisci l'URL WS in base allo schema della pagina
+    const WS_PROTO = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const WS_URL = `${WS_PROTO}//${window.location.host}/ws`;
+
+    const socket = new WebSocket(WS_URL);
     setWs(socket);
 
-    // Gestisci i messaggi ricevuti
     socket.onmessage = (event) => {
-      setMessages((prevMessages) => [...prevMessages, event.data]);
+      setMessages((prev) => [...prev, event.data]);
     };
 
-    // Pulizia alla chiusura del componente
+    // opzionale: log utili
+    socket.onopen = () => console.log("WS connected:", WS_URL);
+    socket.onclose = () => console.log("WS closed");
+    socket.onerror = (e) => console.error("WS error:", e);
+
     return () => socket.close();
   }, []);
 
@@ -26,8 +32,7 @@ const App = () => {
 
   const sendMessage = () => {
     if (ws && ws.readyState === WebSocket.OPEN) {
-      const message = "Ciao dal client!";
-      ws.send(message);
+      ws.send("Ciao dal client!");
     }
   };
 
@@ -38,8 +43,8 @@ const App = () => {
 
       <h2>Messaggi:</h2>
       <ul>
-        {messages.map((msg, index) => (
-          <li key={index}>{msg}</li>
+        {messages.map((msg, i) => (
+          <li key={i}>{msg}</li>
         ))}
       </ul>
 
