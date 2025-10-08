@@ -1189,14 +1189,16 @@ setInterval(() => {
 }, 300000); // Ogni 5 minuti
 
 
+// Avvia il server (unica versione corretta per Railway)
+const PORT = process.env.PORT || 3000;
 
-// Avvia il server
-const PORT = 5000;
-server.listen(PORT, '0.0.0.0', () => {
-    console.log(`🛡️ Server sicuro avviato su http://0.0.0.0:${PORT}`);
+server
+  .listen(PORT, '0.0.0.0', () => {
+    console.log(`🛡️ Server avviato su http://0.0.0.0:${PORT}`);
     console.log('✅ Autenticazione WebSocket attiva');
     console.log('✅ Validazione dati attiva');
     console.log('✅ Rate limiting ottimizzato');
-}).on('error', (error) => {
+  })
+  .on('error', (error) => {
     console.error('❌ Errore avvio server:', error);
-});
+  });
