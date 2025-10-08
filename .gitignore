@@ -145,3 +145,10 @@ attached_assets/*.txt
 *.pem
 *.p12
 *.key
+
+# secrets
+attached_assets/*
+*.json
+*.pem
+*.p12
+*.key
