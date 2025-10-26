@@ -88,6 +88,18 @@
         loadingIndicator.innerHTML = '⏳ Caricamento...';
         document.body.appendChild(loadingIndicator);
 
+        // Timeout di sicurezza: riabilita i pulsanti dopo 3 secondi in ogni caso
+        setTimeout(() => {
+            if (buttonGrid && buttonGrid.style.opacity !== '1') {
+                console.warn('⚠️ Timeout raggiunto, riabilitazione forzata pulsanti');
+                buttonGrid.style.opacity = '1';
+                buttonGrid.style.pointerEvents = 'auto';
+                if (loadingIndicator && loadingIndicator.parentNode) {
+                    loadingIndicator.remove();
+                }
+            }
+        }, 3000);
+
         // Gestione autenticazione e dati utente
         onAuthStateChanged(auth, async (user) => {
             if (user) {
@@ -164,9 +176,15 @@
                 if (loadingIndicator && loadingIndicator.parentNode) {
                     loadingIndicator.remove();
                 }
-                setTimeout(() => {
-                    window.location.href = 'index.html';
-                }, 300);
+                
+                // Riabilita i pulsanti comunque (per evitare che restino bloccati)
+                if (buttonGrid) {
+                    buttonGrid.style.opacity = '1';
+                    buttonGrid.style.pointerEvents = 'auto';
+                }
+                
+                // Redirect al login
+                window.location.href = 'index.html';
             }
         });
 
