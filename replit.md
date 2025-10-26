@@ -6,6 +6,27 @@ A real-time restaurant order coordination system that manages countdowns for dis
 
 ## Recent Changes
 
+### October 26, 2025 - Countdown Launch Capability in Insalata (Salad Bar) Station
+- **Enhanced insalata.html with countdown launcher** to enable salad bar staff to initiate countdowns
+  - Added left-side control container matching cucina.html layout pattern
+  - Virtual numeric keyboard for table number input (0-9 + Clear)
+  - Multi-select destination buttons (Cucina, Pizzeria, Insalata) with visual feedback
+  - Duration selection grid (4, 5, 6, 7, 8, 9, 10, 12, 15 minutes)
+  - Smart UI: duration buttons enabled only after selecting at least one destination
+  
+- **Implemented JavaScript countdown management logic**
+  - `sendCountdown()`: Sends WebSocket `startCountdown` message for each selected destination
+  - `resetCountdownSelection()`: Clears selections and resets UI state after countdown launch
+  - `showCountdownConfirmation()`: Displays animated success message with countdown details
+  - `updateDestinationCountdownFeedback()`: Updates section title to show selected destinations
+  - Separate state management (`selectedDestinationsCountdown`) to avoid conflicts with voice message destinations
+  
+- **Consistent user experience across stations**
+  - Insalata.html now has parity with cucina.html for countdown launching
+  - Same visual design language, layout structure, and interaction patterns
+  - Countdown messages broadcast to all selected destinations via WebSocket
+  - Recipients (cucina, pizzeria, insalata, sala) receive and display countdowns based on their destination filters
+
 ### October 7, 2025 - WebRTC Group Voice Call Feature
 - **Implemented WebRTC-based group audio call system** for inter-department communication
   - Mesh P2P topology allowing Kitchen, Pizzeria, and Salad Bar to communicate via real-time audio
