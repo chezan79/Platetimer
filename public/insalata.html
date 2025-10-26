@@ -11,18 +11,57 @@
             min-height: 100vh;
             margin: 0;
             padding: 20px;
+            padding-top: 120px;
             display: flex;
-            align-items: center;
-            justify-content: center;
+            flex-direction: row;
+            gap: 20px;
+            position: relative;
         }
 
-        .countdown-container {
-            max-width: 800px;
-            width: 100%;
+        /* Container principale per controlli - a sinistra verticale */
+        #topContainer {
+            width: 350px;
+            flex-shrink: 0;
             background: white;
-            padding: 40px;
+            padding: 20px;
             border-radius: 10px;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+            height: fit-content;
+            position: sticky;
+            top: 150px;
+        }
+
+        /* Sezione tastiera e input */
+        #keyboardSection {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+        }
+
+        /* Sezione selezione durata */
+        #durationSection {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+        }
+
+        /* Container per i countdown - posizionato a destra */
+        .countdown-container {
+            flex: 1;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            max-height: calc(100vh - 140px);
+            min-height: calc(100vh - 200px);
         }
 
         h1 {
@@ -31,6 +70,116 @@
             margin-bottom: 30px;
             font-size: 28px;
             font-weight: 300;
+        }
+
+        h2 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+
+        input[type="text"] {
+            width: 90%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+            margin: 10px 0;
+            box-sizing: border-box;
+            text-align: center;
+        }
+
+        #keyboard {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 6px;
+            max-width: 240px;
+            margin: 0 auto;
+        }
+
+        .key {
+            padding: 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            font-size: 16px;
+            text-align: center;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            border: none;
+        }
+
+        .key:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .destination-button-countdown {
+            padding: 8px 12px;
+            margin: 3px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: transform 0.2s, background-color 0.3s, box-shadow 0.2s;
+            font-weight: 600;
+            font-size: 14px;
+            min-width: 60px;
+        }
+
+        .destination-button-countdown:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .destination-button-countdown.selected {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            border: 3px solid #333;
+            position: relative;
+        }
+
+        .destination-button-countdown.selected::after {
+            content: '✓';
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background: #28a745;
+            color: white;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+            border: 2px solid white;
+        }
+
+        .duration-button {
+            padding: 8px 12px;
+            margin: 3px;
+            background: linear-gradient(135deg, #696969 0%, #A9A9A9 100%);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: transform 0.2s, background-color 0.3s, box-shadow 0.2s;
+            font-weight: 600;
+            font-size: 14px;
+            min-width: 60px;
+        }
+
+        .duration-button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(40, 167, 69, 0.3);
+        }
+
+        .duration-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            background: linear-gradient(135deg, #cccccc 0%, #cccccc 100%);
         }
 
         .countdown-item {
@@ -210,6 +359,59 @@
     <!-- Container for remote audio elements -->
     <div id="remote-audios" style="display: none;"></div>
 
+    <!-- Container controlli a sinistra verticale (sempre visibile) -->
+    <div id="topContainer">
+        <!-- Sezione tastiera e input -->
+        <div id="keyboardSection">
+            <h2 style="color: #333; text-align: center; margin-bottom: 15px; font-size: 18px;">🔢 Tastiera</h2>
+            <input type="text" id="numeroTavolo" pattern="[0-9]*" inputmode="numeric" placeholder="Numero Tavolo" readonly style="width: 90%; margin-bottom: 15px;">
+            <div id="keyboard">
+                <div class="key">1</div>
+                <div class="key">2</div>
+                <div class="key">3</div>
+                <div class="key">4</div>
+                <div class="key">5</div>
+                <div class="key">C</div>
+                <div class="key">6</div>
+                <div class="key">7</div>
+                <div class="key">8</div>
+                <div class="key">9</div>
+                <div class="key">0</div>
+            </div>
+        </div>
+
+        <!-- Sezione selezione destinazione -->
+        <div id="destinationSection">
+            <h2 style="color: #333; text-align: center; margin-bottom: 15px; font-size: 18px;">🎯 Destinazione</h2>
+            <div id="destinationSelection">
+                <div style="display: flex; flex-direction: column; gap: 8px; width: 100%;">
+                    <button class="destination-button-countdown" data-destination="cucina" style="background: linear-gradient(135deg, #28a745 0%, #98FB98 100%); color: #212529;">🍳 Cucina</button>
+                    <button class="destination-button-countdown" data-destination="pizzeria" style="background: linear-gradient(135deg, #ffc107 0%, #FFE4C4 100%); color: #212529;">🍕 Pizzeria</button>
+                    <button class="destination-button-countdown" data-destination="insalata" style="background: linear-gradient(135deg, #17a2b8 0%, #B0E0E6 100%); color: #212529;">🥗 Insalata</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sezione selezione durata -->
+        <div id="durationSection">
+            <h2 style="color: #333; text-align: center; margin-bottom: 15px; font-size: 18px;">⏱️ Durata</h2>
+            <div id="durationSelection">
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; width: 100%;">
+                    <button class="duration-button" data-minutes="4" disabled>4 Min</button>
+                    <button class="duration-button" data-minutes="5" disabled>5 Min</button>
+                    <button class="duration-button" data-minutes="6" disabled>6 Min</button>
+                    <button class="duration-button" data-minutes="7" disabled>7 Min</button>
+                    <button class="duration-button" data-minutes="8" disabled>8 Min</button>
+                    <button class="duration-button" data-minutes="9" disabled>9 Min</button>
+                    <button class="duration-button" data-minutes="10" disabled>10 Min</button>
+                    <button class="duration-button" data-minutes="12" disabled>12 Min</button>
+                    <button class="duration-button" data-minutes="15" disabled>15 Min</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Container countdown a destra -->
     <div class="countdown-container">
         <h1>🥗 Insalata</h1>
         <div id="tavoli">
@@ -486,6 +688,191 @@
             const remainingSeconds = seconds % 60;
             return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
         }
+
+        // ====== GESTIONE LANCIO COUNTDOWN DA INSALATA ======
+        
+        // Selezione elementi per lancio countdown
+        const numeroTavoloInput = document.getElementById('numeroTavolo');
+        const keyboard = document.getElementById('keyboard');
+        const destinationSelection = document.getElementById('destinationSelection');
+        const durationSelection = document.getElementById('durationSelection');
+        
+        // Array per memorizzare le destinazioni selezionate per countdown
+        let selectedDestinationsCountdown = [];
+
+        // Gestione tastiera virtuale
+        keyboard.addEventListener('click', (event) => {
+            if (event.target.classList.contains('key')) {
+                const key = event.target.textContent;
+                if (key === 'C') {
+                    numeroTavoloInput.value = '';
+                } else {
+                    numeroTavoloInput.value += key;
+                }
+            }
+        });
+
+        // Gestione selezione multipla destinazioni per countdown
+        destinationSelection.addEventListener('click', (event) => {
+            if (event.target.classList.contains('destination-button-countdown')) {
+                const destination = event.target.getAttribute('data-destination');
+
+                // Toggle della selezione
+                if (event.target.classList.contains('selected')) {
+                    // Rimuovi dalla selezione
+                    event.target.classList.remove('selected');
+                    selectedDestinationsCountdown = selectedDestinationsCountdown.filter(d => d !== destination);
+                } else {
+                    // Aggiungi alla selezione
+                    event.target.classList.add('selected');
+                    selectedDestinationsCountdown.push(destination);
+                }
+
+                // Abilita i pulsanti durata solo se almeno una destinazione è selezionata
+                const hasDestinations = selectedDestinationsCountdown.length > 0;
+                document.querySelectorAll('.duration-button').forEach(btn => {
+                    btn.disabled = !hasDestinations;
+                });
+
+                console.log('Destinazioni countdown selezionate:', selectedDestinationsCountdown);
+
+                // Aggiorna il feedback visivo
+                updateDestinationCountdownFeedback();
+            }
+        });
+
+        // Funzione per aggiornare il feedback visivo delle destinazioni countdown
+        function updateDestinationCountdownFeedback() {
+            const sectionTitle = document.querySelector('#destinationSection h2');
+            if (selectedDestinationsCountdown.length === 0) {
+                sectionTitle.textContent = '🎯 Destinazione';
+            } else if (selectedDestinationsCountdown.length === 1) {
+                const icons = {'cucina': '🍳', 'pizzeria': '🍕', 'insalata': '🥗'};
+                sectionTitle.textContent = `🎯 ${icons[selectedDestinationsCountdown[0]]} ${selectedDestinationsCountdown[0].charAt(0).toUpperCase() + selectedDestinationsCountdown[0].slice(1)}`;
+            } else {
+                sectionTitle.textContent = `🎯 ${selectedDestinationsCountdown.length} Destinazioni`;
+            }
+        }
+
+        // Gestione selezione durata e avvio countdown
+        durationSelection.addEventListener('click', (event) => {
+            if (event.target.classList.contains('duration-button') && !event.target.disabled) {
+                const minutes = parseInt(event.target.getAttribute('data-minutes'));
+                const tableNumber = numeroTavoloInput.value;
+
+                if (tableNumber !== '') {
+                    if (selectedDestinationsCountdown.length > 0) {
+                        // Avvia countdown per ogni destinazione selezionata
+                        selectedDestinationsCountdown.forEach(destination => {
+                            sendCountdown(minutes, tableNumber, destination);
+                        });
+
+                        numeroTavoloInput.value = '';
+
+                        // Resetta la selezione dopo l'invio
+                        resetCountdownSelection();
+
+                        // Feedback di conferma
+                        showCountdownConfirmation(tableNumber, selectedDestinationsCountdown, minutes);
+                    } else {
+                        alert('Seleziona almeno una destinazione (Cucina, Pizzeria o Insalata)');
+                    }
+                } else {
+                    alert('Inserisci prima il numero del tavolo');
+                }
+            }
+        });
+
+        // Funzione per inviare countdown tramite WebSocket
+        function sendCountdown(minutes, tableNumber, destination) {
+            const timeRemaining = minutes * 60; // Converti minuti in secondi
+            
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                const countdownMessage = {
+                    action: 'startCountdown',
+                    tableNumber: tableNumber,
+                    timeRemaining: timeRemaining,
+                    destination: destination
+                };
+                
+                ws.send(JSON.stringify(countdownMessage));
+                console.log(`✅ Countdown inviato da insalata: Tavolo ${tableNumber}, ${minutes} min → ${destination}`);
+            } else {
+                console.error('❌ WebSocket non connesso');
+                alert('❌ Connessione persa. Impossibile avviare countdown.');
+            }
+        }
+
+        // Funzione per resettare la selezione countdown
+        function resetCountdownSelection() {
+            selectedDestinationsCountdown = [];
+            document.querySelectorAll('.destination-button-countdown').forEach(btn => {
+                btn.classList.remove('selected');
+            });
+            document.querySelectorAll('.duration-button').forEach(btn => {
+                btn.disabled = true;
+            });
+            updateDestinationCountdownFeedback();
+        }
+
+        // Funzione per mostrare messaggio di conferma countdown
+        function showCountdownConfirmation(tableNumber, destinations, minutes) {
+            const icons = {'cucina': '🍳', 'pizzeria': '🍕', 'insalata': '🥗'};
+            const destList = destinations.map(d => `${icons[d]} ${d.charAt(0).toUpperCase() + d.slice(1)}`).join(', ');
+
+            // Crea un messaggio di conferma temporaneo
+            const confirmationDiv = document.createElement('div');
+            confirmationDiv.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+                color: white;
+                padding: 20px 30px;
+                border-radius: 10px;
+                box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+                z-index: 2001;
+                font-size: 18px;
+                font-weight: 600;
+                text-align: center;
+                animation: fadeInOut 2s ease-in-out;
+            `;
+            
+            confirmationDiv.innerHTML = `
+                ✅ Countdown Avviato!<br>
+                <span style="font-size: 16px; margin-top: 10px; display: block;">
+                    Tavolo ${tableNumber} - ${minutes} min<br>
+                    ${destList}
+                </span>
+            `;
+
+            // Aggiungi animazione se non esiste
+            if (!document.getElementById('confirmationAnimation')) {
+                const style = document.createElement('style');
+                style.id = 'confirmationAnimation';
+                style.textContent = `
+                    @keyframes fadeInOut {
+                        0% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+                        20% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+                        80% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+                        100% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+
+            document.body.appendChild(confirmationDiv);
+
+            // Rimuovi dopo 2 secondi
+            setTimeout(() => {
+                confirmationDiv.remove();
+            }, 2000);
+
+            console.log(`🎉 Conferma countdown mostrata: Tavolo ${tableNumber}, ${minutes}min → ${destList}`);
+        }
+
+        // ====== FINE GESTIONE LANCIO COUNTDOWN ======
 
         // Gestione messaggi vocali
         function displayVoiceMessage(messageData) {
