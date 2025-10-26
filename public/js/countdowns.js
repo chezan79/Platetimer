@@ -110,6 +110,7 @@ const CountdownsModule = (() => {
 
                         if (data.action === 'startCountdown' && onCountdownUpdateCallback) {
                             console.log('📥 [COUNTDOWNS.JS] Countdown received:', data);
+                            console.log(`🔍 Destination passed: "${data.destination}", Table: ${data.tableNumber}`);
                             onCountdownUpdateCallback({
                                 tableNumber: data.tableNumber,
                                 timeRemaining: data.timeRemaining,

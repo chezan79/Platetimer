@@ -577,7 +577,7 @@
                 };
                 
                 countdowns.push(newCountdown);
-                console.log(`✅ Nuovo countdown tavolo ${data.tableNumber} aggiunto in sala con destinazione: [${data.destination}]`);
+                console.log(`✅ Nuovo countdown tavolo ${data.tableNumber} aggiunto in sala con destinazione: [${newCountdown.destinations.join(', ')}]`);
             }
 
             renderCountdowns();
