@@ -75,6 +75,13 @@
         const auth = getAuth(app);
         const db = getFirestore(app);
 
+        // Nascondi temporaneamente i pulsanti finché non è caricato tutto
+        const buttonGrid = document.querySelector('.button-grid');
+        if (buttonGrid) {
+            buttonGrid.style.opacity = '0.5';
+            buttonGrid.style.pointerEvents = 'none';
+        }
+
         // Gestione autenticazione e dati utente
         onAuthStateChanged(auth, async (user) => {
             if (user) {
@@ -85,7 +92,7 @@
 
                     if (userDoc.exists()) {
                         userData = userDoc.data();
-                        console.log('Dati utente caricati:', userData);
+                        console.log('✅ Dati utente caricati:', userData);
 
                         // Mostra il nome utente
                         if (document.getElementById('user-display-name')) {
@@ -115,31 +122,39 @@
 
                         // Aggiorna l'interfaccia dopo aver impostato il nome azienda
                         updateCompanyName();
+
+                        // Riabilita i pulsanti dopo il caricamento
+                        if (buttonGrid) {
+                            buttonGrid.style.opacity = '1';
+                            buttonGrid.style.pointerEvents = 'auto';
+                        }
                     } else {
-                        console.error('Documento utente non trovato');
-                        // Non reindirizzare automaticamente - dai il tempo all'utente di vedere l'errore
+                        console.error('❌ Documento utente non trovato');
                         alert('Errore: profilo utente non trovato. Contatta il supporto.');
+                        setTimeout(() => {
+                            window.location.href = 'index.html';
+                        }, 2000);
                     }
                 } catch (error) {
-                    console.error("Errore nel recupero dei dati utente:", error);
-                    // Mostra errore ma non reindirizzare immediatamente
-                    const errorMsg = document.createElement('div');
-                    errorMsg.style.cssText = 'position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: #f44336; color: white; padding: 15px 25px; border-radius: 8px; z-index: 10000;';
-                    errorMsg.textContent = 'Errore caricamento dati. Ricarica la pagina o effettua nuovamente il login.';
-                    document.body.appendChild(errorMsg);
+                    console.error("❌ Errore nel recupero dei dati utente:", error);
+                    // Solo se è un errore reale di rete o Firebase
+                    if (error.code !== 'auth/network-request-failed') {
+                        const errorMsg = document.createElement('div');
+                        errorMsg.style.cssText = 'position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: #f44336; color: white; padding: 15px 25px; border-radius: 8px; z-index: 10000;';
+                        errorMsg.textContent = 'Errore caricamento dati. Ricarica la pagina.';
+                        document.body.appendChild(errorMsg);
+                        
+                        setTimeout(() => {
+                            errorMsg.remove();
+                        }, 5000);
+                    }
                 }
             } else {
                 // L'utente non è autenticato, reindirizza al login
                 console.log('❌ Utente non autenticato, reindirizzamento al login');
-                // Mostra un messaggio prima del redirect
-                const msg = document.createElement('div');
-                msg.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.2); text-align: center; z-index: 10000;';
-                msg.innerHTML = '<p style="margin: 0 0 15px 0; font-size: 16px;">Sessione scaduta o non autenticato.</p><p style="margin: 0; color: #666;">Reindirizzamento al login...</p>';
-                document.body.appendChild(msg);
-                
                 setTimeout(() => {
                     window.location.href = 'index.html';
-                }, 1500);
+                }, 500);
             }
         });
 
