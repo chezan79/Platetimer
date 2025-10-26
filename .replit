@@ -7,7 +7,7 @@ requiredFiles = [".replit", "replit.nix", "package.json", "package-lock.json"]
 
 [nix]
 channel = "stable-24_11"
-packages = ["openssh"]
+packages = ["openssh", "mcron"]
 
 [deployment]
 run = ["sh", "-c", "node server.js"]
