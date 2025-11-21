@@ -482,12 +482,12 @@
             <h4 style="margin: 0; color: #333; font-size: 16px;">🎙️ Chiamata Vocale</h4>
             <button id="voice-close-btn" style="background: transparent; border: none; font-size: 18px; cursor: pointer; color: #999;">×</button>
         </div>
-        
+
         <div style="display: flex; flex-direction: column; gap: 10px;">
             <button id="voice-toggle-btn" style="padding: 10px; background: linear-gradient(135deg, #28a745 0%, #20c997 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; transition: all 0.3s;">
                 📞 Entra in Chiamata
             </button>
-            
+
             <div style="display: flex; gap: 8px;">
                 <button id="voice-mute-btn" disabled style="flex: 1; padding: 8px; background: #6c757d; color: white; border: none; border-radius: 6px; cursor: not-allowed; font-size: 13px; font-weight: 600; transition: all 0.3s;">
                     🎤 Muto
@@ -496,16 +496,16 @@
                     🔊
                 </button>
             </div>
-            
+
             <div id="voice-volume-control" style="display: none; margin-top: 5px;">
                 <label style="font-size: 12px; color: #666;">Volume: <span id="voice-volume-value">100</span>%</label>
                 <input type="range" id="voice-volume-slider" min="0" max="100" value="100" style="width: 100%; margin-top: 5px;">
             </div>
-            
+
             <div id="voice-status" style="font-size: 12px; color: #666; text-align: center;">
                 Non connesso
             </div>
-            
+
             <div id="voice-peers" style="font-size: 11px; color: #999; text-align: center; min-height: 16px;">
             </div>
         </div>
@@ -631,7 +631,7 @@
         let currentPopup = null;
         let offsetX = 0;
         let offsetY = 0;
-        
+
         // Memorizza la posizione condivisa per tutti i popup countdown
         let countdownPopupPosition = null;
 
@@ -644,7 +644,7 @@
         document.getElementById('toggle-voice-section').addEventListener('click', () => {
             const voiceSection = document.getElementById('voiceSection');
             const toggleBtn = document.getElementById('toggle-voice-section');
-            
+
             if (voiceSection && voiceSection.style.display === 'none') {
                 voiceSection.style.display = 'block';
                 toggleBtn.style.background = 'linear-gradient(135deg, #28a745 0%, #20c997 100%)';
@@ -658,7 +658,7 @@
             closeAllPopups();
             const popup = document.getElementById(popupId);
             popup.style.display = 'block';
-            
+
             // Usa la posizione condivisa se esiste, altrimenti centra
             if (countdownPopupPosition) {
                 popup.style.left = countdownPopupPosition.left;
@@ -670,7 +670,7 @@
                 popup.style.top = '50%';
                 popup.style.transform = 'translate(-50%, -50%)';
             }
-            
+
             enableDragging(popup);
         }
 
@@ -685,46 +685,46 @@
         // Drag & Drop per popup
         function enableDragging(popup) {
             const header = popup.querySelector('.popup-header');
-            
+
             header.addEventListener('mousedown', startDragging);
             header.addEventListener('touchstart', startDragging);
-            
+
             function startDragging(e) {
                 isDragging = true;
                 currentPopup = popup;
-                
+
                 const rect = popup.getBoundingClientRect();
                 const clientX = e.type === 'mousedown' ? e.clientX : e.touches[0].clientX;
                 const clientY = e.type === 'mousedown' ? e.clientY : e.touches[0].clientY;
-                
+
                 offsetX = clientX - rect.left;
                 offsetY = clientY - rect.top;
-                
+
                 popup.style.transform = 'none';
-                
+
                 document.addEventListener('mousemove', drag);
                 document.addEventListener('touchmove', drag);
                 document.addEventListener('mouseup', stopDragging);
                 document.addEventListener('touchend', stopDragging);
-                
+
                 e.preventDefault();
             }
-            
+
             function drag(e) {
                 if (!isDragging || !currentPopup) return;
-                
+
                 const clientX = e.type === 'mousemove' ? e.clientX : e.touches[0].clientX;
                 const clientY = e.type === 'mousemove' ? e.clientY : e.touches[0].clientY;
-                
+
                 currentPopup.style.left = (clientX - offsetX) + 'px';
                 currentPopup.style.top = (clientY - offsetY) + 'px';
-                
+
                 e.preventDefault();
             }
-            
+
             function stopDragging() {
                 isDragging = false;
-                
+
                 // Salva la posizione condivisa per tutti i popup countdown
                 if (currentPopup && (currentPopup.id === 'popup-tavolo' || currentPopup.id === 'popup-destinazione' || currentPopup.id === 'popup-minuti')) {
                     countdownPopupPosition = {
@@ -732,7 +732,7 @@
                         top: currentPopup.style.top
                     };
                 }
-                
+
                 currentPopup = null;
                 document.removeEventListener('mousemove', drag);
                 document.removeEventListener('touchmove', drag);
@@ -744,11 +744,11 @@
         // Popup 1: Tastiera numero tavolo
         const popupTavoloInput = document.getElementById('popup-numero-tavolo');
         const popupKeyboard = document.getElementById('popup-keyboard');
-        
+
         popupKeyboard.addEventListener('click', (e) => {
             if (e.target.classList.contains('popup-key')) {
                 const value = e.target.getAttribute('data-value');
-                
+
                 if (value === 'C') {
                     popupTavoloInput.value = '';
                 } else if (value === 'OK') {
@@ -769,7 +769,7 @@
         document.querySelectorAll('.popup-destination-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 const destination = btn.getAttribute('data-destination');
-                
+
                 if (btn.classList.contains('selected')) {
                     btn.classList.remove('selected');
                     popupDestinations = popupDestinations.filter(d => d !== destination);
@@ -792,22 +792,22 @@
         document.querySelectorAll('.popup-minutes-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 const minutes = parseInt(btn.getAttribute('data-minutes'));
-                
+
                 // Avvia countdown per ogni destinazione
                 popupDestinations.forEach(destination => {
                     sendCountdown(minutes, popupTableNumber, destination);
                 });
-                
+
                 // Feedback
                 const icons = {'cucina': '🍳', 'pizzeria': '🍕', 'insalata': '🥗'};
                 const destList = popupDestinations.map(d => `${icons[d]} ${d.charAt(0).toUpperCase() + d.slice(1)}`).join(', ');
                 console.log(`✅ Countdown avviato: Tavolo ${popupTableNumber}, ${minutes}min → ${destList}`);
-                
+
                 // Reset stato e riapri popup tavolo
                 popupTableNumber = '';
                 popupDestinations = [];
                 document.querySelectorAll('.popup-destination-btn').forEach(b => b.classList.remove('selected'));
-                
+
                 // Chiudi e riapri popup tavolo per prossimo inserimento
                 setTimeout(() => {
                     openPopup('popup-tavolo');
@@ -856,7 +856,7 @@
                         companyName = companyName.trim().toLowerCase();
                         // Forza l'aggiornamento del localStorage con il valore normalizzato
                         localStorage.setItem('userCompany', companyName);
-                        
+
                         const joinMessage = {
                             action: 'joinRoom',
                             companyName: companyName
@@ -1072,11 +1072,11 @@
         }
 
         // ====== GESTIONE LANCIO COUNTDOWN DA INSALATA ======
-        
+
         // Funzione per inviare countdown tramite WebSocket
         function sendCountdown(minutes, tableNumber, destination) {
             const timeRemaining = minutes * 60; // Converti minuti in secondi
-            
+
             if (ws && ws.readyState === WebSocket.OPEN) {
                 const countdownMessage = {
                     action: 'startCountdown',
@@ -1084,7 +1084,7 @@
                     timeRemaining: timeRemaining,
                     destination: destination
                 };
-                
+
                 ws.send(JSON.stringify(countdownMessage));
                 console.log(`✅ Countdown inviato da insalata: Tavolo ${tableNumber}, ${minutes} min → ${destination}`);
             } else {
@@ -1936,7 +1936,7 @@
             }, 3000);
         }
 
-        
+
 
         function mostraPausaInsalata(data) {
             // Rimuovi messaggio precedente se esiste
@@ -2144,7 +2144,7 @@ function mostraAvvisoPaginaOccupata(data) {
             }
         });
     </script>
-    
+
     <!-- Voice Call Module -->
     <script src="js/voice-call.js"></script>
     <script>
@@ -2154,7 +2154,7 @@ function mostraAvvisoPaginaOccupata(data) {
             onStateChanged: (state) => {
                 const statusEl = document.getElementById('voice-status');
                 const muteBtn = document.getElementById('voice-mute-btn');
-                
+
                 if (state === 'connected') {
                     statusEl.textContent = '🟢 Connesso';
                     statusEl.style.color = '#28a745';
@@ -2211,12 +2211,12 @@ function mostraAvvisoPaginaOccupata(data) {
 
         document.getElementById('voice-toggle-btn').addEventListener('click', async () => {
             const btn = document.getElementById('voice-toggle-btn');
-            
+
             if (!voiceCallActive) {
                 try {
                     btn.disabled = true;
                     btn.textContent = 'Connessione...';
-                    
+
                     let companyName = localStorage.getItem('userCompany');
                     if (!companyName) {
                         alert('❌ Nome azienda non trovato. Effettua il login.');
@@ -2226,9 +2226,9 @@ function mostraAvvisoPaginaOccupata(data) {
                     }
                     companyName = companyName.trim().toLowerCase();
                     const roomId = `${companyName}:voice`;
-                    
+
                     await VoiceCall.joinVoice(roomId, 'INSALATA', ws);
-                    
+
                     voiceCallActive = true;
                     btn.textContent = '📞 Esci dalla Chiamata';
                     btn.style.background = 'linear-gradient(135deg, #dc3545 0%, #c82333 100%)';
@@ -2268,7 +2268,7 @@ function mostraAvvisoPaginaOccupata(data) {
             }
         });
     </script>
-    
+
     <script src="company-header.js"></script>
 
 </body>
