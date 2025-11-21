@@ -325,6 +325,150 @@
                         from { opacity: 1; transform: translateX(0); }
                         to { opacity: 0; transform: translateX(20px); }
                     }
+
+                    /* Stili per popup modali mobili */
+                    .countdown-popup {
+                        position: fixed;
+                        top: 50%;
+                        left: 50%;
+                        transform: translate(-50%, -50%);
+                        background: white;
+                        border-radius: 15px;
+                        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+                        z-index: 2000;
+                        min-width: 320px;
+                        max-width: 400px;
+                        cursor: move;
+                        animation: popupSlideIn 0.3s ease-out;
+                    }
+
+                    @keyframes popupSlideIn {
+                        from {
+                            opacity: 0;
+                            transform: translate(-50%, -50%) scale(0.9);
+                        }
+                        to {
+                            opacity: 1;
+                            transform: translate(-50%, -50%) scale(1);
+                        }
+                    }
+
+                    .popup-header {
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        color: white;
+                        padding: 15px 20px;
+                        border-radius: 15px 15px 0 0;
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        cursor: move;
+                    }
+
+                    .popup-header h3 {
+                        margin: 0;
+                        font-size: 18px;
+                        font-weight: 600;
+                    }
+
+                    .popup-close {
+                        background: rgba(255, 255, 255, 0.2);
+                        border: none;
+                        color: white;
+                        font-size: 20px;
+                        width: 30px;
+                        height: 30px;
+                        border-radius: 50%;
+                        cursor: pointer;
+                        transition: background 0.2s;
+                    }
+
+                    .popup-close:hover {
+                        background: rgba(255, 255, 255, 0.3);
+                    }
+
+                    .popup-body {
+                        padding: 20px;
+                    }
+
+                    .popup-key {
+                        padding: 15px;
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        color: white;
+                        font-size: 18px;
+                        font-weight: 600;
+                        border: none;
+                        border-radius: 8px;
+                        cursor: pointer;
+                        transition: transform 0.2s, box-shadow 0.2s;
+                    }
+
+                    .popup-key:hover {
+                        transform: translateY(-2px);
+                        box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+                    }
+
+                    .popup-key:active {
+                        transform: translateY(0);
+                    }
+
+                    .popup-destination-btn {
+                        padding: 15px;
+                        border: none;
+                        border-radius: 8px;
+                        font-size: 16px;
+                        font-weight: 600;
+                        cursor: pointer;
+                        transition: transform 0.2s, box-shadow 0.2s;
+                    }
+
+                    .popup-destination-btn:hover {
+                        transform: translateY(-2px);
+                        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+                    }
+
+                    .popup-destination-btn.selected {
+                        border: 3px solid #333;
+                        position: relative;
+                    }
+
+                    .popup-destination-btn.selected::after {
+                        content: '✓';
+                        position: absolute;
+                        top: -5px;
+                        right: -5px;
+                        background: #28a745;
+                        color: white;
+                        border-radius: 50%;
+                        width: 24px;
+                        height: 24px;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        font-size: 14px;
+                        font-weight: bold;
+                        border: 2px solid white;
+                    }
+
+                    .popup-minutes-btn {
+                        padding: 15px;
+                        background: linear-gradient(135deg, #696969 0%, #A9A9A9 100%);
+                        color: white;
+                        border: none;
+                        border-radius: 8px;
+                        font-size: 16px;
+                        font-weight: 600;
+                        cursor: pointer;
+                        transition: transform 0.2s, box-shadow 0.2s;
+                    }
+
+                    .popup-minutes-btn:hover {
+                        transform: translateY(-2px);
+                        box-shadow: 0 5px 15px rgba(40, 167, 69, 0.3);
+                    }
+
+                    #open-countdown-popup:hover {
+                        transform: scale(1.1);
+                    }
     </style>
 </head>
 <body>
@@ -382,68 +526,92 @@
         <button onclick="window.location.href='index.html'" style="padding: 6px 12px; background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500; transition: transform 0.2s, box-shadow 0.2s;">🚪 Esci</button>
     </div>
 
-    <!-- Container controlli a sinistra verticale (sempre visibile) -->
-    <div id="topContainer">
-        <!-- Sezione tastiera e input -->
-        <div id="keyboardSection">
-            <h2 style="color: #333; text-align: center; margin-bottom: 15px; font-size: 18px;">🔢 Tastiera</h2>
-            <input type="text" id="numeroTavolo" pattern="[0-9]*" inputmode="numeric" placeholder="Numero Tavolo" readonly style="width: 90%; margin-bottom: 15px;">
-            <div id="keyboard">
-                <div class="key">1</div>
-                <div class="key">2</div>
-                <div class="key">3</div>
-                <div class="key">4</div>
-                <div class="key">5</div>
-                <div class="key">C</div>
-                <div class="key">6</div>
-                <div class="key">7</div>
-                <div class="key">8</div>
-                <div class="key">9</div>
-                <div class="key">0</div>
+    <!-- Pulsante per aprire popup lancio countdown -->
+    <button id="open-countdown-popup" style="position: fixed; bottom: 90px; right: 20px; z-index: 999; background: linear-gradient(135deg, #28a745 0%, #20c997 100%); color: white; border: none; border-radius: 50%; width: 56px; height: 56px; cursor: pointer; font-size: 24px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3); transition: transform 0.2s;">
+        ⏱️
+    </button>
+
+    <!-- Sezione riconoscimento vocale compatto -->
+    <div id="voiceSection" style="position: fixed; bottom: 160px; right: 20px; z-index: 999; background: white; padding: 15px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2); min-width: 200px;">
+        <h3 style="margin: 0 0 10px 0; font-size: 14px; text-align: center;">🎤 Voce</h3>
+        <button onclick="toggleContinuousVoice()" id="voice-button" style="width: 100%; padding: 8px; background-color: #DCDCDC; color: #696969; border: none; border-radius: 5px; cursor: pointer; transition: all 0.3s ease; font-size: 14px; font-weight: 600;">
+            🎤 Attiva
+        </button>
+        <div id="voice-status" style="margin-top: 6px; font-size: 10px; color: #666; text-align: center;">
+            "tavolo" + numero + minuti
+        </div>
+        <div id="voice-indicator" style="margin-top: 3px; font-size: 10px; color: #999; text-align: center;">
+            🔴 OFF
+        </div>
+    </div>
+
+    <!-- Popup Modali per Countdown -->
+    <!-- Popup 1: Numero Tavolo -->
+    <div id="popup-tavolo" class="countdown-popup" style="display: none;">
+        <div class="popup-header">
+            <h3>🔢 Numero Tavolo</h3>
+            <button class="popup-close" onclick="closeAllPopups()">✖️</button>
+        </div>
+        <div class="popup-body">
+            <input type="text" id="popup-numero-tavolo" pattern="[0-9]*" inputmode="numeric" placeholder="Inserisci numero" readonly style="width: 100%; padding: 12px; font-size: 18px; text-align: center; border: 2px solid #ddd; border-radius: 5px; margin-bottom: 15px;">
+            <div id="popup-keyboard" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
+                <button class="popup-key" data-value="1">1</button>
+                <button class="popup-key" data-value="2">2</button>
+                <button class="popup-key" data-value="3">3</button>
+                <button class="popup-key" data-value="4">4</button>
+                <button class="popup-key" data-value="5">5</button>
+                <button class="popup-key" data-value="6">6</button>
+                <button class="popup-key" data-value="7">7</button>
+                <button class="popup-key" data-value="8">8</button>
+                <button class="popup-key" data-value="9">9</button>
+                <button class="popup-key" data-value="C" style="background: #dc3545; color: white;">C</button>
+                <button class="popup-key" data-value="0">0</button>
+                <button class="popup-key" data-value="OK" style="background: #28a745; color: white;">OK</button>
             </div>
         </div>
+    </div>
 
-        <!-- Sezione selezione destinazione -->
-        <div id="destinationSection">
-            <h2 style="color: #333; text-align: center; margin-bottom: 15px; font-size: 18px;">🎯 Destinazione</h2>
-            <div id="destinationSelection">
-                <div style="display: flex; flex-direction: column; gap: 8px; width: 100%;">
-                    <button class="destination-button" data-destination="cucina" style="background: linear-gradient(135deg, #28a745 0%, #98FB98 100%); color: #212529;">🍳 Cucina</button>
-                    <button class="destination-button" data-destination="pizzeria" style="background: linear-gradient(135deg, #ffc107 0%, #FFE4C4 100%); color: #212529;">🍕 Pizzeria</button>
-                    <button class="destination-button" data-destination="insalata" style="background: linear-gradient(135deg, #ff6b35 0%, #B0E0E6 100%); color: #212529;">🥗 Insalata</button>
-                </div>
-            </div>
+    <!-- Popup 2: Destinazione -->
+    <div id="popup-destinazione" class="countdown-popup" style="display: none;">
+        <div class="popup-header">
+            <h3>🎯 Destinazione</h3>
+            <button class="popup-close" onclick="closeAllPopups()">✖️</button>
         </div>
-
-        <!-- Sezione selezione durata -->
-        <div id="durationSection">
-            <h2 style="color: #333; text-align: center; margin-bottom: 15px; font-size: 18px;">⏱️ Durata</h2>
-            <div id="durationSelection">
-                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; width: 100%;">
-                    <button class="duration-button" data-minutes="4" disabled>4 Min</button>
-                    <button class="duration-button" data-minutes="5" disabled>5 Min</button>
-                    <button class="duration-button" data-minutes="6" disabled>6 Min</button>
-                    <button class="duration-button" data-minutes="7" disabled>7 Min</button>
-                    <button class="duration-button" data-minutes="8" disabled>8 Min</button>
-                    <button class="duration-button" data-minutes="9" disabled>9 Min</button>
-                    <button class="duration-button" data-minutes="10" disabled>10 Min</button>
-                    <button class="duration-button" data-minutes="12" disabled>12 Min</button>
-                    <button class="duration-button" data-minutes="15" disabled>15 Min</button>
-                </div>
+        <div class="popup-body">
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+                <button class="popup-destination-btn" data-destination="cucina" style="background: linear-gradient(135deg, #28a745 0%, #98FB98 100%); color: #212529;">
+                    🍳 Cucina
+                </button>
+                <button class="popup-destination-btn" data-destination="pizzeria" style="background: linear-gradient(135deg, #ffc107 0%, #FFE4C4 100%); color: #212529;">
+                    🍕 Pizzeria
+                </button>
+                <button class="popup-destination-btn" data-destination="insalata" style="background: linear-gradient(135deg, #17a2b8 0%, #B0E0E6 100%); color: #212529;">
+                    🥗 Insalata
+                </button>
             </div>
-        </div>
-
-        <!-- Sezione riconoscimento vocale -->
-        <div id="voiceSection">
-            <h2 style="color: #333; text-align: center; margin-bottom: 15px; font-size: 18px;">🎤 Comando Vocale</h2>
-            <button onclick="toggleContinuousVoice()" id="voice-button" style="padding: 10px 20px; background-color: #DCDCDC; color: #696969; border: none; border-radius: 5px; cursor: pointer; transition: all 0.3s ease; font-size: 16px; font-weight: 600;">
-                🎤 Attiva Comando vocale
+            <button id="confirm-destination" style="margin-top: 15px; width: 100%; padding: 12px; background: #007bff; color: white; border: none; border-radius: 5px; font-size: 16px; font-weight: 600; cursor: pointer;">
+                Conferma ✓
             </button>
-            <div id="voice-status" style="margin-top: 8px; font-size: 12px; color: #666; min-height: 20px; text-align: center;">
-                "tavolo" seguito dal numero e minuti
-            </div>
-            <div id="voice-indicator" style="margin-top: 5px; font-size: 12px; color: #999; text-align: center;">
-                🔴 Voce disattivata
+        </div>
+    </div>
+
+    <!-- Popup 3: Minuti -->
+    <div id="popup-minuti" class="countdown-popup" style="display: none;">
+        <div class="popup-header">
+            <h3>⏱️ Seleziona Minuti</h3>
+            <button class="popup-close" onclick="closeAllPopups()">✖️</button>
+        </div>
+        <div class="popup-body">
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
+                <button class="popup-minutes-btn" data-minutes="4">4 Min</button>
+                <button class="popup-minutes-btn" data-minutes="5">5 Min</button>
+                <button class="popup-minutes-btn" data-minutes="6">6 Min</button>
+                <button class="popup-minutes-btn" data-minutes="7">7 Min</button>
+                <button class="popup-minutes-btn" data-minutes="8">8 Min</button>
+                <button class="popup-minutes-btn" data-minutes="9">9 Min</button>
+                <button class="popup-minutes-btn" data-minutes="10">10 Min</button>
+                <button class="popup-minutes-btn" data-minutes="12">12 Min</button>
+                <button class="popup-minutes-btn" data-minutes="15">15 Min</button>
             </div>
         </div>
     </div>
@@ -540,121 +708,165 @@
         // Array per memorizzare i countdown
         const countdowns = [];
 
-        // Gestione tastiera virtuale
-        keyboard.addEventListener('click', (event) => {
-            if (event.target.classList.contains('key')) {
-                const key = event.target.textContent;
-                if (key === 'C') {
-                    numeroTavoloInput.value = '';
-                } else {
-                    numeroTavoloInput.value += key;
-                }
-            }
+        // ===== SISTEMA POPUP MODALI PER COUNTDOWN =====
+        let popupTableNumber = '';
+        let popupDestinations = [];
+
+        // Stato per drag & drop
+        let isDragging = false;
+        let currentPopup = null;
+        let offsetX = 0;
+        let offsetY = 0;
+
+        // Apri popup tavolo
+        document.getElementById('open-countdown-popup').addEventListener('click', () => {
+            openPopup('popup-tavolo');
         });
 
-        // Array per memorizzare le destinazioni selezionate
-        let selectedDestinations = [];
+        function openPopup(popupId) {
+            closeAllPopups();
+            const popup = document.getElementById(popupId);
+            popup.style.display = 'block';
+            
+            // Reset posizione al centro
+            popup.style.left = '50%';
+            popup.style.top = '50%';
+            popup.style.transform = 'translate(-50%, -50%)';
+            
+            enableDragging(popup);
+        }
 
-        // Gestione selezione multipla destinazioni
-        const destinationSelection = document.getElementById('destinationSelection');
-        destinationSelection.addEventListener('click', (event) => {
-            if (event.target.classList.contains('destination-button')) {
-                const destination = event.target.getAttribute('data-destination');
+        function closeAllPopups() {
+            document.querySelectorAll('.countdown-popup').forEach(popup => {
+                popup.style.display = 'none';
+            });
+        }
 
-                // Toggle della selezione
-                if (event.target.classList.contains('selected')) {
-                    // Rimuovi dalla selezione
-                    event.target.classList.remove('selected');
-                    selectedDestinations = selectedDestinations.filter(d => d !== destination);
-                } else {
-                    // Aggiungi alla selezione
-                    event.target.classList.add('selected');
-                    selectedDestinations.push(destination);
-                }
+        window.closeAllPopups = closeAllPopups;
 
-                // Abilita i pulsanti durata solo se almeno una destinazione è selezionata
-                const hasDestinations = selectedDestinations.length > 0;
-                document.querySelectorAll('.duration-button').forEach(btn => {
-                    btn.disabled = !hasDestinations;
-                });
-
-                console.log('Destinazioni selezionate:', selectedDestinations);
-
-                // Aggiorna il feedback visivo
-                updateDestinationFeedback();
+        // Drag & Drop per popup
+        function enableDragging(popup) {
+            const header = popup.querySelector('.popup-header');
+            
+            header.addEventListener('mousedown', startDragging);
+            header.addEventListener('touchstart', startDragging);
+            
+            function startDragging(e) {
+                isDragging = true;
+                currentPopup = popup;
+                
+                const rect = popup.getBoundingClientRect();
+                const clientX = e.type === 'mousedown' ? e.clientX : e.touches[0].clientX;
+                const clientY = e.type === 'mousedown' ? e.clientY : e.touches[0].clientY;
+                
+                offsetX = clientX - rect.left;
+                offsetY = clientY - rect.top;
+                
+                popup.style.transform = 'none';
+                
+                document.addEventListener('mousemove', drag);
+                document.addEventListener('touchmove', drag);
+                document.addEventListener('mouseup', stopDragging);
+                document.addEventListener('touchend', stopDragging);
+                
+                e.preventDefault();
             }
-        });
+            
+            function drag(e) {
+                if (!isDragging || !currentPopup) return;
+                
+                const clientX = e.type === 'mousemove' ? e.clientX : e.touches[0].clientX;
+                const clientY = e.type === 'mousemove' ? e.clientY : e.touches[0].clientY;
+                
+                currentPopup.style.left = (clientX - offsetX) + 'px';
+                currentPopup.style.top = (clientY - offsetY) + 'px';
+                
+                e.preventDefault();
+            }
+            
+            function stopDragging() {
+                isDragging = false;
+                currentPopup = null;
+                document.removeEventListener('mousemove', drag);
+                document.removeEventListener('touchmove', drag);
+                document.removeEventListener('mouseup', stopDragging);
+                document.removeEventListener('touchend', stopDragging);
+            }
+        }
 
-        // Gestione selezione durata e avvio countdown
-        durationSelection.addEventListener('click', (event) => {
-            if (event.target.classList.contains('duration-button') && !event.target.disabled) {
-                const minutes = parseInt(event.target.getAttribute('data-minutes'));
-                const tableNumber = numeroTavoloInput.value;
-
-                if (tableNumber !== '') {
-                    if (selectedDestinations.length > 0) {
-                        // Avvia countdown per ogni destinazione selezionata
-                        selectedDestinations.forEach(destination => {
-                            startCountdown(minutes, tableNumber, destination);
-                        });
-
-                        numeroTavoloInput.value = '';
-
-                        // Resetta la selezione dopo l'invio
-                        resetSelection();
-
-                        // Feedback di conferma
-                        showConfirmationMessage(tableNumber, selectedDestinations, minutes);
+        // Popup 1: Tastiera numero tavolo
+        const popupTavoloInput = document.getElementById('popup-numero-tavolo');
+        const popupKeyboard = document.getElementById('popup-keyboard');
+        
+        popupKeyboard.addEventListener('click', (e) => {
+            if (e.target.classList.contains('popup-key')) {
+                const value = e.target.getAttribute('data-value');
+                
+                if (value === 'C') {
+                    popupTavoloInput.value = '';
+                } else if (value === 'OK') {
+                    if (popupTavoloInput.value.trim() !== '') {
+                        popupTableNumber = popupTavoloInput.value.trim();
+                        popupTavoloInput.value = '';
+                        openPopup('popup-destinazione');
                     } else {
-                        alert('Seleziona almeno una destinazione (Cucina, Pizzeria o Insalata)');
+                        alert('Inserisci un numero tavolo');
                     }
                 } else {
-                    alert('Inserisci prima il numero del tavolo');
+                    popupTavoloInput.value += value;
                 }
             }
         });
 
-        // Funzione per resettare la selezione
-        function resetSelection() {
-            selectedDestinations = [];
-            document.querySelectorAll('.destination-button').forEach(btn => {
-                btn.classList.remove('selected');
-            });
-            document.querySelectorAll('.duration-button').forEach(btn => {
-                btn.disabled = true;
-            });
-            updateDestinationFeedback();
-        }
-
-        // Funzione per aggiornare il feedback visivo delle destinazioni
-        function updateDestinationFeedback() {
-            const sectionTitle = document.querySelector('#destinationSection h2');
-            if (selectedDestinations.length === 0) {
-                sectionTitle.textContent = '🎯 Destinazione';
-            } else if (selectedDestinations.length === 1) {
-                const icons = {'cucina': '🍳', 'pizzeria': '🍕', 'insalata': '🥗'};
-                sectionTitle.textContent = `🎯 ${icons[selectedDestinations[0]]} ${selectedDestinations[0].charAt(0).toUpperCase() + selectedDestinations[0].slice(1)}`;
-            } else {
-                sectionTitle.textContent = `🎯 ${selectedDestinations.length} Destinazioni`;
-            }
-        }
-
-        // Funzione per mostrare messaggio di conferma
-        function showConfirmationMessage(tableNumber, destinations, minutes) {
-            const statusDiv = document.getElementById('voice-status');
-            const icons = {'cucina': '🍳', 'pizzeria': '🍕', 'insalata': '🥗'};
-            const destList = destinations.map(d => `${icons[d]} ${d.charAt(0).toUpperCase() + d.slice(1)}`).join(', ');
-
-            statusDiv.textContent = `✅ Tavolo ${tableNumber}: ${minutes}min → ${destList}`;
-            statusDiv.style.color = '#28a745';
-
-            setTimeout(() => {
-                if (!isContinuousListening) {
-                    statusDiv.textContent = '"tavolo" seguito dal numero e minuti';
-                    statusDiv.style.color = '#666';
+        // Popup 2: Selezione destinazione
+        document.querySelectorAll('.popup-destination-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const destination = btn.getAttribute('data-destination');
+                
+                if (btn.classList.contains('selected')) {
+                    btn.classList.remove('selected');
+                    popupDestinations = popupDestinations.filter(d => d !== destination);
+                } else {
+                    btn.classList.add('selected');
+                    popupDestinations.push(destination);
                 }
-            }, 3000);
-        }
+            });
+        });
+
+        document.getElementById('confirm-destination').addEventListener('click', () => {
+            if (popupDestinations.length > 0) {
+                openPopup('popup-minuti');
+            } else {
+                alert('Seleziona almeno una destinazione');
+            }
+        });
+
+        // Popup 3: Selezione minuti e avvio countdown
+        document.querySelectorAll('.popup-minutes-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const minutes = parseInt(btn.getAttribute('data-minutes'));
+                
+                // Avvia countdown per ogni destinazione
+                popupDestinations.forEach(destination => {
+                    startCountdown(minutes, popupTableNumber, destination);
+                });
+                
+                // Feedback
+                const icons = {'cucina': '🍳', 'pizzeria': '🍕', 'insalata': '🥗'};
+                const destList = popupDestinations.map(d => `${icons[d]} ${d.charAt(0).toUpperCase() + d.slice(1)}`).join(', ');
+                console.log(`✅ Countdown avviato: Tavolo ${popupTableNumber}, ${minutes}min → ${destList}`);
+                
+                // Reset stato e riapri popup tavolo
+                popupTableNumber = '';
+                popupDestinations = [];
+                document.querySelectorAll('.popup-destination-btn').forEach(b => b.classList.remove('selected'));
+                
+                // Chiudi e riapri popup tavolo per prossimo inserimento
+                setTimeout(() => {
+                    openPopup('popup-tavolo');
+                }, 300);
+            });
+        });
 
         // Sistema WebSocket con riconnessione automatica
         let ws = null;
@@ -1302,30 +1514,22 @@
             const indicatorDiv = document.getElementById('voice-indicator');
 
             if (isActive) {
-                // Rimuovi la classe inattiva e aggiungi quella attiva
                 voiceButton.classList.remove('voice-inactive');
                 voiceButton.classList.add('voice-active');
-                voiceButton.textContent = '🎤 Voce Attiva - STOP';
+                voiceButton.textContent = '🎤 STOP';
 
-                // Controlla se ci sono destinazioni selezionate per il messaggio appropriato
-                if (selectedDestinations.length > 0) {
-                    statusDiv.textContent = 'Dì "tavolo" seguito dal numero e minuti (es: "tavolo 5 otto minuti")';
-                    statusDiv.style.color = '#666';
-                } else {
-                    statusDiv.textContent = '⚠️ Seleziona prima una destinazione';
-                    statusDiv.style.color = '#ffc107';
-                }
+                statusDiv.textContent = '"tavolo" + numero + minuti';
+                statusDiv.style.color = '#666';
 
-                indicatorDiv.textContent = '🟢 In ascolto continuo...';
+                indicatorDiv.textContent = '🟢 ON';
                 indicatorDiv.style.color = '#28a745';
             } else {
-                // Rimuovi la classe attiva e aggiungi quella inattiva
                 voiceButton.classList.remove('voice-active');
                 voiceButton.classList.add('voice-inactive');
-                voiceButton.textContent = '🎤 Attiva Comando vocale';
-                statusDiv.textContent = 'Dì "tavolo" seguito dal numero e minuti (es: "tavolo 5 otto minuti")';
+                voiceButton.textContent = '🎤 Attiva';
+                statusDiv.textContent = '"tavolo" + numero + minuti';
                 statusDiv.style.color = '#666';
-                indicatorDiv.textContent = '🔴 Voce disattivata';
+                indicatorDiv.textContent = '🔴 OFF';
                 indicatorDiv.style.color = '#dc3545';
             }
         }
@@ -1381,36 +1585,8 @@
                     if (tableNumber && minutes) {
                         console.log(`✅ Comando riconosciuto: Tavolo ${tableNumber}, ${minutes} minuti`);
 
-                        document.getElementById('numeroTavolo').value = tableNumber;
-
-                         // Verifica se è stata selezionata una destinazione
-                        if (selectedDestinations.length === 0) {
-                            const statusDiv = document.getElementById('voice-status');
-                            statusDiv.textContent = '⚠️ Seleziona prima una destinazione';
-                            statusDiv.style.color = '#ffc107';
-                            return false;
-                        }
-
-                        // Per il comando vocale, usa automaticamente "cucina" come destinazione di default
-                        // Se ci sono destinazioni selezionate manualmente, usale; altrimenti usa cucina
-                        if (selectedDestinations.length > 0) {
-                            selectedDestinations.forEach(destination => {
-                                startCountdown(minutes, tableNumber, destination);
-                            });
-                            showConfirmationMessage(tableNumber, selectedDestinations, minutes);
-                        } else {
-                            startCountdown(minutes, tableNumber, 'cucina');
-                        }
-
-                        // 🧹 Pulisce automaticamente l'input e le destinazioni dopo il comando vocale
-                        setTimeout(() => {
-                            document.getElementById('numeroTavolo').value = '';
-                            console.log('🧹 Input tavolo pulito automaticamente dopo comando vocale');
-
-                            // Reset selezione destinazioni anche per comando vocale
-                            resetSelection();
-                            console.log('🧹 Destinazioni resettate automaticamente dopo comando vocale');
-                        }, 500);
+                        // Per il comando vocale, usa "cucina" come destinazione predefinita
+                        startCountdown(minutes, tableNumber, 'cucina');
 
                         const statusDiv = document.getElementById('voice-status');
                         statusDiv.textContent = `✅ Countdown avviato: Tavolo ${tableNumber}, ${minutes} min`;
