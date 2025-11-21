@@ -103,16 +103,19 @@
         // Flag per prevenire redirect multipli
         let authCheckComplete = false;
         let redirectTimeout = null;
+        let authCheckAttempts = 0;
+        const MAX_AUTH_ATTEMPTS = 3;
 
         // Gestione autenticazione e dati utente
         onAuthStateChanged(auth, async (user) => {
-            // Previeni controlli multipli
-            if (authCheckComplete) {
-                console.log('⚠️ Auth check già completato, ignoro callback successivo');
+            authCheckAttempts++;
+            console.log(`🔍 Auth check tentativo ${authCheckAttempts} - User:`, user ? user.email : 'null');
+
+            // Previeni controlli multipli dopo che l'autenticazione è confermata
+            if (authCheckComplete && user) {
+                console.log('⚠️ Auth check già completato con utente valido, ignoro callback successivo');
                 return;
             }
-
-            console.log('🔍 Auth check - User:', user ? user.email : 'null');
 
             if (user) {
                 // Cancella qualsiasi timeout di redirect pendente
@@ -122,6 +125,8 @@
                 }
 
                 authCheckComplete = true;
+                console.log('✅ Utente autenticato confermato:', user.email);
+                
                 const userDocRef = doc(db, "users", user.uid);
                 try {
                     const userDoc = await getDoc(userDocRef);
@@ -202,27 +207,36 @@
                 }
             } else {
                 // L'utente non è autenticato
-                console.log('⚠️ Utente non autenticato rilevato');
+                console.log(`⚠️ Utente non autenticato rilevato (tentativo ${authCheckAttempts}/${MAX_AUTH_ATTEMPTS})`);
                 
-                // Aspetta 2 secondi prima di reindirizzare per dare tempo a Firebase di completare l'autenticazione
-                redirectTimeout = setTimeout(() => {
-                    if (!authCheckComplete) {
-                        console.log('❌ Timeout raggiunto senza autenticazione, reindirizzamento al login');
-                        authCheckComplete = true;
-                        
-                        if (loadingIndicator && loadingIndicator.parentNode) {
-                            loadingIndicator.remove();
-                        }
-                        
-                        // Riabilita i pulsanti comunque (per evitare che restino bloccati)
-                        if (buttonGrid) {
-                            buttonGrid.style.opacity = '1';
-                            buttonGrid.style.pointerEvents = 'auto';
-                        }
-                        
-                        window.location.href = 'index.html';
+                // Non reindirizzare immediatamente - dai più tempo a Firebase
+                // Solo se abbiamo fatto almeno 2 tentativi, inizia il timeout
+                if (authCheckAttempts >= 2) {
+                    // Aspetta 5 secondi prima di reindirizzare per dare tempo a Firebase di completare l'autenticazione
+                    if (!redirectTimeout) {
+                        console.log('⏳ Avvio timeout di 5 secondi per verifica autenticazione...');
+                        redirectTimeout = setTimeout(() => {
+                            if (!authCheckComplete) {
+                                console.log('❌ Timeout raggiunto senza autenticazione, reindirizzamento al login');
+                                authCheckComplete = true;
+                                
+                                if (loadingIndicator && loadingIndicator.parentNode) {
+                                    loadingIndicator.remove();
+                                }
+                                
+                                // Riabilita i pulsanti comunque (per evitare che restino bloccati)
+                                if (buttonGrid) {
+                                    buttonGrid.style.opacity = '1';
+                                    buttonGrid.style.pointerEvents = 'auto';
+                                }
+                                
+                                window.location.href = 'index.html';
+                            }
+                        }, 5000);
                     }
-                }, 2000);
+                } else {
+                    console.log('⏳ Primo tentativo negativo, attendo prossimo callback Firebase...');
+                }
             }
         });
 
