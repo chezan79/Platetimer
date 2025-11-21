@@ -88,7 +88,7 @@
         loadingIndicator.innerHTML = '⏳ Caricamento...';
         document.body.appendChild(loadingIndicator);
 
-        // Timeout di sicurezza: riabilita i pulsanti dopo 3 secondi in ogni caso
+        // Timeout di sicurezza aumentato: riabilita i pulsanti dopo 5 secondi in ogni caso
         setTimeout(() => {
             if (buttonGrid && buttonGrid.style.opacity !== '1') {
                 console.warn('⚠️ Timeout raggiunto, riabilitazione forzata pulsanti');
@@ -98,7 +98,7 @@
                     loadingIndicator.remove();
                 }
             }
-        }, 3000);
+        }, 5000);
 
         // Gestione autenticazione e dati utente
         onAuthStateChanged(auth, async (user) => {
@@ -164,10 +164,21 @@
                     }
                 } catch (error) {
                     console.error("❌ Errore nel recupero dei dati utente:", error);
-                    loadingIndicator.remove();
-                    // Mostra errore solo per errori critici
-                    if (error.code && error.code !== 'auth/network-request-failed') {
-                        alert('Errore di connessione. Ricarica la pagina.');
+                    
+                    // Rimuovi loading indicator
+                    if (loadingIndicator && loadingIndicator.parentNode) {
+                        loadingIndicator.remove();
+                    }
+                    
+                    // Riabilita comunque i pulsanti per permettere navigazione
+                    if (buttonGrid) {
+                        buttonGrid.style.opacity = '1';
+                        buttonGrid.style.pointerEvents = 'auto';
+                    }
+                    
+                    // NON reindirizzare per errori di rete o temporanei
+                    if (error.code && error.code !== 'auth/network-request-failed' && error.code !== 'unavailable') {
+                        console.warn('⚠️ Errore recupero dati, ma permetto navigazione');
                     }
                 }
             } else {
@@ -183,8 +194,10 @@
                     buttonGrid.style.pointerEvents = 'auto';
                 }
                 
-                // Redirect al login
-                window.location.href = 'index.html';
+                // Aspetta 1 secondo prima del redirect per evitare loop
+                setTimeout(() => {
+                    window.location.href = 'index.html';
+                }, 1000);
             }
         });
 
