@@ -718,8 +718,8 @@
         let offsetX = 0;
         let offsetY = 0;
         
-        // Memorizza le posizioni dei popup
-        let popupPositions = {};
+        // Memorizza la posizione condivisa per tutti i popup countdown
+        let countdownPopupPosition = null;
 
         // Apri popup tavolo
         document.getElementById('open-countdown-popup').addEventListener('click', () => {
@@ -731,10 +731,10 @@
             const popup = document.getElementById(popupId);
             popup.style.display = 'block';
             
-            // Se esiste una posizione memorizzata, usala, altrimenti centra
-            if (popupPositions[popupId]) {
-                popup.style.left = popupPositions[popupId].left;
-                popup.style.top = popupPositions[popupId].top;
+            // Usa la posizione condivisa se esiste, altrimenti centra
+            if (countdownPopupPosition) {
+                popup.style.left = countdownPopupPosition.left;
+                popup.style.top = countdownPopupPosition.top;
                 popup.style.transform = 'none';
             } else {
                 // Prima volta: centra il popup
@@ -797,10 +797,9 @@
             function stopDragging() {
                 isDragging = false;
                 
-                // Salva la posizione corrente del popup
-                if (currentPopup) {
-                    const popupId = currentPopup.id;
-                    popupPositions[popupId] = {
+                // Salva la posizione condivisa per tutti i popup countdown
+                if (currentPopup && (currentPopup.id === 'popup-tavolo' || currentPopup.id === 'popup-destinazione' || currentPopup.id === 'popup-minuti')) {
+                    countdownPopupPosition = {
                         left: currentPopup.style.left,
                         top: currentPopup.style.top
                     };
