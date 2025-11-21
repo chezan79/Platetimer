@@ -469,6 +469,10 @@
                     #open-countdown-popup:hover {
                         transform: scale(1.1);
                     }
+
+                    #toggle-voice-section:hover {
+                        transform: scale(1.1);
+                    }
     </style>
 </head>
 <body>
@@ -531,8 +535,13 @@
         ⏱️
     </button>
 
+    <!-- Pulsante per aprire container comando vocale -->
+    <button id="toggle-voice-section" style="position: fixed; bottom: 160px; right: 20px; z-index: 999; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 50%; width: 56px; height: 56px; cursor: pointer; font-size: 24px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3); transition: transform 0.2s;">
+        🎤
+    </button>
+
     <!-- Sezione riconoscimento vocale compatto -->
-    <div id="voiceSection" style="position: fixed; bottom: 160px; right: 20px; z-index: 999; background: white; padding: 15px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2); min-width: 200px;">
+    <div id="voiceSection" style="position: fixed; bottom: 230px; right: 20px; z-index: 999; background: white; padding: 15px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2); min-width: 200px; display: none;">
         <h3 style="margin: 0 0 10px 0; font-size: 14px; text-align: center;">🎤 Voce</h3>
         <button onclick="toggleContinuousVoice()" id="voice-button" style="width: 100%; padding: 8px; background-color: #DCDCDC; color: #696969; border: none; border-radius: 5px; cursor: pointer; transition: all 0.3s ease; font-size: 14px; font-weight: 600;">
             🎤 Attiva
@@ -724,6 +733,20 @@
         // Apri popup tavolo
         document.getElementById('open-countdown-popup').addEventListener('click', () => {
             openPopup('popup-tavolo');
+        });
+
+        // Toggle container comando vocale
+        document.getElementById('toggle-voice-section').addEventListener('click', () => {
+            const voiceSection = document.getElementById('voiceSection');
+            const toggleBtn = document.getElementById('toggle-voice-section');
+            
+            if (voiceSection.style.display === 'none') {
+                voiceSection.style.display = 'block';
+                toggleBtn.style.background = 'linear-gradient(135deg, #28a745 0%, #20c997 100%)';
+            } else {
+                voiceSection.style.display = 'none';
+                toggleBtn.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+            }
         });
 
         function openPopup(popupId) {
