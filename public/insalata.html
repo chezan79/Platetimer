@@ -200,6 +200,14 @@
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
 
+        #open-countdown-popup:hover {
+            transform: scale(1.1);
+        }
+
+        #toggle-voice-section:hover {
+            transform: scale(1.1);
+        }
+
         .countdown-table {
             flex: 0 0 auto;
             margin-right: 15px;
@@ -306,6 +314,14 @@
         </div>
     </div>
 
+    <!-- Sezione riconoscimento vocale compatto (inizialmente nascosto) -->
+    <div id="voiceSection" style="position: fixed; bottom: 230px; right: 20px; z-index: 999; background: white; padding: 15px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2); min-width: 200px; display: none;">
+        <h3 style="margin: 0 0 10px 0; font-size: 14px; text-align: center;">🎤 Voce</h3>
+        <div style="font-size: 12px; color: #666; text-align: center; margin-top: 6px;">
+            Sistema comando vocale disponibile
+        </div>
+    </div>
+
     <!-- Container dedicato per i messaggi della pizzeria - posizionato in alto a destra (inizialmente nascosto) -->
     <div id="messagesContainer" style="position: fixed; top: 100px; right: 20px; width: 400px; max-width: 400px;  max-height: 300px; z-index: 500; background: white; padding: 15px; border-radius: 10px; box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15); display: none; flex-direction: column; max-height: 60vh; overflow-y: auto;">
         <div id="voice-messages-container" style="padding: 12px; background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-radius: 8px; border-left: 4px solid #2196f3;">
@@ -351,6 +367,16 @@
         </div>
     </div>
 
+    <!-- Pulsante per aprire popup lancio countdown -->
+    <button id="open-countdown-popup" style="position: fixed; bottom: 90px; right: 20px; z-index: 999; background: linear-gradient(135deg, #28a745 0%, #20c997 100%); color: white; border: none; border-radius: 50%; width: 56px; height: 56px; cursor: pointer; font-size: 24px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3); transition: transform 0.2s;">
+        ⏱️
+    </button>
+
+    <!-- Pulsante per aprire container comando vocale -->
+    <button id="toggle-voice-section" style="position: fixed; bottom: 160px; right: 20px; z-index: 999; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 50%; width: 56px; height: 56px; cursor: pointer; font-size: 24px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3); transition: transform 0.2s;">
+        🎤
+    </button>
+
     <!-- Voice Call Toggle Button (always visible) -->
     <button id="voice-panel-toggle" style="position: fixed; bottom: 20px; left: 20px; z-index: 999; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 50%; width: 56px; height: 56px; cursor: pointer; font-size: 24px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3); transition: transform 0.2s;">
         🎙️
@@ -359,8 +385,8 @@
     <!-- Container for remote audio elements -->
     <div id="remote-audios" style="display: none;"></div>
 
-    <!-- Container controlli a sinistra verticale (sempre visibile) -->
-    <div id="topContainer">
+    <!-- Container controlli popup draggabile (inizialmente nascosto) -->
+    <div id="topContainer" style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 1000; display: none; cursor: move;">
         <!-- Sezione tastiera e input -->
         <div id="keyboardSection">
             <h2 style="color: #333; text-align: center; margin-bottom: 15px; font-size: 18px;">🔢 Tastiera</h2>
@@ -432,6 +458,85 @@
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
         const countdowns = [];
+
+        // ===== GESTIONE CONTAINER CONTROLLI DRAGGABILE =====
+        let isDraggingContainer = false;
+        let containerOffsetX = 0;
+        let containerOffsetY = 0;
+
+        // Apri/chiudi container controlli
+        document.getElementById('open-countdown-popup').addEventListener('click', () => {
+            const container = document.getElementById('topContainer');
+            const btn = document.getElementById('open-countdown-popup');
+            
+            if (container.style.display === 'none') {
+                container.style.display = 'flex';
+                btn.style.background = 'linear-gradient(135deg, #dc3545 0%, #c82333 100%)';
+            } else {
+                container.style.display = 'none';
+                btn.style.background = 'linear-gradient(135deg, #28a745 0%, #20c997 100%)';
+            }
+        });
+
+        // Toggle container comando vocale
+        document.getElementById('toggle-voice-section').addEventListener('click', () => {
+            const voiceSection = document.getElementById('voiceSection');
+            const toggleBtn = document.getElementById('toggle-voice-section');
+            
+            if (voiceSection && voiceSection.style.display === 'none') {
+                voiceSection.style.display = 'block';
+                toggleBtn.style.background = 'linear-gradient(135deg, #28a745 0%, #20c997 100%)';
+            } else if (voiceSection) {
+                voiceSection.style.display = 'none';
+                toggleBtn.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+            }
+        });
+
+        // Abilita drag & drop per container controlli
+        const topContainer = document.getElementById('topContainer');
+        
+        topContainer.addEventListener('mousedown', startDraggingContainer);
+        topContainer.addEventListener('touchstart', startDraggingContainer);
+
+        function startDraggingContainer(e) {
+            isDraggingContainer = true;
+            
+            const rect = topContainer.getBoundingClientRect();
+            const clientX = e.type === 'mousedown' ? e.clientX : e.touches[0].clientX;
+            const clientY = e.type === 'mousedown' ? e.clientY : e.touches[0].clientY;
+            
+            containerOffsetX = clientX - rect.left;
+            containerOffsetY = clientY - rect.top;
+            
+            topContainer.style.transform = 'none';
+            
+            document.addEventListener('mousemove', dragContainer);
+            document.addEventListener('touchmove', dragContainer);
+            document.addEventListener('mouseup', stopDraggingContainer);
+            document.addEventListener('touchend', stopDraggingContainer);
+            
+            e.preventDefault();
+        }
+
+        function dragContainer(e) {
+            if (!isDraggingContainer) return;
+            
+            const clientX = e.type === 'mousemove' ? e.clientX : e.touches[0].clientX;
+            const clientY = e.type === 'mousemove' ? e.clientY : e.touches[0].clientY;
+            
+            topContainer.style.left = (clientX - containerOffsetX) + 'px';
+            topContainer.style.top = (clientY - containerOffsetY) + 'px';
+            
+            e.preventDefault();
+        }
+
+        function stopDraggingContainer() {
+            isDraggingContainer = false;
+            document.removeEventListener('mousemove', dragContainer);
+            document.removeEventListener('touchmove', dragContainer);
+            document.removeEventListener('mouseup', stopDraggingContainer);
+            document.removeEventListener('touchend', stopDraggingContainer);
+        }
 
         function updateConnectionStatus(connected) {
             let status = document.getElementById('connection-status');
