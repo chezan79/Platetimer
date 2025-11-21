@@ -100,9 +100,28 @@
             }
         }, 5000);
 
+        // Flag per prevenire redirect multipli
+        let authCheckComplete = false;
+        let redirectTimeout = null;
+
         // Gestione autenticazione e dati utente
         onAuthStateChanged(auth, async (user) => {
+            // Previeni controlli multipli
+            if (authCheckComplete) {
+                console.log('⚠️ Auth check già completato, ignoro callback successivo');
+                return;
+            }
+
+            console.log('🔍 Auth check - User:', user ? user.email : 'null');
+
             if (user) {
+                // Cancella qualsiasi timeout di redirect pendente
+                if (redirectTimeout) {
+                    clearTimeout(redirectTimeout);
+                    redirectTimeout = null;
+                }
+
+                authCheckComplete = true;
                 const userDocRef = doc(db, "users", user.uid);
                 try {
                     const userDoc = await getDoc(userDocRef);
@@ -182,22 +201,28 @@
                     }
                 }
             } else {
-                // L'utente non è autenticato, reindirizza al login
-                console.log('❌ Utente non autenticato, reindirizzamento al login');
-                if (loadingIndicator && loadingIndicator.parentNode) {
-                    loadingIndicator.remove();
-                }
+                // L'utente non è autenticato
+                console.log('⚠️ Utente non autenticato rilevato');
                 
-                // Riabilita i pulsanti comunque (per evitare che restino bloccati)
-                if (buttonGrid) {
-                    buttonGrid.style.opacity = '1';
-                    buttonGrid.style.pointerEvents = 'auto';
-                }
-                
-                // Aspetta 1 secondo prima del redirect per evitare loop
-                setTimeout(() => {
-                    window.location.href = 'index.html';
-                }, 1000);
+                // Aspetta 2 secondi prima di reindirizzare per dare tempo a Firebase di completare l'autenticazione
+                redirectTimeout = setTimeout(() => {
+                    if (!authCheckComplete) {
+                        console.log('❌ Timeout raggiunto senza autenticazione, reindirizzamento al login');
+                        authCheckComplete = true;
+                        
+                        if (loadingIndicator && loadingIndicator.parentNode) {
+                            loadingIndicator.remove();
+                        }
+                        
+                        // Riabilita i pulsanti comunque (per evitare che restino bloccati)
+                        if (buttonGrid) {
+                            buttonGrid.style.opacity = '1';
+                            buttonGrid.style.pointerEvents = 'auto';
+                        }
+                        
+                        window.location.href = 'index.html';
+                    }
+                }, 2000);
             }
         });
 
