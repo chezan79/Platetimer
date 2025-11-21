@@ -717,6 +717,9 @@
         let currentPopup = null;
         let offsetX = 0;
         let offsetY = 0;
+        
+        // Memorizza le posizioni dei popup
+        let popupPositions = {};
 
         // Apri popup tavolo
         document.getElementById('open-countdown-popup').addEventListener('click', () => {
@@ -728,10 +731,17 @@
             const popup = document.getElementById(popupId);
             popup.style.display = 'block';
             
-            // Reset posizione al centro
-            popup.style.left = '50%';
-            popup.style.top = '50%';
-            popup.style.transform = 'translate(-50%, -50%)';
+            // Se esiste una posizione memorizzata, usala, altrimenti centra
+            if (popupPositions[popupId]) {
+                popup.style.left = popupPositions[popupId].left;
+                popup.style.top = popupPositions[popupId].top;
+                popup.style.transform = 'none';
+            } else {
+                // Prima volta: centra il popup
+                popup.style.left = '50%';
+                popup.style.top = '50%';
+                popup.style.transform = 'translate(-50%, -50%)';
+            }
             
             enableDragging(popup);
         }
@@ -786,6 +796,16 @@
             
             function stopDragging() {
                 isDragging = false;
+                
+                // Salva la posizione corrente del popup
+                if (currentPopup) {
+                    const popupId = currentPopup.id;
+                    popupPositions[popupId] = {
+                        left: currentPopup.style.left,
+                        top: currentPopup.style.top
+                    };
+                }
+                
                 currentPopup = null;
                 document.removeEventListener('mousemove', drag);
                 document.removeEventListener('touchmove', drag);
