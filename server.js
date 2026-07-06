@@ -7,6 +7,94 @@ const speech = require('@google-cloud/speech');
 const app = express();
 const server = http.createServer(app);
 
+// ===== SECURITY: Server-side Session Token (HMAC-SHA256) =====
+// Secret loaded from env var; if missing, a random key is generated.
+// WARNING: a random key means all tokens are invalidated on server restart.
+const WS_SECRET = process.env.WS_SESSION_SECRET || crypto.randomBytes(32).toString('hex');
+if (!process.env.WS_SESSION_SECRET) {
+    console.warn('⚠️ [SECURITY] WS_SESSION_SECRET not set — random key generated. Tokens will be invalidated on server restart. Set WS_SESSION_SECRET in Secrets for production.');
+}
+
+const FIREBASE_API_KEY = 'AIzaSyDZ0FdjenO-ngblcuXKdwWwvRV5liiR18I';
+const FIREBASE_PROJECT_ID = 'app-dati-tavoli';
+const SESSION_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+// Sign a session token using HMAC-SHA256.
+// The token payload contains uid, companyName, iat, exp — never trust these from the client.
+function signSessionToken(uid, companyName) {
+    const payload = Buffer.from(JSON.stringify({
+        uid,
+        companyName,
+        iat: Date.now(),
+        exp: Date.now() + SESSION_DURATION_MS
+    })).toString('base64');
+    const sig = crypto.createHmac('sha256', WS_SECRET).update(payload).digest('hex');
+    return `${payload}.${sig}`;
+}
+
+// Verify a session token. Returns the decoded data or null if invalid/expired.
+function verifySessionToken(token) {
+    try {
+        if (!token || typeof token !== 'string') return null;
+        const dotIndex = token.lastIndexOf('.');
+        if (dotIndex === -1) return null;
+        const payload = token.substring(0, dotIndex);
+        const sig = token.substring(dotIndex + 1);
+        // Timing-safe HMAC comparison to prevent timing attacks
+        const expected = crypto.createHmac('sha256', WS_SECRET).update(payload).digest('hex');
+        const sigBuf = Buffer.from(sig.length === expected.length ? sig : '0'.repeat(expected.length), 'hex');
+        const expBuf = Buffer.from(expected, 'hex');
+        if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
+            return null; // [SECURITY] Invalid signature
+        }
+        const data = JSON.parse(Buffer.from(payload, 'base64').toString('utf8'));
+        if (!data.uid || !data.companyName || !data.exp) return null;
+        if (Date.now() > data.exp) return null; // [SECURITY] Token expired
+        return data;
+    } catch {
+        return null;
+    }
+}
+
+// Verify a Firebase ID token via Firebase REST API (no Admin SDK required).
+// Returns the Firebase uid or null on failure.
+async function verifyFirebaseIdToken(idToken) {
+    try {
+        const response = await fetch(
+            `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${FIREBASE_API_KEY}`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ idToken })
+            }
+        );
+        if (!response.ok) return null;
+        const data = await response.json();
+        if (!data.users || data.users.length === 0) return null;
+        return data.users[0].localId; // Firebase uid
+    } catch (err) {
+        console.error('❌ [SECURITY] Firebase ID token verification error:', err.message);
+        return null;
+    }
+}
+
+// Fetch the user's company name from Firestore using their own ID token.
+// This is authoritative — the company comes from the database, not from the client.
+async function getCompanyFromFirestore(uid, idToken) {
+    try {
+        const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/users/${uid}`;
+        const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${idToken}` }
+        });
+        if (!response.ok) return null;
+        const data = await response.json();
+        return data.fields?.company?.stringValue || null;
+    } catch (err) {
+        console.error('❌ [SECURITY] Firestore company lookup error:', err.message);
+        return null;
+    }
+}
+
 // Configura il WebSocket Server
 const wss = new WebSocket.Server({ 
     server,
@@ -60,6 +148,57 @@ try {
 } catch (error) {
     console.error('❌ Errore configurazione Google Cloud Speech:', error.message);
 }
+
+// ===== SECURITY: Session Token Exchange Endpoint =====
+// The frontend calls this after Firebase login to get a server-signed session token.
+// The server verifies the Firebase ID token, fetches the company from Firestore
+// (authoritative source — never trusts the client-supplied companyName),
+// then returns a short-lived HMAC-signed token used for all subsequent WS messages.
+app.post('/api/auth/session', async (req, res) => {
+    try {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            return res.status(401).json({ error: 'Firebase ID token required in Authorization header' });
+        }
+
+        const idToken = authHeader.substring(7).trim();
+        if (!idToken) {
+            return res.status(401).json({ error: 'Firebase ID token is empty' });
+        }
+
+        // [SECURITY] Step 1: Verify the Firebase ID token via Firebase REST API
+        const uid = await verifyFirebaseIdToken(idToken);
+        if (!uid) {
+            console.log('⛔ [SECURITY] /api/auth/session rejected: invalid Firebase token');
+            return res.status(401).json({ error: 'Invalid or expired Firebase token' });
+        }
+
+        // [SECURITY] Step 2: Fetch company name from Firestore using the user's own token
+        // This is the authoritative source — the client cannot forge this value
+        const companyName = await getCompanyFromFirestore(uid, idToken);
+        if (!companyName || companyName.trim() === '') {
+            console.log(`⛔ [SECURITY] /api/auth/session rejected: no company found for uid=${uid}`);
+            return res.status(403).json({ error: 'No company associated with this account. Please complete your profile.' });
+        }
+
+        const normalizedCompany = companyName.trim().toLowerCase();
+
+        // [SECURITY] Step 3: Issue a server-signed session token
+        const sessionToken = signSessionToken(uid, normalizedCompany);
+
+        console.log(`✅ [SECURITY] Session token issued: uid=${uid}, company="${normalizedCompany}"`);
+
+        res.json({
+            success: true,
+            token: sessionToken,
+            companyName: normalizedCompany
+        });
+
+    } catch (error) {
+        console.error('❌ [SECURITY] /api/auth/session error:', error);
+        res.status(500).json({ error: 'Internal server error during authentication' });
+    }
+});
 
 // Endpoint per salvare messaggi vocali
 app.post('/api/voice-message', (req, res) => {
@@ -142,22 +281,45 @@ app.post('/api/speech-to-text', async (req, res) => {
 });
 
 // REST API endpoint to get active countdowns
+// [SECURITY] A company filter is now mandatory — the server never returns data for all companies at once.
+// If a session token is provided in the Authorization header, the company is extracted from it
+// (server-verified). Otherwise the query param is used as a fallback (less secure, but the worst
+// an attacker can do is guess a company name — no token needed to read public countdown timers).
 app.get('/api/countdowns', (req, res) => {
     try {
         const status = req.query.status || 'active';
-        const companyName = req.query.company;
-        
+        let companyName = req.query.company;
+
+        // [SECURITY] If a session token is present, prefer the verified company over the query param
+        const authHeader = req.headers['authorization'];
+        if (authHeader && authHeader.startsWith('Bearer ')) {
+            const token = authHeader.substring(7).trim();
+            const session = verifySessionToken(token);
+            if (session) {
+                companyName = session.companyName; // Use server-verified company
+            }
+        }
+
+        // [SECURITY] Refuse to return data for all companies — a company filter is required
+        if (!companyName || typeof companyName !== 'string' || companyName.trim() === '') {
+            return res.status(400).json({
+                success: false,
+                error: 'Company filter is required. Pass ?company=name or a valid session token.'
+            });
+        }
+
+        const normalizedCompany = companyName.trim().toLowerCase();
         const result = [];
         const currentTime = Date.now();
-        
-        // If company is specified, return only that company's countdowns
-        if (companyName && activeCountdowns.has(companyName)) {
-            const companyCountdowns = activeCountdowns.get(companyName);
-            
+
+        // Return only the requested company's countdowns
+        if (activeCountdowns.has(normalizedCompany)) {
+            const companyCountdowns = activeCountdowns.get(normalizedCompany);
+
             companyCountdowns.forEach((countdown, tableNumber) => {
                 const elapsed = Math.floor((currentTime - countdown.startTime) / 1000);
                 const remainingTime = Math.max(0, countdown.initialDuration - elapsed);
-                
+
                 if (status === 'active' && remainingTime > 0) {
                     result.push({
                         tableNumber: countdown.tableNumber,
@@ -171,43 +333,21 @@ app.get('/api/countdowns', (req, res) => {
                     });
                 }
             });
-        } else {
-            // Return all companies' countdowns
-            activeCountdowns.forEach((companyCountdowns, company) => {
-                companyCountdowns.forEach((countdown, tableNumber) => {
-                    const elapsed = Math.floor((currentTime - countdown.startTime) / 1000);
-                    const remainingTime = Math.max(0, countdown.initialDuration - elapsed);
-                    
-                    if (status === 'active' && remainingTime > 0) {
-                        result.push({
-                            company: company,
-                            tableNumber: countdown.tableNumber,
-                            remainingTime: remainingTime,
-                            initialDuration: countdown.initialDuration,
-                            destinations: countdown.destinations,
-                            startedAt: new Date(countdown.startTime).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
-                            startTime: countdown.startTime,
-                            endsAt: countdown.startTime + (countdown.initialDuration * 1000),
-                            status: remainingTime > 0 ? 'active' : 'finished'
-                        });
-                    }
-                });
-            });
         }
-        
+
         res.json({
             success: true,
             countdowns: result,
             count: result.length,
             timestamp: currentTime
         });
-        
+
     } catch (error) {
         console.error('❌ Errore API countdowns:', error);
-        res.status(500).json({ 
+        res.status(500).json({
             success: false,
             error: 'Errore nel recupero dei countdown',
-            details: error.message 
+            details: error.message
         });
     }
 });
@@ -283,6 +423,9 @@ wss.on('connection', (ws, req) => {
     ws.lastPong = Date.now();
     ws.isAlive = true;
     ws.clientIp = clientIp;
+    // [SECURITY] Authentication state — false until a valid session token is verified via joinRoom
+    ws.isAuthenticated = false;
+    ws.authenticatedUid = null;
 
     // Rate limiting per prevenire spam
     ws.messageCount = 0;
@@ -366,20 +509,49 @@ wss.on('connection', (ws, req) => {
                 return;
             }
 
+            // [SECURITY] Block all actions except ping/pong/joinRoom for unauthenticated clients.
+            // A client must complete joinRoom with a valid server-signed session token first.
+            const PUBLIC_ACTIONS = ['ping', 'pong', 'joinRoom'];
+            if (!PUBLIC_ACTIONS.includes(data.action) && !ws.isAuthenticated) {
+                console.log(`⛔ [SECURITY] Action "${data.action}" blocked — client not authenticated (IP: ${ws.clientIp})`);
+                ws.send(JSON.stringify({
+                    action: 'error',
+                    code: 'UNAUTHENTICATED',
+                    message: 'Authentication required. Please log in again.'
+                }));
+                return;
+            }
+
             if (data.action === 'joinRoom') {
-                // Validazione nome azienda
-                if (!data.companyName || typeof data.companyName !== 'string' || data.companyName.trim().length === 0) {
-                    console.log('⚠️ Nome azienda non valido');
-                    ws.send(JSON.stringify({ 
-                        action: 'error', 
-                        message: 'Nome azienda non valido. Effettua il login.' 
+                // [SECURITY] Require a server-signed session token — reject bare companyName claims.
+                // The company is ALWAYS extracted from the verified token, never from data.companyName.
+                if (!data.token || typeof data.token !== 'string') {
+                    console.log(`⛔ [SECURITY] joinRoom rejected — no session token (IP: ${ws.clientIp})`);
+                    ws.send(JSON.stringify({
+                        action: 'error',
+                        code: 'TOKEN_REQUIRED',
+                        message: 'Session token required. Please log in again.'
                     }));
                     return;
                 }
 
-                // Normalizzazione: trim + toLowerCase per evitare problemi di case
-                const companyName = data.companyName.trim().toLowerCase();
-                console.log(`🔑 JoinRoom richiesto: "${data.companyName}" → normalizzato: "${companyName}"`);
+                // [SECURITY] Verify HMAC signature and expiry of the session token
+                const session = verifySessionToken(data.token);
+                if (!session) {
+                    console.log(`⛔ [SECURITY] joinRoom rejected — invalid or expired token (IP: ${ws.clientIp})`);
+                    ws.send(JSON.stringify({
+                        action: 'error',
+                        code: 'TOKEN_INVALID',
+                        message: 'Session token invalid or expired. Please log in again.'
+                    }));
+                    return;
+                }
+
+                // [SECURITY] Company comes from the verified token — the client cannot forge this
+                const companyName = session.companyName;
+                ws.isAuthenticated = true;
+                ws.authenticatedUid = session.uid;
+                console.log(`🔑 [SECURITY] joinRoom authenticated: uid=${session.uid}, company="${companyName}" (IP: ${ws.clientIp})`);
 
                 // Rimuovi il client dalla room precedente se esistente
                 if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {

@@ -857,26 +857,10 @@
                         // Forza l'aggiornamento del localStorage con il valore normalizzato
                         localStorage.setItem('userCompany', companyName);
 
-                        const joinMessage = {
-                            action: 'joinRoom',
-                            companyName: companyName
-                        };
-
-                        if (ws.readyState === WebSocket.OPEN) {
-                            ws.send(JSON.stringify(joinMessage));
-                            console.log(`✅ Insalata connessa alla room: ${companyName}`);
-
-                            // Informa il server che questo client è sulla pagina insalata
-                            setTimeout(() => {
-                                if (ws.readyState === WebSocket.OPEN) {
-                                    ws.send(JSON.stringify({
-                                        action: 'joinPage',
-                                        pageType: 'insalata'
-                                    }));
-                                    console.log('📄 Informato server: pagina insalata');
-                                }
-                            }, 200);
-                        }
+                        // [SECURITY] Use WsAuth.joinRoom — sends server-signed token, company verified server-side
+                        WsAuth.joinRoom(ws, 'insalata', () => {
+                            console.log('✅ [SECURITY] Insalata authenticated joinRoom sent');
+                        });
                     }, 100);
                 };
 
@@ -2146,6 +2130,7 @@ function mostraAvvisoPaginaOccupata(data) {
     </script>
 
     <!-- Voice Call Module -->
+    <script src="js/ws-auth.js"></script>
     <script src="js/voice-call.js"></script>
     <script>
         let voiceCallActive = false;

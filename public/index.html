@@ -313,6 +313,22 @@
                     // Attendi un momento per assicurarsi che localStorage sia salvato
                     await new Promise(resolve => setTimeout(resolve, 100));
 
+                    // [SECURITY] Exchange Firebase ID token for a server-signed session token after registration
+                    try {
+                        const idToken = await user.getIdToken();
+                        const sessionResp = await fetch('/api/auth/session', {
+                            method: 'POST',
+                            headers: { 'Authorization': `Bearer ${idToken}` }
+                        });
+                        if (sessionResp.ok) {
+                            const sessionData = await sessionResp.json();
+                            sessionStorage.setItem('ws_session_token', sessionData.token);
+                            console.log('✅ [SECURITY] Server session token obtained after registration');
+                        }
+                    } catch (sessionErr) {
+                        console.warn('⚠️ [SECURITY] Session token exchange error during registration:', sessionErr.message);
+                    }
+
                     // Reindirizza alla pagina home dopo 1 secondo
                     setTimeout(() => {
                         window.location.href = '/home.html';
@@ -401,6 +417,26 @@
                         }
                     }
                     
+                    // [SECURITY] Exchange Firebase ID token for a server-signed session token.
+                    // This token is stored in sessionStorage and used for all WebSocket joinRoom calls.
+                    // The server verifies identity and company from Firestore — the client cannot forge it.
+                    try {
+                        const idToken = await user.getIdToken();
+                        const sessionResp = await fetch('/api/auth/session', {
+                            method: 'POST',
+                            headers: { 'Authorization': `Bearer ${idToken}` }
+                        });
+                        if (sessionResp.ok) {
+                            const sessionData = await sessionResp.json();
+                            sessionStorage.setItem('ws_session_token', sessionData.token);
+                            console.log('✅ [SECURITY] Server session token obtained and stored');
+                        } else {
+                            console.warn('⚠️ [SECURITY] Could not obtain server session token — login will proceed but WebSocket auth may fail');
+                        }
+                    } catch (sessionErr) {
+                        console.warn('⚠️ [SECURITY] Session token exchange error:', sessionErr.message);
+                    }
+
                     // Login riuscito - reindirizza alla home
                     window.location.href = '/home.html';
 

@@ -267,32 +267,10 @@
 
                     startHeartbeat();
 
-                    let companyName = localStorage.getItem('userCompany');
-            if (companyName) {
-                companyName = companyName.trim().toLowerCase();
-                console.log('Nome azienda dal localStorage (normalizzato):', companyName);
-                
-                // Forza l'aggiornamento del localStorage con il valore normalizzato
-                localStorage.setItem('userCompany', companyName);
-
-                // Unisciti alla room aziendale
-                ws.send(JSON.stringify({
-                    action: 'joinRoom',
-                    companyName: companyName
-                }));
-                console.log(`✅ Connesso alla room: ${companyName}`);
-
-                // Informa il server che stiamo entrando nella pagina pizzeria
-                ws.send(JSON.stringify({
-                    action: 'joinPage',
-                    pageType: 'pizzeria'
-                }));
-                console.log('📄 Entrato nella pagina PIZZERIA');
-            } else {
-                console.error('❌ Nome azienda non trovato nel localStorage');
-                alert('❌ Errore: Nome azienda non trovato. Effettua nuovamente il login.');
-                window.location.href = '/';
-            }
+                    // [SECURITY] Use WsAuth.joinRoom — sends server-signed token, company verified server-side
+                    WsAuth.joinRoom(ws, 'pizzeria', () => {
+                        console.log('✅ [SECURITY] Pizzeria authenticated joinRoom sent');
+                    });
                     updateConnectionStatus(true);
                 };
 
@@ -1594,6 +1572,7 @@
     </script>
 
     <!-- Voice Call Module -->
+    <script src="js/ws-auth.js"></script>
     <script src="js/voice-call.js"></script>
     <script>
         let voiceCallActive = false;

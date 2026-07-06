@@ -84,12 +84,14 @@ const CountdownsModule = (() => {
 
                     startHeartbeat();
 
-                    if (companyName) {
-                        ws.send(JSON.stringify({
-                            action: 'joinRoom',
-                            companyName: companyName
-                        }));
-                        console.log(`✅ Joined room: ${companyName}`);
+                    // [SECURITY] Send server-signed session token in joinRoom — company verified server-side
+                    if (typeof WsAuth !== 'undefined') {
+                        WsAuth.joinRoom(ws, null, () => {
+                            console.log(`✅ [SECURITY] Authenticated joinRoom sent (sala)`);
+                        });
+                    } else if (companyName) {
+                        ws.send(JSON.stringify({ action: 'joinRoom', companyName: companyName }));
+                        console.log(`✅ Joined room (fallback): ${companyName}`);
                     }
 
                     if (onConnectionStatusCallback) {

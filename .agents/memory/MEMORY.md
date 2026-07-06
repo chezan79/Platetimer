@@ -1,0 +1,1 @@
+- [WebSocket Security Architecture](ws-security.md) — HMAC session tokens enforce auth and company isolation; never trust client-supplied companyName; requires WS_SESSION_SECRET in Secrets.
