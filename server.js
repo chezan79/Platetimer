@@ -2,6 +2,8 @@ const express = require('express');
 const http = require('http');
 const WebSocket = require('ws');
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 const speech = require('@google-cloud/speech');
 
 const app = express();
@@ -20,6 +22,31 @@ if (!process.env.WS_SESSION_SECRET) {
 const FIREBASE_API_KEY = process.env.FIREBASE_API_KEY || 'AIzaSyDZ0FdjenO-ngblcuXKdwWwvRV5liiR18I';
 const FIREBASE_PROJECT_ID = process.env.FIREBASE_PROJECT_ID || 'app-dati-tavoli';
 const SESSION_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+// ===== Department Storage =====
+const DATA_DIR = path.join(__dirname, 'data');
+if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+const DEPARTMENTS_FILE = path.join(DATA_DIR, 'departments.json');
+const PLANS_FILE = path.join(DATA_DIR, 'plans.json');
+const PLAN_LIMITS = { base: 3, medium: 5, premium: 10 };
+
+function loadJSON(filePath) {
+    try { if (fs.existsSync(filePath)) return JSON.parse(fs.readFileSync(filePath, 'utf8')); }
+    catch (e) { console.error('Error loading', filePath, e.message); }
+    return {};
+}
+function saveJSON(filePath, data) {
+    try { fs.writeFileSync(filePath, JSON.stringify(data, null, 2)); }
+    catch (e) { console.error('Error saving', filePath, e.message); }
+}
+
+let departmentsStore = loadJSON(DEPARTMENTS_FILE);
+let plansStore = loadJSON(PLANS_FILE);
+
+function getCompanyDepts(companyId) { return departmentsStore[companyId] || []; }
+function getCompanyPlan(companyId) { return plansStore[companyId] || 'base'; }
+function getPlanLimit(plan) { return PLAN_LIMITS[plan] || PLAN_LIMITS.base; }
+function genDeptId() { return 'dept_' + Date.now() + '_' + crypto.randomBytes(3).toString('hex'); }
 
 // Sign a session token using HMAC-SHA256.
 // The token payload contains uid, companyName, iat, exp — never trust these from the client.
@@ -107,6 +134,22 @@ const wss = new WebSocket.Server({
 const MAINTENANCE_MODE = false; // Cambiare a true per attivare la manutenzione
 
 // Middleware per modalità manutenzione
+// Shared auth guard — call at the top of any protected route handler.
+// Returns the verified session object or sends 401 and returns null.
+function requireAuth(req, res) {
+    const h = req.headers['authorization'];
+    if (!h || !h.startsWith('Bearer ')) {
+        res.status(401).json({ error: 'Authentication required. Please log in again.' });
+        return null;
+    }
+    const session = verifySessionToken(h.substring(7).trim());
+    if (!session) {
+        res.status(401).json({ error: 'Session token invalid or expired. Please log in again.' });
+        return null;
+    }
+    return session;
+}
+
 app.use((req, res, next) => {
     if (MAINTENANCE_MODE) {
         // Permetti solo l'accesso alla pagina di manutenzione e ai suoi assets
@@ -269,6 +312,113 @@ app.post('/api/voice-message', (req, res) => {
 });
 
 // Payment functionality removed
+
+// ===== Department REST API =====
+
+// GET /api/departments — list company's departments + plan info
+app.get('/api/departments', (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const companyId = session.companyName;
+    const depts = getCompanyDepts(companyId);
+    const plan = getCompanyPlan(companyId);
+    const limit = getPlanLimit(plan);
+    res.json({ success: true, departments: depts, plan, limit });
+});
+
+// POST /api/departments — create (enforces plan limit server-side)
+app.post('/api/departments', (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const companyId = session.companyName;
+    const name = (req.body.name || '').trim();
+    if (!name) return res.status(400).json({ error: 'Department name is required.' });
+
+    const depts = getCompanyDepts(companyId);
+    const plan = getCompanyPlan(companyId);
+    const limit = getPlanLimit(plan);
+    const activeCount = depts.filter(d => d.active).length;
+
+    if (activeCount >= limit) {
+        return res.status(403).json({
+            error: `Plan limit reached. Your ${plan} plan allows up to ${limit} active departments. Deactivate one or upgrade your plan.`
+        });
+    }
+
+    const dept = { id: genDeptId(), name, active: true, usedInCountdowns: false, createdAt: Date.now() };
+    if (!departmentsStore[companyId]) departmentsStore[companyId] = [];
+    departmentsStore[companyId].push(dept);
+    saveJSON(DEPARTMENTS_FILE, departmentsStore);
+    console.log(`✅ Department created: "${name}" for company "${companyId}"`);
+    res.status(201).json({ success: true, department: dept });
+});
+
+// PUT /api/departments/:id — update name and/or active status
+app.put('/api/departments/:id', (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const companyId = session.companyName;
+    const depts = departmentsStore[companyId] || [];
+    const idx = depts.findIndex(d => d.id === req.params.id);
+    if (idx === -1) return res.status(404).json({ error: 'Department not found.' });
+
+    const { name, active } = req.body;
+
+    // Enforce plan limit when re-activating
+    if (active === true && !depts[idx].active) {
+        const plan = getCompanyPlan(companyId);
+        const limit = getPlanLimit(plan);
+        const currentActive = depts.filter(d => d.active).length;
+        if (currentActive >= limit) {
+            return res.status(403).json({
+                error: `Plan limit reached. Your ${plan} plan allows up to ${limit} active departments.`
+            });
+        }
+    }
+
+    if (typeof name === 'string' && name.trim()) depts[idx].name = name.trim();
+    if (typeof active === 'boolean') depts[idx].active = active;
+
+    saveJSON(DEPARTMENTS_FILE, departmentsStore);
+    res.json({ success: true, department: depts[idx] });
+});
+
+// DELETE /api/departments/:id — only if never used in countdowns
+app.delete('/api/departments/:id', (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const companyId = session.companyName;
+    const depts = departmentsStore[companyId] || [];
+    const idx = depts.findIndex(d => d.id === req.params.id);
+    if (idx === -1) return res.status(404).json({ error: 'Department not found.' });
+
+    if (depts[idx].usedInCountdowns) {
+        return res.status(409).json({ error: 'This department has been used in countdowns and cannot be deleted. Deactivate it instead.' });
+    }
+    // Also block if it has an active countdown right now
+    if (activeCountdowns.has(companyId)) {
+        for (const [, cd] of activeCountdowns.get(companyId)) {
+            if (cd.destinations && cd.destinations.includes(req.params.id)) {
+                return res.status(409).json({ error: 'This department has active countdowns. Deactivate it instead.' });
+            }
+        }
+    }
+
+    departmentsStore[companyId].splice(idx, 1);
+    saveJSON(DEPARTMENTS_FILE, departmentsStore);
+    res.json({ success: true });
+});
+
+// GET /api/subscription — return company's current plan and limit
+app.get('/api/subscription', (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const companyId = session.companyName;
+    const plan = getCompanyPlan(companyId);
+    const limit = getPlanLimit(plan);
+    const activeCount = getCompanyDepts(companyId).filter(d => d.active).length;
+    res.json({ success: true, plan, limit, activeCount });
+});
 
 // Endpoint per il riconoscimento vocale
 app.post('/api/speech-to-text', async (req, res) => {
@@ -669,18 +819,13 @@ wss.on('connection', (ws, req) => {
                 }
 
             } else if (data.action === 'joinPage') {
-                // Gestisce l'ingresso in una specifica pagina (cucina, pizzeria, insalata)
-                if (!data.pageType || typeof data.pageType !== 'string') {
+                // Gestisce l'ingresso in una specifica pagina (department ID)
+                if (!data.pageType || typeof data.pageType !== 'string' || !data.pageType.trim()) {
                     console.log('⚠️ Tipo pagina non valido');
                     return;
                 }
-
-                const validPageTypes = ['cucina', 'pizzeria', 'insalata'];
-                if (!validPageTypes.includes(data.pageType)) {
-                    console.log('⚠️ Tipo pagina non supportato');
-                    return;
-                }
-
+                // Any non-empty string is accepted — department IDs are dynamic per company.
+                // Security is already enforced: connection is authenticated and company-scoped.
                 ws.pageType = data.pageType;
 
                 // Conta quanti utenti sono attualmente sulla stessa pagina
@@ -774,12 +919,24 @@ wss.on('connection', (ws, req) => {
                     return;
                 }
 
-                // Validazione destinazione
-                const validDestinations = ['cucina', 'pizzeria', 'insalata'];
-                const destination = data.destination || 'cucina';
-                if (!validDestinations.includes(destination)) {
-                    console.log('⚠️ Destinazione non valida');
+                // Validate destination against this company's active departments
+                const destination = data.destination;
+                if (!destination || typeof destination !== 'string') {
+                    console.log('⚠️ Destinazione mancante');
                     return;
+                }
+                const companyDepts = getCompanyDepts(ws.companyRoom);
+                const activeDeptIds = companyDepts.filter(d => d.active).map(d => d.id);
+                if (activeDeptIds.length > 0 && !activeDeptIds.includes(destination)) {
+                    console.log(`⚠️ Destinazione "${destination}" non è un reparto valido per "${ws.companyRoom}"`);
+                    ws.send(JSON.stringify({ action: 'error', message: 'Destination department not found.' }));
+                    return;
+                }
+                // Mark this department as used so it cannot be deleted later
+                const deptIdx = (departmentsStore[ws.companyRoom] || []).findIndex(d => d.id === destination);
+                if (deptIdx !== -1 && !departmentsStore[ws.companyRoom][deptIdx].usedInCountdowns) {
+                    departmentsStore[ws.companyRoom][deptIdx].usedInCountdowns = true;
+                    saveJSON(DEPARTMENTS_FILE, departmentsStore);
                 }
 
                 // Memorizza il countdown attivo con logica unificata (Soluzione 1)
@@ -895,10 +1052,10 @@ wss.on('connection', (ws, req) => {
                     return;
                 }
 
-                // Validazione destinazione
-                const validDestinations = ['cucina', 'insalata', 'pizzeria'];
+                // Validate destination — must be a non-empty string; company room scoping
+                // already enforces isolation, so no department whitelist needed here.
                 const destination = data.destination;
-                if (!destination || !validDestinations.includes(destination)) {
+                if (!destination || typeof destination !== 'string' || !destination.trim()) {
                     console.log('⚠️ Destinazione messaggio vocale non valida:', destination);
                     return;
                 }

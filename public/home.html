@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gestione Ordini - Home</title>
     <link rel="stylesheet" href="style.css">
+    <script src="js/ws-auth.js"></script>
 </head>
 <body>
     <div style="position: absolute; top: 20px; right: 20px; z-index: 1000;">
@@ -23,19 +24,12 @@
             <h2 id="company-display"> <span id="company-name"></span></h2>
         </div>
 
-        <div class="button-grid">
-            <a href="cucina.html" class="nav-button cucina">
-                🍳 Cucina
-            </a>
-            <a href="pizzeria.html" class="nav-button pizzeria">
-                🍕 Pizzeria
-            </a>
-            <a href="insalata.html" class="nav-button insalata">
-                🥗 Insalata
-            </a>
-            <a href="sala.html" class="nav-button sala">
-                🍽️ Sala
-            </a>
+        <div id="dept-grid" class="button-grid">
+            <div id="dept-grid-msg" style="grid-column:1/-1;text-align:center;color:#aaa;padding:10px 0;font-size:14px;">Caricamento reparti...</div>
+        </div>
+        <div class="button-grid" style="margin-top:12px;">
+            <a href="sala.html" class="nav-button sala">🍽️ Sala</a>
+            <a href="admin-departments.html" class="nav-button" style="background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:#fff;">⚙️ Gestione Reparti</a>
         </div>
     </div>
 
@@ -171,12 +165,8 @@
                                 loadingIndicator.remove();
                             }
 
-                            // Riabilita i pulsanti dopo il caricamento con animazione fluida
-                            if (buttonGrid) {
-                                buttonGrid.style.transition = 'opacity 0.3s ease';
-                                buttonGrid.style.opacity = '1';
-                                buttonGrid.style.pointerEvents = 'auto';
-                            }
+                            // Load dynamic department buttons
+                            loadDepartmentsGrid();
                         }, 100);
                     } else {
                         console.error('❌ Documento utente non trovato');
@@ -239,6 +229,48 @@
                 }
             }
         });
+
+        // Load departments from API and populate the dept-grid
+        async function loadDepartmentsGrid() {
+            const grid = document.getElementById('dept-grid');
+            const msg = document.getElementById('dept-grid-msg');
+            // Restore grid visibility (was dimmed during auth check)
+            if (grid) { grid.style.transition = 'opacity 0.3s ease'; grid.style.opacity = '1'; grid.style.pointerEvents = 'auto'; }
+            const token = WsAuth.getStoredToken();
+            if (!token) {
+                if (msg) msg.textContent = 'Sessione scaduta. Effettua nuovamente il login.';
+                return;
+            }
+            try {
+                const res = await fetch('/api/departments', { headers: { 'Authorization': `Bearer ${token}` } });
+                const data = await res.json();
+                if (!data.success) {
+                    if (msg) msg.textContent = data.error || 'Errore caricamento reparti.';
+                    return;
+                }
+                const active = (data.departments || []).filter(d => d.active);
+                if (active.length === 0) {
+                    if (msg) {
+                        msg.innerHTML = 'Nessun reparto attivo. <a href="admin-departments.html" style="color:#667eea;">Crea il primo reparto</a>.';
+                    }
+                    return;
+                }
+                if (msg) msg.remove();
+                // Emoji cycle for department cards
+                const emojis = ['🍳', '🍕', '🥗', '🍜', '🍰', '🥩', '🍣', '🍹'];
+                active.forEach((dept, i) => {
+                    const a = document.createElement('a');
+                    a.href = `department.html?id=${encodeURIComponent(dept.id)}`;
+                    a.className = 'nav-button';
+                    a.style.cssText = 'background:linear-gradient(135deg,#2c3e50 0%,#3498db 100%);color:#fff;';
+                    a.textContent = `${emojis[i % emojis.length]} ${dept.name}`;
+                    grid.appendChild(a);
+                });
+            } catch (e) {
+                console.error('Error loading departments:', e);
+                if (msg) msg.textContent = 'Errore di rete. Riprova.';
+            }
+        }
 
         // Funzione per andare al login
         function goToLogin() {

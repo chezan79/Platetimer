@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reparto - PlateTimer</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); min-height: 100vh; display: flex; flex-direction: column; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #fff; }
+
+        /* Header */
+        .page-header { background: rgba(255,255,255,0.06); backdrop-filter: blur(10px); padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.08); flex-wrap: wrap; gap: 8px; }
+        .dept-title { font-size: 20px; font-weight: 700; color: #fff; }
+        .company-sub { font-size: 12px; color: rgba(255,255,255,0.5); margin-top: 2px; }
+        .header-actions { display: flex; gap: 10px; align-items: center; }
+        .btn-home { padding: 7px 14px; background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; cursor: pointer; font-size: 13px; }
+        .btn-home:hover { background: rgba(255,255,255,0.18); }
+        #conn-status { font-size: 12px; padding: 5px 10px; border-radius: 12px; background: rgba(255,100,100,0.2); color: #ff6b6b; }
+        #conn-status.connected { background: rgba(40,167,69,0.2); color: #5cb85c; }
+
+        /* Main layout */
+        .main-layout { display: flex; flex: 1; gap: 0; min-height: 0; }
+
+        /* Left control panel */
+        .control-panel { width: 300px; min-width: 260px; background: rgba(255,255,255,0.04); border-right: 1px solid rgba(255,255,255,0.08); padding: 18px; display: flex; flex-direction: column; gap: 16px; overflow-y: auto; }
+        .panel-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: rgba(255,255,255,0.4); margin-bottom: 8px; }
+
+        /* Table number */
+        .table-display { background: rgba(255,255,255,0.08); border-radius: 10px; padding: 14px; text-align: center; font-size: 32px; font-weight: 700; letter-spacing: 2px; color: #fff; min-height: 60px; border: 2px solid rgba(255,255,255,0.1); }
+        .table-display.empty { color: rgba(255,255,255,0.25); font-size: 16px; font-weight: 400; display: flex; align-items: center; justify-content: center; }
+
+        /* Numpad */
+        .numpad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+        .num-btn { padding: 12px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; color: #fff; font-size: 18px; font-weight: 600; cursor: pointer; text-align: center; transition: all 0.15s; user-select: none; }
+        .num-btn:active { transform: scale(0.94); }
+        .num-btn:hover { background: rgba(255,255,255,0.14); }
+        .num-btn.clear { color: #ff6b6b; background: rgba(255,107,107,0.1); border-color: rgba(255,107,107,0.2); font-size: 13px; }
+
+        /* Duration buttons */
+        .duration-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+        .dur-btn { padding: 8px 12px; background: rgba(255,255,255,0.07); border: 1.5px solid rgba(255,255,255,0.1); border-radius: 7px; color: rgba(255,255,255,0.7); font-size: 13px; cursor: pointer; transition: all 0.15s; }
+        .dur-btn:hover { background: rgba(255,255,255,0.12); color: #fff; }
+        .dur-btn.selected { background: linear-gradient(135deg, #667eea, #764ba2); border-color: transparent; color: #fff; font-weight: 600; }
+
+        /* Destination checkboxes */
+        .dest-list { display: flex; flex-direction: column; gap: 6px; max-height: 180px; overflow-y: auto; }
+        .dest-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; background: rgba(255,255,255,0.05); border: 1.5px solid rgba(255,255,255,0.08); border-radius: 8px; cursor: pointer; transition: all 0.15s; user-select: none; }
+        .dest-item:hover { background: rgba(255,255,255,0.09); }
+        .dest-item.selected { background: rgba(102,126,234,0.25); border-color: rgba(102,126,234,0.5); }
+        .dest-item label { cursor: pointer; font-size: 14px; font-weight: 500; flex: 1; }
+        .dest-check { width: 16px; height: 16px; accent-color: #667eea; }
+
+        /* Send button */
+        .send-btn { width: 100%; padding: 14px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; border-radius: 10px; color: white; font-size: 15px; font-weight: 700; cursor: pointer; transition: all 0.2s; letter-spacing: 0.3px; }
+        .send-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(102,126,234,0.4); }
+        .send-btn:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+
+        /* Right countdown area */
+        .countdown-area { flex: 1; padding: 18px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+        .area-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+        .area-title { font-size: 14px; font-weight: 700; color: rgba(255,255,255,0.6); text-transform: uppercase; letter-spacing: 0.8px; }
+        .cd-count { font-size: 12px; background: rgba(255,255,255,0.1); padding: 4px 10px; border-radius: 10px; color: rgba(255,255,255,0.6); }
+
+        /* Countdown card */
+        .cd-card { background: rgba(255,255,255,0.06); border: 1.5px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 16px 20px; display: flex; align-items: center; gap: 16px; transition: border-color 0.3s; }
+        .cd-card.warning { border-color: rgba(255,193,7,0.5); background: rgba(255,193,7,0.07); }
+        .cd-card.critical { border-color: rgba(255,107,107,0.6); background: rgba(255,107,107,0.1); animation: pulse 1.2s ease-in-out infinite; }
+        @keyframes pulse { 0%,100% { border-color: rgba(255,107,107,0.6); } 50% { border-color: rgba(255,107,107,1); } }
+        .cd-table { font-size: 26px; font-weight: 800; color: #fff; min-width: 55px; text-align: center; }
+        .cd-table span { display: block; font-size: 10px; font-weight: 400; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 0.6px; }
+        .cd-time { font-size: 36px; font-weight: 300; color: #fff; flex: 1; text-align: center; font-variant-numeric: tabular-nums; }
+        .cd-time.warning { color: #ffc107; }
+        .cd-time.critical { color: #ff6b6b; }
+        .cd-started { font-size: 11px; color: rgba(255,255,255,0.35); text-align: right; min-width: 50px; }
+
+        .empty-cd { text-align: center; padding: 60px 20px; color: rgba(255,255,255,0.25); font-size: 15px; }
+
+        /* Voice message panel */
+        .voice-panel { position: fixed; bottom: 20px; right: 20px; background: #fff; border-radius: 12px; padding: 16px; box-shadow: 0 8px 30px rgba(0,0,0,0.3); min-width: 260px; z-index: 200; display: none; }
+        .voice-panel-title { font-size: 14px; font-weight: 700; color: #333; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+        .voice-close { background: none; border: none; font-size: 20px; color: #999; cursor: pointer; line-height: 1; }
+        .voice-toggle-float { position: fixed; bottom: 20px; right: 20px; z-index: 199; width: 52px; height: 52px; border-radius: 50%; background: linear-gradient(135deg, #28a745, #20c997); border: none; color: white; font-size: 22px; cursor: pointer; box-shadow: 0 4px 14px rgba(40,167,69,0.4); display: flex; align-items: center; justify-content: center; }
+        .voice-section { margin-bottom: 10px; }
+        .voice-section label { display: block; font-size: 12px; color: #777; margin-bottom: 5px; }
+        .voice-dest-list { display: flex; flex-direction: column; gap: 5px; max-height: 120px; overflow-y: auto; }
+        .voice-dest-item { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border: 1px solid #eee; border-radius: 6px; cursor: pointer; font-size: 13px; }
+        .voice-dest-item.selected { background: #e8f4fd; border-color: #2196f3; }
+        .voice-record-btn { width: 100%; padding: 10px; background: linear-gradient(135deg, #e74c3c, #c0392b); color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; margin-top: 8px; }
+        .voice-record-btn.recording { background: linear-gradient(135deg, #27ae60, #229954); animation: pulse 1s ease-in-out infinite; }
+        .voice-status { font-size: 11px; color: #888; text-align: center; margin-top: 6px; min-height: 16px; }
+        .voice-msg-list { max-height: 140px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+        .voice-msg-item { background: #f8f9fa; border-radius: 8px; padding: 8px 10px; font-size: 12px; }
+        .voice-msg-from { font-weight: 600; color: #333; }
+        .voice-msg-time { color: #999; font-size: 11px; float: right; }
+
+        @media (max-width: 640px) {
+            .main-layout { flex-direction: column; }
+            .control-panel { width: 100%; border-right: none; border-bottom: 1px solid rgba(255,255,255,0.08); }
+        }
+    </style>
+</head>
+<body>
+    <div class="page-header">
+        <div>
+            <div id="dept-title" class="dept-title">Caricamento...</div>
+            <div id="company-sub" class="company-sub"></div>
+        </div>
+        <div class="header-actions">
+            <span id="conn-status">Disconnesso</span>
+            <button class="btn-home" onclick="window.location.href='home.html'">Home</button>
+        </div>
+    </div>
+
+    <div class="main-layout">
+        <!-- Left: Send countdown -->
+        <div class="control-panel">
+            <div>
+                <div class="panel-label">Numero Tavolo</div>
+                <div id="table-display" class="table-display empty">Inserisci tavolo</div>
+            </div>
+
+            <div class="numpad">
+                <button class="num-btn" onclick="numPress('1')">1</button>
+                <button class="num-btn" onclick="numPress('2')">2</button>
+                <button class="num-btn" onclick="numPress('3')">3</button>
+                <button class="num-btn" onclick="numPress('4')">4</button>
+                <button class="num-btn" onclick="numPress('5')">5</button>
+                <button class="num-btn" onclick="numPress('6')">6</button>
+                <button class="num-btn" onclick="numPress('7')">7</button>
+                <button class="num-btn" onclick="numPress('8')">8</button>
+                <button class="num-btn" onclick="numPress('9')">9</button>
+                <button class="num-btn clear" onclick="numClear()">Canc</button>
+                <button class="num-btn" onclick="numPress('0')">0</button>
+                <button class="num-btn clear" onclick="numDel()">Del</button>
+            </div>
+
+            <div>
+                <div class="panel-label">Durata</div>
+                <div class="duration-grid" id="duration-grid">
+                    <button class="dur-btn" data-min="4" onclick="selectDuration(this,4)">4'</button>
+                    <button class="dur-btn" data-min="5" onclick="selectDuration(this,5)">5'</button>
+                    <button class="dur-btn" data-min="6" onclick="selectDuration(this,6)">6'</button>
+                    <button class="dur-btn" data-min="7" onclick="selectDuration(this,7)">7'</button>
+                    <button class="dur-btn" data-min="8" onclick="selectDuration(this,8)">8'</button>
+                    <button class="dur-btn" data-min="9" onclick="selectDuration(this,9)">9'</button>
+                    <button class="dur-btn" data-min="10" onclick="selectDuration(this,10)">10'</button>
+                    <button class="dur-btn" data-min="12" onclick="selectDuration(this,12)">12'</button>
+                    <button class="dur-btn" data-min="15" onclick="selectDuration(this,15)">15'</button>
+                </div>
+            </div>
+
+            <div>
+                <div class="panel-label">Invia A</div>
+                <div id="dest-list" class="dest-list">
+                    <div style="color:rgba(255,255,255,0.3);font-size:13px;">Caricamento reparti...</div>
+                </div>
+            </div>
+
+            <button id="send-btn" class="send-btn" onclick="sendCountdown()" disabled>Avvia Countdown</button>
+        </div>
+
+        <!-- Right: Incoming countdowns -->
+        <div class="countdown-area">
+            <div class="area-header">
+                <span class="area-title" id="area-title">Countdown per questo reparto</span>
+                <span id="cd-count" class="cd-count">0</span>
+            </div>
+            <div id="cd-list"></div>
+        </div>
+    </div>
+
+    <!-- Floating voice toggle -->
+    <button class="voice-toggle-float" id="voice-float-btn" onclick="toggleVoicePanel()" title="Messaggi Vocali">M</button>
+
+    <!-- Voice message panel -->
+    <div class="voice-panel" id="voice-panel">
+        <div class="voice-panel-title">
+            Messaggi Vocali
+            <button class="voice-close" onclick="toggleVoicePanel()">×</button>
+        </div>
+        <div class="voice-section">
+            <label>Invia a:</label>
+            <div class="voice-dest-list" id="voice-dest-list"></div>
+        </div>
+        <button class="voice-record-btn" id="voice-record-btn" onclick="toggleRecording()">Tieni premuto per registrare</button>
+        <div class="voice-status" id="voice-status"></div>
+        <div class="voice-msg-list" id="voice-msg-list"></div>
+    </div>
+
+    <script src="js/ws-auth.js"></script>
+    <script>
+        // ===== Init =====
+        const urlParams = new URLSearchParams(window.location.search);
+        const myDeptId = urlParams.get('id');
+        if (!myDeptId) { alert('Reparto non specificato.'); window.location.href = 'home.html'; }
+
+        const token = WsAuth.getStoredToken();
+        if (!token) { alert('Sessione scaduta. Effettua nuovamente il login.'); window.location.href = 'index.html'; }
+
+        const companyName = localStorage.getItem('userCompany') || '';
+        document.getElementById('company-sub').textContent = companyName;
+
+        let myDeptName = '';
+        let allDepts = [];
+        let selectedDests = new Set();
+        let selectedDuration = 0;
+        let tableInput = '';
+        let countdowns = new Map(); // tableKey → { timeRemaining, initialDuration, startTime, startedAt }
+        let ws = null;
+        let tickInterval = null;
+
+        // ===== Load departments =====
+        async function loadDepts() {
+            try {
+                const res = await fetch('/api/departments', { headers: { 'Authorization': `Bearer ${token}` } });
+                const data = await res.json();
+                if (!data.success) { window.location.href = 'home.html'; return; }
+                allDepts = data.departments || [];
+                const mine = allDepts.find(d => d.id === myDeptId);
+                if (!mine) { alert('Reparto non trovato.'); window.location.href = 'home.html'; return; }
+                myDeptName = mine.name;
+                document.getElementById('dept-title').textContent = myDeptName;
+                document.getElementById('area-title').textContent = `Countdown per ${myDeptName}`;
+                document.title = myDeptName + ' - PlateTimer';
+                buildDestList();
+                buildVoiceDestList();
+            } catch (e) { console.error('Error loading depts:', e); }
+        }
+
+        function buildDestList() {
+            const others = allDepts.filter(d => d.active && d.id !== myDeptId);
+            const container = document.getElementById('dest-list');
+            if (others.length === 0) {
+                container.innerHTML = '<div style="color:rgba(255,255,255,0.35);font-size:13px;">Nessun altro reparto attivo.</div>';
+                return;
+            }
+            container.innerHTML = others.map(d => `
+                <div class="dest-item" id="dest-${d.id}" onclick="toggleDest('${d.id}')">
+                    <input type="checkbox" class="dest-check" id="chk-${d.id}">
+                    <label for="chk-${d.id}">${escHtml(d.name)}</label>
+                </div>
+            `).join('');
+        }
+
+        function buildVoiceDestList() {
+            const others = allDepts.filter(d => d.active && d.id !== myDeptId);
+            const container = document.getElementById('voice-dest-list');
+            container.innerHTML = others.map(d => `
+                <div class="voice-dest-item" id="vdest-${d.id}" onclick="toggleVoiceDest('${d.id}')">
+                    <input type="checkbox" id="vchk-${d.id}"> ${escHtml(d.name)}
+                </div>
+            `).join('');
+        }
+
+        // ===== Numpad =====
+        function numPress(digit) {
+            if (tableInput.length >= 3) return;
+            tableInput += digit;
+            updateTableDisplay();
+        }
+        function numClear() { tableInput = ''; updateTableDisplay(); }
+        function numDel() { tableInput = tableInput.slice(0, -1); updateTableDisplay(); }
+        function updateTableDisplay() {
+            const el = document.getElementById('table-display');
+            if (tableInput) { el.textContent = tableInput; el.classList.remove('empty'); }
+            else { el.textContent = 'Inserisci tavolo'; el.classList.add('empty'); }
+            updateSendBtn();
+        }
+
+        // ===== Duration =====
+        function selectDuration(btn, minutes) {
+            document.querySelectorAll('.dur-btn').forEach(b => b.classList.remove('selected'));
+            btn.classList.add('selected');
+            selectedDuration = minutes * 60;
+            updateSendBtn();
+        }
+
+        // ===== Destinations =====
+        function toggleDest(id) {
+            if (selectedDests.has(id)) { selectedDests.delete(id); }
+            else { selectedDests.add(id); }
+            document.getElementById('dest-' + id)?.classList.toggle('selected', selectedDests.has(id));
+            document.getElementById('chk-' + id).checked = selectedDests.has(id);
+            updateSendBtn();
+        }
+
+        function updateSendBtn() {
+            const ok = tableInput.length > 0 && selectedDuration > 0 && selectedDests.size > 0;
+            document.getElementById('send-btn').disabled = !ok;
+        }
+
+        // ===== Send countdown =====
+        function sendCountdown() {
+            if (!ws || ws.readyState !== WebSocket.OPEN) { alert('WebSocket non connesso.'); return; }
+            if (!tableInput || selectedDuration <= 0 || selectedDests.size === 0) return;
+
+            selectedDests.forEach(destId => {
+                ws.send(JSON.stringify({
+                    action: 'startCountdown',
+                    tableNumber: tableInput,
+                    timeRemaining: selectedDuration,
+                    destination: destId
+                }));
+            });
+
+            tableInput = '';
+            selectedDuration = 0;
+            selectedDests.clear();
+            document.querySelectorAll('.dest-item').forEach(el => el.classList.remove('selected'));
+            document.querySelectorAll('.dest-check').forEach(el => { el.checked = false; });
+            document.querySelectorAll('.dur-btn').forEach(el => el.classList.remove('selected'));
+            updateTableDisplay();
+            updateSendBtn();
+        }
+
+        // ===== WebSocket =====
+        function connectWS() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+
+            ws.onopen = () => {
+                document.getElementById('conn-status').textContent = 'Connesso';
+                document.getElementById('conn-status').className = 'connected';
+                WsAuth.joinRoom(ws, myDeptId, () => {
+                    console.log('[DEPT] Joined room + page for', myDeptId);
+                });
+            };
+
+            ws.onclose = () => {
+                document.getElementById('conn-status').textContent = 'Disconnesso';
+                document.getElementById('conn-status').className = '';
+                setTimeout(connectWS, 3000);
+            };
+
+            ws.onerror = () => ws.close();
+
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (WsAuth.handleServerError(data)) return;
+
+                    if (data.action === 'startCountdown' && data.destination === myDeptId) {
+                        countdowns.set(data.tableNumber.toString(), {
+                            tableNumber: data.tableNumber,
+                            timeRemaining: data.timeRemaining,
+                            initialDuration: data.timeRemaining,
+                            startTime: Date.now(),
+                            startedAt: new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
+                        });
+                        renderCountdowns();
+                    }
+
+                    if (data.action === 'deleteCountdown') {
+                        countdowns.delete(data.tableNumber.toString());
+                        renderCountdowns();
+                    }
+
+                    if (data.action === 'voiceMessage' && data.destination === myDeptId) {
+                        addVoiceMessage(data);
+                    }
+                } catch(e) {}
+            };
+        }
+
+        // ===== Countdown rendering =====
+        function fmtTime(secs) {
+            secs = Math.max(0, secs);
+            const m = Math.floor(secs / 60);
+            const s = secs % 60;
+            return `${m}:${s.toString().padStart(2, '0')}`;
+        }
+
+        function getLevel(secs) {
+            if (secs < 120) return 'critical';
+            if (secs < 300) return 'warning';
+            return '';
+        }
+
+        function renderCountdowns() {
+            const container = document.getElementById('cd-list');
+            document.getElementById('cd-count').textContent = countdowns.size;
+
+            if (countdowns.size === 0) {
+                container.innerHTML = '<div class="empty-cd">Nessun countdown attivo per questo reparto.</div>';
+                return;
+            }
+
+            const sorted = Array.from(countdowns.values()).sort((a, b) => a.timeRemaining - b.timeRemaining);
+            container.innerHTML = sorted.map(cd => {
+                const level = getLevel(cd.timeRemaining);
+                return `
+                    <div class="cd-card ${level}">
+                        <div class="cd-table">${cd.tableNumber}<span>Tavolo</span></div>
+                        <div class="cd-time ${level}">${fmtTime(cd.timeRemaining)}</div>
+                        <div class="cd-started">${cd.startedAt}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function tick() {
+            const now = Date.now();
+            const toDelete = [];
+            countdowns.forEach((cd, key) => {
+                const elapsed = Math.floor((now - cd.startTime) / 1000);
+                cd.timeRemaining = Math.max(0, cd.initialDuration - elapsed);
+                if (cd.timeRemaining === 0) toDelete.push(key);
+            });
+            toDelete.forEach(k => countdowns.delete(k));
+            renderCountdowns();
+        }
+
+        // ===== Voice messages =====
+        let voicePanelOpen = false;
+        let isRecording = false;
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let selectedVoiceDests = new Set();
+
+        function toggleVoicePanel() {
+            voicePanelOpen = !voicePanelOpen;
+            document.getElementById('voice-panel').style.display = voicePanelOpen ? 'block' : 'none';
+            document.getElementById('voice-float-btn').style.display = voicePanelOpen ? 'none' : 'flex';
+        }
+
+        function toggleVoiceDest(id) {
+            if (selectedVoiceDests.has(id)) selectedVoiceDests.delete(id);
+            else selectedVoiceDests.add(id);
+            document.getElementById('vdest-' + id)?.classList.toggle('selected', selectedVoiceDests.has(id));
+            document.getElementById('vchk-' + id).checked = selectedVoiceDests.has(id);
+        }
+
+        async function toggleRecording() {
+            if (!isRecording) {
+                if (selectedVoiceDests.size === 0) { alert('Seleziona almeno un destinatario.'); return; }
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    audioChunks = [];
+                    mediaRecorder = new MediaRecorder(stream);
+                    mediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
+                    mediaRecorder.onstop = sendVoiceMsg;
+                    mediaRecorder.start();
+                    isRecording = true;
+                    document.getElementById('voice-record-btn').textContent = 'Rilascia per inviare';
+                    document.getElementById('voice-record-btn').classList.add('recording');
+                    document.getElementById('voice-status').textContent = 'Registrazione in corso...';
+                } catch(e) { alert('Microfono non disponibile.'); }
+            } else {
+                if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+                mediaRecorder?.stream?.getTracks().forEach(t => t.stop());
+                isRecording = false;
+                document.getElementById('voice-record-btn').textContent = 'Tieni premuto per registrare';
+                document.getElementById('voice-record-btn').classList.remove('recording');
+                document.getElementById('voice-status').textContent = 'Invio...';
+            }
+        }
+
+        async function sendVoiceMsg() {
+            const blob = new Blob(audioChunks, { type: 'audio/webm' });
+            const reader = new FileReader();
+            reader.onload = () => {
+                const b64 = reader.result.split(',')[1];
+                const msgId = Date.now().toString();
+                selectedVoiceDests.forEach(destId => {
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({
+                            action: 'voiceMessage',
+                            message: `Messaggio vocale da ${myDeptName}`,
+                            messageId: `${msgId}_${destId}`,
+                            from: myDeptName,
+                            destination: destId,
+                            audioData: b64,
+                            hasAudio: true,
+                            audioSize: blob.size,
+                            timestamp: new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
+                        }));
+                    }
+                });
+                document.getElementById('voice-status').textContent = 'Inviato.';
+                setTimeout(() => { document.getElementById('voice-status').textContent = ''; }, 2000);
+            };
+            reader.readAsDataURL(blob);
+        }
+
+        function addVoiceMessage(data) {
+            const container = document.getElementById('voice-msg-list');
+            const item = document.createElement('div');
+            item.className = 'voice-msg-item';
+            item.innerHTML = `<span class="voice-msg-from">${escHtml(data.from || 'Sconosciuto')}</span><span class="voice-msg-time">${escHtml(data.timestamp || '')}</span><br>${escHtml(data.message || '')}`;
+            container.prepend(item);
+            if (data.hasAudio && data.audioData) {
+                const audio = new Audio('data:audio/webm;base64,' + data.audioData);
+                audio.play().catch(() => {});
+            }
+        }
+
+        function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+        // ===== Boot =====
+        loadDepts().then(() => {
+            connectWS();
+            tickInterval = setInterval(tick, 1000);
+        });
+
+        window.addEventListener('beforeunload', () => {
+            clearInterval(tickInterval);
+            if (ws) ws.close();
+        });
+    </script>
+</body>
+</html>

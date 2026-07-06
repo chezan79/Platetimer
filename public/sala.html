@@ -390,11 +390,8 @@
         <div class="filters-container">
             <input type="text" id="searchInput" class="search-input" placeholder="🔍 Cerca tavolo...">
             
-            <div class="filter-group">
+            <div class="filter-group" id="filter-group">
                 <button class="filter-btn active" data-filter="all">Tutti</button>
-                <button class="filter-btn" data-filter="cucina">🍳 Cucina</button>
-                <button class="filter-btn" data-filter="pizzeria">🍕 Pizzeria</button>
-                <button class="filter-btn" data-filter="insalata">🥗 Insalata</button>
             </div>
         </div>
     </div>
@@ -481,7 +478,46 @@
         }
         companyName = companyName.trim().toLowerCase();
 
+        // Map of deptId → department object (name, active)
+        let departmentMap = {};
+
+        async function loadDepartments() {
+            const token = WsAuth.getStoredToken();
+            if (!token) return;
+            try {
+                const res = await fetch('/api/departments', { headers: { 'Authorization': `Bearer ${token}` } });
+                const data = await res.json();
+                if (data.success && data.departments) {
+                    departmentMap = {};
+                    data.departments.forEach(d => { departmentMap[d.id] = d; });
+                    buildFilterButtons(data.departments.filter(d => d.active));
+                }
+            } catch (e) { console.warn('Could not load departments for sala:', e.message); }
+        }
+
+        function buildFilterButtons(activeDepts) {
+            const group = document.getElementById('filter-group');
+            if (!group) return;
+            // Remove old dept buttons (keep "Tutti")
+            Array.from(group.querySelectorAll('[data-dept]')).forEach(el => el.remove());
+            activeDepts.forEach(d => {
+                const btn = document.createElement('button');
+                btn.className = 'filter-btn';
+                btn.dataset.filter = d.id;
+                btn.dataset.dept = '1';
+                btn.textContent = d.name;
+                btn.addEventListener('click', () => {
+                    group.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    activeFilter = d.id;
+                    renderCountdowns();
+                });
+                group.appendChild(btn);
+            });
+        }
+
         function initializePage() {
+            loadDepartments();
             loadInitialCountdowns();
             subscribeToUpdates();
             startAutoRefresh();
@@ -569,7 +605,7 @@
                     tableNumber: data.tableNumber,
                     remainingTime: data.timeRemaining,
                     initialDuration: data.timeRemaining,
-                    destinations: data.destination ? [data.destination] : ['cucina'],
+                    destinations: data.destination ? [data.destination] : [],
                     startedAt: new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
                     startTime: Date.now(),
                     endsAt: Date.now() + (data.timeRemaining * 1000),
@@ -645,12 +681,11 @@
         }
 
         function getStationIcon(station) {
-            const icons = {
-                'cucina': '🍳 Cucina',
-                'pizzeria': '🍕 Pizzeria',
-                'insalata': '🥗 Insalata'
-            };
-            return icons[station] || station;
+            // Look up department name from map; fall back to raw ID
+            if (departmentMap[station]) return departmentMap[station].name;
+            // Legacy names for old countdown records
+            const legacy = { 'cucina': '🍳 Cucina', 'pizzeria': '🍕 Pizzeria', 'insalata': '🥗 Insalata' };
+            return legacy[station] || station;
         }
 
         function updateStatistics() {
@@ -686,14 +721,16 @@
                 }, 150);
             });
 
-            document.querySelectorAll('.filter-btn').forEach(btn => {
-                btn.addEventListener('click', () => {
+            // "Tutti" button — department buttons are wired inside buildFilterButtons
+            const tuttiBtn = document.querySelector('.filter-btn[data-filter="all"]');
+            if (tuttiBtn) {
+                tuttiBtn.addEventListener('click', () => {
                     document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-                    btn.classList.add('active');
-                    activeFilter = btn.dataset.filter;
+                    tuttiBtn.classList.add('active');
+                    activeFilter = 'all';
                     renderCountdowns();
                 });
-            });
+            }
         }
 
         window.addEventListener('load', initializePage);
