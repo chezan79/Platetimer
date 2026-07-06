@@ -28,11 +28,27 @@ const CountdownsModule = (() => {
     }
 
     function fetchActiveCountdowns(companyName) {
-        const url = companyName 
-            ? `/api/countdowns?status=active&company=${encodeURIComponent(companyName)}`
-            : '/api/countdowns?status=active';
-        
-        return fetch(url)
+        // [SECURITY] Always send the server session token so the server uses the verified company,
+        // not the client-supplied query param. Falling back to ?company= only if no token exists.
+        const sessionToken = (typeof WsAuth !== 'undefined') ? WsAuth.getStoredToken() : null;
+
+        let url, fetchOptions;
+        if (sessionToken) {
+            // Preferred path: token in Authorization header — server ignores ?company= and uses verified company
+            url = '/api/countdowns?status=active';
+            fetchOptions = { headers: { 'Authorization': `Bearer ${sessionToken}` } };
+        } else if (companyName) {
+            // Fallback: company from caller — server enforces it as a required filter but cannot verify it
+            console.warn('[SECURITY] fetchActiveCountdowns: no session token, using companyName param as fallback');
+            url = `/api/countdowns?status=active&company=${encodeURIComponent(companyName)}`;
+            fetchOptions = {};
+        } else {
+            // No company and no token — server will return 400
+            url = '/api/countdowns?status=active';
+            fetchOptions = {};
+        }
+
+        return fetch(url, fetchOptions)
             .then(response => {
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
@@ -84,14 +100,15 @@ const CountdownsModule = (() => {
 
                     startHeartbeat();
 
-                    // [SECURITY] Send server-signed session token in joinRoom — company verified server-side
+                    // [SECURITY] Send server-signed session token in joinRoom — company verified server-side.
+                    // There is intentionally no fallback to bare companyName: the server requires a token
+                    // and would reject any bare joinRoom, so a fallback would only produce a silent failure.
                     if (typeof WsAuth !== 'undefined') {
                         WsAuth.joinRoom(ws, null, () => {
                             console.log(`✅ [SECURITY] Authenticated joinRoom sent (sala)`);
                         });
-                    } else if (companyName) {
-                        ws.send(JSON.stringify({ action: 'joinRoom', companyName: companyName }));
-                        console.log(`✅ Joined room (fallback): ${companyName}`);
+                    } else {
+                        console.error('[SECURITY] WsAuth not loaded — cannot join room. Ensure ws-auth.js is loaded before countdowns.js.');
                     }
 
                     if (onConnectionStatusCallback) {
