@@ -57,3 +57,8 @@ externalPort = 80
 
 [agent]
 expertMode = true
+
+[userenv]
+
+[userenv.shared]
+WS_SESSION_SECRET = "8f3d2c1a9e7b4f6d8c9e1a2b3d4f5a6c7e8d9f1a2b3c4d5e6f7a8b9c0d1e2f3"

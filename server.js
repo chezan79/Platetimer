@@ -201,17 +201,58 @@ app.post('/api/auth/session', async (req, res) => {
 });
 
 // Endpoint per salvare messaggi vocali
+// [SECURITY] Requires a valid server-signed session token in Authorization: Bearer header.
+// Company is always taken from the verified token — never from the request body.
 app.post('/api/voice-message', (req, res) => {
     try {
+        // [SECURITY] Extract and verify the session token
+        const authHeader = req.headers['authorization'];
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            console.log(`⛔ [SECURITY] POST /api/voice-message rejected — no token (IP: ${req.ip})`);
+            return res.status(401).json({ error: 'Authentication required. Please log in again.' });
+        }
+
+        const token = authHeader.substring(7).trim();
+        const session = verifySessionToken(token);
+        if (!session) {
+            console.log(`⛔ [SECURITY] POST /api/voice-message rejected — invalid or expired token (IP: ${req.ip})`);
+            return res.status(401).json({ error: 'Session token invalid or expired. Please log in again.' });
+        }
+
+        // [SECURITY] Company always comes from the verified token — never from req.body
+        const companyName = session.companyName;
+
         const { audioData, messageId, destination, from } = req.body;
 
         if (!audioData || !messageId || !destination) {
             return res.status(400).json({ error: 'Dati mancanti' });
         }
 
-        // Salva temporaneamente i dati audio in memoria
-        // In produzione si potrebbe usare un database o storage
-        console.log(`🎤 Messaggio vocale ricevuto: ID ${messageId}, Da: ${from}, Per: ${destination}`);
+        console.log(`🎤 [SECURITY] Messaggio vocale ricevuto: ID ${messageId}, Da: ${from}, Company: "${companyName}", Per: ${destination} (uid: ${session.uid})`);
+
+        // Broadcast to WebSocket clients inside the verified company room only
+        if (companyRooms.has(companyName)) {
+            const roomClients = companyRooms.get(companyName);
+            const broadcastPayload = JSON.stringify({
+                action: 'voiceMessage',
+                message: `Messaggio vocale da ${from}`,
+                messageId,
+                from,
+                destination,
+                audioData,
+                hasAudio: true,
+                timestamp: new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
+            });
+
+            let sentCount = 0;
+            roomClients.forEach(client => {
+                if (client.readyState === 1 /* OPEN */ && client !== req._ws) {
+                    client.send(broadcastPayload);
+                    sentCount++;
+                }
+            });
+            console.log(`📢 [SECURITY] Voice message broadcast to ${sentCount} clients in company room "${companyName}"`);
+        }
 
         res.json({ 
             success: true, 
