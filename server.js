@@ -15,8 +15,10 @@ if (!process.env.WS_SESSION_SECRET) {
     console.warn('⚠️ [SECURITY] WS_SESSION_SECRET not set — random key generated. Tokens will be invalidated on server restart. Set WS_SESSION_SECRET in Secrets for production.');
 }
 
-const FIREBASE_API_KEY = 'AIzaSyDZ0FdjenO-ngblcuXKdwWwvRV5liiR18I';
-const FIREBASE_PROJECT_ID = 'app-dati-tavoli';
+// Firebase Web API key — technically public (same value appears in client-side config by design),
+// but kept server-side as an env var so it can be rotated without a code change.
+const FIREBASE_API_KEY = process.env.FIREBASE_API_KEY || 'AIzaSyDZ0FdjenO-ngblcuXKdwWwvRV5liiR18I';
+const FIREBASE_PROJECT_ID = process.env.FIREBASE_PROJECT_ID || 'app-dati-tavoli';
 const SESSION_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 // Sign a session token using HMAC-SHA256.
