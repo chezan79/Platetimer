@@ -271,6 +271,20 @@ app.post('/api/voice-message', (req, res) => {
 // Endpoint per il riconoscimento vocale
 app.post('/api/speech-to-text', async (req, res) => {
     try {
+        // [SECURITY] Require a valid server session token — prevents unauthenticated callers
+        // from consuming Google Cloud Speech API quota at the restaurant's expense.
+        const authHeader = req.headers['authorization'];
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            console.log(`⛔ [SECURITY] POST /api/speech-to-text rejected — no token (IP: ${req.ip})`);
+            return res.status(401).json({ error: 'Authentication required. Please log in again.' });
+        }
+        const sttToken = authHeader.substring(7).trim();
+        const sttSession = verifySessionToken(sttToken);
+        if (!sttSession) {
+            console.log(`⛔ [SECURITY] POST /api/speech-to-text rejected — invalid or expired token (IP: ${req.ip})`);
+            return res.status(401).json({ error: 'Session token invalid or expired. Please log in again.' });
+        }
+
         if (!speechClient) {
             return res.status(500).json({ 
                 error: 'Google Cloud Speech non configurato',
@@ -321,33 +335,37 @@ app.post('/api/speech-to-text', async (req, res) => {
     }
 });
 
-// REST API endpoint to get active countdowns
-// [SECURITY] A company filter is now mandatory — the server never returns data for all companies at once.
-// If a session token is provided in the Authorization header, the company is extracted from it
-// (server-verified). Otherwise the query param is used as a fallback (less secure, but the worst
-// an attacker can do is guess a company name — no token needed to read public countdown timers).
+// REST API endpoint to get active countdowns.
+// [SECURITY] Bearer token is mandatory. Company is always extracted from the verified token —
+// the ?company= query param is accepted but ignored. Unauthenticated requests receive HTTP 401.
 app.get('/api/countdowns', (req, res) => {
     try {
         const status = req.query.status || 'active';
-        let companyName = req.query.company;
 
-        // [SECURITY] If a session token is present, prefer the verified company over the query param
+        // [SECURITY] Bearer token is now mandatory — the company is always extracted from the
+        // verified token, never from a client-supplied query param. This closes the cross-company
+        // data exposure window where any caller knowing a company name could read its countdowns.
         const authHeader = req.headers['authorization'];
-        if (authHeader && authHeader.startsWith('Bearer ')) {
-            const token = authHeader.substring(7).trim();
-            const session = verifySessionToken(token);
-            if (session) {
-                companyName = session.companyName; // Use server-verified company
-            }
-        }
-
-        // [SECURITY] Refuse to return data for all companies — a company filter is required
-        if (!companyName || typeof companyName !== 'string' || companyName.trim() === '') {
-            return res.status(400).json({
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            console.log(`⛔ [SECURITY] GET /api/countdowns rejected — no token (IP: ${req.ip})`);
+            return res.status(401).json({
                 success: false,
-                error: 'Company filter is required. Pass ?company=name or a valid session token.'
+                error: 'Authentication required. Pass a valid session token in the Authorization header.'
             });
         }
+
+        const cdToken = authHeader.substring(7).trim();
+        const cdSession = verifySessionToken(cdToken);
+        if (!cdSession) {
+            console.log(`⛔ [SECURITY] GET /api/countdowns rejected — invalid or expired token (IP: ${req.ip})`);
+            return res.status(401).json({
+                success: false,
+                error: 'Session token invalid or expired. Please log in again.'
+            });
+        }
+
+        // [SECURITY] Company always comes from the verified token — the ?company= query param is ignored
+        const companyName = cdSession.companyName;
 
         const normalizedCompany = companyName.trim().toLowerCase();
         const result = [];
