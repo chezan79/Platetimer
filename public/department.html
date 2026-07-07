@@ -1,512 +1,564 @@
 <!DOCTYPE html>
 <html lang="it">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Reparto - PlateTimer</title>
-    <link rel="stylesheet" href="style.css">
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); min-height: 100vh; display: flex; flex-direction: column; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #fff; }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PlateTimer</title>
+<style>
+:root {
+  --bg:        #0d0d1a;
+  --panel:     #12122a;
+  --card:      #1a1a35;
+  --card-h:    #1f1f40;
+  --border:    rgba(255,255,255,0.07);
+  --border-l:  rgba(255,255,255,0.13);
+  --text:      #e2e2f0;
+  --muted:     rgba(255,255,255,0.35);
+  --accent:    #6366f1;
+  --accent2:   #818cf8;
+  --warn:      #f59e0b;
+  --danger:    #ef4444;
+  --ok:        #22c55e;
+  --hdr:       56px;
+  --lw:        310px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,sans-serif;min-height:100vh;overflow-x:hidden;}
 
-        /* Header */
-        .page-header { background: rgba(255,255,255,0.06); backdrop-filter: blur(10px); padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.08); flex-wrap: wrap; gap: 8px; }
-        .dept-title { font-size: 20px; font-weight: 700; color: #fff; }
-        .company-sub { font-size: 12px; color: rgba(255,255,255,0.5); margin-top: 2px; }
-        .header-actions { display: flex; gap: 10px; align-items: center; }
-        .btn-home { padding: 7px 14px; background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; cursor: pointer; font-size: 13px; }
-        .btn-home:hover { background: rgba(255,255,255,0.18); }
-        #conn-status { font-size: 12px; padding: 5px 10px; border-radius: 12px; background: rgba(255,100,100,0.2); color: #ff6b6b; }
-        #conn-status.connected { background: rgba(40,167,69,0.2); color: #5cb85c; }
+/* ── HEADER ─────────────────────────────────── */
+.hdr{position:fixed;top:0;left:0;right:0;height:var(--hdr);
+  background:rgba(13,13,26,.96);backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:12px;padding:0 16px;z-index:200;}
+.hdr-brand{font-size:15px;font-weight:700;color:var(--accent2);white-space:nowrap;}
+.hdr-sep{width:1px;height:20px;background:var(--border-l);flex-shrink:0;}
+.hdr-dept{font-size:15px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;}
+.conn-badge{font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px;
+  background:rgba(239,68,68,.15);color:var(--danger);border:1px solid rgba(239,68,68,.3);
+  white-space:nowrap;flex-shrink:0;}
+.conn-badge.ok{background:rgba(34,197,94,.12);color:var(--ok);border-color:rgba(34,197,94,.3);}
+.hdr-btn{padding:7px 14px;border:1px solid var(--border-l);border-radius:7px;
+  background:rgba(255,255,255,.06);color:var(--text);font-size:13px;cursor:pointer;
+  white-space:nowrap;flex-shrink:0;transition:background .15s;}
+.hdr-btn:hover{background:rgba(255,255,255,.12);}
+.hdr-btn.danger{border-color:rgba(239,68,68,.3);color:var(--danger);}
+.hdr-btn.danger:hover{background:rgba(239,68,68,.1);}
 
-        /* Main layout */
-        .main-layout { display: flex; flex: 1; gap: 0; min-height: 0; }
+/* ── LEFT PANEL ─────────────────────────────── */
+.lp{position:fixed;top:var(--hdr);left:0;bottom:0;width:var(--lw);
+  background:var(--panel);border-right:1px solid var(--border);
+  overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:14px;}
+.lp-title{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;
+  color:var(--muted);}
+/* Table display */
+.tbl-disp{background:var(--card);border:2px solid var(--border-l);border-radius:10px;
+  padding:12px 16px;text-align:center;font-size:34px;font-weight:800;letter-spacing:3px;
+  min-height:62px;display:flex;align-items:center;justify-content:center;color:var(--text);}
+.tbl-disp.empty{font-size:13px;font-weight:400;color:var(--muted);letter-spacing:0;}
+/* Numpad */
+.numpad{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
+.nb{padding:13px 0;background:var(--card);border:1px solid var(--border);border-radius:8px;
+  color:var(--text);font-size:17px;font-weight:600;cursor:pointer;text-align:center;
+  transition:background .12s;user-select:none;}
+.nb:active{background:var(--card-h);}
+.nb:hover{background:var(--card-h);}
+.nb.del{font-size:12px;color:var(--muted);}
+.nb.clr{font-size:12px;color:var(--danger);border-color:rgba(239,68,68,.2);}
+/* Duration */
+.dur-wrap{display:flex;flex-wrap:wrap;gap:5px;}
+.db{padding:7px 10px;background:var(--card);border:1.5px solid var(--border);border-radius:7px;
+  color:var(--muted);font-size:13px;cursor:pointer;transition:all .12s;user-select:none;}
+.db:hover{border-color:var(--border-l);color:var(--text);}
+.db.sel{background:rgba(99,102,241,.2);border-color:var(--accent);color:var(--accent2);font-weight:700;}
+/* Destinations */
+.dest-list{display:flex;flex-direction:column;gap:5px;max-height:180px;overflow-y:auto;}
+.di{display:flex;align-items:center;gap:10px;padding:9px 12px;
+  background:var(--card);border:1.5px solid var(--border);border-radius:8px;cursor:pointer;
+  transition:all .12s;user-select:none;}
+.di:hover{border-color:var(--border-l);}
+.di.sel{background:rgba(99,102,241,.15);border-color:var(--accent);}
+.di label{cursor:pointer;font-size:14px;font-weight:500;flex:1;pointer-events:none;}
+.di input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px;}
+.no-dests{font-size:13px;color:var(--muted);padding:8px 0;}
+/* Send button */
+.send-btn{width:100%;padding:14px;background:linear-gradient(135deg,#6366f1,#8b5cf6);
+  border:none;border-radius:10px;color:#fff;font-size:15px;font-weight:700;cursor:pointer;
+  transition:all .2s;letter-spacing:.3px;}
+.send-btn:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 6px 20px rgba(99,102,241,.35);}
+.send-btn:disabled{opacity:.3;cursor:not-allowed;transform:none;}
 
-        /* Left control panel */
-        .control-panel { width: 300px; min-width: 260px; background: rgba(255,255,255,0.04); border-right: 1px solid rgba(255,255,255,0.08); padding: 18px; display: flex; flex-direction: column; gap: 16px; overflow-y: auto; }
-        .panel-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: rgba(255,255,255,0.4); margin-bottom: 8px; }
+/* ── RIGHT AREA ─────────────────────────────── */
+.ra{margin-left:var(--lw);padding:calc(var(--hdr) + 20px) 24px 24px;}
+.ra-hdr{display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap;}
+.ra-title{font-size:17px;font-weight:700;color:var(--text);}
+.ra-count{font-size:12px;font-weight:700;padding:4px 12px;border-radius:20px;
+  background:rgba(99,102,241,.15);color:var(--accent2);border:1px solid rgba(99,102,241,.3);}
+/* Cards */
+.cd-list{display:flex;flex-direction:column;gap:12px;}
+.empty-state{text-align:center;padding:60px 20px;color:var(--muted);font-size:15px;line-height:1.7;}
+/* Countdown card */
+.cdc{background:var(--card);border:1.5px solid var(--border);border-radius:12px;
+  padding:16px 18px;transition:border-color .3s;}
+.cdc.warn{border-color:rgba(245,158,11,.4);background:rgba(245,158,11,.04);}
+.cdc.crit{border-color:rgba(239,68,68,.5);background:rgba(239,68,68,.05);}
+.cdc.crit{animation:pulse-border 1.2s ease-in-out infinite;}
+@keyframes pulse-border{0%,100%{border-color:rgba(239,68,68,.5);}50%{border-color:rgba(239,68,68,.9);}}
+.cdc-top{display:flex;align-items:center;gap:12px;margin-bottom:10px;}
+.cdc-tbl{display:flex;flex-direction:column;align-items:center;min-width:60px;}
+.cdc-tbl-lbl{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);}
+.cdc-tbl-num{font-size:28px;font-weight:800;color:var(--text);line-height:1;}
+.cdc-time{flex:1;font-size:38px;font-weight:300;color:var(--text);text-align:center;
+  font-variant-numeric:tabular-nums;}
+.cdc-time.warn{color:var(--warn);}
+.cdc-time.crit{color:var(--danger);}
+.cdc-cancel{padding:6px 10px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.25);
+  border-radius:7px;color:var(--danger);font-size:14px;cursor:pointer;flex-shrink:0;
+  transition:all .15s;}
+.cdc-cancel:hover{background:rgba(239,68,68,.2);}
+/* Progress bar */
+.cdc-prog{height:4px;background:rgba(255,255,255,.07);border-radius:4px;overflow:hidden;margin-bottom:10px;}
+.cdc-prog-fill{height:100%;border-radius:4px;background:var(--accent);transition:width .9s linear;}
+.cdc-prog-fill.warn{background:var(--warn);}
+.cdc-prog-fill.crit{background:var(--danger);}
+/* Meta row */
+.cdc-meta{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;}
+.cdc-badges{display:flex;gap:6px;flex-wrap:wrap;}
+.cdc-badge{font-size:11px;font-weight:600;padding:3px 9px;border-radius:12px;
+  background:rgba(99,102,241,.15);color:var(--accent2);border:1px solid rgba(99,102,241,.25);}
+.cdc-badge.recv{background:rgba(34,197,94,.1);color:var(--ok);border-color:rgba(34,197,94,.25);}
+.cdc-started{font-size:11px;color:var(--muted);}
 
-        /* Table number */
-        .table-display { background: rgba(255,255,255,0.08); border-radius: 10px; padding: 14px; text-align: center; font-size: 32px; font-weight: 700; letter-spacing: 2px; color: #fff; min-height: 60px; border: 2px solid rgba(255,255,255,0.1); }
-        .table-display.empty { color: rgba(255,255,255,0.25); font-size: 16px; font-weight: 400; display: flex; align-items: center; justify-content: center; }
+/* ── DISCONNECTED OVERLAY ───────────────────── */
+.dc-bar{position:fixed;top:var(--hdr);left:0;right:0;background:rgba(239,68,68,.95);
+  color:#fff;text-align:center;padding:8px;font-size:13px;font-weight:600;z-index:150;
+  display:none;}
 
-        /* Numpad */
-        .numpad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
-        .num-btn { padding: 12px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; color: #fff; font-size: 18px; font-weight: 600; cursor: pointer; text-align: center; transition: all 0.15s; user-select: none; }
-        .num-btn:active { transform: scale(0.94); }
-        .num-btn:hover { background: rgba(255,255,255,0.14); }
-        .num-btn.clear { color: #ff6b6b; background: rgba(255,107,107,0.1); border-color: rgba(255,107,107,0.2); font-size: 13px; }
-
-        /* Duration buttons */
-        .duration-grid { display: flex; flex-wrap: wrap; gap: 6px; }
-        .dur-btn { padding: 8px 12px; background: rgba(255,255,255,0.07); border: 1.5px solid rgba(255,255,255,0.1); border-radius: 7px; color: rgba(255,255,255,0.7); font-size: 13px; cursor: pointer; transition: all 0.15s; }
-        .dur-btn:hover { background: rgba(255,255,255,0.12); color: #fff; }
-        .dur-btn.selected { background: linear-gradient(135deg, #667eea, #764ba2); border-color: transparent; color: #fff; font-weight: 600; }
-
-        /* Destination checkboxes */
-        .dest-list { display: flex; flex-direction: column; gap: 6px; max-height: 180px; overflow-y: auto; }
-        .dest-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; background: rgba(255,255,255,0.05); border: 1.5px solid rgba(255,255,255,0.08); border-radius: 8px; cursor: pointer; transition: all 0.15s; user-select: none; }
-        .dest-item:hover { background: rgba(255,255,255,0.09); }
-        .dest-item.selected { background: rgba(102,126,234,0.25); border-color: rgba(102,126,234,0.5); }
-        .dest-item label { cursor: pointer; font-size: 14px; font-weight: 500; flex: 1; }
-        .dest-check { width: 16px; height: 16px; accent-color: #667eea; }
-
-        /* Send button */
-        .send-btn { width: 100%; padding: 14px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; border-radius: 10px; color: white; font-size: 15px; font-weight: 700; cursor: pointer; transition: all 0.2s; letter-spacing: 0.3px; }
-        .send-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(102,126,234,0.4); }
-        .send-btn:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
-
-        /* Right countdown area */
-        .countdown-area { flex: 1; padding: 18px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
-        .area-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
-        .area-title { font-size: 14px; font-weight: 700; color: rgba(255,255,255,0.6); text-transform: uppercase; letter-spacing: 0.8px; }
-        .cd-count { font-size: 12px; background: rgba(255,255,255,0.1); padding: 4px 10px; border-radius: 10px; color: rgba(255,255,255,0.6); }
-
-        /* Countdown card */
-        .cd-card { background: rgba(255,255,255,0.06); border: 1.5px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 16px 20px; display: flex; align-items: center; gap: 16px; transition: border-color 0.3s; }
-        .cd-card.warning { border-color: rgba(255,193,7,0.5); background: rgba(255,193,7,0.07); }
-        .cd-card.critical { border-color: rgba(255,107,107,0.6); background: rgba(255,107,107,0.1); animation: pulse 1.2s ease-in-out infinite; }
-        @keyframes pulse { 0%,100% { border-color: rgba(255,107,107,0.6); } 50% { border-color: rgba(255,107,107,1); } }
-        .cd-table { font-size: 26px; font-weight: 800; color: #fff; min-width: 55px; text-align: center; }
-        .cd-table span { display: block; font-size: 10px; font-weight: 400; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 0.6px; }
-        .cd-time { font-size: 36px; font-weight: 300; color: #fff; flex: 1; text-align: center; font-variant-numeric: tabular-nums; }
-        .cd-time.warning { color: #ffc107; }
-        .cd-time.critical { color: #ff6b6b; }
-        .cd-started { font-size: 11px; color: rgba(255,255,255,0.35); text-align: right; min-width: 50px; }
-
-        .empty-cd { text-align: center; padding: 60px 20px; color: rgba(255,255,255,0.25); font-size: 15px; }
-
-        /* Voice message panel */
-        .voice-panel { position: fixed; bottom: 20px; right: 20px; background: #fff; border-radius: 12px; padding: 16px; box-shadow: 0 8px 30px rgba(0,0,0,0.3); min-width: 260px; z-index: 200; display: none; }
-        .voice-panel-title { font-size: 14px; font-weight: 700; color: #333; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
-        .voice-close { background: none; border: none; font-size: 20px; color: #999; cursor: pointer; line-height: 1; }
-        .voice-toggle-float { position: fixed; bottom: 20px; right: 20px; z-index: 199; width: 52px; height: 52px; border-radius: 50%; background: linear-gradient(135deg, #28a745, #20c997); border: none; color: white; font-size: 22px; cursor: pointer; box-shadow: 0 4px 14px rgba(40,167,69,0.4); display: flex; align-items: center; justify-content: center; }
-        .voice-section { margin-bottom: 10px; }
-        .voice-section label { display: block; font-size: 12px; color: #777; margin-bottom: 5px; }
-        .voice-dest-list { display: flex; flex-direction: column; gap: 5px; max-height: 120px; overflow-y: auto; }
-        .voice-dest-item { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border: 1px solid #eee; border-radius: 6px; cursor: pointer; font-size: 13px; }
-        .voice-dest-item.selected { background: #e8f4fd; border-color: #2196f3; }
-        .voice-record-btn { width: 100%; padding: 10px; background: linear-gradient(135deg, #e74c3c, #c0392b); color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; margin-top: 8px; }
-        .voice-record-btn.recording { background: linear-gradient(135deg, #27ae60, #229954); animation: pulse 1s ease-in-out infinite; }
-        .voice-status { font-size: 11px; color: #888; text-align: center; margin-top: 6px; min-height: 16px; }
-        .voice-msg-list { max-height: 140px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
-        .voice-msg-item { background: #f8f9fa; border-radius: 8px; padding: 8px 10px; font-size: 12px; }
-        .voice-msg-from { font-weight: 600; color: #333; }
-        .voice-msg-time { color: #999; font-size: 11px; float: right; }
-
-        @media (max-width: 640px) {
-            .main-layout { flex-direction: column; }
-            .control-panel { width: 100%; border-right: none; border-bottom: 1px solid rgba(255,255,255,0.08); }
-        }
-    </style>
+/* ── RESPONSIVE ─────────────────────────────── */
+@media(max-width:700px){
+  :root{--lw:100%;}
+  .lp{position:relative;top:auto;width:100%;border-right:none;border-bottom:1px solid var(--border);}
+  .ra{margin-left:0;padding-top:20px;}
+  .hdr-dept{max-width:120px;}
+}
+</style>
 </head>
 <body>
-    <div class="page-header">
-        <div>
-            <div id="dept-title" class="dept-title">Caricamento...</div>
-            <div id="company-sub" class="company-sub"></div>
-        </div>
-        <div class="header-actions">
-            <span id="conn-status">Disconnesso</span>
-            <button class="btn-home" onclick="window.location.href='home.html'">Home</button>
-        </div>
+
+<!-- Disconnected banner -->
+<div class="dc-bar" id="dc-bar">⚠️ WebSocket disconnesso — le modifiche non verranno sincronizzate</div>
+
+<!-- Header -->
+<header class="hdr">
+  <span class="hdr-brand" id="hdr-brand">PlateTimer</span>
+  <div class="hdr-sep"></div>
+  <span class="hdr-dept" id="hdr-dept">Caricamento...</span>
+  <span class="conn-badge" id="conn-badge">Disconnesso</span>
+  <button class="hdr-btn" onclick="window.location.href='home.html'">Home</button>
+  <button class="hdr-btn danger" onclick="window.location.href='index.html'">Esci</button>
+</header>
+
+<!-- Left panel: send countdown -->
+<aside class="lp">
+  <div class="lp-title">Nuovo Countdown</div>
+
+  <!-- Table number -->
+  <div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">NUMERO TAVOLO</div>
+    <div id="tbl-disp" class="tbl-disp empty">—</div>
+  </div>
+
+  <!-- Numpad -->
+  <div class="numpad">
+    <div class="nb" onclick="npPress('1')">1</div>
+    <div class="nb" onclick="npPress('2')">2</div>
+    <div class="nb" onclick="npPress('3')">3</div>
+    <div class="nb" onclick="npPress('4')">4</div>
+    <div class="nb" onclick="npPress('5')">5</div>
+    <div class="nb" onclick="npPress('6')">6</div>
+    <div class="nb" onclick="npPress('7')">7</div>
+    <div class="nb" onclick="npPress('8')">8</div>
+    <div class="nb" onclick="npPress('9')">9</div>
+    <div class="nb clr" onclick="npClear()">Canc</div>
+    <div class="nb" onclick="npPress('0')">0</div>
+    <div class="nb del" onclick="npDel()">⌫ Del</div>
+  </div>
+
+  <!-- Duration -->
+  <div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">DURATA</div>
+    <div class="dur-wrap" id="dur-wrap">
+      <div class="db" onclick="selectDur(this,4)">4'</div>
+      <div class="db" onclick="selectDur(this,5)">5'</div>
+      <div class="db" onclick="selectDur(this,6)">6'</div>
+      <div class="db" onclick="selectDur(this,7)">7'</div>
+      <div class="db" onclick="selectDur(this,8)">8'</div>
+      <div class="db" onclick="selectDur(this,9)">9'</div>
+      <div class="db" onclick="selectDur(this,10)">10'</div>
+      <div class="db" onclick="selectDur(this,12)">12'</div>
+      <div class="db" onclick="selectDur(this,15)">15'</div>
     </div>
+  </div>
 
-    <div class="main-layout">
-        <!-- Left: Send countdown -->
-        <div class="control-panel">
-            <div>
-                <div class="panel-label">Numero Tavolo</div>
-                <div id="table-display" class="table-display empty">Inserisci tavolo</div>
-            </div>
-
-            <div class="numpad">
-                <button class="num-btn" onclick="numPress('1')">1</button>
-                <button class="num-btn" onclick="numPress('2')">2</button>
-                <button class="num-btn" onclick="numPress('3')">3</button>
-                <button class="num-btn" onclick="numPress('4')">4</button>
-                <button class="num-btn" onclick="numPress('5')">5</button>
-                <button class="num-btn" onclick="numPress('6')">6</button>
-                <button class="num-btn" onclick="numPress('7')">7</button>
-                <button class="num-btn" onclick="numPress('8')">8</button>
-                <button class="num-btn" onclick="numPress('9')">9</button>
-                <button class="num-btn clear" onclick="numClear()">Canc</button>
-                <button class="num-btn" onclick="numPress('0')">0</button>
-                <button class="num-btn clear" onclick="numDel()">Del</button>
-            </div>
-
-            <div>
-                <div class="panel-label">Durata</div>
-                <div class="duration-grid" id="duration-grid">
-                    <button class="dur-btn" data-min="4" onclick="selectDuration(this,4)">4'</button>
-                    <button class="dur-btn" data-min="5" onclick="selectDuration(this,5)">5'</button>
-                    <button class="dur-btn" data-min="6" onclick="selectDuration(this,6)">6'</button>
-                    <button class="dur-btn" data-min="7" onclick="selectDuration(this,7)">7'</button>
-                    <button class="dur-btn" data-min="8" onclick="selectDuration(this,8)">8'</button>
-                    <button class="dur-btn" data-min="9" onclick="selectDuration(this,9)">9'</button>
-                    <button class="dur-btn" data-min="10" onclick="selectDuration(this,10)">10'</button>
-                    <button class="dur-btn" data-min="12" onclick="selectDuration(this,12)">12'</button>
-                    <button class="dur-btn" data-min="15" onclick="selectDuration(this,15)">15'</button>
-                </div>
-            </div>
-
-            <div>
-                <div class="panel-label">Invia A</div>
-                <div id="dest-list" class="dest-list">
-                    <div style="color:rgba(255,255,255,0.3);font-size:13px;">Caricamento reparti...</div>
-                </div>
-            </div>
-
-            <button id="send-btn" class="send-btn" onclick="sendCountdown()" disabled>Avvia Countdown</button>
-        </div>
-
-        <!-- Right: Incoming countdowns -->
-        <div class="countdown-area">
-            <div class="area-header">
-                <span class="area-title" id="area-title">Countdown per questo reparto</span>
-                <span id="cd-count" class="cd-count">0</span>
-            </div>
-            <div id="cd-list"></div>
-        </div>
+  <!-- Destinations -->
+  <div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">INVIA A</div>
+    <div class="dest-list" id="dest-list">
+      <div class="no-dests">Caricamento reparti...</div>
     </div>
+  </div>
 
-    <!-- Floating voice toggle -->
-    <button class="voice-toggle-float" id="voice-float-btn" onclick="toggleVoicePanel()" title="Messaggi Vocali">M</button>
+  <button id="send-btn" class="send-btn" onclick="sendCountdown()" disabled>
+    Avvia Countdown
+  </button>
+</aside>
 
-    <!-- Voice message panel -->
-    <div class="voice-panel" id="voice-panel">
-        <div class="voice-panel-title">
-            Messaggi Vocali
-            <button class="voice-close" onclick="toggleVoicePanel()">×</button>
+<!-- Right area: active countdowns -->
+<main class="ra">
+  <div class="ra-hdr">
+    <span class="ra-title" id="ra-title">Countdown attivi</span>
+    <span class="ra-count" id="ra-count">0</span>
+  </div>
+  <div class="cd-list" id="cd-list">
+    <div class="empty-state">Nessun countdown attivo.</div>
+  </div>
+</main>
+
+<script src="js/ws-auth.js"></script>
+<script>
+'use strict';
+
+// ── Bootstrap ───────────────────────────────────────────────────────────────
+const params   = new URLSearchParams(location.search);
+const myDeptId = params.get('id');
+if (!myDeptId) { location.href = 'home.html'; }
+
+const token = WsAuth.getStoredToken();
+if (!token) { alert('Sessione scaduta. Effettua il login.'); location.href = 'index.html'; }
+
+// ── State ────────────────────────────────────────────────────────────────────
+let myDeptName    = '';
+let departmentMap = {};           // id → { id, name, active }
+let selectedDests = new Set();
+let selectedDur   = 0;            // seconds
+let tableInput    = '';
+// Countdown map: tableNumber → { tableNumber, timeRemaining, initialDuration, startTime,
+//                                 startedAt, destinations, direction }
+// direction: 'sent' | 'received'
+let countdowns    = new Map();
+let ws            = null;
+let wsConnected   = false;
+let tickTimer     = null;
+
+// ── Utility ──────────────────────────────────────────────────────────────────
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function fmt(s){
+  s = Math.max(0, s);
+  return Math.floor(s/60) + ':' + (s%60).toString().padStart(2,'0');
+}
+function level(s){ return s < 120 ? 'crit' : s < 300 ? 'warn' : ''; }
+function nowTime(){ return new Date().toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'}); }
+
+// ── API: load departments ─────────────────────────────────────────────────────
+async function loadDepts(){
+  try {
+    const r = await fetch('/api/departments',{ headers:{ Authorization:`Bearer ${token}` } });
+    const d = await r.json();
+    if(!d.success){ alert('Errore caricamento reparti.'); location.href='home.html'; return; }
+
+    departmentMap = {};
+    (d.departments||[]).forEach(dep => { departmentMap[dep.id] = dep; });
+
+    const mine = departmentMap[myDeptId];
+    if(!mine){ alert('Reparto non trovato.'); location.href='home.html'; return; }
+
+    myDeptName = mine.name;
+    document.title = myDeptName + ' — PlateTimer';
+    document.getElementById('hdr-dept').textContent = myDeptName;
+    document.getElementById('ra-title').textContent = `Countdown attivi per ${myDeptName}`;
+
+    // Company display name — the best we have client-side without exposing a /me endpoint
+    const stored = localStorage.getItem('userCompany');
+    if(stored) document.getElementById('hdr-brand').textContent = stored.charAt(0).toUpperCase()+stored.slice(1);
+
+    buildDestList();
+  } catch(e){
+    console.error('loadDepts:', e);
+    alert('Errore di rete. Riprova.');
+    location.href = 'home.html';
+  }
+}
+
+function buildDestList(){
+  const others = Object.values(departmentMap).filter(d => d.active && d.id !== myDeptId);
+  const el = document.getElementById('dest-list');
+  if(!others.length){
+    el.innerHTML = '<div class="no-dests">Nessun altro reparto attivo.</div>';
+    return;
+  }
+  el.innerHTML = others.map(d => `
+    <div class="di" id="di-${d.id}" onclick="toggleDest('${d.id}')">
+      <input type="checkbox" id="chk-${d.id}" onclick="event.stopPropagation()">
+      <label for="chk-${d.id}">${esc(d.name)}</label>
+    </div>`).join('');
+  // Sync checkbox clicks that bubble through the label
+  others.forEach(d => {
+    document.getElementById(`chk-${d.id}`).addEventListener('change', e => {
+      e.stopPropagation();
+      toggleDestById(d.id, e.target.checked);
+    });
+  });
+}
+
+// ── Numpad ────────────────────────────────────────────────────────────────────
+function npPress(d){
+  if(tableInput.length >= 3) return;
+  tableInput += d;
+  updateTblDisp();
+}
+function npClear(){ tableInput = ''; updateTblDisp(); }
+function npDel(){ tableInput = tableInput.slice(0,-1); updateTblDisp(); }
+function updateTblDisp(){
+  const el = document.getElementById('tbl-disp');
+  if(tableInput){ el.textContent = tableInput; el.classList.remove('empty'); }
+  else { el.textContent = '—'; el.classList.add('empty'); }
+  refreshSendBtn();
+}
+
+// ── Duration ──────────────────────────────────────────────────────────────────
+function selectDur(btn, mins){
+  document.querySelectorAll('.db').forEach(b => b.classList.remove('sel'));
+  btn.classList.add('sel');
+  selectedDur = mins * 60;
+  refreshSendBtn();
+}
+
+// ── Destinations ──────────────────────────────────────────────────────────────
+function toggleDest(id){
+  const checked = selectedDests.has(id);
+  toggleDestById(id, !checked);
+}
+function toggleDestById(id, on){
+  if(on) selectedDests.add(id); else selectedDests.delete(id);
+  const item = document.getElementById(`di-${id}`);
+  const chk  = document.getElementById(`chk-${id}`);
+  if(item) item.classList.toggle('sel', on);
+  if(chk)  chk.checked = on;
+  refreshSendBtn();
+}
+function refreshSendBtn(){
+  const ok = tableInput.length > 0 && selectedDur > 0 && selectedDests.size > 0;
+  document.getElementById('send-btn').disabled = !ok;
+}
+
+// ── Send countdown ─────────────────────────────────────────────────────────────
+function sendCountdown(){
+  if(!wsConnected){ alert('WebSocket non connesso. Riprova.'); return; }
+  if(!tableInput || selectedDur <= 0 || selectedDests.size === 0) return;
+
+  const tableNum   = tableInput;
+  const duration   = selectedDur;
+  const dests      = Array.from(selectedDests);
+  const startedAt  = nowTime();
+
+  // ► Immediately add to local state (sender sees their own countdown right away)
+  const existing = countdowns.get(tableNum);
+  if(existing && existing.direction === 'sent'){
+    // Update existing sent countdown for same table
+    existing.timeRemaining  = duration;
+    existing.initialDuration= duration;
+    existing.startTime      = Date.now();
+    existing.startedAt      = startedAt;
+    existing.destinations   = dests;
+  } else {
+    countdowns.set(tableNum, {
+      tableNumber:     tableNum,
+      timeRemaining:   duration,
+      initialDuration: duration,
+      startTime:       Date.now(),
+      startedAt,
+      destinations:    dests,
+      direction:       'sent'
+    });
+  }
+  renderCards();
+
+  // ► Send one WS message per destination
+  dests.forEach(destId => {
+    ws.send(JSON.stringify({
+      action:      'startCountdown',
+      tableNumber: tableNum,
+      timeRemaining: duration,
+      destination: destId
+    }));
+  });
+
+  // Reset form
+  tableInput   = '';
+  selectedDur  = 0;
+  selectedDests.clear();
+  document.querySelectorAll('.di').forEach(el => el.classList.remove('sel'));
+  document.querySelectorAll('.di input[type=checkbox]').forEach(el => el.checked = false);
+  document.querySelectorAll('.db').forEach(el => el.classList.remove('sel'));
+  updateTblDisp();
+  refreshSendBtn();
+}
+
+// ── Cancel countdown ───────────────────────────────────────────────────────────
+function cancelCountdown(tableNum){
+  if(!confirm(`Annullare il countdown per il tavolo ${tableNum}?`)) return;
+  countdowns.delete(tableNum);
+  renderCards();
+  if(wsConnected){
+    ws.send(JSON.stringify({ action:'deleteCountdown', tableNumber: tableNum }));
+  }
+}
+
+// ── WebSocket ──────────────────────────────────────────────────────────────────
+function connectWS(){
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(`${proto}//${location.host}/ws`);
+
+  ws.onopen = () => {
+    wsConnected = true;
+    setConnBadge(true);
+    WsAuth.joinRoom(ws, myDeptId, () => {
+      console.log('[dept] joined room + page', myDeptId);
+    });
+  };
+
+  ws.onclose = () => {
+    wsConnected = false;
+    setConnBadge(false);
+    setTimeout(connectWS, 3500);
+  };
+
+  ws.onerror = () => ws.close();
+
+  ws.onmessage = ev => {
+    let data;
+    try { data = JSON.parse(ev.data); } catch{ return; }
+    if(WsAuth.handleServerError(data)) return;
+
+    if(data.action === 'startCountdown'){
+      handleIncomingCountdown(data);
+    } else if(data.action === 'deleteCountdown'){
+      countdowns.delete(String(data.tableNumber));
+      renderCards();
+    }
+  };
+}
+
+function handleIncomingCountdown(data){
+  const tableNum = String(data.tableNumber);
+  const dest     = data.destination;
+
+  // Case 1: this page is the destination → show as received
+  if(dest === myDeptId){
+    const ex = countdowns.get(tableNum);
+    if(ex){
+      // Update time on existing entry (keep direction)
+      ex.timeRemaining   = data.timeRemaining;
+      ex.initialDuration = data.timeRemaining;
+      ex.startTime       = Date.now();
+    } else {
+      countdowns.set(tableNum, {
+        tableNumber:     tableNum,
+        timeRemaining:   data.timeRemaining,
+        initialDuration: data.timeRemaining,
+        startTime:       Date.now(),
+        startedAt:       nowTime(),
+        destinations:    [],         // we don't know the full dest list from this message
+        direction:       'received'
+      });
+    }
+    renderCards();
+    return;
+  }
+
+  // Case 2: this page sent it (echo from broadcast) — already in local state, just confirm/update
+  const ex = countdowns.get(tableNum);
+  if(ex && ex.direction === 'sent'){
+    // Confirm it went through — add this dest to the stored destinations if not present
+    if(dest && !ex.destinations.includes(dest)) ex.destinations.push(dest);
+    renderCards();
+  }
+}
+
+function setConnBadge(ok){
+  const b = document.getElementById('conn-badge');
+  b.textContent  = ok ? 'Connesso' : 'Disconnesso';
+  b.className    = 'conn-badge' + (ok ? ' ok' : '');
+  document.getElementById('dc-bar').style.display = ok ? 'none' : 'block';
+}
+
+// ── Render ─────────────────────────────────────────────────────────────────────
+function renderCards(){
+  const list = document.getElementById('cd-list');
+  document.getElementById('ra-count').textContent = countdowns.size;
+
+  if(!countdowns.size){
+    list.innerHTML = '<div class="empty-state">Nessun countdown attivo per questo reparto.</div>';
+    return;
+  }
+
+  const sorted = Array.from(countdowns.values()).sort((a,b) => a.timeRemaining - b.timeRemaining);
+
+  list.innerHTML = sorted.map(cd => {
+    const lv  = level(cd.timeRemaining);
+    const pct = cd.initialDuration > 0
+      ? Math.max(0, Math.round((cd.timeRemaining / cd.initialDuration) * 100))
+      : 0;
+    const sentBadges = (cd.direction === 'sent' && cd.destinations.length)
+      ? cd.destinations.map(id => {
+          const name = departmentMap[id] ? esc(departmentMap[id].name) : esc(id);
+          return `<span class="cdc-badge">${name}</span>`;
+        }).join('')
+      : '<span class="cdc-badge recv">Ricevuto</span>';
+
+    return `
+      <div class="cdc ${lv}">
+        <div class="cdc-top">
+          <div class="cdc-tbl">
+            <span class="cdc-tbl-lbl">Tavolo</span>
+            <span class="cdc-tbl-num">${esc(cd.tableNumber)}</span>
+          </div>
+          <div class="cdc-time ${lv}">${fmt(cd.timeRemaining)}</div>
+          <button class="cdc-cancel" onclick="cancelCountdown('${esc(cd.tableNumber)}')" title="Annulla">✕</button>
         </div>
-        <div class="voice-section">
-            <label>Invia a:</label>
-            <div class="voice-dest-list" id="voice-dest-list"></div>
+        <div class="cdc-prog">
+          <div class="cdc-prog-fill ${lv}" style="width:${pct}%"></div>
         </div>
-        <button class="voice-record-btn" id="voice-record-btn" onclick="toggleRecording()">Tieni premuto per registrare</button>
-        <div class="voice-status" id="voice-status"></div>
-        <div class="voice-msg-list" id="voice-msg-list"></div>
-    </div>
+        <div class="cdc-meta">
+          <div class="cdc-badges">${sentBadges}</div>
+          <div class="cdc-started">Avviato: ${esc(cd.startedAt)}</div>
+        </div>
+      </div>`;
+  }).join('');
+}
 
-    <script src="js/ws-auth.js"></script>
-    <script>
-        // ===== Init =====
-        const urlParams = new URLSearchParams(window.location.search);
-        const myDeptId = urlParams.get('id');
-        if (!myDeptId) { alert('Reparto non specificato.'); window.location.href = 'home.html'; }
+// ── Tick ───────────────────────────────────────────────────────────────────────
+function tick(){
+  const now = Date.now();
+  let changed = false;
+  for(const [key, cd] of countdowns){
+    const elapsed = Math.floor((now - cd.startTime) / 1000);
+    const rem     = Math.max(0, cd.initialDuration - elapsed);
+    if(rem !== cd.timeRemaining){ cd.timeRemaining = rem; changed = true; }
+    if(rem === 0){ countdowns.delete(key); changed = true; }
+  }
+  if(changed) renderCards();
+}
 
-        const token = WsAuth.getStoredToken();
-        if (!token) { alert('Sessione scaduta. Effettua nuovamente il login.'); window.location.href = 'index.html'; }
+// ── Boot ───────────────────────────────────────────────────────────────────────
+loadDepts().then(() => {
+  connectWS();
+  tickTimer = setInterval(tick, 1000);
+});
 
-        const companyName = localStorage.getItem('userCompany') || '';
-        document.getElementById('company-sub').textContent = companyName;
-
-        let myDeptName = '';
-        let allDepts = [];
-        let selectedDests = new Set();
-        let selectedDuration = 0;
-        let tableInput = '';
-        let countdowns = new Map(); // tableKey → { timeRemaining, initialDuration, startTime, startedAt }
-        let ws = null;
-        let tickInterval = null;
-
-        // ===== Load departments =====
-        async function loadDepts() {
-            try {
-                const res = await fetch('/api/departments', { headers: { 'Authorization': `Bearer ${token}` } });
-                const data = await res.json();
-                if (!data.success) { window.location.href = 'home.html'; return; }
-                allDepts = data.departments || [];
-                const mine = allDepts.find(d => d.id === myDeptId);
-                if (!mine) { alert('Reparto non trovato.'); window.location.href = 'home.html'; return; }
-                myDeptName = mine.name;
-                document.getElementById('dept-title').textContent = myDeptName;
-                document.getElementById('area-title').textContent = `Countdown per ${myDeptName}`;
-                document.title = myDeptName + ' - PlateTimer';
-                buildDestList();
-                buildVoiceDestList();
-            } catch (e) { console.error('Error loading depts:', e); }
-        }
-
-        function buildDestList() {
-            const others = allDepts.filter(d => d.active && d.id !== myDeptId);
-            const container = document.getElementById('dest-list');
-            if (others.length === 0) {
-                container.innerHTML = '<div style="color:rgba(255,255,255,0.35);font-size:13px;">Nessun altro reparto attivo.</div>';
-                return;
-            }
-            container.innerHTML = others.map(d => `
-                <div class="dest-item" id="dest-${d.id}" onclick="toggleDest('${d.id}')">
-                    <input type="checkbox" class="dest-check" id="chk-${d.id}">
-                    <label for="chk-${d.id}">${escHtml(d.name)}</label>
-                </div>
-            `).join('');
-        }
-
-        function buildVoiceDestList() {
-            const others = allDepts.filter(d => d.active && d.id !== myDeptId);
-            const container = document.getElementById('voice-dest-list');
-            container.innerHTML = others.map(d => `
-                <div class="voice-dest-item" id="vdest-${d.id}" onclick="toggleVoiceDest('${d.id}')">
-                    <input type="checkbox" id="vchk-${d.id}"> ${escHtml(d.name)}
-                </div>
-            `).join('');
-        }
-
-        // ===== Numpad =====
-        function numPress(digit) {
-            if (tableInput.length >= 3) return;
-            tableInput += digit;
-            updateTableDisplay();
-        }
-        function numClear() { tableInput = ''; updateTableDisplay(); }
-        function numDel() { tableInput = tableInput.slice(0, -1); updateTableDisplay(); }
-        function updateTableDisplay() {
-            const el = document.getElementById('table-display');
-            if (tableInput) { el.textContent = tableInput; el.classList.remove('empty'); }
-            else { el.textContent = 'Inserisci tavolo'; el.classList.add('empty'); }
-            updateSendBtn();
-        }
-
-        // ===== Duration =====
-        function selectDuration(btn, minutes) {
-            document.querySelectorAll('.dur-btn').forEach(b => b.classList.remove('selected'));
-            btn.classList.add('selected');
-            selectedDuration = minutes * 60;
-            updateSendBtn();
-        }
-
-        // ===== Destinations =====
-        function toggleDest(id) {
-            if (selectedDests.has(id)) { selectedDests.delete(id); }
-            else { selectedDests.add(id); }
-            document.getElementById('dest-' + id)?.classList.toggle('selected', selectedDests.has(id));
-            document.getElementById('chk-' + id).checked = selectedDests.has(id);
-            updateSendBtn();
-        }
-
-        function updateSendBtn() {
-            const ok = tableInput.length > 0 && selectedDuration > 0 && selectedDests.size > 0;
-            document.getElementById('send-btn').disabled = !ok;
-        }
-
-        // ===== Send countdown =====
-        function sendCountdown() {
-            if (!ws || ws.readyState !== WebSocket.OPEN) { alert('WebSocket non connesso.'); return; }
-            if (!tableInput || selectedDuration <= 0 || selectedDests.size === 0) return;
-
-            selectedDests.forEach(destId => {
-                ws.send(JSON.stringify({
-                    action: 'startCountdown',
-                    tableNumber: tableInput,
-                    timeRemaining: selectedDuration,
-                    destination: destId
-                }));
-            });
-
-            tableInput = '';
-            selectedDuration = 0;
-            selectedDests.clear();
-            document.querySelectorAll('.dest-item').forEach(el => el.classList.remove('selected'));
-            document.querySelectorAll('.dest-check').forEach(el => { el.checked = false; });
-            document.querySelectorAll('.dur-btn').forEach(el => el.classList.remove('selected'));
-            updateTableDisplay();
-            updateSendBtn();
-        }
-
-        // ===== WebSocket =====
-        function connectWS() {
-            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
-
-            ws.onopen = () => {
-                document.getElementById('conn-status').textContent = 'Connesso';
-                document.getElementById('conn-status').className = 'connected';
-                WsAuth.joinRoom(ws, myDeptId, () => {
-                    console.log('[DEPT] Joined room + page for', myDeptId);
-                });
-            };
-
-            ws.onclose = () => {
-                document.getElementById('conn-status').textContent = 'Disconnesso';
-                document.getElementById('conn-status').className = '';
-                setTimeout(connectWS, 3000);
-            };
-
-            ws.onerror = () => ws.close();
-
-            ws.onmessage = (event) => {
-                try {
-                    const data = JSON.parse(event.data);
-                    if (WsAuth.handleServerError(data)) return;
-
-                    if (data.action === 'startCountdown' && data.destination === myDeptId) {
-                        countdowns.set(data.tableNumber.toString(), {
-                            tableNumber: data.tableNumber,
-                            timeRemaining: data.timeRemaining,
-                            initialDuration: data.timeRemaining,
-                            startTime: Date.now(),
-                            startedAt: new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
-                        });
-                        renderCountdowns();
-                    }
-
-                    if (data.action === 'deleteCountdown') {
-                        countdowns.delete(data.tableNumber.toString());
-                        renderCountdowns();
-                    }
-
-                    if (data.action === 'voiceMessage' && data.destination === myDeptId) {
-                        addVoiceMessage(data);
-                    }
-                } catch(e) {}
-            };
-        }
-
-        // ===== Countdown rendering =====
-        function fmtTime(secs) {
-            secs = Math.max(0, secs);
-            const m = Math.floor(secs / 60);
-            const s = secs % 60;
-            return `${m}:${s.toString().padStart(2, '0')}`;
-        }
-
-        function getLevel(secs) {
-            if (secs < 120) return 'critical';
-            if (secs < 300) return 'warning';
-            return '';
-        }
-
-        function renderCountdowns() {
-            const container = document.getElementById('cd-list');
-            document.getElementById('cd-count').textContent = countdowns.size;
-
-            if (countdowns.size === 0) {
-                container.innerHTML = '<div class="empty-cd">Nessun countdown attivo per questo reparto.</div>';
-                return;
-            }
-
-            const sorted = Array.from(countdowns.values()).sort((a, b) => a.timeRemaining - b.timeRemaining);
-            container.innerHTML = sorted.map(cd => {
-                const level = getLevel(cd.timeRemaining);
-                return `
-                    <div class="cd-card ${level}">
-                        <div class="cd-table">${cd.tableNumber}<span>Tavolo</span></div>
-                        <div class="cd-time ${level}">${fmtTime(cd.timeRemaining)}</div>
-                        <div class="cd-started">${cd.startedAt}</div>
-                    </div>
-                `;
-            }).join('');
-        }
-
-        function tick() {
-            const now = Date.now();
-            const toDelete = [];
-            countdowns.forEach((cd, key) => {
-                const elapsed = Math.floor((now - cd.startTime) / 1000);
-                cd.timeRemaining = Math.max(0, cd.initialDuration - elapsed);
-                if (cd.timeRemaining === 0) toDelete.push(key);
-            });
-            toDelete.forEach(k => countdowns.delete(k));
-            renderCountdowns();
-        }
-
-        // ===== Voice messages =====
-        let voicePanelOpen = false;
-        let isRecording = false;
-        let mediaRecorder = null;
-        let audioChunks = [];
-        let selectedVoiceDests = new Set();
-
-        function toggleVoicePanel() {
-            voicePanelOpen = !voicePanelOpen;
-            document.getElementById('voice-panel').style.display = voicePanelOpen ? 'block' : 'none';
-            document.getElementById('voice-float-btn').style.display = voicePanelOpen ? 'none' : 'flex';
-        }
-
-        function toggleVoiceDest(id) {
-            if (selectedVoiceDests.has(id)) selectedVoiceDests.delete(id);
-            else selectedVoiceDests.add(id);
-            document.getElementById('vdest-' + id)?.classList.toggle('selected', selectedVoiceDests.has(id));
-            document.getElementById('vchk-' + id).checked = selectedVoiceDests.has(id);
-        }
-
-        async function toggleRecording() {
-            if (!isRecording) {
-                if (selectedVoiceDests.size === 0) { alert('Seleziona almeno un destinatario.'); return; }
-                try {
-                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                    audioChunks = [];
-                    mediaRecorder = new MediaRecorder(stream);
-                    mediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
-                    mediaRecorder.onstop = sendVoiceMsg;
-                    mediaRecorder.start();
-                    isRecording = true;
-                    document.getElementById('voice-record-btn').textContent = 'Rilascia per inviare';
-                    document.getElementById('voice-record-btn').classList.add('recording');
-                    document.getElementById('voice-status').textContent = 'Registrazione in corso...';
-                } catch(e) { alert('Microfono non disponibile.'); }
-            } else {
-                if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
-                mediaRecorder?.stream?.getTracks().forEach(t => t.stop());
-                isRecording = false;
-                document.getElementById('voice-record-btn').textContent = 'Tieni premuto per registrare';
-                document.getElementById('voice-record-btn').classList.remove('recording');
-                document.getElementById('voice-status').textContent = 'Invio...';
-            }
-        }
-
-        async function sendVoiceMsg() {
-            const blob = new Blob(audioChunks, { type: 'audio/webm' });
-            const reader = new FileReader();
-            reader.onload = () => {
-                const b64 = reader.result.split(',')[1];
-                const msgId = Date.now().toString();
-                selectedVoiceDests.forEach(destId => {
-                    if (ws && ws.readyState === WebSocket.OPEN) {
-                        ws.send(JSON.stringify({
-                            action: 'voiceMessage',
-                            message: `Messaggio vocale da ${myDeptName}`,
-                            messageId: `${msgId}_${destId}`,
-                            from: myDeptName,
-                            destination: destId,
-                            audioData: b64,
-                            hasAudio: true,
-                            audioSize: blob.size,
-                            timestamp: new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
-                        }));
-                    }
-                });
-                document.getElementById('voice-status').textContent = 'Inviato.';
-                setTimeout(() => { document.getElementById('voice-status').textContent = ''; }, 2000);
-            };
-            reader.readAsDataURL(blob);
-        }
-
-        function addVoiceMessage(data) {
-            const container = document.getElementById('voice-msg-list');
-            const item = document.createElement('div');
-            item.className = 'voice-msg-item';
-            item.innerHTML = `<span class="voice-msg-from">${escHtml(data.from || 'Sconosciuto')}</span><span class="voice-msg-time">${escHtml(data.timestamp || '')}</span><br>${escHtml(data.message || '')}`;
-            container.prepend(item);
-            if (data.hasAudio && data.audioData) {
-                const audio = new Audio('data:audio/webm;base64,' + data.audioData);
-                audio.play().catch(() => {});
-            }
-        }
-
-        function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-
-        // ===== Boot =====
-        loadDepts().then(() => {
-            connectWS();
-            tickInterval = setInterval(tick, 1000);
-        });
-
-        window.addEventListener('beforeunload', () => {
-            clearInterval(tickInterval);
-            if (ws) ws.close();
-        });
-    </script>
+window.addEventListener('beforeunload', () => {
+  clearInterval(tickTimer);
+  if(ws) ws.close();
+});
+</script>
 </body>
 </html>
