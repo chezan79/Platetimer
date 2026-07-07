@@ -128,8 +128,14 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 .cdc-badge.recv{background:rgba(34,197,94,.1);color:var(--ok);border-color:rgba(34,197,94,.25);}
 .cdc-started{font-size:11px;color:var(--muted);}
 
+/* ── LEFT PANEL TABS ────────────────────────── */
+.lp-tabs{display:flex;gap:4px;background:rgba(255,255,255,.06);border-radius:9px;padding:4px;flex-shrink:0;}
+.lp-tab{flex:1;padding:8px 4px;background:transparent;border:none;border-radius:6px;
+  color:var(--muted);font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;white-space:nowrap;}
+.lp-tab.active{background:var(--card-h);color:var(--text);}
+.lp-section{display:flex;flex-direction:column;gap:14px;}
+
 /* ── VOICE MESSAGE SECTION ──────────────────── */
-.lp-divider{height:1px;background:var(--border-l);margin:4px 0;}
 .voice-btn{width:100%;padding:12px 14px;background:rgba(99,102,241,.12);
   border:1.5px solid rgba(99,102,241,.28);border-radius:10px;color:var(--accent2);
   font-size:14px;font-weight:600;cursor:pointer;transition:all .2s;text-align:center;}
@@ -143,8 +149,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 .voice-status-txt{font-size:12px;color:var(--muted);text-align:center;padding:3px 0 0;}
 /* Incoming voice cards */
 .vm-section{margin-top:28px;border-top:1px solid var(--border);padding-top:24px;}
-.vm-audio{width:100%;height:32px;border-radius:6px;
-  accent-color:var(--accent);margin:4px 0;}
+.vm-audio{flex:1;min-width:0;height:36px;border-radius:6px;accent-color:var(--accent);}
 .vm-from{font-size:16px;font-weight:700;color:var(--text);line-height:1.2;}
 
 /* ── DISCONNECTED OVERLAY ───────────────────── */
@@ -176,77 +181,91 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
   <button class="hdr-btn danger" onclick="window.location.href='index.html'">Esci</button>
 </header>
 
-<!-- Left panel: send countdown -->
+<!-- Left panel: countdown + voice tabs -->
 <aside class="lp">
-  <div class="lp-title">Nuovo Countdown</div>
 
-  <!-- Table number -->
-  <div>
-    <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">NUMERO TAVOLO</div>
-    <div id="tbl-disp" class="tbl-disp empty">—</div>
+  <!-- Tab switcher -->
+  <div class="lp-tabs">
+    <button class="lp-tab active" id="tab-cd" onclick="showTab('cd')">Countdown</button>
+    <button class="lp-tab" id="tab-vm" onclick="showTab('vm')">🎙️ Voce</button>
   </div>
 
-  <!-- Numpad -->
-  <div class="numpad">
-    <div class="nb" onclick="npPress('1')">1</div>
-    <div class="nb" onclick="npPress('2')">2</div>
-    <div class="nb" onclick="npPress('3')">3</div>
-    <div class="nb" onclick="npPress('4')">4</div>
-    <div class="nb" onclick="npPress('5')">5</div>
-    <div class="nb" onclick="npPress('6')">6</div>
-    <div class="nb" onclick="npPress('7')">7</div>
-    <div class="nb" onclick="npPress('8')">8</div>
-    <div class="nb" onclick="npPress('9')">9</div>
-    <div class="nb clr" onclick="npClear()">Canc</div>
-    <div class="nb" onclick="npPress('0')">0</div>
-    <div class="nb del" onclick="npDel()">⌫ Del</div>
-  </div>
+  <!-- ── COUNTDOWN SECTION ──────────────────────── -->
+  <div id="section-cd" class="lp-section">
+    <div class="lp-title">Nuovo Countdown</div>
 
-  <!-- Duration -->
-  <div>
-    <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">DURATA</div>
-    <div class="dur-wrap" id="dur-wrap">
-      <div class="db" onclick="selectDur(this,4)">4'</div>
-      <div class="db" onclick="selectDur(this,5)">5'</div>
-      <div class="db" onclick="selectDur(this,6)">6'</div>
-      <div class="db" onclick="selectDur(this,7)">7'</div>
-      <div class="db" onclick="selectDur(this,8)">8'</div>
-      <div class="db" onclick="selectDur(this,9)">9'</div>
-      <div class="db" onclick="selectDur(this,10)">10'</div>
-      <div class="db" onclick="selectDur(this,12)">12'</div>
-      <div class="db" onclick="selectDur(this,15)">15'</div>
+    <!-- Table number -->
+    <div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">NUMERO TAVOLO</div>
+      <div id="tbl-disp" class="tbl-disp empty">—</div>
     </div>
-  </div>
 
-  <!-- Destinations -->
-  <div>
-    <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">INVIA A</div>
-    <div class="dest-list" id="dest-list">
-      <div class="no-dests">Caricamento reparti...</div>
+    <!-- Numpad -->
+    <div class="numpad">
+      <div class="nb" onclick="npPress('1')">1</div>
+      <div class="nb" onclick="npPress('2')">2</div>
+      <div class="nb" onclick="npPress('3')">3</div>
+      <div class="nb" onclick="npPress('4')">4</div>
+      <div class="nb" onclick="npPress('5')">5</div>
+      <div class="nb" onclick="npPress('6')">6</div>
+      <div class="nb" onclick="npPress('7')">7</div>
+      <div class="nb" onclick="npPress('8')">8</div>
+      <div class="nb" onclick="npPress('9')">9</div>
+      <div class="nb clr" onclick="npClear()">Canc</div>
+      <div class="nb" onclick="npPress('0')">0</div>
+      <div class="nb del" onclick="npDel()">⌫ Del</div>
     </div>
-  </div>
 
-  <button id="send-btn" class="send-btn" onclick="sendCountdown()" disabled>
-    Avvia Countdown
-  </button>
-
-  <!-- Voice message section -->
-  <div class="lp-divider"></div>
-  <div class="lp-title">Messaggio Vocale</div>
-
-  <div>
-    <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">INVIA A</div>
-    <div class="dest-list" id="voice-dest-list">
-      <div class="no-depts">Caricamento...</div>
+    <!-- Duration -->
+    <div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">DURATA</div>
+      <div class="dur-wrap" id="dur-wrap">
+        <div class="db" onclick="selectDur(this,4)">4'</div>
+        <div class="db" onclick="selectDur(this,5)">5'</div>
+        <div class="db" onclick="selectDur(this,6)">6'</div>
+        <div class="db" onclick="selectDur(this,7)">7'</div>
+        <div class="db" onclick="selectDur(this,8)">8'</div>
+        <div class="db" onclick="selectDur(this,9)">9'</div>
+        <div class="db" onclick="selectDur(this,10)">10'</div>
+        <div class="db" onclick="selectDur(this,12)">12'</div>
+        <div class="db" onclick="selectDur(this,15)">15'</div>
+      </div>
     </div>
-  </div>
 
-  <div>
-    <button id="voice-btn" class="voice-btn" onclick="toggleRec()" disabled>
-      🎙️ Avvia registrazione
+    <!-- Destinations (countdown) -->
+    <div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">INVIA A</div>
+      <div class="dest-list" id="dest-list">
+        <div class="no-dests">Caricamento reparti...</div>
+      </div>
+    </div>
+
+    <button id="send-btn" class="send-btn" onclick="sendCountdown()" disabled>
+      Avvia Countdown
     </button>
-    <div id="voice-status-txt" class="voice-status-txt">Seleziona destinatario</div>
   </div>
+
+  <!-- ── VOICE SECTION ──────────────────────────── -->
+  <div id="section-vm" class="lp-section" style="display:none;">
+    <div class="lp-title">Messaggio Vocale</div>
+
+    <!-- Destinations (voice) -->
+    <div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">INVIA A</div>
+      <div class="dest-list" id="voice-dest-list">
+        <div class="no-dests">Caricamento reparti...</div>
+      </div>
+    </div>
+
+    <!-- Record controls -->
+    <div>
+      <button id="voice-btn" class="voice-btn" onclick="toggleRec()" disabled>
+        🎙️ Avvia registrazione
+      </button>
+      <div id="voice-status-txt" class="voice-status-txt">Seleziona destinatario</div>
+    </div>
+  </div>
+
 </aside>
 
 <!-- Right area: active countdowns -->
@@ -364,6 +383,14 @@ function buildDestList(){
   });
 }
 
+// ── Tab switcher ──────────────────────────────────────────────────────────────
+function showTab(tab){
+  document.getElementById('section-cd').style.display = tab === 'cd' ? 'flex' : 'none';
+  document.getElementById('section-vm').style.display = tab === 'vm' ? 'flex' : 'none';
+  document.getElementById('tab-cd').classList.toggle('active', tab === 'cd');
+  document.getElementById('tab-vm').classList.toggle('active', tab === 'vm');
+}
+
 // ── Voice dest list ───────────────────────────────────────────────────────────
 function buildVoiceDestList(){
   const others = Object.values(departmentMap).filter(d => d.active && d.id !== myDeptId);
@@ -400,15 +427,32 @@ function refreshVoiceBtn(){
 }
 
 // ── Voice recording ───────────────────────────────────────────────────────────
+function getSupportedMimeType(){
+  if(!window.MediaRecorder) return '';
+  const types = ['audio/webm;codecs=opus','audio/webm','audio/ogg;codecs=opus','audio/mp4'];
+  for(const t of types){ if(MediaRecorder.isTypeSupported(t)) return t; }
+  return '';
+}
+
 async function toggleRec(){
   if(!isRecording){ await startRec(); } else { stopRec(); }
 }
 async function startRec(){
   if(voiceDests.size === 0) return;
+  const sts = document.getElementById('voice-status-txt');
+  if(!navigator.mediaDevices || !window.MediaRecorder){
+    if(sts) sts.textContent = 'Registrazione audio non supportata in questo browser.';
+    setVoiceState('failed');
+    setTimeout(() => setVoiceState('idle'), 4000);
+    return;
+  }
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    audioChunks = [];
-    mediaRec = new MediaRecorder(stream);
+    const stream   = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const mimeType = getSupportedMimeType();
+    audioChunks    = [];
+    mediaRec       = mimeType
+      ? new MediaRecorder(stream, { mimeType })
+      : new MediaRecorder(stream);
     mediaRec.ondataavailable = e => { if(e.data.size > 0) audioChunks.push(e.data); };
     mediaRec.onstop = sendVoiceMsg;
     mediaRec.start();
@@ -416,8 +460,12 @@ async function startRec(){
     setVoiceState('recording');
   } catch(e){
     console.error('[voice] mic error:', e);
+    const msg = e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError'
+      ? 'Accesso al microfono negato.' : 'Errore microfono.';
+    const sts2 = document.getElementById('voice-status-txt');
+    if(sts2) sts2.textContent = msg;
     setVoiceState('failed');
-    setTimeout(() => setVoiceState('idle'), 3000);
+    setTimeout(() => setVoiceState('idle'), 4000);
   }
 }
 function stopRec(){
@@ -430,7 +478,8 @@ function stopRec(){
 }
 async function sendVoiceMsg(){
   try {
-    const blob  = new Blob(audioChunks, { type: 'audio/webm' });
+    const actualMime = (mediaRec && mediaRec.mimeType) ? mediaRec.mimeType : 'audio/webm';
+    const blob  = new Blob(audioChunks, { type: actualMime });
     const b64   = await blobToBase64(blob);
     const msgId = 'vm_' + Date.now() + '_' + Math.random().toString(36).substr(2,5);
     const resp  = await fetch('/api/voice-message', {
