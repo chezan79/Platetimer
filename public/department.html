@@ -319,10 +319,13 @@ let wsConnected   = false;
 let tickTimer     = null;
 
 // ── Voice message state ───────────────────────────────────────────────────────
-let voiceDests    = new Set();
-let mediaRec      = null;
-let audioChunks   = [];
-let isRecording   = false;
+let voiceDests           = new Set();
+let mediaRec             = null;
+let audioChunks          = [];
+let isRecording          = false;
+let currentVoiceState    = 'idle';
+let recAutoStopTimer     = null;
+let recCountdownInterval = null;
 // Map: messageId → { id, fromName, timestamp, blobUrl }
 let voiceMessages = new Map();
 
@@ -437,7 +440,8 @@ function toggleVoiceDestById(id, on){
 function refreshVoiceBtn(){
   const btn = document.getElementById('voice-btn');
   if(!btn) return;
-  btn.disabled = isRecording ? false : voiceDests.size === 0;
+  const locked = currentVoiceState === 'sending' || currentVoiceState === 'done';
+  btn.disabled = locked || (!isRecording && voiceDests.size === 0);
 }
 
 // ── Voice recording ───────────────────────────────────────────────────────────
@@ -451,9 +455,14 @@ function getSupportedMimeType(){
 async function toggleRec(){
   if(!isRecording){ await startRec(); } else { stopRec(); }
 }
+const MAX_REC_SECONDS = 5;
+
 async function startRec(){
-  if(voiceDests.size === 0) return;
   const sts = document.getElementById('voice-status-txt');
+  if(voiceDests.size === 0){
+    if(sts) sts.textContent = 'Seleziona almeno un reparto destinatario.';
+    return;
+  }
   if(!navigator.mediaDevices || !window.MediaRecorder){
     if(sts) sts.textContent = 'Registrazione audio non supportata in questo browser.';
     setVoiceState('failed');
@@ -472,19 +481,34 @@ async function startRec(){
     mediaRec.start();
     isRecording = true;
     setVoiceState('recording');
+
+    // Countdown display: 5, 4, 3, 2, 1 → auto-stop
+    let secondsLeft = MAX_REC_SECONDS;
+    if(sts) sts.textContent = `Registrazione... ${secondsLeft}`;
+    recCountdownInterval = setInterval(() => {
+      secondsLeft--;
+      if(sts) sts.textContent = secondsLeft > 0
+        ? `Registrazione... ${secondsLeft}`
+        : 'Invio automatico...';
+    }, 1000);
+    recAutoStopTimer = setTimeout(() => stopRec(), MAX_REC_SECONDS * 1000);
+
   } catch(e){
     console.error('[voice] mic error:', e);
     const msg = e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError'
       ? 'Accesso al microfono negato.' : 'Errore microfono.';
-    const sts2 = document.getElementById('voice-status-txt');
-    if(sts2) sts2.textContent = msg;
+    if(sts) sts.textContent = msg;
     setVoiceState('failed');
     setTimeout(() => setVoiceState('idle'), 4000);
   }
 }
 function stopRec(){
+  clearInterval(recCountdownInterval);
+  clearTimeout(recAutoStopTimer);
+  recCountdownInterval = null;
+  recAutoStopTimer = null;
   if(mediaRec && isRecording){
-    mediaRec.stop();
+    mediaRec.stop();                                      // triggers onstop → sendVoiceMsg
     mediaRec.stream.getTracks().forEach(t => t.stop());
     isRecording = false;
     setVoiceState('sending');
@@ -493,7 +517,17 @@ function stopRec(){
 async function sendVoiceMsg(){
   try {
     const actualMime = (mediaRec && mediaRec.mimeType) ? mediaRec.mimeType : 'audio/webm';
-    const blob  = new Blob(audioChunks, { type: actualMime });
+    const blob = new Blob(audioChunks, { type: actualMime });
+
+    // Client-side size guard: ~6 MB blob → ~8 MB base64 < 10 MB server limit
+    if(blob.size > 6_000_000){
+      const sts = document.getElementById('voice-status-txt');
+      if(sts) sts.textContent = 'Messaggio vocale troppo lungo o troppo pesante.';
+      setVoiceState('failed');
+      setTimeout(() => setVoiceState('idle'), 4000);
+      return;
+    }
+
     const b64   = await blobToBase64(blob);
     const msgId = 'vm_' + Date.now() + '_' + Math.random().toString(36).substr(2,5);
     const resp  = await fetch('/api/voice-message', {
@@ -506,13 +540,31 @@ async function sendVoiceMsg(){
         from:         myDeptId
       })
     });
-    const result = await resp.json();
+
+    if(resp.status === 413){
+      const sts = document.getElementById('voice-status-txt');
+      if(sts) sts.textContent = 'Messaggio vocale troppo lungo o troppo pesante.';
+      setVoiceState('failed');
+      setTimeout(() => setVoiceState('idle'), 4000);
+      return;
+    }
+
+    let result;
+    try { result = await resp.json(); } catch { result = { success: false }; }
+
+    if(!result.success){
+      const sts = document.getElementById('voice-status-txt');
+      if(sts) sts.textContent = result.error || 'Invio fallito. Riprova.';
+    }
     setVoiceState(result.success ? 'done' : 'failed');
+
   } catch(e){
     console.error('[voice] send error:', e);
     setVoiceState('failed');
+    const sts = document.getElementById('voice-status-txt');
+    if(sts) sts.textContent = 'Errore di rete. Riprova.';
   }
-  setTimeout(() => setVoiceState('idle'), 2500);
+  setTimeout(() => setVoiceState('idle'), 3000);
 }
 function blobToBase64(blob){
   return new Promise((res, rej) => {
@@ -523,6 +575,7 @@ function blobToBase64(blob){
   });
 }
 function setVoiceState(state){
+  currentVoiceState = state;
   const btn = document.getElementById('voice-btn');
   const sts = document.getElementById('voice-status-txt');
   if(!btn || !sts) return;
@@ -531,12 +584,14 @@ function setVoiceState(state){
     case 'idle':
       btn.textContent = '🎙️ Avvia registrazione';
       btn.className   = 'voice-btn';
-      sts.textContent = voiceDests.size > 0 ? 'Pronto' : 'Seleziona destinatario';
+      sts.textContent = voiceDests.size > 0
+        ? `Pronto. Max ${MAX_REC_SECONDS} secondi.`
+        : 'Seleziona almeno un reparto destinatario.';
       break;
     case 'recording':
-      btn.textContent = '⏹ Ferma e invia';
+      btn.textContent = '⏹ Ferma e invia ora';
       btn.className   = 'voice-btn recording';
-      sts.textContent = 'Registrazione in corso...';
+      // status text managed by countdown in startRec()
       break;
     case 'sending':
       btn.textContent = '⏳ Invio...';
@@ -546,12 +601,12 @@ function setVoiceState(state){
     case 'done':
       btn.textContent = '✓ Inviato';
       btn.className   = 'voice-btn done';
-      sts.textContent = 'Messaggio inviato';
+      sts.textContent = 'Messaggio inviato ✓';
       break;
     case 'failed':
       btn.textContent = '✕ Errore';
       btn.className   = 'voice-btn';
-      sts.textContent = 'Invio fallito. Riprova.';
+      // status text is set by the caller with a specific error message
       break;
   }
   refreshVoiceBtn();

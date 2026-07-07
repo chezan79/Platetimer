@@ -185,7 +185,7 @@ app.use((req, res, next) => {
 app.use(express.static('public'));
 
 // Middleware per parsing JSON
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 
 // Configura Google Cloud Speech
 let speechClient = null;
