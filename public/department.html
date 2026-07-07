@@ -129,10 +129,14 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 .cdc-started{font-size:11px;color:var(--muted);}
 
 /* ── LEFT PANEL TABS ────────────────────────── */
-.lp-tabs{display:flex;gap:4px;background:rgba(255,255,255,.06);border-radius:9px;padding:4px;flex-shrink:0;}
-.lp-tab{flex:1;padding:8px 4px;background:transparent;border:none;border-radius:6px;
-  color:var(--muted);font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;white-space:nowrap;}
-.lp-tab.active{background:var(--card-h);color:var(--text);}
+.lp-tabs{display:flex;gap:0;background:var(--card);border:1.5px solid var(--border-l);
+  border-radius:10px;overflow:hidden;flex-shrink:0;}
+.lp-tab{flex:1;padding:12px 8px;background:transparent;border:none;
+  color:var(--muted);font-size:13px;font-weight:700;cursor:pointer;
+  transition:all .18s;white-space:nowrap;letter-spacing:.3px;}
+.lp-tab:not(:last-child){border-right:1.5px solid var(--border-l);}
+.lp-tab:hover:not(.active){background:var(--card-h);color:var(--text);}
+.lp-tab.active{background:var(--accent);color:#fff;}
 .lp-section{display:flex;flex-direction:column;gap:14px;}
 
 /* ── VOICE MESSAGE SECTION ──────────────────── */
@@ -187,7 +191,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
   <!-- Tab switcher -->
   <div class="lp-tabs">
     <button class="lp-tab active" id="tab-cd" onclick="showTab('cd')">Countdown</button>
-    <button class="lp-tab" id="tab-vm" onclick="showTab('vm')">🎙️ Voce</button>
+    <button class="lp-tab" id="tab-vm" onclick="showTab('vm')">🎙️ Messaggi vocali</button>
   </div>
 
   <!-- ── COUNTDOWN SECTION ──────────────────────── -->
@@ -385,10 +389,20 @@ function buildDestList(){
 
 // ── Tab switcher ──────────────────────────────────────────────────────────────
 function showTab(tab){
-  document.getElementById('section-cd').style.display = tab === 'cd' ? 'flex' : 'none';
-  document.getElementById('section-vm').style.display = tab === 'vm' ? 'flex' : 'none';
-  document.getElementById('tab-cd').classList.toggle('active', tab === 'cd');
-  document.getElementById('tab-vm').classList.toggle('active', tab === 'vm');
+  console.log('[dept] showTab:', tab);
+  const scd = document.getElementById('section-cd');
+  const svm = document.getElementById('section-vm');
+  const tcd = document.getElementById('tab-cd');
+  const tvm = document.getElementById('tab-vm');
+  if(!scd || !svm || !tcd || !tvm){
+    console.error('[dept] showTab: missing element', {scd,svm,tcd,tvm});
+    return;
+  }
+  scd.style.display = tab === 'cd' ? 'flex' : 'none';
+  svm.style.display = tab === 'vm' ? 'flex' : 'none';
+  tcd.classList.toggle('active', tab === 'cd');
+  tvm.classList.toggle('active', tab === 'vm');
+  console.log('[dept] showTab done — section-vm display:', svm.style.display);
 }
 
 // ── Voice dest list ───────────────────────────────────────────────────────────

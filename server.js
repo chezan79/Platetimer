@@ -171,6 +171,16 @@ app.use((req, res, next) => {
     next();
 });
 
+// Force fresh fetch for HTML — prevents stale UI after deploys
+app.use((req, res, next) => {
+  if (req.path.endsWith('.html') || req.path === '/') {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+  }
+  next();
+});
+
 // Serve i file statici dalla directory "public"
 app.use(express.static('public'));
 
