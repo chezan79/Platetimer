@@ -267,23 +267,46 @@ app.post('/api/voice-message', (req, res) => {
         // [SECURITY] Company always comes from the verified token — never from req.body
         const companyName = session.companyName;
 
-        const { audioData, messageId, destination, from } = req.body;
+        const { audioData, messageId, destinations, destination, from } = req.body;
 
-        if (!audioData || !messageId || !destination) {
+        // Accept either destinations[] array or legacy single destination string
+        const destList = (Array.isArray(destinations) && destinations.length > 0)
+            ? destinations
+            : (destination ? [destination] : []);
+
+        if (!audioData || !messageId || destList.length === 0) {
             return res.status(400).json({ error: 'Dati mancanti' });
         }
 
-        console.log(`🎤 [SECURITY] Messaggio vocale ricevuto: ID ${messageId}, Da: ${from}, Company: "${companyName}", Per: ${destination} (uid: ${session.uid})`);
+        // [SECURITY] Validate that every destination belongs to the authenticated company
+        const companyDeptsRest = getCompanyDepts(companyName);
+        const activeDeptIdsRest = companyDeptsRest.filter(d => d.active).map(d => d.id);
+        if (activeDeptIdsRest.length > 0) {
+            for (const destId of destList) {
+                if (!activeDeptIdsRest.includes(destId)) {
+                    console.log(`⛔ [SECURITY] Voice message rejected — invalid destination "${destId}" for company "${companyName}"`);
+                    return res.status(400).json({ error: `Reparto destinatario non valido: ${destId}` });
+                }
+            }
+            if (from && !activeDeptIdsRest.includes(from)) {
+                console.log(`⛔ [SECURITY] Voice message rejected — invalid source "${from}" for company "${companyName}"`);
+                return res.status(400).json({ error: 'Reparto mittente non valido' });
+            }
+        }
+
+        console.log(`🎤 [SECURITY] Messaggio vocale ricevuto: ID ${messageId}, Da: ${from}, Company: "${companyName}", Per: [${destList.join(', ')}] (uid: ${session.uid})`);
 
         // Broadcast to WebSocket clients inside the verified company room only
         if (companyRooms.has(companyName)) {
             const roomClients = companyRooms.get(companyName);
             const broadcastPayload = JSON.stringify({
                 action: 'voiceMessage',
-                message: `Messaggio vocale da ${from}`,
+                message: `Messaggio vocale`,
                 messageId,
                 from,
-                destination,
+                sourceDepartmentId: from || '',
+                destinations: destList,
+                destination: destList[0],
                 audioData,
                 hasAudio: true,
                 timestamp: new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
@@ -296,13 +319,13 @@ app.post('/api/voice-message', (req, res) => {
                     sentCount++;
                 }
             });
-            console.log(`📢 [SECURITY] Voice message broadcast to ${sentCount} clients in company room "${companyName}"`);
+            console.log(`📢 [SECURITY] Voice message broadcast to ${sentCount} clients in company room "${companyName}" for depts [${destList.join(', ')}]`);
         }
 
         res.json({ 
             success: true, 
             messageId: messageId,
-            destination: destination 
+            destinations: destList
         });
 
     } catch (error) {
@@ -1042,34 +1065,49 @@ wss.on('connection', (ws, req) => {
 
             } else if (data.action === 'voiceMessage') {
                 // Validazione messaggio vocale
-                if (!data.message || typeof data.message !== 'string') {
-                    console.log('⚠️ Messaggio vocale non valido');
-                    return;
-                }
-
                 if (!data.messageId || typeof data.messageId !== 'string') {
                     console.log('⚠️ ID messaggio vocale mancante');
                     return;
                 }
 
-                // Validate destination — must be a non-empty string; company room scoping
-                // already enforces isolation, so no department whitelist needed here.
-                const destination = data.destination;
-                if (!destination || typeof destination !== 'string' || !destination.trim()) {
-                    console.log('⚠️ Destinazione messaggio vocale non valida:', destination);
+                // Accept destinations[] array or legacy single destination string
+                const vmDestList = (Array.isArray(data.destinations) && data.destinations.length > 0)
+                    ? data.destinations
+                    : (data.destination ? [data.destination] : []);
+
+                if (vmDestList.length === 0) {
+                    console.log('⚠️ Destinazione messaggio vocale mancante');
                     return;
                 }
 
-                // Invia messaggio vocale solo ai client della destinazione specificata
+                // [SECURITY] Validate every destination against company's active departments
+                const vmCompanyDepts = getCompanyDepts(ws.companyRoom);
+                const vmActiveDeptIds = vmCompanyDepts.filter(d => d.active).map(d => d.id);
+                if (vmActiveDeptIds.length > 0) {
+                    for (const destId of vmDestList) {
+                        if (!vmActiveDeptIds.includes(destId)) {
+                            console.log(`⛔ [SECURITY] voiceMessage rejected — invalid destination "${destId}" for "${ws.companyRoom}"`);
+                            ws.send(JSON.stringify({ action: 'error', message: 'Destination department not found.' }));
+                            return;
+                        }
+                    }
+                }
+
+                // sourceDepartmentId comes from the authenticated ws.pageType — never trust client's from field for routing
+                const vmSourceDeptId = ws.pageType || data.from || '';
+
+                // Invia messaggio vocale a tutti i client della room (filtro lato client per destinazione)
                 if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
                     const roomClients = companyRooms.get(ws.companyRoom);
                     const voiceMessage = JSON.stringify({
                         action: 'voiceMessage',
-                        message: data.message,
+                        message: data.message || 'Messaggio vocale',
                         messageId: data.messageId,
                         timestamp: new Date().toLocaleTimeString('it-IT'),
-                        from: data.from || 'Pizzeria',
-                        destination: destination,
+                        from: vmSourceDeptId,
+                        sourceDepartmentId: vmSourceDeptId,
+                        destinations: vmDestList,
+                        destination: vmDestList[0],
                         audioData: data.audioData || null,
                         hasAudio: data.hasAudio || false
                     });
@@ -1082,7 +1120,7 @@ wss.on('connection', (ws, req) => {
                         }
                     });
 
-                    console.log(`📢 Messaggio vocale inviato alla room "${ws.companyRoom}" per destinazione "${destination}" (${sentCount}/${roomClients.size} client): "${data.message}"`);
+                    console.log(`📢 Messaggio vocale inviato alla room "${ws.companyRoom}" per [${vmDestList.join(', ')}] (${sentCount}/${roomClients.size} client)`);
                 } else {
                     console.log('⚠️ Client non assegnato a nessuna room per messaggio vocale');
                 }

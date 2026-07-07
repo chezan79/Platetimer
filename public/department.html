@@ -128,6 +128,25 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 .cdc-badge.recv{background:rgba(34,197,94,.1);color:var(--ok);border-color:rgba(34,197,94,.25);}
 .cdc-started{font-size:11px;color:var(--muted);}
 
+/* ── VOICE MESSAGE SECTION ──────────────────── */
+.lp-divider{height:1px;background:var(--border-l);margin:4px 0;}
+.voice-btn{width:100%;padding:12px 14px;background:rgba(99,102,241,.12);
+  border:1.5px solid rgba(99,102,241,.28);border-radius:10px;color:var(--accent2);
+  font-size:14px;font-weight:600;cursor:pointer;transition:all .2s;text-align:center;}
+.voice-btn:hover:not(:disabled){background:rgba(99,102,241,.22);}
+.voice-btn:disabled{opacity:.3;cursor:not-allowed;}
+.voice-btn.recording{background:rgba(239,68,68,.13);border-color:rgba(239,68,68,.4);
+  color:var(--danger);animation:pulse-btn 1s ease-in-out infinite;}
+.voice-btn.sending{background:rgba(245,158,11,.1);border-color:rgba(245,158,11,.3);color:var(--warn);}
+.voice-btn.done{background:rgba(34,197,94,.1);border-color:rgba(34,197,94,.3);color:var(--ok);}
+@keyframes pulse-btn{0%,100%{opacity:1;}50%{opacity:.55;}}
+.voice-status-txt{font-size:12px;color:var(--muted);text-align:center;padding:3px 0 0;}
+/* Incoming voice cards */
+.vm-section{margin-top:28px;border-top:1px solid var(--border);padding-top:24px;}
+.vm-audio{width:100%;height:32px;border-radius:6px;
+  accent-color:var(--accent);margin:4px 0;}
+.vm-from{font-size:16px;font-weight:700;color:var(--text);line-height:1.2;}
+
 /* ── DISCONNECTED OVERLAY ───────────────────── */
 .dc-bar{position:fixed;top:var(--hdr);left:0;right:0;background:rgba(239,68,68,.95);
   color:#fff;text-align:center;padding:8px;font-size:13px;font-weight:600;z-index:150;
@@ -210,6 +229,24 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
   <button id="send-btn" class="send-btn" onclick="sendCountdown()" disabled>
     Avvia Countdown
   </button>
+
+  <!-- Voice message section -->
+  <div class="lp-divider"></div>
+  <div class="lp-title">Messaggio Vocale</div>
+
+  <div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">INVIA A</div>
+    <div class="dest-list" id="voice-dest-list">
+      <div class="no-depts">Caricamento...</div>
+    </div>
+  </div>
+
+  <div>
+    <button id="voice-btn" class="voice-btn" onclick="toggleRec()" disabled>
+      🎙️ Avvia registrazione
+    </button>
+    <div id="voice-status-txt" class="voice-status-txt">Seleziona destinatario</div>
+  </div>
 </aside>
 
 <!-- Right area: active countdowns -->
@@ -220,6 +257,15 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
   </div>
   <div class="cd-list" id="cd-list">
     <div class="empty-state">Nessun countdown attivo.</div>
+  </div>
+
+  <!-- Incoming voice messages (hidden until a message arrives) -->
+  <div id="voice-msgs-section" class="vm-section" style="display:none;">
+    <div class="ra-hdr">
+      <span class="ra-title">Messaggi vocali ricevuti</span>
+      <span class="ra-count" id="voice-msg-count">0</span>
+    </div>
+    <div class="cd-list" id="voice-msg-list"></div>
   </div>
 </main>
 
@@ -248,6 +294,14 @@ let countdowns    = new Map();
 let ws            = null;
 let wsConnected   = false;
 let tickTimer     = null;
+
+// ── Voice message state ───────────────────────────────────────────────────────
+let voiceDests    = new Set();
+let mediaRec      = null;
+let audioChunks   = [];
+let isRecording   = false;
+// Map: messageId → { id, fromName, timestamp, blobUrl }
+let voiceMessages = new Map();
 
 // ── Utility ──────────────────────────────────────────────────────────────────
 function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
@@ -281,6 +335,7 @@ async function loadDepts(){
     if(stored) document.getElementById('hdr-brand').textContent = stored.charAt(0).toUpperCase()+stored.slice(1);
 
     buildDestList();
+    buildVoiceDestList();
   } catch(e){
     console.error('loadDepts:', e);
     alert('Errore di rete. Riprova.');
@@ -307,6 +362,203 @@ function buildDestList(){
       toggleDestById(d.id, e.target.checked);
     });
   });
+}
+
+// ── Voice dest list ───────────────────────────────────────────────────────────
+function buildVoiceDestList(){
+  const others = Object.values(departmentMap).filter(d => d.active && d.id !== myDeptId);
+  const el = document.getElementById('voice-dest-list');
+  if(!others.length){
+    el.innerHTML = '<div class="no-dests">Nessun altro reparto attivo.</div>';
+    return;
+  }
+  el.innerHTML = others.map(d => `
+    <div class="di" id="vdi-${d.id}" onclick="toggleVoiceDest('${d.id}')">
+      <input type="checkbox" id="vchk-${d.id}" onclick="event.stopPropagation()">
+      <label for="vchk-${d.id}">${esc(d.name)}</label>
+    </div>`).join('');
+  others.forEach(d => {
+    document.getElementById(`vchk-${d.id}`).addEventListener('change', e => {
+      e.stopPropagation();
+      toggleVoiceDestById(d.id, e.target.checked);
+    });
+  });
+}
+function toggleVoiceDest(id){ toggleVoiceDestById(id, !voiceDests.has(id)); }
+function toggleVoiceDestById(id, on){
+  if(on) voiceDests.add(id); else voiceDests.delete(id);
+  const item = document.getElementById(`vdi-${id}`);
+  const chk  = document.getElementById(`vchk-${id}`);
+  if(item) item.classList.toggle('sel', on);
+  if(chk)  chk.checked = on;
+  refreshVoiceBtn();
+}
+function refreshVoiceBtn(){
+  const btn = document.getElementById('voice-btn');
+  if(!btn) return;
+  btn.disabled = isRecording ? false : voiceDests.size === 0;
+}
+
+// ── Voice recording ───────────────────────────────────────────────────────────
+async function toggleRec(){
+  if(!isRecording){ await startRec(); } else { stopRec(); }
+}
+async function startRec(){
+  if(voiceDests.size === 0) return;
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    audioChunks = [];
+    mediaRec = new MediaRecorder(stream);
+    mediaRec.ondataavailable = e => { if(e.data.size > 0) audioChunks.push(e.data); };
+    mediaRec.onstop = sendVoiceMsg;
+    mediaRec.start();
+    isRecording = true;
+    setVoiceState('recording');
+  } catch(e){
+    console.error('[voice] mic error:', e);
+    setVoiceState('failed');
+    setTimeout(() => setVoiceState('idle'), 3000);
+  }
+}
+function stopRec(){
+  if(mediaRec && isRecording){
+    mediaRec.stop();
+    mediaRec.stream.getTracks().forEach(t => t.stop());
+    isRecording = false;
+    setVoiceState('sending');
+  }
+}
+async function sendVoiceMsg(){
+  try {
+    const blob  = new Blob(audioChunks, { type: 'audio/webm' });
+    const b64   = await blobToBase64(blob);
+    const msgId = 'vm_' + Date.now() + '_' + Math.random().toString(36).substr(2,5);
+    const resp  = await fetch('/api/voice-message', {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json', 'Authorization':`Bearer ${token}` },
+      body: JSON.stringify({
+        audioData:    b64,
+        messageId:    msgId,
+        destinations: Array.from(voiceDests),
+        from:         myDeptId
+      })
+    });
+    const result = await resp.json();
+    setVoiceState(result.success ? 'done' : 'failed');
+  } catch(e){
+    console.error('[voice] send error:', e);
+    setVoiceState('failed');
+  }
+  setTimeout(() => setVoiceState('idle'), 2500);
+}
+function blobToBase64(blob){
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onloadend = () => res(r.result.split(',')[1]);
+    r.onerror = rej;
+    r.readAsDataURL(blob);
+  });
+}
+function setVoiceState(state){
+  const btn = document.getElementById('voice-btn');
+  const sts = document.getElementById('voice-status-txt');
+  if(!btn || !sts) return;
+  isRecording = (state === 'recording');
+  switch(state){
+    case 'idle':
+      btn.textContent = '🎙️ Avvia registrazione';
+      btn.className   = 'voice-btn';
+      sts.textContent = voiceDests.size > 0 ? 'Pronto' : 'Seleziona destinatario';
+      break;
+    case 'recording':
+      btn.textContent = '⏹ Ferma e invia';
+      btn.className   = 'voice-btn recording';
+      sts.textContent = 'Registrazione in corso...';
+      break;
+    case 'sending':
+      btn.textContent = '⏳ Invio...';
+      btn.className   = 'voice-btn sending';
+      sts.textContent = 'Invio in corso...';
+      break;
+    case 'done':
+      btn.textContent = '✓ Inviato';
+      btn.className   = 'voice-btn done';
+      sts.textContent = 'Messaggio inviato';
+      break;
+    case 'failed':
+      btn.textContent = '✕ Errore';
+      btn.className   = 'voice-btn';
+      sts.textContent = 'Invio fallito. Riprova.';
+      break;
+  }
+  refreshVoiceBtn();
+}
+
+// ── Incoming voice messages ───────────────────────────────────────────────────
+function handleVoiceMessage(data){
+  // Filter: this dept must be in the destinations array
+  const dests = Array.isArray(data.destinations) ? data.destinations
+               : (data.destination ? [data.destination] : []);
+  if(!dests.includes(myDeptId)) return;
+
+  // Resolve sender name from departmentMap using sourceDepartmentId
+  const srcId   = data.sourceDepartmentId || data.from || '';
+  const fromName = (srcId && departmentMap[srcId]) ? departmentMap[srcId].name : 'Reparto';
+
+  let blobUrl = null;
+  if(data.audioData){
+    try {
+      const bytes = atob(data.audioData);
+      const arr   = new Uint8Array(bytes.length);
+      for(let i=0; i<bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+      blobUrl = URL.createObjectURL(new Blob([arr], { type:'audio/webm' }));
+    } catch(e){ console.error('[voice] decode error:', e); }
+  }
+
+  voiceMessages.set(data.messageId, {
+    id:       data.messageId,
+    fromName,
+    timestamp: data.timestamp || nowTime(),
+    blobUrl,
+    text:     data.message || ''
+  });
+  renderVoiceMessages();
+}
+
+function dismissVoice(id){
+  const vm = voiceMessages.get(id);
+  if(!vm) return;
+  if(vm.blobUrl) URL.revokeObjectURL(vm.blobUrl);
+  voiceMessages.delete(id);
+  if(wsConnected) ws.send(JSON.stringify({ action:'deleteVoiceMessage', messageId: id }));
+  renderVoiceMessages();
+}
+
+function renderVoiceMessages(){
+  const section = document.getElementById('voice-msgs-section');
+  const list    = document.getElementById('voice-msg-list');
+  const badge   = document.getElementById('voice-msg-count');
+  if(!section || !list) return;
+
+  if(!voiceMessages.size){ section.style.display='none'; return; }
+
+  section.style.display = 'block';
+  badge.textContent = voiceMessages.size;
+
+  list.innerHTML = Array.from(voiceMessages.values()).reverse().map(vm => `
+    <div class="cdc">
+      <div class="cdc-top">
+        <div class="cdc-tbl">
+          <span class="cdc-tbl-lbl">Da</span>
+          <span class="cdc-tbl-num" style="font-size:16px;">${esc(vm.fromName)}</span>
+        </div>
+        ${vm.blobUrl
+          ? `<audio class="vm-audio" controls src="${vm.blobUrl}"></audio>`
+          : `<span style="flex:1;font-size:13px;color:var(--muted);">${esc(vm.text)}</span>`}
+        <button class="cdc-cancel" onclick="dismissVoice('${esc(vm.id)}')" title="Rimuovi">✕</button>
+      </div>
+      <div class="cdc-meta"><div></div><div class="cdc-started">${esc(vm.timestamp)}</div></div>
+    </div>`).join('');
 }
 
 // ── Numpad ────────────────────────────────────────────────────────────────────
@@ -444,6 +696,11 @@ function connectWS(){
     } else if(data.action === 'deleteCountdown'){
       countdowns.delete(String(data.tableNumber));
       renderCards();
+    } else if(data.action === 'voiceMessage'){
+      handleVoiceMessage(data);
+    } else if(data.action === 'deleteVoiceMessage'){
+      const vm = voiceMessages.get(data.messageId);
+      if(vm){ if(vm.blobUrl) URL.revokeObjectURL(vm.blobUrl); voiceMessages.delete(data.messageId); renderVoiceMessages(); }
     }
   };
 }
@@ -558,6 +815,8 @@ loadDepts().then(() => {
 window.addEventListener('beforeunload', () => {
   clearInterval(tickTimer);
   if(ws) ws.close();
+  // Revoke any open blob URLs to free memory
+  voiceMessages.forEach(vm => { if(vm.blobUrl) URL.revokeObjectURL(vm.blobUrl); });
 });
 </script>
 </body>
