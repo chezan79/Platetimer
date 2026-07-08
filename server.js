@@ -1475,27 +1475,6 @@ wss.on('connection', (ws, req) => {
                 }
                 console.log(`🔇 [PTT] talkingStop da peer ${data.peerId}`);
 
-            } else if (data.action === 'mute' || data.action === 'unmute') {
-                // WebRTC Voice Call: Mute/Unmute status
-                if (!data.peerId) {
-                    console.log('⚠️ PeerId mancante per mute/unmute');
-                    return;
-                }
-
-                console.log(`🎙️ [VOICE] Peer ${data.peerId} ${data.action === 'mute' ? 'muted' : 'unmuted'}`);
-
-                // Notifica gli altri peer dello stato mute
-                if (companyRooms.has(ws.companyRoom)) {
-                    const roomClients = companyRooms.get(ws.companyRoom);
-                    roomClients.forEach((client) => {
-                        if (client !== ws && client.voiceRoom === ws.voiceRoom && client.readyState === WebSocket.OPEN) {
-                            client.send(JSON.stringify({
-                                action: data.action,
-                                peerId: data.peerId
-                            }));
-                        }
-                    });
-                }
             }
         } catch (error) {
             console.error('❌ Errore nel parsing del messaggio:', error);
