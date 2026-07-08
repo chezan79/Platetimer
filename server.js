@@ -709,8 +709,10 @@ wss.on('connection', (ws, req) => {
                     data.action === 'ice-candidate' || 
                     data.action === 'offer' || 
                     data.action === 'answer' ||
-                    data.action === 'voice_join' ||
-                    data.action === 'voice_leave'
+                    data.action === 'joinVoice' ||
+                    data.action === 'leaveVoice' ||
+                    data.action === 'talkingStart' ||
+                    data.action === 'talkingStop'
                 );
                 
                 const now = Date.now();
@@ -1336,7 +1338,7 @@ wss.on('connection', (ws, req) => {
 
                     // Notifica gli altri peer del nuovo arrivo
                     roomClients.forEach((client) => {
-                        if (client !== ws && client.voiceRoom === data.room && client.readyState === WebSocket.OPEN) {
+                        if (client !== ws && client.voiceRoom === ws.voiceRoom && client.readyState === WebSocket.OPEN) {
                             client.send(JSON.stringify({
                                 action: 'voicePeerJoined',
                                 peerId: data.peerId
@@ -1434,6 +1436,45 @@ wss.on('connection', (ws, req) => {
 
                 ws.voiceRoom = null;
                 ws.voicePeerId = null;
+            } else if (data.action === 'talkingStart') {
+                // PTT: broadcast "this peer started talking" to all same-room same-company peers
+                if (!data.peerId || !data.deptName) {
+                    console.log('⚠️ talkingStart: peerId o deptName mancante');
+                    return;
+                }
+                if (companyRooms.has(ws.companyRoom)) {
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    roomClients.forEach((client) => {
+                        if (client !== ws && client.voiceRoom === ws.voiceRoom && client.readyState === WebSocket.OPEN) {
+                            client.send(JSON.stringify({
+                                action: 'talkingStart',
+                                peerId: data.peerId,
+                                deptName: data.deptName
+                            }));
+                        }
+                    });
+                }
+                console.log(`🎙️ [PTT] talkingStart da peer ${data.peerId} (${data.deptName})`);
+
+            } else if (data.action === 'talkingStop') {
+                // PTT: broadcast "this peer stopped talking" to all same-room same-company peers
+                if (!data.peerId) {
+                    console.log('⚠️ talkingStop: peerId mancante');
+                    return;
+                }
+                if (companyRooms.has(ws.companyRoom)) {
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    roomClients.forEach((client) => {
+                        if (client !== ws && client.voiceRoom === ws.voiceRoom && client.readyState === WebSocket.OPEN) {
+                            client.send(JSON.stringify({
+                                action: 'talkingStop',
+                                peerId: data.peerId
+                            }));
+                        }
+                    });
+                }
+                console.log(`🔇 [PTT] talkingStop da peer ${data.peerId}`);
+
             } else if (data.action === 'mute' || data.action === 'unmute') {
                 // WebRTC Voice Call: Mute/Unmute status
                 if (!data.peerId) {
