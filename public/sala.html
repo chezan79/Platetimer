@@ -1,702 +1,474 @@
 <!DOCTYPE html>
 <html lang="it">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Controllo Attese - Sala</title>
-    <link rel="stylesheet" href="style.css">
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Servizio — PlateTimer</title>
+<style>
+:root {
+  --bg:       #0d0d1a;
+  --panel:    #12122a;
+  --card:     #1a1a35;
+  --card-h:   #1f1f40;
+  --border:   rgba(255,255,255,0.07);
+  --border-l: rgba(255,255,255,0.13);
+  --text:     #e2e2f0;
+  --muted:    rgba(255,255,255,0.35);
+  --accent:   #6366f1;
+  --accent2:  #818cf8;
+  --warn:     #f59e0b;
+  --danger:   #ef4444;
+  --ok:       #22c55e;
+  --hdr:      56px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,sans-serif;min-height:100vh;overflow-x:hidden;}
 
-        body {
-            background: linear-gradient(135deg, #F0FFFF 0%, #E6E6FA 100%);
-            min-height: 100vh;
-            padding: 20px;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-        }
+/* ── HEADER ─────────────────────────────── */
+.hdr{position:fixed;top:0;left:0;right:0;height:var(--hdr);
+  background:rgba(13,13,26,.96);backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:12px;padding:0 16px;z-index:200;}
+.hdr-brand{font-size:15px;font-weight:700;color:var(--accent2);white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;max-width:200px;}
+.hdr-sep{width:1px;height:20px;background:var(--border-l);flex-shrink:0;}
+.hdr-page{font-size:15px;font-weight:600;color:var(--text);white-space:nowrap;flex:1;}
+.conn-badge{font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px;
+  background:rgba(239,68,68,.15);color:var(--danger);border:1px solid rgba(239,68,68,.3);
+  white-space:nowrap;flex-shrink:0;transition:all .3s;}
+.conn-badge.ok{background:rgba(34,197,94,.12);color:var(--ok);border-color:rgba(34,197,94,.3);}
+.hdr-btn{padding:7px 14px;border:1px solid var(--border-l);border-radius:7px;
+  background:rgba(255,255,255,.06);color:var(--text);font-size:13px;cursor:pointer;
+  white-space:nowrap;flex-shrink:0;transition:background .15s;}
+.hdr-btn:hover{background:rgba(255,255,255,.12);}
+.hdr-btn.danger{border-color:rgba(239,68,68,.3);color:var(--danger);}
+.hdr-btn.danger:hover{background:rgba(239,68,68,.1);}
 
-        .header-container {
-            position: sticky;
-            top: 0;
-            z-index: 100;
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-            margin-bottom: 20px;
-        }
+/* ── MAIN ───────────────────────────────── */
+.main{max-width:1200px;margin:0 auto;padding:calc(var(--hdr) + 20px) 16px 40px;}
 
-        .page-title {
-            text-align: center;
-            color: #333;
-            font-size: 28px;
-            font-weight: 300;
-            margin-bottom: 20px;
-        }
+/* ── STATS ROW ──────────────────────────── */
+.stats-row{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;}
+@media(max-width:600px){.stats-row{grid-template-columns:1fr;}}
+.stat-card{background:var(--card);border:1.5px solid var(--border);border-radius:12px;
+  padding:16px 18px;text-align:center;}
+.stat-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;
+  color:var(--muted);margin-bottom:6px;}
+.stat-value{font-size:28px;font-weight:800;color:var(--accent2);line-height:1;}
 
-        .stats-bar {
-            display: flex;
-            justify-content: space-around;
-            gap: 15px;
-            margin-bottom: 20px;
-            flex-wrap: wrap;
-        }
+/* ── FILTERS ────────────────────────────── */
+.filters-bar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:20px;}
+.search-input{flex:1;min-width:180px;padding:9px 14px;
+  background:rgba(255,255,255,.05);border:1.5px solid var(--border-l);
+  border-radius:9px;color:var(--text);font-size:14px;outline:none;transition:border-color .15s;}
+.search-input::placeholder{color:var(--muted);}
+.search-input:focus{border-color:var(--accent);}
+.filter-group{display:flex;gap:6px;flex-wrap:wrap;}
+.filter-btn{padding:7px 14px;border:1.5px solid var(--border-l);
+  background:rgba(255,255,255,.05);border-radius:8px;color:var(--muted);
+  cursor:pointer;font-size:13px;font-weight:600;transition:all .15s;}
+.filter-btn:hover{background:rgba(255,255,255,.1);color:var(--text);}
+.filter-btn.active{background:rgba(99,102,241,.2);border-color:var(--accent);color:var(--accent2);}
 
-        .stat-item {
-            flex: 1;
-            min-width: 150px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 15px;
-            border-radius: 8px;
-            text-align: center;
-        }
+/* ── SECTION HEADER ─────────────────────── */
+.section-hdr{display:flex;align-items:center;gap:10px;margin-bottom:14px;}
+.section-title{font-size:14px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.6px;color:var(--muted);}
+.section-count{font-size:12px;font-weight:700;padding:3px 10px;border-radius:20px;
+  background:rgba(99,102,241,.15);color:var(--accent2);border:1px solid rgba(99,102,241,.3);}
 
-        .stat-label {
-            font-size: 12px;
-            opacity: 0.9;
-            margin-bottom: 5px;
-        }
+/* ── COUNTDOWN CARDS ────────────────────── */
+.cd-list{display:flex;flex-direction:column;gap:10px;}
 
-        .stat-value {
-            font-size: 24px;
-            font-weight: 600;
-        }
+.cd-card{background:var(--card);border:1.5px solid var(--border);border-radius:13px;
+  padding:16px 18px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+  transition:border-color .2s;}
+.cd-card:hover{border-color:var(--border-l);}
 
-        .filters-container {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-            align-items: center;
-        }
+.cd-card.warning{border-color:rgba(245,158,11,.35);background:rgba(245,158,11,.05);}
+.cd-card.critical{border-color:rgba(239,68,68,.4);background:rgba(239,68,68,.07);
+  animation:pulse 2s ease-in-out infinite;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.75;}}
 
-        .search-input {
-            flex: 1;
-            min-width: 200px;
-            padding: 10px 15px;
-            border: 2px solid #ddd;
-            border-radius: 8px;
-            font-size: 16px;
-            transition: border-color 0.3s;
-        }
+/* Table number */
+.cd-table{font-size:22px;font-weight:800;color:var(--text);
+  min-width:52px;text-align:center;flex-shrink:0;}
 
-        .search-input:focus {
-            outline: none;
-            border-color: #667eea;
-        }
+/* Stations */
+.cd-stations{display:flex;gap:6px;flex-wrap:wrap;flex:1;min-width:120px;}
+.station-badge{font-size:12px;font-weight:700;padding:4px 10px;border-radius:20px;
+  background:rgba(255,255,255,.08);color:var(--text);border:1px solid var(--border-l);}
 
-        .filter-group {
-            display: flex;
-            gap: 8px;
-        }
+/* Time */
+.cd-time{font-size:26px;font-weight:800;min-width:72px;text-align:right;flex-shrink:0;
+  font-variant-numeric:tabular-nums;}
+.cd-time.neutral{color:var(--ok);}
+.cd-time.warning{color:var(--warn);}
+.cd-time.critical{color:var(--danger);}
 
-        .filter-btn {
-            padding: 8px 16px;
-            border: 2px solid #ddd;
-            background: white;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 500;
-            transition: all 0.3s;
-        }
+/* Meta */
+.cd-meta{display:flex;flex-direction:column;gap:3px;min-width:90px;flex-shrink:0;}
+.cd-meta-row{font-size:11px;color:var(--muted);}
+.cd-meta-row strong{color:var(--text);font-weight:600;}
 
-        .filter-btn:hover {
-            background: #f0f0f0;
-        }
+/* Status badge */
+.status-badge{font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px;
+  white-space:nowrap;flex-shrink:0;}
+.status-badge.active{background:rgba(34,197,94,.12);color:var(--ok);border:1px solid rgba(34,197,94,.25);}
+.status-badge.alert{background:rgba(239,68,68,.12);color:#fca5a5;border:1px solid rgba(239,68,68,.25);}
 
-        .filter-btn.active {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border-color: #667eea;
-        }
+/* Empty state */
+.empty-state{text-align:center;padding:70px 20px;color:var(--muted);}
+.empty-state-icon{font-size:56px;margin-bottom:16px;}
+.empty-state-text{font-size:16px;}
 
-        .countdowns-container {
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-            min-height: 400px;
-        }
-
-        .table-header {
-            display: grid;
-            grid-template-columns: 100px 1fr 150px 120px 150px 100px;
-            gap: 15px;
-            padding: 12px 15px;
-            background: #f8f9fa;
-            border-radius: 8px;
-            font-weight: 600;
-            color: #666;
-            font-size: 14px;
-            margin-bottom: 10px;
-        }
-
-        .countdown-row {
-            display: grid;
-            grid-template-columns: 100px 1fr 150px 120px 150px 100px;
-            gap: 15px;
-            padding: 15px;
-            border: 2px solid #ddd;
-            border-radius: 8px;
-            margin-bottom: 10px;
-            transition: all 0.3s;
-            align-items: center;
-        }
-
-        .countdown-row:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-        }
-
-        .countdown-row.neutral {
-            background-color: #f8f9fa;
-            border-color: #ddd;
-        }
-
-        .countdown-row.warning {
-            background-color: #fff3cd;
-            border-color: #ffc107;
-        }
-
-        .countdown-row.critical {
-            background-color: #f8d7da;
-            border-color: #dc3545;
-            animation: pulse 2s ease-in-out infinite;
-        }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.7; }
-        }
-
-        .table-number {
-            font-size: 20px;
-            font-weight: 600;
-            color: #333;
-        }
-
-        .station-badge {
-            display: inline-block;
-            padding: 4px 10px;
-            border-radius: 12px;
-            font-size: 12px;
-            font-weight: 600;
-        }
-
-        .station-badge.cucina {
-            background: linear-gradient(135deg, #28a745 0%, #98FB98 100%);
-            color: #212529;
-        }
-
-        .station-badge.pizzeria {
-            background: linear-gradient(135deg, #ffc107 0%, #FFE4C4 100%);
-            color: #212529;
-        }
-
-        .station-badge.insalata {
-            background: linear-gradient(135deg, #17a2b8 0%, #B0E0E6 100%);
-            color: #212529;
-        }
-
-        .time-display {
-            font-size: 22px;
-            font-weight: 700;
-            color: #d9534f;
-        }
-
-        .status-badge {
-            padding: 6px 12px;
-            border-radius: 12px;
-            font-size: 12px;
-            font-weight: 600;
-            text-align: center;
-        }
-
-        .status-badge.active {
-            background: #d4edda;
-            color: #155724;
-        }
-
-        .status-badge.alert {
-            background: #f8d7da;
-            color: #721c24;
-        }
-
-        .empty-state {
-            text-align: center;
-            padding: 60px 20px;
-            color: #999;
-        }
-
-        .empty-state-icon {
-            font-size: 64px;
-            margin-bottom: 20px;
-        }
-
-        .empty-state-text {
-            font-size: 18px;
-        }
-
-        .connection-status {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
-            z-index: 1000;
-            transition: all 0.3s;
-        }
-
-        .connection-status.connected {
-            background: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
-        }
-
-        .connection-status.disconnected {
-            background: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
-        }
-
-        .nav-buttons {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            display: flex;
-            gap: 10px;
-            z-index: 1000;
-        }
-
-        .nav-btn {
-            padding: 8px 16px;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 600;
-            transition: all 0.3s;
-        }
-
-        .nav-btn.home {
-            background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%);
-            color: white;
-        }
-
-        .nav-btn.exit {
-            background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
-            color: white;
-        }
-
-        .nav-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-        }
-
-        .company-header {
-            position: fixed;
-            top: 20px;
-            left: 20px;
-            z-index: 1000;
-            padding: 12px 20px;
-            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-            border-radius: 8px;
-            border-left: 4px solid #ffc107;
-        }
-
-        .company-name {
-            margin: 0;
-            color: #333;
-            font-weight: 600;
-            font-size: 16px;
-        }
-
-        @media (max-width: 768px) {
-            .table-header,
-            .countdown-row {
-                grid-template-columns: 1fr;
-                gap: 8px;
-            }
-
-            .table-header {
-                display: none;
-            }
-
-            .countdown-row > div::before {
-                content: attr(data-label);
-                font-weight: 600;
-                margin-right: 8px;
-                color: #666;
-            }
-
-            .stats-bar {
-                flex-direction: column;
-            }
-
-            .stat-item {
-                min-width: 100%;
-            }
-
-            .filters-container {
-                flex-direction: column;
-            }
-
-            .search-input {
-                width: 100%;
-            }
-
-            .filter-group {
-                width: 100%;
-                flex-wrap: wrap;
-            }
-        }
-    </style>
+/* ── MOBILE ─────────────────────────────── */
+@media(max-width:600px){
+  .cd-card{gap:10px;}
+  .cd-meta{display:none;}
+  .cd-time{font-size:22px;}
+  .hdr-brand{max-width:120px;}
+}
+</style>
 </head>
 <body>
-    <div class="company-header" id="company-header">
-        <h4 class="company-name" id="company-name">Nome Azienda</h4>
+
+<!-- ── HEADER ─────────────────────────── -->
+<header class="hdr">
+  <span id="hdr-company" class="hdr-brand">Servizio</span>
+  <span class="hdr-sep"></span>
+  <span class="hdr-page">Servizio</span>
+  <span id="connectionStatus" class="conn-badge">🔴 Riconnessione…</span>
+  <button class="hdr-btn" onclick="window.location.href='home.html'">Home</button>
+  <button class="hdr-btn danger" onclick="window.location.href='index.html'">Esci</button>
+</header>
+
+<!-- ── MAIN ───────────────────────────── -->
+<main class="main">
+
+  <!-- Stats -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-label">Countdown Attivi</div>
+      <div class="stat-value" id="activeCount">0</div>
     </div>
-
-    <div class="nav-buttons">
-        <button class="nav-btn home" onclick="window.location.href='home.html'">🏠 Home</button>
-        <button class="nav-btn exit" onclick="window.location.href='index.html'">🚪 Esci</button>
+    <div class="stat-card">
+      <div class="stat-label">Tempo Medio Attesa</div>
+      <div class="stat-value" id="avgTime">0:00</div>
     </div>
-
-    <div class="header-container">
-        <h1 class="page-title">🍽️ Controllo Attese - Sala</h1>
-
-        <div class="stats-bar">
-            <div class="stat-item">
-                <div class="stat-label">Countdown Attivi</div>
-                <div class="stat-value" id="activeCount">0</div>
-            </div>
-            <div class="stat-item">
-                <div class="stat-label">Tempo Medio Attesa</div>
-                <div class="stat-value" id="avgTime">0:00</div>
-            </div>
-            <div class="stat-item">
-                <div class="stat-label">Tavoli in Attesa</div>
-                <div class="stat-value" id="tableCount">0</div>
-            </div>
-        </div>
-
-        <div class="filters-container">
-            <input type="text" id="searchInput" class="search-input" placeholder="🔍 Cerca tavolo...">
-            
-            <div class="filter-group" id="filter-group">
-                <button class="filter-btn active" data-filter="all">Tutti</button>
-            </div>
-        </div>
+    <div class="stat-card">
+      <div class="stat-label">Tavoli in Attesa</div>
+      <div class="stat-value" id="tableCount">0</div>
     </div>
+  </div>
 
-    <div class="countdowns-container">
-        <div class="table-header">
-            <div>Tavolo</div>
-            <div>Stazioni</div>
-            <div>Ora Inizio</div>
-            <div>Tempo Rimasto</div>
-            <div>Durata Iniziale</div>
-            <div>Stato</div>
-        </div>
-        <div id="countdownsList"></div>
+  <!-- Filters -->
+  <div class="filters-bar">
+    <input type="text" id="searchInput" class="search-input" placeholder="🔍 Cerca tavolo…">
+    <div class="filter-group" id="filter-group">
+      <button class="filter-btn active" data-filter="all">Tutti</button>
     </div>
+  </div>
 
-    <div class="connection-status connected" id="connectionStatus">
-        🟢 Connesso
-    </div>
+  <!-- List -->
+  <div class="section-hdr">
+    <span class="section-title">Countdown attivi</span>
+    <span class="section-count" id="visibleCount">0</span>
+  </div>
+  <div class="cd-list" id="countdownsList"></div>
 
-    <audio id="alertSound" src="alerte-346112.mp3" preload="auto"></audio>
+</main>
 
-    <script src="js/ws-auth.js"></script>
-    <script src="js/countdowns.js"></script>
-    <script src="company-header.js"></script>
-    <script>
-        let countdowns = [];
-        let activeFilter = 'all';
-        let searchTerm = '';
-        let subscription = null;
-        let updateInterval = null;
+<audio id="alertSound" src="alerte-346112.mp3" preload="auto"></audio>
 
-        let companyName = localStorage.getItem('userCompany');
-        if (!companyName) {
-            alert('❌ Nome azienda non trovato. Effettua il login.');
-            window.location.href = 'index.html';
-        }
-        companyName = companyName.trim().toLowerCase();
+<script src="js/ws-auth.js"></script>
+<script src="js/countdowns.js"></script>
+<script src="company-header.js"></script>
+<script>
+    let countdowns = [];
+    let activeFilter = 'all';
+    let searchTerm = '';
+    let subscription = null;
+    let updateInterval = null;
 
-        // Map of deptId → department object (name, active)
-        let departmentMap = {};
+    let companyName = localStorage.getItem('userCompany');
+    if (!companyName) {
+        alert('❌ Nome azienda non trovato. Effettua il login.');
+        window.location.href = 'index.html';
+    }
+    companyName = companyName.trim().toLowerCase();
 
-        async function loadDepartments() {
-            const token = WsAuth.getStoredToken();
-            if (!token) return;
-            try {
-                const res = await fetch('/api/departments', { headers: { 'Authorization': `Bearer ${token}` } });
-                const data = await res.json();
-                if (data.success && data.departments) {
-                    departmentMap = {};
-                    data.departments.forEach(d => { departmentMap[d.id] = d; });
-                    buildFilterButtons(data.departments.filter(d => d.active));
-                }
-            } catch (e) { console.warn('Could not load departments for sala:', e.message); }
-        }
+    // Populate header company name (display only)
+    document.getElementById('hdr-company').textContent = localStorage.getItem('userCompany') || 'Servizio';
 
-        function buildFilterButtons(activeDepts) {
-            const group = document.getElementById('filter-group');
-            if (!group) return;
-            // Remove old dept buttons (keep "Tutti")
-            Array.from(group.querySelectorAll('[data-dept]')).forEach(el => el.remove());
-            activeDepts.forEach(d => {
-                const btn = document.createElement('button');
-                btn.className = 'filter-btn';
-                btn.dataset.filter = d.id;
-                btn.dataset.dept = '1';
-                btn.textContent = d.name;
-                btn.addEventListener('click', () => {
-                    group.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-                    btn.classList.add('active');
-                    activeFilter = d.id;
-                    renderCountdowns();
-                });
-                group.appendChild(btn);
+    // Map of deptId → department object (name, active)
+    let departmentMap = {};
+
+    async function loadDepartments() {
+        const token = WsAuth.getStoredToken();
+        if (!token) return;
+        try {
+            const res = await fetch('/api/departments', { headers: { 'Authorization': `Bearer ${token}` } });
+            const data = await res.json();
+            if (data.success && data.departments) {
+                departmentMap = {};
+                data.departments.forEach(d => { departmentMap[d.id] = d; });
+                buildFilterButtons(data.departments.filter(d => d.active));
+            }
+        } catch (e) { console.warn('Could not load departments for sala:', e.message); }
+    }
+
+    function buildFilterButtons(activeDepts) {
+        const group = document.getElementById('filter-group');
+        if (!group) return;
+        // Remove old dept buttons (keep "Tutti")
+        Array.from(group.querySelectorAll('[data-dept]')).forEach(el => el.remove());
+        activeDepts.forEach(d => {
+            const btn = document.createElement('button');
+            btn.className = 'filter-btn';
+            btn.dataset.filter = d.id;
+            btn.dataset.dept = '1';
+            btn.textContent = d.name;
+            btn.addEventListener('click', () => {
+                group.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                activeFilter = d.id;
+                renderCountdowns();
             });
-        }
+            group.appendChild(btn);
+        });
+    }
 
-        function initializePage() {
-            loadDepartments();
-            loadInitialCountdowns();
-            subscribeToUpdates();
-            startAutoRefresh();
-            setupEventListeners();
-        }
+    function initializePage() {
+        loadDepartments();
+        loadInitialCountdowns();
+        subscribeToUpdates();
+        startAutoRefresh();
+        setupEventListeners();
+    }
 
-        function loadInitialCountdowns() {
-            CountdownsModule.fetchActiveCountdowns(companyName)
-                .then(data => {
-                    countdowns = data;
-                    renderCountdowns();
-                    updateStatistics();
-                })
-                .catch(error => {
-                    console.error('Error loading countdowns:', error);
-                });
-        }
-
-        function subscribeToUpdates() {
-            subscription = CountdownsModule.subscribeCountdowns({
-                companyName: companyName,
-                onCountdownUpdate: (data) => {
-                    updateCountdown(data);
-                },
-                onCountdownDelete: (tableNumber) => {
-                    deleteCountdown(tableNumber);
-                },
-                onConnectionStatus: (connected) => {
-                    updateConnectionStatus(connected);
-                }
+    function loadInitialCountdowns() {
+        CountdownsModule.fetchActiveCountdowns(companyName)
+            .then(data => {
+                countdowns = data;
+                renderCountdowns();
+                updateStatistics();
+            })
+            .catch(error => {
+                console.error('Error loading countdowns:', error);
             });
-        }
+    }
 
-        function startAutoRefresh() {
-            updateInterval = setInterval(() => {
-                updateAllCountdowns();
-            }, 1000);
-        }
-
-        function updateAllCountdowns() {
-            const currentTime = Date.now();
-            
-            countdowns = countdowns.map(countdown => {
-                const elapsed = Math.floor((currentTime - countdown.startTime) / 1000);
-                const remainingTime = Math.max(0, countdown.initialDuration - elapsed);
-                
-                return {
-                    ...countdown,
-                    remainingTime: remainingTime,
-                    remainingTimeFormatted: CountdownsModule.formatTime(remainingTime)
-                };
-            }).filter(c => c.remainingTime > 0);
-
-            renderCountdowns();
-            updateStatistics();
-        }
-
-        function updateCountdown(data) {
-            console.log('📥 Countdown ricevuto in sala:', data);
-            console.log(`🔍 Destinazione: "${data.destination}", Tavolo: ${data.tableNumber}, Tempo: ${data.timeRemaining}s`);
-            
-            // Verifica se esiste già un countdown per questo tavolo
-            const existingIndex = countdowns.findIndex(c => c.tableNumber == data.tableNumber);
-            
-            if (existingIndex !== -1) {
-                const existing = countdowns[existingIndex];
-                
-                // Aggiungi destinazione se non presente
-                if (data.destination && !existing.destinations.includes(data.destination)) {
-                    existing.destinations.push(data.destination);
-                    console.log(`📝 Destinazione "${data.destination}" aggiunta al tavolo ${data.tableNumber}. Destinazioni totali: [${existing.destinations.join(', ')}]`);
-                }
-                
-                // Aggiorna il tempo con il countdown più recente
-                existing.remainingTime = data.timeRemaining;
-                existing.initialDuration = data.timeRemaining;
-                existing.startTime = Date.now();
-                existing.endsAt = Date.now() + (data.timeRemaining * 1000);
-                existing.remainingTimeFormatted = CountdownsModule.formatTime(data.timeRemaining);
-                
-                console.log(`🔄 Countdown tavolo ${data.tableNumber} aggiornato in sala`);
-            } else {
-                // Crea nuovo countdown
-                const newCountdown = {
-                    tableNumber: data.tableNumber,
-                    remainingTime: data.timeRemaining,
-                    initialDuration: data.timeRemaining,
-                    destinations: data.destination ? [data.destination] : [],
-                    startedAt: new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
-                    startTime: Date.now(),
-                    endsAt: Date.now() + (data.timeRemaining * 1000),
-                    status: 'active',
-                    remainingTimeFormatted: CountdownsModule.formatTime(data.timeRemaining)
-                };
-                
-                countdowns.push(newCountdown);
-                console.log(`✅ Nuovo countdown tavolo ${data.tableNumber} aggiunto in sala con destinazione: [${newCountdown.destinations.join(', ')}]`);
-            }
-
-            renderCountdowns();
-            updateStatistics();
-        }
-
-        function deleteCountdown(tableNumber) {
-            countdowns = countdowns.filter(c => c.tableNumber != tableNumber);
-            renderCountdowns();
-            updateStatistics();
-        }
-
-        function renderCountdowns() {
-            const container = document.getElementById('countdownsList');
-            
-            let filtered = countdowns.filter(c => {
-                const matchesSearch = searchTerm === '' || 
-                    c.tableNumber.toString().includes(searchTerm);
-                
-                const matchesFilter = activeFilter === 'all' || 
-                    (c.destinations && c.destinations.includes(activeFilter));
-                
-                return matchesSearch && matchesFilter;
-            });
-
-            filtered.sort((a, b) => a.remainingTime - b.remainingTime);
-
-            if (filtered.length === 0) {
-                container.innerHTML = `
-                    <div class="empty-state">
-                        <div class="empty-state-icon">🍽️</div>
-                        <div class="empty-state-text">Nessun countdown attivo</div>
-                    </div>
-                `;
-                return;
-            }
-
-            container.innerHTML = filtered.map(countdown => {
-                const alertLevel = CountdownsModule.getAlertLevel(countdown.remainingTime);
-                const statusClass = countdown.remainingTime < 120 ? 'alert' : 'active';
-                const initialTimeFormatted = CountdownsModule.formatTime(countdown.initialDuration);
-
-                const stationBadges = countdown.destinations && countdown.destinations.length > 0
-                    ? countdown.destinations.map(dest => 
-                        `<span class="station-badge ${dest}">${getStationIcon(dest)}</span>`
-                      ).join(' ')
-                    : '<span class="station-badge cucina">🍳</span>';
-
-                return `
-                    <div class="countdown-row ${alertLevel}">
-                        <div class="table-number" data-label="Tavolo:">T${countdown.tableNumber}</div>
-                        <div data-label="Stazioni:">${stationBadges}</div>
-                        <div data-label="Ora Inizio:">${countdown.startedAt}</div>
-                        <div class="time-display" data-label="Tempo Rimasto:">${countdown.remainingTimeFormatted}</div>
-                        <div data-label="Durata Iniziale:">${initialTimeFormatted}</div>
-                        <div data-label="Stato:">
-                            <span class="status-badge ${statusClass}">
-                                ${statusClass === 'alert' ? '🔥 Urgente' : '✅ Attivo'}
-                            </span>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-        }
-
-        function getStationIcon(station) {
-            // Look up department name from map; fall back to raw ID
-            if (departmentMap[station]) return departmentMap[station].name;
-            // Legacy names for old countdown records
-            const legacy = { 'cucina': '🍳 Cucina', 'pizzeria': '🍕 Pizzeria', 'insalata': '🥗 Insalata' };
-            return legacy[station] || station;
-        }
-
-        function updateStatistics() {
-            document.getElementById('activeCount').textContent = countdowns.length;
-            
-            const uniqueTables = new Set(countdowns.map(c => c.tableNumber)).size;
-            document.getElementById('tableCount').textContent = uniqueTables;
-
-            const avgTime = CountdownsModule.calculateAverageWaitTime(countdowns);
-            document.getElementById('avgTime').textContent = CountdownsModule.formatTime(avgTime);
-        }
-
-        function updateConnectionStatus(connected) {
-            const statusEl = document.getElementById('connectionStatus');
-            if (connected) {
-                statusEl.className = 'connection-status connected';
-                statusEl.innerHTML = '🟢 Connesso';
-            } else {
-                statusEl.className = 'connection-status disconnected';
-                statusEl.innerHTML = '🔴 Riconnessione...';
-            }
-        }
-
-        function setupEventListeners() {
-            const searchInput = document.getElementById('searchInput');
-            let debounceTimer;
-            
-            searchInput.addEventListener('input', (e) => {
-                clearTimeout(debounceTimer);
-                debounceTimer = setTimeout(() => {
-                    searchTerm = e.target.value.toLowerCase();
-                    renderCountdowns();
-                }, 150);
-            });
-
-            // "Tutti" button — department buttons are wired inside buildFilterButtons
-            const tuttiBtn = document.querySelector('.filter-btn[data-filter="all"]');
-            if (tuttiBtn) {
-                tuttiBtn.addEventListener('click', () => {
-                    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-                    tuttiBtn.classList.add('active');
-                    activeFilter = 'all';
-                    renderCountdowns();
-                });
-            }
-        }
-
-        window.addEventListener('load', initializePage);
-
-        window.addEventListener('beforeunload', () => {
-            if (subscription) {
-                subscription.disconnect();
-            }
-            if (updateInterval) {
-                clearInterval(updateInterval);
+    function subscribeToUpdates() {
+        subscription = CountdownsModule.subscribeCountdowns({
+            companyName: companyName,
+            onCountdownUpdate: (data) => {
+                updateCountdown(data);
+            },
+            onCountdownDelete: (tableNumber) => {
+                deleteCountdown(tableNumber);
+            },
+            onConnectionStatus: (connected) => {
+                updateConnectionStatus(connected);
             }
         });
+    }
 
-    </script>
+    function startAutoRefresh() {
+        updateInterval = setInterval(() => {
+            updateAllCountdowns();
+        }, 1000);
+    }
+
+    function updateAllCountdowns() {
+        const currentTime = Date.now();
+        
+        countdowns = countdowns.map(countdown => {
+            const elapsed = Math.floor((currentTime - countdown.startTime) / 1000);
+            const remainingTime = Math.max(0, countdown.initialDuration - elapsed);
+            
+            return {
+                ...countdown,
+                remainingTime: remainingTime,
+                remainingTimeFormatted: CountdownsModule.formatTime(remainingTime)
+            };
+        }).filter(c => c.remainingTime > 0);
+
+        renderCountdowns();
+        updateStatistics();
+    }
+
+    function updateCountdown(data) {
+        console.log('📥 Countdown ricevuto in sala:', data);
+        console.log(`🔍 Destinazione: "${data.destination}", Tavolo: ${data.tableNumber}, Tempo: ${data.timeRemaining}s`);
+        
+        // Verifica se esiste già un countdown per questo tavolo
+        const existingIndex = countdowns.findIndex(c => c.tableNumber == data.tableNumber);
+        
+        if (existingIndex !== -1) {
+            const existing = countdowns[existingIndex];
+            
+            // Aggiungi destinazione se non presente
+            if (data.destination && !existing.destinations.includes(data.destination)) {
+                existing.destinations.push(data.destination);
+                console.log(`📝 Destinazione "${data.destination}" aggiunta al tavolo ${data.tableNumber}. Destinazioni totali: [${existing.destinations.join(', ')}]`);
+            }
+            
+            // Aggiorna il tempo con il countdown più recente
+            existing.remainingTime = data.timeRemaining;
+            existing.initialDuration = data.timeRemaining;
+            existing.startTime = Date.now();
+            existing.endsAt = Date.now() + (data.timeRemaining * 1000);
+            existing.remainingTimeFormatted = CountdownsModule.formatTime(data.timeRemaining);
+            
+            console.log(`🔄 Countdown tavolo ${data.tableNumber} aggiornato in sala`);
+        } else {
+            // Crea nuovo countdown
+            const newCountdown = {
+                tableNumber: data.tableNumber,
+                remainingTime: data.timeRemaining,
+                initialDuration: data.timeRemaining,
+                destinations: data.destination ? [data.destination] : [],
+                startedAt: new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
+                startTime: Date.now(),
+                endsAt: Date.now() + (data.timeRemaining * 1000),
+                status: 'active',
+                remainingTimeFormatted: CountdownsModule.formatTime(data.timeRemaining)
+            };
+            
+            countdowns.push(newCountdown);
+            console.log(`✅ Nuovo countdown tavolo ${data.tableNumber} aggiunto in sala con destinazione: [${newCountdown.destinations.join(', ')}]`);
+        }
+
+        renderCountdowns();
+        updateStatistics();
+    }
+
+    function deleteCountdown(tableNumber) {
+        countdowns = countdowns.filter(c => c.tableNumber != tableNumber);
+        renderCountdowns();
+        updateStatistics();
+    }
+
+    function renderCountdowns() {
+        const container = document.getElementById('countdownsList');
+        
+        let filtered = countdowns.filter(c => {
+            const matchesSearch = searchTerm === '' || 
+                c.tableNumber.toString().includes(searchTerm);
+            
+            const matchesFilter = activeFilter === 'all' || 
+                (c.destinations && c.destinations.includes(activeFilter));
+            
+            return matchesSearch && matchesFilter;
+        });
+
+        filtered.sort((a, b) => a.remainingTime - b.remainingTime);
+
+        const visibleCount = document.getElementById('visibleCount');
+        if (visibleCount) visibleCount.textContent = filtered.length;
+
+        if (filtered.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-state-icon">🍽️</div>
+                    <div class="empty-state-text">Nessun countdown attivo</div>
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = filtered.map(countdown => {
+            const alertLevel = CountdownsModule.getAlertLevel(countdown.remainingTime);
+            const statusClass = countdown.remainingTime < 120 ? 'alert' : 'active';
+            const initialTimeFormatted = CountdownsModule.formatTime(countdown.initialDuration);
+
+            const stationBadges = countdown.destinations && countdown.destinations.length > 0
+                ? countdown.destinations.map(dest => 
+                    `<span class="station-badge">${getStationIcon(dest)}</span>`
+                  ).join('')
+                : '<span class="station-badge">🍳 Cucina</span>';
+
+            return `
+                <div class="cd-card ${alertLevel}">
+                    <div class="cd-table">T${countdown.tableNumber}</div>
+                    <div class="cd-stations">${stationBadges}</div>
+                    <div class="cd-meta">
+                        <div class="cd-meta-row">Inizio: <strong>${countdown.startedAt}</strong></div>
+                        <div class="cd-meta-row">Durata: <strong>${initialTimeFormatted}</strong></div>
+                    </div>
+                    <div class="cd-time ${alertLevel}">${countdown.remainingTimeFormatted}</div>
+                    <span class="status-badge ${statusClass}">
+                        ${statusClass === 'alert' ? '🔥 Urgente' : '✅ Attivo'}
+                    </span>
+                </div>
+            `;
+        }).join('');
+    }
+
+    function getStationIcon(station) {
+        // Look up department name from map; fall back to raw ID
+        if (departmentMap[station]) return departmentMap[station].name;
+        // Legacy names for old countdown records
+        const legacy = { 'cucina': '🍳 Cucina', 'pizzeria': '🍕 Pizzeria', 'insalata': '🥗 Insalata' };
+        return legacy[station] || station;
+    }
+
+    function updateStatistics() {
+        document.getElementById('activeCount').textContent = countdowns.length;
+        
+        const uniqueTables = new Set(countdowns.map(c => c.tableNumber)).size;
+        document.getElementById('tableCount').textContent = uniqueTables;
+
+        const avgTime = CountdownsModule.calculateAverageWaitTime(countdowns);
+        document.getElementById('avgTime').textContent = CountdownsModule.formatTime(avgTime);
+    }
+
+    function updateConnectionStatus(connected) {
+        const statusEl = document.getElementById('connectionStatus');
+        if (connected) {
+            statusEl.className = 'conn-badge ok';
+            statusEl.innerHTML = '🟢 Connesso';
+        } else {
+            statusEl.className = 'conn-badge';
+            statusEl.innerHTML = '🔴 Riconnessione…';
+        }
+    }
+
+    function setupEventListeners() {
+        const searchInput = document.getElementById('searchInput');
+        let debounceTimer;
+        
+        searchInput.addEventListener('input', (e) => {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                searchTerm = e.target.value.toLowerCase();
+                renderCountdowns();
+            }, 150);
+        });
+
+        // "Tutti" button — department buttons are wired inside buildFilterButtons
+        const tuttiBtn = document.querySelector('.filter-btn[data-filter="all"]');
+        if (tuttiBtn) {
+            tuttiBtn.addEventListener('click', () => {
+                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                tuttiBtn.classList.add('active');
+                activeFilter = 'all';
+                renderCountdowns();
+            });
+        }
+    }
+
+    window.addEventListener('load', initializePage);
+
+    window.addEventListener('beforeunload', () => {
+        if (subscription) {
+            subscription.disconnect();
+        }
+        if (updateInterval) {
+            clearInterval(updateInterval);
+        }
+    });
+</script>
 </body>
 </html>
