@@ -1,211 +1,349 @@
 <!DOCTYPE html>
 <html lang="it">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestione Reparti - PlateTimer</title>
-    <link rel="stylesheet" href="style.css">
-    <style>
-        body { background: linear-gradient(135deg, #f5f7fa 0%, #e8ecf0 100%); min-height: 100vh; padding: 20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
-        .page-header { background: white; border-radius: 12px; padding: 24px; margin-bottom: 20px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
-        .page-title { font-size: 22px; font-weight: 600; color: #1a1a2e; margin: 0; }
-        .plan-badge { display: inline-flex; align-items: center; gap: 8px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 8px 16px; border-radius: 20px; font-size: 14px; font-weight: 500; }
-        .btn { padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; transition: all 0.2s; }
-        .btn-primary { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
-        .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(102,126,234,0.4); }
-        .btn-secondary { background: #f0f0f0; color: #444; }
-        .btn-secondary:hover { background: #e0e0e0; }
-        .btn-danger { background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%); color: white; }
-        .btn-danger:hover:not(:disabled) { transform: translateY(-1px); }
-        .btn:disabled { opacity: 0.45; cursor: not-allowed; }
-        .card { background: white; border-radius: 12px; padding: 24px; margin-bottom: 16px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
-        .card-title { font-size: 16px; font-weight: 600; color: #333; margin: 0 0 16px 0; }
-        .create-form { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
-        .form-group { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 200px; }
-        .form-label { font-size: 13px; font-weight: 500; color: #555; }
-        .form-input { padding: 10px 14px; border: 1.5px solid #ddd; border-radius: 8px; font-size: 14px; outline: none; transition: border-color 0.2s; }
-        .form-input:focus { border-color: #667eea; }
-        .dept-list { display: flex; flex-direction: column; gap: 10px; }
-        .dept-item { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border: 1.5px solid #eee; border-radius: 10px; background: #fafafa; flex-wrap: wrap; }
-        .dept-item.inactive { opacity: 0.65; }
-        .dept-name { font-size: 15px; font-weight: 600; color: #333; flex: 1; min-width: 120px; }
-        .status-badge { font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 20px; }
-        .status-active { background: #d4edda; color: #155724; }
-        .status-inactive { background: #f8d7da; color: #721c24; }
-        .used-badge { font-size: 11px; color: #888; background: #f0f0f0; padding: 3px 8px; border-radius: 10px; }
-        .limit-bar { background: #f0f0f0; border-radius: 8px; height: 8px; margin-top: 8px; overflow: hidden; }
-        .limit-bar-fill { height: 100%; border-radius: 8px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); transition: width 0.4s; }
-        .empty-state { text-align: center; padding: 40px 20px; color: #888; font-size: 15px; }
-        .back-btn { position: absolute; top: 20px; right: 20px; }
-        #error-msg, #success-msg { display: none; padding: 10px 14px; border-radius: 8px; font-size: 14px; margin-top: 10px; }
-        #error-msg { background: #ffeaea; color: #c0392b; border: 1px solid #f5c6cb; }
-        #success-msg { background: #eafaf1; color: #196f3d; border: 1px solid #b7e4c7; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gestione Reparti — PlateTimer</title>
+<style>
+:root {
+  --bg:       #0d0d1a;
+  --panel:    #12122a;
+  --card:     #1a1a35;
+  --card-h:   #1f1f40;
+  --border:   rgba(255,255,255,0.07);
+  --border-l: rgba(255,255,255,0.13);
+  --text:     #e2e2f0;
+  --muted:    rgba(255,255,255,0.35);
+  --accent:   #6366f1;
+  --accent2:  #818cf8;
+  --warn:     #f59e0b;
+  --danger:   #ef4444;
+  --ok:       #22c55e;
+  --hdr:      56px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,sans-serif;min-height:100vh;overflow-x:hidden;}
+
+/* ── HEADER ─────────────────────────────── */
+.hdr{position:fixed;top:0;left:0;right:0;height:var(--hdr);
+  background:rgba(13,13,26,.96);backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:12px;padding:0 16px;z-index:200;}
+.hdr-brand{font-size:15px;font-weight:700;color:var(--accent2);white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;max-width:220px;}
+.hdr-sep{width:1px;height:20px;background:var(--border-l);flex-shrink:0;}
+.hdr-page{font-size:15px;font-weight:600;color:var(--text);white-space:nowrap;flex:1;}
+.hdr-btn{padding:7px 14px;border:1px solid var(--border-l);border-radius:7px;
+  background:rgba(255,255,255,.06);color:var(--text);font-size:13px;cursor:pointer;
+  white-space:nowrap;flex-shrink:0;transition:background .15s;}
+.hdr-btn:hover{background:rgba(255,255,255,.12);}
+.hdr-btn.danger{border-color:rgba(239,68,68,.3);color:var(--danger);}
+.hdr-btn.danger:hover{background:rgba(239,68,68,.1);}
+
+/* ── MAIN CONTAINER ─────────────────────── */
+.main{max-width:1200px;margin:0 auto;padding:calc(var(--hdr) + 28px) 20px 40px;}
+
+/* ── PAGE HEADING ───────────────────────── */
+.pg-heading{margin-bottom:28px;}
+.pg-title{font-size:24px;font-weight:800;color:var(--text);margin-bottom:4px;}
+.pg-sub{font-size:14px;color:var(--muted);margin-bottom:12px;}
+.plan-badge{display:inline-flex;align-items:center;gap:6px;
+  background:rgba(99,102,241,.15);border:1px solid rgba(99,102,241,.3);
+  color:var(--accent2);padding:6px 14px;border-radius:20px;font-size:13px;font-weight:600;}
+
+/* ── SUMMARY ROW ────────────────────────── */
+.summary-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px;}
+@media(max-width:700px){.summary-row{grid-template-columns:1fr;}}
+
+/* ── CARD ───────────────────────────────── */
+.card{background:var(--card);border:1.5px solid var(--border);border-radius:14px;padding:22px;}
+.card-title{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;
+  color:var(--muted);margin-bottom:16px;}
+
+/* ── USAGE CARD ─────────────────────────── */
+.usage-count{font-size:26px;font-weight:800;color:var(--text);line-height:1;}
+.usage-sub{font-size:13px;color:var(--muted);margin-top:4px;margin-bottom:14px;}
+.limit-bar{background:rgba(255,255,255,.07);border-radius:8px;height:8px;overflow:hidden;}
+.limit-bar-fill{height:100%;border-radius:8px;
+  background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .4s;}
+.limit-bar-fill.at-limit{background:linear-gradient(90deg,var(--danger),#f97316);}
+.usage-msg{font-size:13px;font-weight:600;margin-top:10px;}
+.usage-msg.ok{color:var(--ok);}
+.usage-msg.warn{color:var(--danger);}
+
+/* ── CREATE CARD ────────────────────────── */
+.form-label{font-size:13px;font-weight:600;color:var(--muted);margin-bottom:6px;display:block;}
+.form-input{width:100%;padding:11px 14px;
+  background:rgba(255,255,255,.05);border:1.5px solid var(--border-l);
+  border-radius:9px;color:var(--text);font-size:14px;outline:none;
+  transition:border-color .15s;margin-bottom:10px;}
+.form-input::placeholder{color:var(--muted);}
+.form-input:focus{border-color:var(--accent);}
+.form-input:disabled{opacity:.4;cursor:not-allowed;}
+.limit-notice{font-size:13px;color:var(--danger);margin-bottom:10px;
+  background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);
+  border-radius:8px;padding:10px 12px;line-height:1.5;}
+
+/* ── BUTTONS ────────────────────────────── */
+.btn{padding:10px 18px;border:none;border-radius:9px;cursor:pointer;
+  font-size:14px;font-weight:600;transition:all .15s;white-space:nowrap;}
+.btn:disabled{opacity:.35;cursor:not-allowed;transform:none !important;}
+.btn-primary{background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;width:100%;}
+.btn-primary:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 6px 18px rgba(99,102,241,.35);}
+.btn-sm{padding:7px 14px;font-size:13px;}
+.btn-neutral{background:rgba(255,255,255,.07);color:var(--text);border:1px solid var(--border-l);}
+.btn-neutral:hover:not(:disabled){background:rgba(255,255,255,.13);}
+.btn-danger{background:rgba(239,68,68,.12);color:var(--danger);border:1px solid rgba(239,68,68,.25);}
+.btn-danger:hover:not(:disabled){background:rgba(239,68,68,.22);}
+.btn-danger:disabled{opacity:.25;cursor:not-allowed;}
+
+/* ── FEEDBACK MESSAGES ──────────────────── */
+.msg{display:none;padding:10px 14px;border-radius:8px;font-size:13px;margin-top:10px;}
+.msg-error{background:rgba(239,68,68,.1);color:#fca5a5;border:1px solid rgba(239,68,68,.25);}
+.msg-success{background:rgba(34,197,94,.1);color:#86efac;border:1px solid rgba(34,197,94,.25);}
+
+/* ── DEPT SECTION ───────────────────────── */
+.section-title{font-size:16px;font-weight:700;color:var(--text);margin-bottom:14px;}
+.dept-list{display:flex;flex-direction:column;gap:10px;}
+.dept-item{background:var(--card);border:1.5px solid var(--border);border-radius:12px;
+  padding:14px 18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+  transition:border-color .15s;}
+.dept-item:hover{border-color:var(--border-l);}
+.dept-item.inactive{opacity:.55;}
+.dept-meta{flex:1;min-width:140px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.dept-name{font-size:15px;font-weight:700;color:var(--text);}
+.badge{font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;white-space:nowrap;}
+.badge-active{background:rgba(34,197,94,.15);color:var(--ok);border:1px solid rgba(34,197,94,.25);}
+.badge-inactive{background:rgba(239,68,68,.12);color:#fca5a5;border:1px solid rgba(239,68,68,.2);}
+.badge-used{background:rgba(255,255,255,.06);color:var(--muted);border:1px solid var(--border-l);}
+.dept-actions{display:flex;gap:8px;flex-shrink:0;flex-wrap:wrap;}
+.delete-tip{font-size:11px;color:var(--muted);align-self:center;white-space:nowrap;}
+
+.empty-state{text-align:center;padding:50px 20px;color:var(--muted);font-size:15px;}
+</style>
 </head>
 <body>
-    <button class="btn btn-secondary back-btn" onclick="window.location.href='home.html'">Torna alla Home</button>
 
-    <div class="page-header">
-        <div>
-            <p class="page-title">Gestione Reparti</p>
-            <p id="company-label" style="margin:4px 0 0; font-size:13px; color:#888;"></p>
-        </div>
-        <div>
-            <span id="plan-badge" class="plan-badge">Piano: ...</span>
-        </div>
-    </div>
+<!-- ── HEADER ────────────────────────────── -->
+<header class="hdr">
+  <span id="hdr-company" class="hdr-brand"></span>
+  <span class="hdr-sep"></span>
+  <span class="hdr-page">Gestione Reparti</span>
+  <button class="hdr-btn" onclick="window.location.href='home.html'">Home</button>
+  <button class="hdr-btn danger" onclick="logout()">Esci</button>
+</header>
 
+<!-- ── MAIN ──────────────────────────────── -->
+<main class="main">
+
+  <!-- Page heading -->
+  <div class="pg-heading">
+    <h1 class="pg-title">Gestione Reparti</h1>
+    <p id="pg-company" class="pg-sub"></p>
+    <span id="plan-badge" class="plan-badge">Piano: …</span>
+  </div>
+
+  <!-- Summary row -->
+  <div class="summary-row">
+
+    <!-- Usage card -->
     <div class="card">
-        <p class="card-title">Utilizzo Reparti</p>
-        <p id="usage-text" style="font-size:14px; color:#555; margin:0 0 8px;">Caricamento...</p>
-        <div class="limit-bar"><div id="limit-bar-fill" class="limit-bar-fill" style="width:0%"></div></div>
+      <p class="card-title">Utilizzo Reparti</p>
+      <div id="usage-count" class="usage-count">—</div>
+      <div id="usage-sub" class="usage-sub">Caricamento…</div>
+      <div class="limit-bar"><div id="limit-bar-fill" class="limit-bar-fill" style="width:0%"></div></div>
+      <div id="usage-msg" class="usage-msg"></div>
     </div>
 
+    <!-- Create card -->
     <div class="card">
-        <p class="card-title">Crea Nuovo Reparto</p>
-        <div class="create-form">
-            <div class="form-group">
-                <label class="form-label">Nome Reparto</label>
-                <input id="dept-name-input" class="form-input" type="text" placeholder="es. Cucina, Bar, Pasticceria..." maxlength="40">
-            </div>
-            <button id="create-btn" class="btn btn-primary" onclick="createDepartment()">Crea Reparto</button>
-        </div>
-        <div id="error-msg"></div>
-        <div id="success-msg"></div>
+      <p class="card-title">Crea Nuovo Reparto</p>
+      <div id="limit-notice" class="limit-notice" style="display:none;"></div>
+      <label class="form-label" for="dept-name-input">Nome reparto</label>
+      <input id="dept-name-input" class="form-input" type="text"
+             placeholder="es. Cucina, Bar, Pasticceria…" maxlength="40">
+      <button id="create-btn" class="btn btn-primary" onclick="createDepartment()">Crea reparto</button>
+      <div id="error-msg" class="msg msg-error"></div>
+      <div id="success-msg" class="msg msg-success"></div>
     </div>
 
-    <div class="card">
-        <p class="card-title">Reparti Configurati</p>
-        <div id="dept-list" class="dept-list">
-            <div class="empty-state">Caricamento...</div>
-        </div>
-    </div>
+  </div>
 
-    <script src="js/ws-auth.js"></script>
-    <script>
-        const token = WsAuth.getStoredToken();
-        if (!token) {
-            alert('Sessione scaduta. Effettua nuovamente il login.');
-            window.location.href = 'index.html';
-        }
+  <!-- Departments list -->
+  <p class="section-title">Reparti configurati</p>
+  <div id="dept-list" class="dept-list">
+    <div class="empty-state">Caricamento…</div>
+  </div>
 
-        const companyName = localStorage.getItem('userCompany') || '';
-        document.getElementById('company-label').textContent = companyName;
+</main>
 
-        let departments = [];
-        let planLimit = 3;
-        let planName = 'base';
+<script src="js/ws-auth.js"></script>
+<script>
+    const token = WsAuth.getStoredToken();
+    if (!token) {
+        alert('Sessione scaduta. Effettua nuovamente il login.');
+        window.location.href = 'index.html';
+    }
 
-        async function apiFetch(path, opts = {}) {
-            const res = await fetch(path, {
-                ...opts,
-                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', ...(opts.headers || {}) }
-            });
-            return res.json();
-        }
+    const companyName = localStorage.getItem('userCompany') || '';
+    document.getElementById('hdr-company').textContent = companyName;
+    document.getElementById('pg-company').textContent = companyName;
 
-        async function loadDepartments() {
-            const data = await apiFetch('/api/departments');
-            if (!data.success) { showError(data.error || 'Errore nel caricamento.'); return; }
-            departments = data.departments || [];
-            planName = data.plan || 'base';
-            planLimit = data.limit || 3;
-            renderAll();
-        }
+    let departments = [];
+    let planLimit = 3;
+    let planName = 'base';
 
-        function renderAll() {
-            const active = departments.filter(d => d.active).length;
-            const total = departments.length;
-            const planLabels = { base: 'Base (max 3)', medium: 'Medium (max 5)', premium: 'Premium (max 10)' };
-            document.getElementById('plan-badge').textContent = 'Piano: ' + (planLabels[planName] || planName);
-            document.getElementById('usage-text').textContent = `${active} attivi su ${planLimit} consentiti (${total} totali)`;
-            const pct = planLimit > 0 ? Math.min(100, Math.round((active / planLimit) * 100)) : 0;
-            document.getElementById('limit-bar-fill').style.width = pct + '%';
-            document.getElementById('limit-bar-fill').style.background = pct >= 100
-                ? 'linear-gradient(135deg,#ff6b6b,#ee5a24)'
-                : 'linear-gradient(135deg,#667eea,#764ba2)';
+    function logout() {
+        if (typeof WsAuth !== 'undefined' && WsAuth.clearToken) WsAuth.clearToken();
+        window.location.href = 'index.html';
+    }
 
-            const list = document.getElementById('dept-list');
-            if (departments.length === 0) {
-                list.innerHTML = '<div class="empty-state">Nessun reparto configurato. Crea il primo reparto sopra.</div>';
-                return;
-            }
-
-            list.innerHTML = departments.map(d => `
-                <div class="dept-item ${d.active ? '' : 'inactive'}">
-                    <span class="dept-name">${escHtml(d.name)}</span>
-                    <span class="status-badge ${d.active ? 'status-active' : 'status-inactive'}">${d.active ? 'Attivo' : 'Inattivo'}</span>
-                    ${d.usedInCountdowns ? '<span class="used-badge">Usato in countdown</span>' : ''}
-                    <div style="display:flex;gap:8px;margin-left:auto;flex-wrap:wrap;">
-                        <button class="btn btn-secondary" style="padding:6px 14px;font-size:13px;"
-                            onclick="toggleDept('${d.id}', ${!d.active})">${d.active ? 'Disattiva' : 'Attiva'}</button>
-                        <button class="btn btn-danger" style="padding:6px 14px;font-size:13px;"
-                            onclick="deleteDept('${d.id}')"
-                            ${d.usedInCountdowns ? 'disabled title="Usato in countdown — disattivare invece"' : ''}>Elimina</button>
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        async function createDepartment() {
-            const name = document.getElementById('dept-name-input').value.trim();
-            if (!name) { showError('Inserisci un nome per il reparto.'); return; }
-            clearMessages();
-            const btn = document.getElementById('create-btn');
-            btn.disabled = true;
-            btn.textContent = 'Creazione...';
-
-            const data = await apiFetch('/api/departments', { method: 'POST', body: JSON.stringify({ name }) });
-            btn.disabled = false;
-            btn.textContent = 'Crea Reparto';
-
-            if (data.success) {
-                document.getElementById('dept-name-input').value = '';
-                showSuccess(`Reparto "${data.department.name}" creato.`);
-                await loadDepartments();
-            } else {
-                showError(data.error || 'Errore nella creazione.');
-            }
-        }
-
-        async function toggleDept(id, newActive) {
-            clearMessages();
-            const data = await apiFetch(`/api/departments/${id}`, { method: 'PUT', body: JSON.stringify({ active: newActive }) });
-            if (data.success) { await loadDepartments(); }
-            else { showError(data.error || 'Errore.'); }
-        }
-
-        async function deleteDept(id) {
-            if (!confirm('Eliminare definitivamente questo reparto?')) return;
-            clearMessages();
-            const data = await apiFetch(`/api/departments/${id}`, { method: 'DELETE' });
-            if (data.success) { showSuccess('Reparto eliminato.'); await loadDepartments(); }
-            else { showError(data.error || 'Errore.'); }
-        }
-
-        function showError(msg) {
-            const el = document.getElementById('error-msg');
-            el.textContent = msg;
-            el.style.display = 'block';
-            document.getElementById('success-msg').style.display = 'none';
-        }
-        function showSuccess(msg) {
-            const el = document.getElementById('success-msg');
-            el.textContent = msg;
-            el.style.display = 'block';
-            document.getElementById('error-msg').style.display = 'none';
-        }
-        function clearMessages() {
-            document.getElementById('error-msg').style.display = 'none';
-            document.getElementById('success-msg').style.display = 'none';
-        }
-        function escHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-
-        document.getElementById('dept-name-input').addEventListener('keypress', e => {
-            if (e.key === 'Enter') createDepartment();
+    async function apiFetch(path, opts = {}) {
+        const res = await fetch(path, {
+            ...opts,
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', ...(opts.headers || {}) }
         });
+        return res.json();
+    }
 
-        loadDepartments();
-    </script>
+    async function loadDepartments() {
+        const data = await apiFetch('/api/departments');
+        if (!data.success) { showError(data.error || 'Errore nel caricamento.'); return; }
+        departments = data.departments || [];
+        planName = data.plan || 'base';
+        planLimit = data.limit || 3;
+        renderAll();
+    }
+
+    function renderAll() {
+        const active = departments.filter(d => d.active).length;
+        const total  = departments.length;
+        const atLimit = active >= planLimit;
+
+        const planLabels = { base: 'Base', medium: 'Medium', premium: 'Premium' };
+        const planMaxLabels = { base: 3, medium: 5, premium: 10 };
+        document.getElementById('plan-badge').textContent =
+            `Piano: ${planLabels[planName] || planName} — massimo ${planLimit} reparti`;
+
+        document.getElementById('usage-count').textContent = `${active} / ${planLimit}`;
+        document.getElementById('usage-sub').textContent =
+            `${active} reparti attivi su ${planLimit} consentiti (${total} totali)`;
+
+        const pct = planLimit > 0 ? Math.min(100, Math.round((active / planLimit) * 100)) : 0;
+        const fill = document.getElementById('limit-bar-fill');
+        fill.style.width = pct + '%';
+        fill.classList.toggle('at-limit', atLimit);
+
+        const usageMsg = document.getElementById('usage-msg');
+        if (atLimit) {
+            usageMsg.textContent = 'Limite del piano raggiunto';
+            usageMsg.className = 'usage-msg warn';
+        } else {
+            usageMsg.textContent = `${planLimit - active} slot disponibili`;
+            usageMsg.className = 'usage-msg ok';
+        }
+
+        const limitNotice = document.getElementById('limit-notice');
+        const input = document.getElementById('dept-name-input');
+        const createBtn = document.getElementById('create-btn');
+        if (atLimit) {
+            limitNotice.textContent =
+                `Hai raggiunto il limite di ${planLimit} reparti attivi previsto dal piano ${planLabels[planName] || planName}. Disattiva un reparto esistente per crearne uno nuovo.`;
+            limitNotice.style.display = 'block';
+            input.disabled = true;
+            createBtn.disabled = true;
+        } else {
+            limitNotice.style.display = 'none';
+            input.disabled = false;
+            createBtn.disabled = false;
+        }
+
+        const list = document.getElementById('dept-list');
+        if (departments.length === 0) {
+            list.innerHTML = '<div class="empty-state">Nessun reparto configurato.<br>Crea il primo reparto qui sopra.</div>';
+            return;
+        }
+
+        list.innerHTML = departments.map(d => {
+            const canDelete = !d.usedInCountdowns;
+            return `
+            <div class="dept-item ${d.active ? '' : 'inactive'}">
+              <div class="dept-meta">
+                <span class="dept-name">${escHtml(d.name)}</span>
+                <span class="badge ${d.active ? 'badge-active' : 'badge-inactive'}">${d.active ? 'Attivo' : 'Inattivo'}</span>
+                ${d.usedInCountdowns ? '<span class="badge badge-used">Usato nei countdown</span>' : ''}
+              </div>
+              <div class="dept-actions">
+                <button class="btn btn-sm btn-neutral"
+                    onclick="toggleDept('${d.id}', ${!d.active})">${d.active ? 'Disattiva' : 'Attiva'}</button>
+                ${canDelete
+                    ? `<button class="btn btn-sm btn-danger"
+                           onclick="deleteDept('${d.id}')">Elimina</button>`
+                    : `<button class="btn btn-sm btn-danger" disabled
+                           title="Non eliminabile: reparto già utilizzato nei countdown">Elimina</button>`
+                }
+              </div>
+            </div>`;
+        }).join('');
+    }
+
+    async function createDepartment() {
+        const name = document.getElementById('dept-name-input').value.trim();
+        if (!name) { showError('Inserisci un nome per il reparto.'); return; }
+        clearMessages();
+        const btn = document.getElementById('create-btn');
+        btn.disabled = true;
+        btn.textContent = 'Creazione…';
+
+        const data = await apiFetch('/api/departments', { method: 'POST', body: JSON.stringify({ name }) });
+        btn.disabled = false;
+        btn.textContent = 'Crea reparto';
+
+        if (data.success) {
+            document.getElementById('dept-name-input').value = '';
+            showSuccess(`Reparto "${data.department.name}" creato.`);
+            await loadDepartments();
+        } else {
+            showError(data.error || 'Errore nella creazione.');
+        }
+    }
+
+    async function toggleDept(id, newActive) {
+        clearMessages();
+        const data = await apiFetch(`/api/departments/${id}`, { method: 'PUT', body: JSON.stringify({ active: newActive }) });
+        if (data.success) { await loadDepartments(); }
+        else { showError(data.error || 'Errore.'); }
+    }
+
+    async function deleteDept(id) {
+        if (!confirm('Eliminare definitivamente questo reparto?')) return;
+        clearMessages();
+        const data = await apiFetch(`/api/departments/${id}`, { method: 'DELETE' });
+        if (data.success) { showSuccess('Reparto eliminato.'); await loadDepartments(); }
+        else { showError(data.error || 'Errore.'); }
+    }
+
+    function showError(msg) {
+        const el = document.getElementById('error-msg');
+        el.textContent = msg; el.style.display = 'block';
+        document.getElementById('success-msg').style.display = 'none';
+    }
+    function showSuccess(msg) {
+        const el = document.getElementById('success-msg');
+        el.textContent = msg; el.style.display = 'block';
+        document.getElementById('error-msg').style.display = 'none';
+    }
+    function clearMessages() {
+        document.getElementById('error-msg').style.display = 'none';
+        document.getElementById('success-msg').style.display = 'none';
+    }
+    function escHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+    document.getElementById('dept-name-input').addEventListener('keypress', e => {
+        if (e.key === 'Enter') createDepartment();
+    });
+
+    loadDepartments();
+</script>
 </body>
 </html>
