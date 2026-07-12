@@ -1,338 +1,515 @@
 <!DOCTYPE html>
 <html lang="it">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestione Ordini - Home</title>
-    <link rel="stylesheet" href="style.css">
-    <script src="js/ws-auth.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Home — PlateTimer</title>
+<style>
+:root {
+  --bg:       #0d0d1a;
+  --panel:    #12122a;
+  --card:     #1a1a35;
+  --card-h:   #1f1f40;
+  --border:   rgba(255,255,255,0.07);
+  --border-l: rgba(255,255,255,0.13);
+  --text:     #e2e2f0;
+  --muted:    rgba(255,255,255,0.35);
+  --accent:   #6366f1;
+  --accent2:  #818cf8;
+  --danger:   #ef4444;
+  --ok:       #22c55e;
+  --hdr:      56px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,sans-serif;min-height:100vh;}
+
+/* ── HEADER ─────────────────────────────── */
+.hdr{position:fixed;top:0;left:0;right:0;height:var(--hdr);
+  background:rgba(13,13,26,.96);backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:12px;padding:0 16px;z-index:200;}
+.hdr-brand{font-size:15px;font-weight:700;color:var(--accent2);white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;max-width:220px;}
+.hdr-sep{width:1px;height:20px;background:var(--border-l);flex-shrink:0;}
+.hdr-page{font-size:15px;font-weight:600;color:var(--text);flex:1;}
+.hdr-btn{padding:7px 14px;border:1px solid var(--border-l);border-radius:7px;
+  background:rgba(255,255,255,.06);color:var(--text);font-size:13px;cursor:pointer;
+  white-space:nowrap;flex-shrink:0;transition:background .15s;}
+.hdr-btn:hover{background:rgba(255,255,255,.12);}
+.hdr-btn.danger{border-color:rgba(239,68,68,.3);color:var(--danger);}
+.hdr-btn.danger:hover{background:rgba(239,68,68,.1);}
+
+/* ── MAIN ───────────────────────────────── */
+.main{max-width:1100px;margin:0 auto;padding:calc(var(--hdr) + 32px) 16px 48px;}
+
+/* ── IDENTITY AREA ──────────────────────── */
+.identity{display:flex;align-items:center;gap:18px;margin-bottom:32px;}
+.logo-monogram{width:64px;height:64px;border-radius:14px;flex-shrink:0;
+  background:rgba(99,102,241,.18);border:1.5px solid rgba(99,102,241,.35);
+  display:flex;align-items:center;justify-content:center;
+  font-size:18px;font-weight:800;color:var(--accent2);letter-spacing:.5px;
+  user-select:none;}
+.logo-img{width:auto;height:64px;max-width:160px;object-fit:contain;border-radius:10px;flex-shrink:0;}
+.identity-text{}
+.identity-company{font-size:22px;font-weight:800;color:var(--text);line-height:1.2;}
+.identity-sub{font-size:13px;color:var(--muted);margin-top:3px;}
+
+/* ── SECTION LABEL ──────────────────────── */
+.section-label{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;
+  color:var(--muted);margin-bottom:12px;}
+
+/* ── CARD GRID ──────────────────────────── */
+.card-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:28px;}
+@media(max-width:700px){.card-grid{grid-template-columns:repeat(2,1fr);}}
+@media(max-width:440px){.card-grid{grid-template-columns:1fr;}}
+
+/* ── NAV CARD ───────────────────────────── */
+.nav-card{display:flex;flex-direction:column;gap:5px;
+  padding:20px 18px;background:var(--card);border:1.5px solid var(--border);
+  border-radius:13px;color:var(--text);text-decoration:none;
+  transition:border-color .15s,background .15s;cursor:pointer;min-height:80px;}
+.nav-card:hover,.nav-card:focus-visible{background:var(--card-h);border-color:var(--border-l);outline:none;}
+.nav-card:focus-visible{box-shadow:0 0 0 2px var(--accent);}
+.card-icon{font-size:22px;line-height:1;}
+.card-name{font-size:15px;font-weight:700;color:var(--text);}
+.card-sub{font-size:12px;color:var(--muted);}
+
+/* Dept cards — accent left border */
+.nav-card.dept{border-left:3px solid rgba(99,102,241,.45);}
+.nav-card.dept:hover{border-left-color:var(--accent);}
+
+/* Admin card — subtler */
+.nav-card.admin{border-color:rgba(255,255,255,.05);}
+.nav-card.admin .card-name{color:var(--muted);}
+.nav-card.admin:hover .card-name{color:var(--text);}
+
+/* Floor card — slightly highlighted */
+.nav-card.floor{border-left:3px solid rgba(34,197,94,.3);}
+.nav-card.floor:hover{border-left-color:var(--ok);}
+
+/* ── LOADING / EMPTY STATES ─────────────── */
+.grid-msg{grid-column:1/-1;text-align:center;color:var(--muted);
+  padding:20px 0;font-size:14px;line-height:1.7;}
+.grid-msg a{color:var(--accent2);}
+</style>
 </head>
 <body>
-    <div style="position: absolute; top: 20px; right: 20px; z-index: 1000;">
-        <!-- Pulsante abbonamenti temporaneamente nascosto -->
-        <!-- <button onclick="window.location.href='subscription.html'" style="padding: 8px 16px; background: linear-gradient(135deg, #28a745, #20c997); margin-right: 10px; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: 500; transition: transform 0.2s, box-shadow 0.2s;">⭐ Abbonamenti</button> -->
-        <button onclick="window.location.href='index.html'" style="padding: 8px 16px; background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: 500; transition: transform 0.2s, box-shadow 0.2s;">🚪 Esci</button>
+
+<!-- ── HEADER ─────────────────────────── -->
+<header class="hdr">
+  <span id="hdr-company" class="hdr-brand"></span>
+  <span class="hdr-sep"></span>
+  <span class="hdr-page">Home</span>
+  <button class="hdr-btn danger" onclick="window.location.href='index.html'">Esci</button>
+</header>
+
+<!-- ── MAIN ───────────────────────────── -->
+<main class="main">
+
+  <!-- Identity -->
+  <div class="identity">
+    <img id="logo-img" class="logo-img" src="" alt="Logo ristorante" style="display:none;"
+         onerror="this.style.display='none';document.getElementById('logo-monogram').style.display='flex';">
+    <div id="logo-monogram" class="logo-monogram" aria-label="Logo ristorante">?</div>
+    <div class="identity-text">
+      <div id="company-name" class="identity-company"></div>
+      <div class="identity-sub">Seleziona postazione · Scegli il reparto o la funzione da aprire</div>
     </div>
+  </div>
 
-    <div class="container home-container">
-        <div class="header">
-            <div class="logo-container" style="margin-bottom: 20px;">
-                <img src="" alt=" Logo" style="width: 120px; height: auto; max-width: 100%;">
+  <!-- Dynamic department cards -->
+  <p class="section-label">Reparti</p>
+  <div id="dept-grid" class="card-grid">
+    <div class="grid-msg">Caricamento reparti…</div>
+  </div>
 
+  <!-- Static function cards -->
+  <p class="section-label">Funzioni</p>
+  <div class="card-grid">
+    <a href="sala.html" class="nav-card floor">
+      <span class="card-icon" aria-hidden="true">🍽️</span>
+      <span class="card-name">Floor</span>
+      <span class="card-sub">Monitoraggio tavoli</span>
+    </a>
+    <a href="admin-departments.html" class="nav-card admin">
+      <span class="card-icon" aria-hidden="true">⚙️</span>
+      <span class="card-name">Gestione Reparti</span>
+      <span class="card-sub">Configurazione</span>
+    </a>
+  </div>
 
-        <div class="company-info">
-            <h2 id="company-display"> <span id="company-name"></span></h2>
-        </div>
+</main>
 
-        <div id="dept-grid" class="button-grid">
-            <div id="dept-grid-msg" style="grid-column:1/-1;text-align:center;color:#aaa;padding:10px 0;font-size:14px;">Caricamento reparti...</div>
-        </div>
-        <div class="button-grid" style="margin-top:12px;">
-            <a href="sala.html" class="nav-button sala">🍽️ Floor</a>
-            <a href="admin-departments.html" class="nav-button" style="background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:#fff;">⚙️ Gestione Reparti</a>
-        </div>
-    </div>
+<!-- Hidden elements kept for JS compatibility -->
+<div id="company-display" style="display:none;"></div>
 
-    <script type="module">
-        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-        import { getAuth, onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
-        import { getFirestore, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+<!-- ── SCRIPTS ──────────────────────── -->
+<script src="js/ws-auth.js"></script>
+<script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+    import { getAuth, onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+    import { getFirestore, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
-        // Helper function for Google Sign-In (if needed)
-        async function signInWithGoogle() {
-            const provider = new GoogleAuthProvider();
-            try {
-                const result = await signInWithPopup(auth, provider);
-                return result.user;
-            } catch (error) {
-                console.error('Errore Google Sign-In:', error);
-                throw error;
+    // Helper function for Google Sign-In (if needed)
+    async function signInWithGoogle() {
+        const provider = new GoogleAuthProvider();
+        try {
+            const result = await signInWithPopup(auth, provider);
+            return result.user;
+        } catch (error) {
+            console.error('Errore Google Sign-In:', error);
+            throw error;
+        }
+    }
+
+    // Debug: Verifica localStorage all'avvio
+    console.log('🔍 DEBUG HOME - localStorage userCompany:', localStorage.getItem('userCompany'));
+
+    // Configurazione Firebase
+    const firebaseConfig = {
+        apiKey: "AIzaSyDZ0FdjenO-ngblcuXKdwWwvRV5liiR18I",
+        authDomain: "app-dati-tavoli.firebaseapp.com",
+        projectId: "app-dati-tavoli",
+        storageBucket: "app-dati-tavoli.appspot.com",
+        messagingSenderId: "267339065819",
+        appId: "1:267339065819:web:1e74647f740bdf1d725ffe",
+        measurementId: "G-F79QERTN6C"
+    };
+
+    // Inizializza Firebase
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    // Reference used by the 5-second safety timeout below
+    const buttonGrid = document.querySelector('.card-grid');
+
+    // Mostra un indicatore di caricamento
+    const loadingIndicator = document.createElement('div');
+    loadingIndicator.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #1a1a35; color: #e2e2f0; padding: 20px 28px; border-radius: 12px; border: 1.5px solid rgba(255,255,255,0.1); box-shadow: 0 8px 32px rgba(0,0,0,0.4); z-index: 9999; font-size: 16px; text-align: center;';
+    loadingIndicator.innerHTML = '⏳ Caricamento...';
+    document.body.appendChild(loadingIndicator);
+
+    // Timeout di sicurezza aumentato: riabilita i pulsanti dopo 5 secondi in ogni caso
+    setTimeout(() => {
+        if (buttonGrid && buttonGrid.style.opacity !== '1') {
+            console.warn('⚠️ Timeout raggiunto, riabilitazione forzata pulsanti');
+            buttonGrid.style.opacity = '1';
+            buttonGrid.style.pointerEvents = 'auto';
+            if (loadingIndicator && loadingIndicator.parentNode) {
+                loadingIndicator.remove();
             }
         }
+    }, 5000);
 
-        // Debug: Verifica localStorage all'avvio
-        console.log('🔍 DEBUG HOME - localStorage userCompany:', localStorage.getItem('userCompany'));
+    // Flag per prevenire redirect multipli
+    let authCheckComplete = false;
+    let redirectTimeout = null;
+    let authCheckAttempts = 0;
+    const MAX_AUTH_ATTEMPTS = 3;
 
-        // Configurazione Firebase
-        const firebaseConfig = {
-            apiKey: "AIzaSyDZ0FdjenO-ngblcuXKdwWwvRV5liiR18I",
-            authDomain: "app-dati-tavoli.firebaseapp.com",
-            projectId: "app-dati-tavoli",
-            storageBucket: "app-dati-tavoli.appspot.com",
-            messagingSenderId: "267339065819",
-            appId: "1:267339065819:web:1e74647f740bdf1d725ffe",
-            measurementId: "G-F79QERTN6C"
-        };
+    // Gestione autenticazione e dati utente
+    onAuthStateChanged(auth, async (user) => {
+        authCheckAttempts++;
+        console.log(`🔍 Auth check tentativo ${authCheckAttempts} - User:`, user ? user.email : 'null');
 
-        // Inizializza Firebase
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
+        // Previeni controlli multipli dopo che l'autenticazione è confermata
+        if (authCheckComplete && user) {
+            console.log('⚠️ Auth check già completato con utente valido, ignoro callback successivo');
+            return;
+        }
 
-        // Reference used by the 5-second safety timeout below
-        const buttonGrid = document.querySelector('.button-grid');
+        if (user) {
+            // Cancella qualsiasi timeout di redirect pendente
+            if (redirectTimeout) {
+                clearTimeout(redirectTimeout);
+                redirectTimeout = null;
+            }
 
-        // Mostra un indicatore di caricamento
-        const loadingIndicator = document.createElement('div');
-        loadingIndicator.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); z-index: 9999; font-size: 16px; text-align: center;';
-        loadingIndicator.innerHTML = '⏳ Caricamento...';
-        document.body.appendChild(loadingIndicator);
+            authCheckComplete = true;
+            console.log('✅ Utente autenticato confermato:', user.email);
+            
+            const userDocRef = doc(db, "users", user.uid);
+            try {
+                const userDoc = await getDoc(userDocRef);
+                let userData = null;
 
-        // Timeout di sicurezza aumentato: riabilita i pulsanti dopo 5 secondi in ogni caso
-        setTimeout(() => {
-            if (buttonGrid && buttonGrid.style.opacity !== '1') {
-                console.warn('⚠️ Timeout raggiunto, riabilitazione forzata pulsanti');
-                buttonGrid.style.opacity = '1';
-                buttonGrid.style.pointerEvents = 'auto';
+                if (userDoc.exists()) {
+                    userData = userDoc.data();
+                    console.log('✅ Dati utente caricati:', userData);
+
+                    // Mostra il nome utente
+                    if (document.getElementById('user-display-name')) {
+                        document.getElementById('user-display-name').textContent = `${userData.firstName} ${userData.lastName}`;
+                    }
+
+                    // IMPORTANTE: Forza il salvataggio del nome azienda nel localStorage se presente (normalizzato)
+                    if (userData.company && userData.company.trim() !== '') {
+                        const normalizedCompany = userData.company.trim().toLowerCase();
+                        localStorage.setItem('userCompany', normalizedCompany);
+                        console.log('✅ Nome azienda aggiornato nel localStorage (normalizzato):', normalizedCompany);
+
+                        // Aggiorna il nome dell'azienda nell'interfaccia
+                        if (document.getElementById('company-name')) {
+                            document.getElementById('company-name').textContent = userData.company.trim();
+                        }
+                    } else {
+                        console.warn('⚠️ Nessun nome azienda nel profilo Firestore');
+                        // Usa il nome utente come fallback (normalizzato)
+                        const fallbackName = `${userData.firstName} ${userData.lastName}`.trim().toLowerCase();
+                        localStorage.setItem('userCompany', fallbackName);
+                        console.log('✅ Usato nome utente come fallback (normalizzato):', fallbackName);
+                        if (document.getElementById('company-name')) {
+                            document.getElementById('company-name').textContent = fallbackName;
+                        }
+                    }
+
+                    // Aggiorna l'interfaccia dopo aver impostato il nome azienda
+                    updateCompanyName();
+
+                    // Rimuovi l'indicatore di caricamento
+                    setTimeout(() => {
+                        if (loadingIndicator && loadingIndicator.parentNode) {
+                            loadingIndicator.remove();
+                        }
+
+                        // Load dynamic department buttons
+                        loadDepartmentsGrid();
+                    }, 100);
+                } else {
+                    console.error('❌ Documento utente non trovato');
+                    loadingIndicator.remove();
+                    alert('Errore: profilo utente non trovato. Contatta il supporto.');
+                    setTimeout(() => {
+                        window.location.href = 'index.html';
+                    }, 2000);
+                }
+            } catch (error) {
+                console.error("❌ Errore nel recupero dei dati utente:", error);
+                
+                // Rimuovi loading indicator
                 if (loadingIndicator && loadingIndicator.parentNode) {
                     loadingIndicator.remove();
                 }
-            }
-        }, 5000);
-
-        // Flag per prevenire redirect multipli
-        let authCheckComplete = false;
-        let redirectTimeout = null;
-        let authCheckAttempts = 0;
-        const MAX_AUTH_ATTEMPTS = 3;
-
-        // Gestione autenticazione e dati utente
-        onAuthStateChanged(auth, async (user) => {
-            authCheckAttempts++;
-            console.log(`🔍 Auth check tentativo ${authCheckAttempts} - User:`, user ? user.email : 'null');
-
-            // Previeni controlli multipli dopo che l'autenticazione è confermata
-            if (authCheckComplete && user) {
-                console.log('⚠️ Auth check già completato con utente valido, ignoro callback successivo');
-                return;
-            }
-
-            if (user) {
-                // Cancella qualsiasi timeout di redirect pendente
-                if (redirectTimeout) {
-                    clearTimeout(redirectTimeout);
-                    redirectTimeout = null;
-                }
-
-                authCheckComplete = true;
-                console.log('✅ Utente autenticato confermato:', user.email);
                 
-                const userDocRef = doc(db, "users", user.uid);
-                try {
-                    const userDoc = await getDoc(userDocRef);
-                    let userData = null;
-
-                    if (userDoc.exists()) {
-                        userData = userDoc.data();
-                        console.log('✅ Dati utente caricati:', userData);
-
-                        // Mostra il nome utente
-                        if (document.getElementById('user-display-name')) {
-                            document.getElementById('user-display-name').textContent = `${userData.firstName} ${userData.lastName}`;
-                        }
-
-                        // IMPORTANTE: Forza il salvataggio del nome azienda nel localStorage se presente (normalizzato)
-                        if (userData.company && userData.company.trim() !== '') {
-                            const normalizedCompany = userData.company.trim().toLowerCase();
-                            localStorage.setItem('userCompany', normalizedCompany);
-                            console.log('✅ Nome azienda aggiornato nel localStorage (normalizzato):', normalizedCompany);
-
-                            // Aggiorna il nome dell'azienda nell'interfaccia
-                            if (document.getElementById('company-name')) {
-                                document.getElementById('company-name').textContent = userData.company.trim();
-                            }
-                        } else {
-                            console.warn('⚠️ Nessun nome azienda nel profilo Firestore');
-                            // Usa il nome utente come fallback (normalizzato)
-                            const fallbackName = `${userData.firstName} ${userData.lastName}`.trim().toLowerCase();
-                            localStorage.setItem('userCompany', fallbackName);
-                            console.log('✅ Usato nome utente come fallback (normalizzato):', fallbackName);
-                            if (document.getElementById('company-name')) {
-                                document.getElementById('company-name').textContent = fallbackName;
-                            }
-                        }
-
-                        // Aggiorna l'interfaccia dopo aver impostato il nome azienda
-                        updateCompanyName();
-
-                        // Rimuovi l'indicatore di caricamento
-                        setTimeout(() => {
+                // Riabilita comunque i pulsanti per permettere navigazione
+                if (buttonGrid) {
+                    buttonGrid.style.opacity = '1';
+                    buttonGrid.style.pointerEvents = 'auto';
+                }
+                
+                // NON reindirizzare per errori di rete o temporanei
+                if (error.code && error.code !== 'auth/network-request-failed' && error.code !== 'unavailable') {
+                    console.warn('⚠️ Errore recupero dati, ma permetto navigazione');
+                }
+            }
+        } else {
+            // L'utente non è autenticato
+            console.log(`⚠️ Utente non autenticato rilevato (tentativo ${authCheckAttempts}/${MAX_AUTH_ATTEMPTS})`);
+            
+            // Non reindirizzare immediatamente - dai più tempo a Firebase
+            // Solo se abbiamo fatto almeno 2 tentativi, inizia il timeout
+            if (authCheckAttempts >= 2) {
+                // Aspetta 5 secondi prima di reindirizzare per dare tempo a Firebase di completare l'autenticazione
+                if (!redirectTimeout) {
+                    console.log('⏳ Avvio timeout di 5 secondi per verifica autenticazione...');
+                    redirectTimeout = setTimeout(() => {
+                        if (!authCheckComplete) {
+                            console.log('❌ Timeout raggiunto senza autenticazione, reindirizzamento al login');
+                            authCheckComplete = true;
+                            
                             if (loadingIndicator && loadingIndicator.parentNode) {
                                 loadingIndicator.remove();
                             }
-
-                            // Load dynamic department buttons
-                            loadDepartmentsGrid();
-                        }, 100);
-                    } else {
-                        console.error('❌ Documento utente non trovato');
-                        loadingIndicator.remove();
-                        alert('Errore: profilo utente non trovato. Contatta il supporto.');
-                        setTimeout(() => {
+                            
+                            // Riabilita i pulsanti comunque (per evitare che restino bloccati)
+                            if (buttonGrid) {
+                                buttonGrid.style.opacity = '1';
+                                buttonGrid.style.pointerEvents = 'auto';
+                            }
+                            
                             window.location.href = 'index.html';
-                        }, 2000);
-                    }
-                } catch (error) {
-                    console.error("❌ Errore nel recupero dei dati utente:", error);
-                    
-                    // Rimuovi loading indicator
-                    if (loadingIndicator && loadingIndicator.parentNode) {
-                        loadingIndicator.remove();
-                    }
-                    
-                    // Riabilita comunque i pulsanti per permettere navigazione
-                    if (buttonGrid) {
-                        buttonGrid.style.opacity = '1';
-                        buttonGrid.style.pointerEvents = 'auto';
-                    }
-                    
-                    // NON reindirizzare per errori di rete o temporanei
-                    if (error.code && error.code !== 'auth/network-request-failed' && error.code !== 'unavailable') {
-                        console.warn('⚠️ Errore recupero dati, ma permetto navigazione');
-                    }
+                        }
+                    }, 5000);
                 }
             } else {
-                // L'utente non è autenticato
-                console.log(`⚠️ Utente non autenticato rilevato (tentativo ${authCheckAttempts}/${MAX_AUTH_ATTEMPTS})`);
-                
-                // Non reindirizzare immediatamente - dai più tempo a Firebase
-                // Solo se abbiamo fatto almeno 2 tentativi, inizia il timeout
-                if (authCheckAttempts >= 2) {
-                    // Aspetta 5 secondi prima di reindirizzare per dare tempo a Firebase di completare l'autenticazione
-                    if (!redirectTimeout) {
-                        console.log('⏳ Avvio timeout di 5 secondi per verifica autenticazione...');
-                        redirectTimeout = setTimeout(() => {
-                            if (!authCheckComplete) {
-                                console.log('❌ Timeout raggiunto senza autenticazione, reindirizzamento al login');
-                                authCheckComplete = true;
-                                
-                                if (loadingIndicator && loadingIndicator.parentNode) {
-                                    loadingIndicator.remove();
-                                }
-                                
-                                // Riabilita i pulsanti comunque (per evitare che restino bloccati)
-                                if (buttonGrid) {
-                                    buttonGrid.style.opacity = '1';
-                                    buttonGrid.style.pointerEvents = 'auto';
-                                }
-                                
-                                window.location.href = 'index.html';
-                            }
-                        }, 5000);
-                    }
-                } else {
-                    console.log('⏳ Primo tentativo negativo, attendo prossimo callback Firebase...');
-                }
+                console.log('⏳ Primo tentativo negativo, attendo prossimo callback Firebase...');
             }
-        });
+        }
+    });
 
-        // Load (or refresh) departments from API and populate the dept-grid.
-        // Safe to call multiple times — always clears and rebuilds.
-        async function loadDepartmentsGrid() {
-            const grid = document.getElementById('dept-grid');
-            if (!grid) return;
+    // Load (or refresh) departments from API and populate the dept-grid.
+    // Safe to call multiple times — always clears and rebuilds.
+    async function loadDepartmentsGrid() {
+        const grid = document.getElementById('dept-grid');
+        if (!grid) return;
 
-            // Always ensure the grid is fully visible
-            grid.style.transition = 'opacity 0.3s ease';
-            grid.style.opacity = '1';
-            grid.style.pointerEvents = 'auto';
+        // Always ensure the grid is fully visible
+        grid.style.transition = 'opacity 0.3s ease';
+        grid.style.opacity = '1';
+        grid.style.pointerEvents = 'auto';
 
-            // Show loading state (clearing any previous content)
-            grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:#aaa;padding:12px 0;font-size:14px;">Caricamento reparti...</div>';
+        // Show loading state (clearing any previous content)
+        grid.innerHTML = '<div class="grid-msg">Caricamento reparti…</div>';
 
-            const token = WsAuth.getStoredToken();
-            if (!token) {
-                grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:#aaa;padding:12px 0;font-size:14px;">Sessione scaduta. <a href="index.html" style="color:#667eea;">Effettua il login</a>.</div>';
+        const token = WsAuth.getStoredToken();
+        if (!token) {
+            grid.innerHTML = '<div class="grid-msg">Sessione scaduta. <a href="index.html">Effettua il login</a>.</div>';
+            return;
+        }
+
+        try {
+            const res = await fetch('/api/departments', { headers: { 'Authorization': `Bearer ${token}` } });
+            const data = await res.json();
+
+            if (!data.success) {
+                grid.innerHTML = `<div class="grid-msg">${data.error || 'Errore nel caricamento dei reparti.'}</div>`;
                 return;
             }
 
-            try {
-                const res = await fetch('/api/departments', { headers: { 'Authorization': `Bearer ${token}` } });
-                const data = await res.json();
+            const active = (data.departments || []).filter(d => d.active);
 
-                if (!data.success) {
-                    grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;color:#aaa;padding:12px 0;font-size:14px;">${data.error || 'Errore nel caricamento dei reparti.'}</div>`;
-                    return;
-                }
-
-                const active = (data.departments || []).filter(d => d.active);
-
-                if (active.length === 0) {
-                    grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:#666;padding:20px 0;font-size:15px;line-height:1.6;">Nessun reparto attivo.<br>Vai in <a href="admin-departments.html" style="color:#667eea;font-weight:600;">Gestione Reparti</a> per crearne uno.</div>';
-                    return;
-                }
-
-                // Rebuild department buttons
-                grid.innerHTML = '';
-                const emojis = ['🍳', '🍕', '🥗', '🍜', '🍰', '🥩', '🍣', '🍹'];
-                active.forEach((dept, i) => {
-                    const a = document.createElement('a');
-                    a.href = `department.html?id=${encodeURIComponent(dept.id)}`;
-                    a.className = 'nav-button';
-                    a.style.cssText = 'background:linear-gradient(135deg,#2c3e50 0%,#3498db 100%);color:#fff;font-size:18px;padding:22px 16px;';
-                    a.textContent = `${emojis[i % emojis.length]} ${dept.name}`;
-                    grid.appendChild(a);
-                });
-            } catch (e) {
-                console.error('Error loading departments:', e);
-                grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:#aaa;padding:12px 0;font-size:14px;">Errore di rete. <a href="javascript:loadDepartmentsGrid()" style="color:#667eea;">Riprova</a>.</div>';
-            }
-        }
-
-        // Funzione per andare al login
-        function goToLogin() {
-            window.location.href = 'index.html';
-        }
-
-        // Gestione del nome dell'azienda
-        document.addEventListener('DOMContentLoaded', function() {
-            function updateCompanyName() {
-                const companyName = localStorage.getItem('userCompany');
-                const companyElement = document.getElementById('company-name');
-
-                if (companyElement) {
-                    if (companyName && companyName.trim() !== '') {
-                        companyElement.textContent = companyName;
-                    } else {
-                        // Mostra un messaggio temporaneo mentre i dati vengono caricati
-                        companyElement.textContent = 'Caricamento...';
-                    }
-                }
-
-                console.log('Nome azienda dal localStorage:', companyName);
+            if (active.length === 0) {
+                grid.innerHTML = '<div class="grid-msg">Nessun reparto attivo.<br>Vai in <a href="admin-departments.html">Gestione Reparti</a> per crearne uno.</div>';
+                return;
             }
 
-            // Aggiorna immediatamente
-            updateCompanyName();
+            // Rebuild department cards
+            grid.innerHTML = '';
+            const emojis = ['🍳', '🍕', '🥗', '🍜', '🍰', '🥩', '🍣', '🍹'];
+            active.forEach((dept, i) => {
+                const a = document.createElement('a');
+                a.href = `department.html?id=${encodeURIComponent(dept.id)}`;
+                a.className = 'nav-card dept';
 
-            // Ascolta i cambiamenti nel localStorage
-            window.addEventListener('storage', function(e) {
-                if (e.key === 'userCompany') {
-                    console.log('Storage event detected for userCompany:', e.newValue);
-                    updateCompanyName();
-                }
+                const icon = document.createElement('span');
+                icon.className = 'card-icon';
+                icon.setAttribute('aria-hidden', 'true');
+                icon.textContent = emojis[i % emojis.length];
+
+                const name = document.createElement('span');
+                name.className = 'card-name';
+                name.textContent = dept.name;
+
+                const sub = document.createElement('span');
+                sub.className = 'card-sub';
+                sub.textContent = 'Apri postazione';
+
+                a.appendChild(icon);
+                a.appendChild(name);
+                a.appendChild(sub);
+                grid.appendChild(a);
             });
-        });
+        } catch (e) {
+            console.error('Error loading departments:', e);
+            grid.innerHTML = '<div class="grid-msg">Errore di rete. <a href="javascript:void(0)" onclick="location.reload()">Riprova</a>.</div>';
+        }
+    }
 
-        // Funzione per impostare manualmente il nome dell'azienda (per test)
-        function setCompanyName(name) {
-            localStorage.setItem('userCompany', name);
+    // Funzione per andare al login
+    function goToLogin() {
+        window.location.href = 'index.html';
+    }
+
+    // Gestione del nome dell'azienda
+    document.addEventListener('DOMContentLoaded', function() {
+        function updateCompanyName() {
+            const companyName = localStorage.getItem('userCompany');
             const companyElement = document.getElementById('company-name');
+
             if (companyElement) {
-                companyElement.textContent = name;
+                if (companyName && companyName.trim() !== '') {
+                    companyElement.textContent = companyName;
+                } else {
+                    // Mostra un messaggio temporaneo mentre i dati vengono caricati
+                    companyElement.textContent = 'Caricamento...';
+                }
             }
-            console.log('Nome azienda impostato manualmente:', name);
+
+            console.log('Nome azienda dal localStorage:', companyName);
         }
 
-        // Reload departments whenever user returns to this page
-        // (covers back navigation, bfcache restore, and tab re-focus)
-        window.addEventListener('pageshow', () => {
-            loadDepartmentsGrid();
-        });
+        // Aggiorna immediatamente
+        updateCompanyName();
 
-        // Also try immediately on first script execution using the stored token —
-        // no need to wait for Firebase auth to resolve on repeat visits.
+        // Ascolta i cambiamenti nel localStorage
+        window.addEventListener('storage', function(e) {
+            if (e.key === 'userCompany') {
+                console.log('Storage event detected for userCompany:', e.newValue);
+                updateCompanyName();
+            }
+        });
+    });
+
+    // Funzione per impostare manualmente il nome dell'azienda (per test)
+    function setCompanyName(name) {
+        localStorage.setItem('userCompany', name);
+        const companyElement = document.getElementById('company-name');
+        if (companyElement) {
+            companyElement.textContent = name;
+        }
+        console.log('Nome azienda impostato manualmente:', name);
+    }
+
+    // Reload departments whenever user returns to this page
+    // (covers back navigation, bfcache restore, and tab re-focus)
+    window.addEventListener('pageshow', () => {
         loadDepartmentsGrid();
-    </script>
+    });
+
+    // Also try immediately on first script execution using the stored token —
+    // no need to wait for Firebase auth to resolve on repeat visits.
+    loadDepartmentsGrid();
+</script>
+
+<!-- Plain script: sync header brand + logo monogram whenever company-name changes -->
+<script>
+(function () {
+    function getInitials(name) {
+        if (!name || !name.trim()) return '?';
+        return name.trim().split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 3);
+    }
+
+    function syncIdentity(name) {
+        const hdr = document.getElementById('hdr-company');
+        const monogram = document.getElementById('logo-monogram');
+        const logoImg = document.getElementById('logo-img');
+
+        if (hdr && name) hdr.textContent = name;
+
+        if (monogram && name) {
+            monogram.textContent = getInitials(name);
+            monogram.setAttribute('aria-label', name);
+        }
+
+        // Show logo image only if it has a real src; otherwise keep monogram
+        if (logoImg) {
+            const src = logoImg.getAttribute('src');
+            if (src && src.trim() !== '' && src.trim() !== window.location.href) {
+                logoImg.style.display = 'block';
+                monogram.style.display = 'none';
+            } else {
+                logoImg.style.display = 'none';
+                monogram.style.display = 'flex';
+            }
+        }
+    }
+
+    // Seed from localStorage immediately (for repeat visits)
+    const stored = localStorage.getItem('userCompany');
+    if (stored) syncIdentity(stored);
+
+    // Watch #company-name for changes set by the Firebase module
+    const target = document.getElementById('company-name');
+    if (target) {
+        const obs = new MutationObserver(() => {
+            const name = target.textContent.trim();
+            if (name && name !== 'Caricamento...') syncIdentity(name);
+        });
+        obs.observe(target, { childList: true, subtree: true, characterData: true });
+    }
+})();
+</script>
+
 </body>
 </html>
