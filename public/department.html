@@ -903,21 +903,22 @@ function sendCountdown(){
   // ► Immediately add to local state (sender sees their own countdown right away)
   const existing = countdowns.get(tableNum);
   if(existing && existing.direction === 'sent'){
-    // Update existing sent countdown for same table — reset alarm flags for new duration
-    existing.timeRemaining  = duration;
-    existing.initialDuration= duration;
-    existing.startTime      = Date.now();
-    existing.startedAt      = startedAt;
-    existing.destinations   = dests;
-    existing.warnedAt60     = duration <= 60;
-    existing.alarmedExpiry  = false;
-    existing.expiredAt      = null;
+    // Re-sent for the same table — this is a deliberate user action (new countdown),
+    // so alarm flags must be reset for the new duration.
+    existing.timeRemaining   = duration;
+    existing.initialDuration = duration;
+    existing.endsAt          = Date.now() + duration * 1000;
+    existing.startedAt       = startedAt;
+    existing.destinations    = dests;
+    existing.warnedAt60      = duration <= 60;
+    existing.alarmedExpiry   = false;
+    existing.expiredAt       = null;
   } else {
     countdowns.set(tableNum, {
       tableNumber:     tableNum,
       timeRemaining:   duration,
       initialDuration: duration,
-      startTime:       Date.now(),
+      endsAt:          Date.now() + duration * 1000,
       startedAt,
       destinations:    dests,
       direction:       'sent',
@@ -1115,9 +1116,10 @@ async function processVoiceCmd(){
     // Update local state immediately (same pattern as sendCountdown)
     const existing = countdowns.get(tableNum);
     if(existing && existing.direction === 'sent'){
+      // Re-sent via voice command — deliberate new countdown, reset alarm flags.
       existing.timeRemaining   = durationS;
       existing.initialDuration = durationS;
-      existing.startTime       = Date.now();
+      existing.endsAt          = Date.now() + durationS * 1000;
       existing.startedAt       = startedAt;
       existing.destinations    = deptIds;
       existing.warnedAt60      = durationS <= 60;
@@ -1126,7 +1128,7 @@ async function processVoiceCmd(){
     } else {
       countdowns.set(tableNum, {
         tableNumber: tableNum, timeRemaining: durationS,
-        initialDuration: durationS, startTime: Date.now(),
+        initialDuration: durationS, endsAt: Date.now() + durationS * 1000,
         startedAt, destinations: deptIds, direction: 'sent',
         warnedAt60: durationS <= 60, alarmedExpiry: false, expiredAt: null
       });
@@ -1267,31 +1269,31 @@ function handleIncomingCountdown(data){
   if(dest === myDeptId){
     const ex = countdowns.get(tableNum);
     if(ex){
-      // Update time on existing entry — reset alarm flags only if the time was extended
-      if(tr > 0 && tr > ex.timeRemaining){
-        // A new/extended countdown — reset flags so alarms fire again
-        ex.warnedAt60    = tr <= 60;
-        ex.alarmedExpiry = false;
-        ex.expiredAt     = null;
+      // Update only the authoritative timing fields.
+      // Alarm flags (warnedAt60, alarmedExpiry, expiredAt) are NEVER touched here.
+      // They are managed exclusively by tick() so that frequent or out-of-order WS
+      // messages cannot suppress or duplicate threshold crossings.
+      if(!ex.expiredAt){
+        // While the countdown is still live, keep endsAt aligned with server time.
+        // Once expired, leave endsAt frozen so the 15-second phase is stable.
+        ex.endsAt = Date.now() + tr * 1000;
       }
       ex.timeRemaining   = tr;
       ex.initialDuration = tr;
-      ex.startTime       = Date.now();
     } else {
-      // Brand-new entry arriving from WS.
-      // If it's already ≤60 s or already at 0, mark alarms as "already fired" so we
-      // don't replay them on reconnects or page loads mid-countdown.
+      // Brand-new entry — initialize alarm flags from current server-reported time so
+      // reconnects and mid-countdown page loads do not replay already-passed alarms.
       countdowns.set(tableNum, {
         tableNumber:     tableNum,
         timeRemaining:   tr,
         initialDuration: tr,
-        startTime:       Date.now(),
+        endsAt:          Date.now() + tr * 1000,
         startedAt:       nowTime(),
         destinations:    [],
         direction:       'received',
-        warnedAt60:      tr <= 60,    // already under threshold — suppress warn alarm
-        alarmedExpiry:   tr === 0,    // already expired   — suppress expiry alarm
-        expiredAt:       tr === 0 ? Date.now() : null
+        warnedAt60:      tr <= 60,
+        alarmedExpiry:   tr === 0,
+        expiredAt:       null  // tick() will set this to endsAt when rem first hits 0
       });
     }
     renderCards();
@@ -1364,6 +1366,9 @@ function tick(){
   let changed = false;
   for(const [key, cd] of countdowns){
     // ── Expired phase: show 00:00 + blink for 15 s, then remove ──────────────
+    // The phase is measured from cd.endsAt (server-authoritative end time), not
+    // from when this client first detected the crossing. This keeps the expired
+    // window consistent across page refreshes and between different browsers.
     if(cd.expiredAt !== null){
       if(now - cd.expiredAt >= 15000){ countdowns.delete(key); changed = true; }
       // timeRemaining is already 0 — nothing else to update
@@ -1371,8 +1376,9 @@ function tick(){
     }
 
     const prevRem = cd.timeRemaining;
-    const elapsed  = Math.floor((now - cd.startTime) / 1000);
-    const rem      = Math.max(0, cd.initialDuration - elapsed);
+    // Use endsAt for remaining-time calculation so it is anchored to the same
+    // authoritative end point regardless of when this browser received the data.
+    const rem = Math.max(0, Math.floor((cd.endsAt - now) / 1000));
 
     // ── 60-second warning (detect crossing even if a tick skips the exact value)
     if(!cd.warnedAt60 && prevRem > 60 && rem <= 60){
@@ -1384,7 +1390,9 @@ function tick(){
 
     // ── Expiry: transition into the 15-second expired phase ──────────────────
     if(rem === 0){
-      cd.expiredAt = now;
+      // Anchor expiredAt to endsAt so the phase length is independent of local
+      // clock drift and of when exactly the tick fires.
+      cd.expiredAt = cd.endsAt;
       if(!cd.alarmedExpiry){
         playAlarm('snd-expiry');
         cd.alarmedExpiry = true;

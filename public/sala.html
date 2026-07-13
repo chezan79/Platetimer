@@ -280,13 +280,17 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
                 // past their threshold so reconnects / page loads don't replay old alarms.
                 countdowns = data.map(cd => {
                     const tr = cd.remainingTime != null ? cd.remainingTime : (cd.timeRemaining || 0);
+                    // The REST API returns endsAt directly (server-authoritative epoch ms).
+                    // Fall back to approximation only when the field is absent.
+                    const endsAt = cd.endsAt || (Date.now() + tr * 1000);
                     return {
                         ...cd,
                         remainingTime:  tr,
                         startTime:      cd.startTime || Date.now(),
+                        endsAt,
                         warnedAt60:     tr <= 60,
                         alarmedExpiry:  tr === 0,
-                        expiredAt:      tr === 0 ? Date.now() : null
+                        expiredAt:      null  // updateAllCountdowns sets this to endsAt on first 0-tick
                     };
                 });
                 renderCountdowns();
@@ -323,6 +327,9 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 
         countdowns = countdowns.reduce((acc, cd) => {
             // ── Expired phase: blink for 15 s then drop ──────────────────────
+            // Measure elapsed time from cd.endsAt (server-authoritative), not from
+            // when this client first noticed the crossing.  This keeps the 15-second
+            // window consistent across page refreshes and across different browsers.
             if (cd.expiredAt !== null) {
                 if (now - cd.expiredAt >= 15000) return acc; // drop after 15 s
                 acc.push({ ...cd, remainingTime: 0, remainingTimeFormatted: '0:00' });
@@ -330,35 +337,39 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
             }
 
             const prevRem = cd.remainingTime;
-            const elapsed = Math.floor((now - cd.startTime) / 1000);
-            const rem     = Math.max(0, cd.initialDuration - elapsed);
+            // Derive remaining time from endsAt so it is anchored to the same
+            // authoritative end point regardless of when the browser received the data.
+            const rem = Math.max(0, Math.floor((cd.endsAt - now) / 1000));
 
             // ── 60-second warning (handles skipped ticks) ────────────────────
+            // Alarm flags are read but never written here when the countdown already
+            // exists — they were initialized at creation and are only set true once.
             if (!cd.warnedAt60 && prevRem > 60 && rem <= 60) {
                 playAlarm('snd-warn');
                 cd.warnedAt60 = true;
             }
 
             if (rem === 0) {
-                // Transition to expired phase
+                // Transition to expired phase — anchor expiredAt to endsAt.
+                const expiredAt = cd.endsAt;
                 if (!cd.alarmedExpiry) {
                     playAlarm('snd-expiry');
                     cd.alarmedExpiry = true;
                 }
                 acc.push({
                     ...cd,
-                    remainingTime: 0,
+                    remainingTime:          0,
                     remainingTimeFormatted: '0:00',
-                    expiredAt: cd.expiredAt !== null ? cd.expiredAt : now,
-                    alarmedExpiry: true,
-                    warnedAt60: true
+                    expiredAt,
+                    warnedAt60:    true,
+                    alarmedExpiry: true
                 });
                 return acc;
             }
 
             acc.push({
                 ...cd,
-                remainingTime: rem,
+                remainingTime:          rem,
                 remainingTimeFormatted: CountdownsModule.formatTime(rem)
             });
             return acc;
@@ -379,23 +390,26 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
                 existing.destinations.push(data.destination);
             }
 
-            // If time was extended (new start), reset alarm flags
-            if (tr > 0 && tr > existing.remainingTime) {
-                existing.warnedAt60    = tr <= 60;
-                existing.alarmedExpiry = false;
-                existing.expiredAt     = null;
+            // Update only the authoritative timing fields.
+            // Alarm flags (warnedAt60, alarmedExpiry, expiredAt) are NEVER overwritten —
+            // they are managed exclusively by updateAllCountdowns() so frequent or
+            // out-of-order WS messages cannot suppress or duplicate threshold crossings.
+            if (!existing.expiredAt) {
+                // Keep endsAt aligned with server while the countdown is still live.
+                // Once expired, leave it frozen so the 15-second phase is stable.
+                existing.endsAt = Date.now() + tr * 1000;
             }
-
             existing.remainingTime          = tr;
             existing.initialDuration        = tr;
-            existing.startTime              = Date.now();
             existing.remainingTimeFormatted = CountdownsModule.formatTime(tr);
         } else {
-            // New arrival — suppress alarms that already passed (reconnect / mid-countdown join)
+            // New arrival — initialize alarm flags so alarms already passed are not replayed
+            // (handles reconnects and joining a countdown that is already in progress).
             countdowns.push({
                 tableNumber:            data.tableNumber,
                 remainingTime:          tr,
                 initialDuration:        tr,
+                endsAt:                 Date.now() + tr * 1000,
                 destinations:           data.destination ? [data.destination] : [],
                 startedAt:              new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
                 startTime:              Date.now(),
@@ -403,7 +417,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
                 remainingTimeFormatted: CountdownsModule.formatTime(tr),
                 warnedAt60:             tr <= 60,
                 alarmedExpiry:          tr === 0,
-                expiredAt:              tr === 0 ? Date.now() : null
+                expiredAt:              null  // updateAllCountdowns sets this to endsAt on first 0-tick
             });
         }
 
