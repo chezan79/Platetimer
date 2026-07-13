@@ -622,6 +622,15 @@ function isValidTableNumber(tableNumber) {
     return !isNaN(num) && num > 0 && num <= 999;
 }
 
+// Normalizza il numero tavolo: rimuove gli zeri iniziali per numeri puri,
+// lowercase per identificatori alfanumerici.
+// Esempi: "012" → "12", "21" → "21", "A12" → "a12"
+function normalizeTableNumber(tableNumber) {
+    const str = String(tableNumber).trim();
+    if (/^\d+$/.test(str)) return String(parseInt(str, 10));
+    return str.toLowerCase();
+}
+
 // Funzione per validare il tempo
 function isValidTime(timeRemaining) {
     const time = parseInt(timeRemaining);
@@ -943,112 +952,122 @@ wss.on('connection', (ws, req) => {
                 }
 
             } else if (data.action === 'startCountdown') {
-                // Validazione dati countdown
+                // ── Validate basic fields ───────────────────────────────────────────────
                 if (!data.tableNumber || !data.timeRemaining) {
                     console.log('⚠️ Dati countdown non validi');
                     return;
                 }
-
                 if (typeof data.tableNumber !== 'string' && typeof data.tableNumber !== 'number') {
                     console.log('⚠️ Numero tavolo non valido');
                     return;
                 }
-
                 if (typeof data.timeRemaining !== 'number' || data.timeRemaining <= 0) {
                     console.log('⚠️ Tempo rimanente non valido');
                     return;
                 }
 
-                // Validate destination against this company's active departments
-                const destination = data.destination;
-                if (!destination || typeof destination !== 'string') {
-                    console.log('⚠️ Destinazione mancante');
+                // Accept destinations array (new protocol) or single destination string (backward compat)
+                const destinations = Array.isArray(data.destinations)
+                    ? data.destinations
+                    : (data.destination ? [data.destination] : []);
+                if (destinations.length === 0) {
+                    console.log('⚠️ Nessuna destinazione specificata');
                     return;
                 }
+
+                // Validate every destination against the company's active departments
                 const companyDepts = getCompanyDepts(ws.companyRoom);
                 const activeDeptIds = companyDepts.filter(d => d.active).map(d => d.id);
-                if (activeDeptIds.length > 0 && !activeDeptIds.includes(destination)) {
-                    console.log(`⚠️ Destinazione "${destination}" non è un reparto valido per "${ws.companyRoom}"`);
-                    ws.send(JSON.stringify({ action: 'error', message: 'Destination department not found.' }));
+                for (const dest of destinations) {
+                    if (typeof dest !== 'string' || !dest.trim()) {
+                        console.log(`⚠️ Destinazione non valida: "${dest}"`);
+                        return;
+                    }
+                    if (activeDeptIds.length > 0 && !activeDeptIds.includes(dest)) {
+                        console.log(`⚠️ Destinazione "${dest}" non è un reparto valido per "${ws.companyRoom}"`);
+                        ws.send(JSON.stringify({ action: 'error', message: 'Destination department not found.' }));
+                        return;
+                    }
+                }
+
+                if (!ws.companyRoom) {
+                    console.log('⚠️ Client non assegnato a nessuna room');
                     return;
                 }
-                // Mark this department as used so it cannot be deleted later
-                const deptIdx = (departmentsStore[ws.companyRoom] || []).findIndex(d => d.id === destination);
-                if (deptIdx !== -1 && !departmentsStore[ws.companyRoom][deptIdx].usedInCountdowns) {
-                    departmentsStore[ws.companyRoom][deptIdx].usedInCountdowns = true;
-                    saveJSON(DEPARTMENTS_FILE, departmentsStore);
+
+                if (!activeCountdowns.has(ws.companyRoom)) {
+                    activeCountdowns.set(ws.companyRoom, new Map());
+                }
+                const companyCountdowns = activeCountdowns.get(ws.companyRoom);
+
+                // Normalize table number: strip leading zeros for purely numeric identifiers;
+                // lowercase for alphanumeric names.  "012" → "12", "A12" → "a12".
+                const tableKey = normalizeTableNumber(data.tableNumber);
+
+                // ── Duplicate-table check (atomic under the single-threaded event loop) ──
+                // Uniqueness rule: companyId + normalizedTableNumber + active status.
+                // The same table may exist in two different companies; never twice in one.
+                if (companyCountdowns.has(tableKey)) {
+                    console.log(`⚠️ Countdown già attivo per tavolo "${tableKey}" in "${ws.companyRoom}" — rifiutato`);
+                    ws.send(JSON.stringify({
+                        action:      'countdownError',
+                        code:        'TABLE_ALREADY_ACTIVE',
+                        tableNumber: data.tableNumber,
+                        message:     `A countdown is already active for table ${data.tableNumber}.`
+                    }));
+                    return;
                 }
 
-                // Memorizza il countdown attivo con logica unificata (Soluzione 1)
-                if (ws.companyRoom) {
-                    if (!activeCountdowns.has(ws.companyRoom)) {
-                        activeCountdowns.set(ws.companyRoom, new Map());
-                    }
+                // ── Create countdown ────────────────────────────────────────────────────
+                const startTime = Date.now();
+                companyCountdowns.set(tableKey, {
+                    startTime,
+                    initialDuration: data.timeRemaining,
+                    tableNumber:     data.tableNumber,
+                    destinations
+                });
+                console.log(`💾 Countdown creato per azienda "${ws.companyRoom}": Tavolo ${tableKey}, Destinazioni: [${destinations.join(', ')}]`);
 
-                    const companyCountdowns = activeCountdowns.get(ws.companyRoom);
-                    const tableKey = data.tableNumber.toString(); // Chiave semplice: solo numero tavolo
-                    
-                    // Verifica se esiste già un countdown per questo tavolo
-                    if (companyCountdowns.has(tableKey)) {
-                        const existingCountdown = companyCountdowns.get(tableKey);
-                        
-                        // Aggiungi la destinazione se non è già presente
-                        if (!existingCountdown.destinations.includes(destination)) {
-                            existingCountdown.destinations.push(destination);
-                            console.log(`📝 Aggiunta destinazione "${destination}" al tavolo ${data.tableNumber} esistente. Destinazioni: [${existingCountdown.destinations.join(', ')}]`);
-                        } else {
-                            console.log(`⚠️ Destinazione "${destination}" già presente per tavolo ${data.tableNumber}, aggiornato il countdown`);
-                        }
-                        
-                        // Aggiorna il tempo con il nuovo countdown (l'ultimo ricevuto)
-                        existingCountdown.startTime = Date.now();
-                        existingCountdown.initialDuration = data.timeRemaining;
-                    } else {
-                        // Crea nuovo countdown con array di destinazioni
-                        companyCountdowns.set(tableKey, {
-                            startTime: Date.now(),
-                            initialDuration: data.timeRemaining,
-                            tableNumber: data.tableNumber,
-                            destinations: [destination] // Array di destinazioni
+                // Mark all destination departments as used (prevents accidental deletion)
+                let depsChanged = false;
+                for (const dest of destinations) {
+                    const deptIdx = (departmentsStore[ws.companyRoom] || []).findIndex(d => d.id === dest);
+                    if (deptIdx !== -1 && !departmentsStore[ws.companyRoom][deptIdx].usedInCountdowns) {
+                        departmentsStore[ws.companyRoom][deptIdx].usedInCountdowns = true;
+                        depsChanged = true;
+                    }
+                }
+                if (depsChanged) saveJSON(DEPARTMENTS_FILE, departmentsStore);
+
+                // ── Broadcast one startCountdown message per destination ─────────────
+                // All authenticated clients in the company room receive every message.
+                // Company isolation is enforced by ws.companyRoom which is derived from
+                // the server-verified session token — clients cannot spoof it.
+                if (companyRooms.has(ws.companyRoom)) {
+                    const roomClients  = companyRooms.get(ws.companyRoom);
+                    const storedCd     = companyCountdowns.get(tableKey);
+                    const serverEndsAt = storedCd.startTime + storedCd.initialDuration * 1000;
+
+                    destinations.forEach(destination => {
+                        const msg = JSON.stringify({
+                            action:          'startCountdown',
+                            tableNumber:     data.tableNumber,
+                            timeRemaining:   data.timeRemaining,
+                            endsAt:          serverEndsAt,
+                            initialDuration: storedCd.initialDuration,
+                            destination
                         });
-                        console.log(`💾 Nuovo countdown creato per tavolo ${data.tableNumber} con destinazione: [${destination}]`);
-                    }
-
-                    console.log(`💾 Countdown memorizzato per azienda "${ws.companyRoom}": Tavolo ${data.tableNumber}, Destinazioni totali: [${companyCountdowns.get(tableKey).destinations.join(', ')}]`);
-                }
-
-                // Invia solo ai client della stessa room/azienda
-                if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
-                    const roomClients = companyRooms.get(ws.companyRoom);
-                    // Retrieve the just-stored countdown to read the authoritative
-                    // startTime and initialDuration set by the server, then compute
-                    // endsAt server-side so every client receives the same value.
-                    const storedCd = activeCountdowns.has(ws.companyRoom)
-                        ? activeCountdowns.get(ws.companyRoom).get(data.tableNumber.toString())
-                        : null;
-                    const serverEndsAt = storedCd
-                        ? storedCd.startTime + storedCd.initialDuration * 1000
-                        : Date.now() + data.timeRemaining * 1000;
-                    const messageToSend = JSON.stringify({
-                        action:          data.action,
-                        tableNumber:     data.tableNumber,
-                        timeRemaining:   data.timeRemaining,
-                        endsAt:          serverEndsAt,
-                        initialDuration: storedCd ? storedCd.initialDuration : data.timeRemaining,
-                        destination:     destination
+                        let sentCount = 0;
+                        roomClients.forEach(client => {
+                            if (client.readyState === WebSocket.OPEN) {
+                                client.send(msg);
+                                sentCount++;
+                            }
+                        });
+                        console.log(`📡 Room "${ws.companyRoom}" (${sentCount}/${roomClients.size} client): Tavolo ${tableKey} → ${destination}, ${Math.floor(data.timeRemaining/60)}:${(data.timeRemaining%60).toString().padStart(2,'0')}`);
                     });
-
-                    let sentCount = 0;
-                    roomClients.forEach((client) => {
-                        if (client.readyState === WebSocket.OPEN) {
-                            client.send(messageToSend);
-                            sentCount++;
-                        }
-                    });
-
-                    console.log(`📡 Countdown inviato alla room "${ws.companyRoom}" (${sentCount}/${roomClients.size} client): Tavolo ${data.tableNumber}, Destinazione: ${destination}, ${Math.floor(data.timeRemaining/60)}:${(data.timeRemaining%60).toString().padStart(2, '0')}`);
                 } else {
-                    console.log('⚠️ Client non assegnato a nessuna room');
+                    console.log('⚠️ Room non trovata per broadcast');
                 }
 
             } else if (data.action === 'deleteCountdown') {

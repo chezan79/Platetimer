@@ -86,6 +86,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
   transition:all .2s;letter-spacing:.3px;}
 .send-btn:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 6px 20px rgba(99,102,241,.35);}
 .send-btn:disabled{opacity:.3;cursor:not-allowed;transform:none;}
+#send-err{display:none;background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.4);color:#ef4444;border-radius:8px;padding:10px 14px;font-size:13px;font-weight:500;text-align:center;margin-top:10px;}
 
 /* ── RIGHT AREA ─────────────────────────────── */
 .ra{margin-left:var(--lw);padding:calc(var(--hdr) + 20px) 24px 24px;}
@@ -297,6 +298,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
     <button id="send-btn" class="send-btn" onclick="sendCountdown()" disabled>
       Avvia Countdown
     </button>
+    <div id="send-err"></div>
 
     <!-- Voice command section (inside countdown tab) -->
     <div class="vc-sep"></div>
@@ -890,54 +892,59 @@ function refreshSendBtn(){
   document.getElementById('send-btn').disabled = !ok;
 }
 
+// ── Error display ───────────────────────────────────────────────────────────────
+let _sendErrTimer = null;
+function showSendError(msg){
+  const el = document.getElementById('send-err');
+  if(!el) return;
+  el.textContent = msg;
+  el.style.display = 'block';
+  if(_sendErrTimer) clearTimeout(_sendErrTimer);
+  _sendErrTimer = setTimeout(() => { el.style.display = 'none'; }, 4000);
+}
+
 // ── Send countdown ─────────────────────────────────────────────────────────────
 function sendCountdown(){
   if(!wsConnected){ alert('WebSocket non connesso. Riprova.'); return; }
   if(!tableInput || selectedDur <= 0 || selectedDests.size === 0) return;
 
-  const tableNum   = tableInput;
-  const duration   = selectedDur;
-  const dests      = Array.from(selectedDests);
-  const startedAt  = nowTime();
+  const tableNum  = tableInput;
+  const duration  = selectedDur;
+  const dests     = Array.from(selectedDests);
+  const startedAt = nowTime();
 
-  // ► Immediately add to local state (sender sees their own countdown right away)
+  // ► Local pre-check: give immediate feedback if the table is already active.
+  // The server is the authoritative duplicate guard; this is only for faster UX.
   const existing = countdowns.get(tableNum);
-  if(existing && existing.direction === 'sent'){
-    // Re-sent for the same table — this is a deliberate user action (new countdown),
-    // so alarm flags must be reset for the new duration.
-    existing.timeRemaining   = duration;
-    existing.initialDuration = duration;
-    existing.endsAt          = Date.now() + duration * 1000;
-    existing.startedAt       = startedAt;
-    existing.destinations    = dests;
-    existing.warnedAt60      = duration <= 60;
-    existing.alarmedExpiry   = false;
-    existing.expiredAt       = null;
-  } else {
-    countdowns.set(tableNum, {
-      tableNumber:     tableNum,
-      timeRemaining:   duration,
-      initialDuration: duration,
-      endsAt:          Date.now() + duration * 1000,
-      startedAt,
-      destinations:    dests,
-      direction:       'sent',
-      warnedAt60:      duration <= 60,
-      alarmedExpiry:   false,
-      expiredAt:       null
-    });
+  if(existing && existing.expiredAt === null && existing.timeRemaining > 0){
+    showSendError(`Il tavolo ${tableNum} ha già un countdown attivo.`);
+    return;
   }
+
+  // ► Optimistically add to local state so the sender sees feedback immediately.
+  // If the server rejects the request, handleCountdownError() removes this entry.
+  countdowns.set(tableNum, {
+    tableNumber:     tableNum,
+    timeRemaining:   duration,
+    initialDuration: duration,
+    endsAt:          Date.now() + duration * 1000,
+    startedAt,
+    destinations:    dests,
+    direction:       'sent',
+    warnedAt60:      duration <= 60,
+    alarmedExpiry:   false,
+    expiredAt:       null
+  });
   renderCards();
 
-  // ► Send one WS message per destination
-  dests.forEach(destId => {
-    ws.send(JSON.stringify({
-      action:      'startCountdown',
-      tableNumber: tableNum,
-      timeRemaining: duration,
-      destination: destId
-    }));
-  });
+  // ► Send ONE message with the full destinations array.
+  // The server creates the countdown atomically and enforces the no-duplicate rule.
+  ws.send(JSON.stringify({
+    action:        'startCountdown',
+    tableNumber:   tableNum,
+    timeRemaining: duration,
+    destinations:  dests
+  }));
 
   // Reset form
   tableInput   = '';
@@ -1135,15 +1142,15 @@ async function processVoiceCmd(){
     }
     renderCards();
 
-    // Send WS messages — one per destination (same as sendCountdown)
-    deptIds.forEach(destId => {
-      if(ws.readyState === WebSocket.OPEN){
-        ws.send(JSON.stringify({
-          action: 'startCountdown', tableNumber: tableNum,
-          timeRemaining: durationS, destination: destId
-        }));
-      }
-    });
+    // Send ONE message with the full destinations array (same protocol as sendCountdown)
+    if(ws.readyState === WebSocket.OPEN){
+      ws.send(JSON.stringify({
+        action:        'startCountdown',
+        tableNumber:   tableNum,
+        timeRemaining: durationS,
+        destinations:  deptIds
+      }));
+    }
 
     showVcSuccess(parsed);
 
@@ -1244,6 +1251,8 @@ function connectWS(){
 
     if(data.action === 'startCountdown'){
       handleIncomingCountdown(data);
+    } else if(data.action === 'countdownError'){
+      handleCountdownError(data);
     } else if(data.action === 'deleteCountdown'){
       countdowns.delete(String(data.tableNumber));
       renderCards();
@@ -1264,50 +1273,62 @@ function handleIncomingCountdown(data){
   const tableNum = String(data.tableNumber);
   const dest     = data.destination;
   const tr       = data.timeRemaining;
+  const ex       = countdowns.get(tableNum);
 
-  // Case 1: this page is the destination → show as received
-  if(dest === myDeptId){
-    const ex = countdowns.get(tableNum);
-    if(ex){
-      // Update only the authoritative timing fields.
-      // Alarm flags (warnedAt60, alarmedExpiry, expiredAt) are NEVER touched here.
-      // They are managed exclusively by tick() so that frequent or out-of-order WS
-      // messages cannot suppress or duplicate threshold crossings.
-      if(!ex.expiredAt){
-        // Use the server-supplied endsAt (epoch ms, computed from server clock).
-        // Fall back to approximation only for old payloads that lack the field.
-        ex.endsAt = data.endsAt ?? (Date.now() + tr * 1000);
-      }
-      ex.timeRemaining = tr;
-      // Preserve the original full duration so the progress bar calculation remains
-      // correct. Never replace it with the current remaining time.
-      // The server always sends initialDuration in the payload; use it if present.
-      ex.initialDuration = data.initialDuration ?? ex.initialDuration;
-    } else {
-      // Brand-new entry — initialize alarm flags from current server-reported time so
-      // reconnects and mid-countdown page loads do not replay already-passed alarms.
-      countdowns.set(tableNum, {
-        tableNumber:     tableNum,
-        timeRemaining:   tr,
-        initialDuration: data.initialDuration ?? tr,
-        endsAt:          data.endsAt ?? (Date.now() + tr * 1000),
-        startedAt:       nowTime(),
-        destinations:    [],
-        direction:       'received',
-        warnedAt60:      tr <= 60,
-        alarmedExpiry:   tr === 0,
-        expiredAt:       null  // tick() will set this to endsAt when rem first hits 0
-      });
+  // ── Sender echo: this page created this countdown ───────────────────────────
+  // It is already in local state as 'sent'. Use the echo to upgrade endsAt and
+  // initialDuration with the server's authoritative values.
+  if(ex && ex.direction === 'sent'){
+    if(dest && !ex.destinations.includes(dest)) ex.destinations.push(dest);
+    if(!ex.expiredAt){
+      ex.endsAt = data.endsAt ?? ex.endsAt ?? (Date.now() + tr * 1000);
     }
+    ex.initialDuration = data.initialDuration ?? ex.initialDuration;
     renderCards();
     return;
   }
 
-  // Case 2: this page sent it (echo from broadcast) — already in local state, just confirm/update
-  const ex = countdowns.get(tableNum);
-  if(ex && ex.direction === 'sent'){
+  // ── Incoming countdown from the company room ────────────────────────────────
+  // Every department page shows ALL countdowns from the same authenticated
+  // company room, regardless of which department is named as destination.
+  // Company isolation is enforced server-side via the authenticated session.
+  // Multiple per-destination messages for the same table are merged by accumulating
+  // the destination into the existing countdown's destinations list.
+  if(ex){
+    if(!ex.expiredAt){
+      ex.endsAt = data.endsAt ?? (Date.now() + tr * 1000);
+    }
+    ex.timeRemaining   = tr;
+    ex.initialDuration = data.initialDuration ?? ex.initialDuration;
     if(dest && !ex.destinations.includes(dest)) ex.destinations.push(dest);
-    renderCards();
+  } else {
+    countdowns.set(tableNum, {
+      tableNumber:     tableNum,
+      timeRemaining:   tr,
+      initialDuration: data.initialDuration ?? tr,
+      endsAt:          data.endsAt ?? (Date.now() + tr * 1000),
+      startedAt:       nowTime(),
+      destinations:    dest ? [dest] : [],
+      direction:       'received',
+      warnedAt60:      tr <= 60,
+      alarmedExpiry:   tr === 0,
+      expiredAt:       null
+    });
+  }
+  renderCards();
+}
+
+function handleCountdownError(data){
+  if(data.code === 'TABLE_ALREADY_ACTIVE'){
+    const tableNum = String(data.tableNumber);
+    // Remove the optimistically added countdown the sender created locally,
+    // since the server rejected it. Do not touch countdowns from other devices.
+    const ex = countdowns.get(tableNum);
+    if(ex && ex.direction === 'sent'){
+      countdowns.delete(tableNum);
+      renderCards();
+    }
+    showSendError(`Il tavolo ${data.tableNumber} ha già un countdown attivo.`);
   }
 }
 
