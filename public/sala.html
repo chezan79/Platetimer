@@ -88,6 +88,9 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 .cd-card.warning{border-color:rgba(245,158,11,.35);background:rgba(245,158,11,.05);}
 .cd-card.critical{border-color:rgba(239,68,68,.4);background:rgba(239,68,68,.07);
   animation:pulse 2s ease-in-out infinite;}
+.cd-card.expired{border-color:rgba(239,68,68,.9);background:rgba(239,68,68,.09);
+  animation:blink-expired .7s ease-in-out infinite;}
+@keyframes blink-expired{0%,100%{opacity:1;border-color:rgba(239,68,68,.9);}50%{opacity:.3;border-color:rgba(239,68,68,.15);}}
 @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.75;}}
 
 /* Table number */
@@ -179,7 +182,8 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 
 </main>
 
-<audio id="alertSound" src="alerte-346112.mp3" preload="auto"></audio>
+<audio id="snd-warn"   src="alerte-346112.mp3"           preload="auto"></audio>
+<audio id="snd-expiry" src="costa-rica-eas-alarm-346194.mp3" preload="auto"></audio>
 
 <script src="js/ws-auth.js"></script>
 <script src="js/countdowns.js"></script>
@@ -190,6 +194,28 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
     let searchTerm = '';
     let subscription = null;
     let updateInterval = null;
+
+    // ── Alarm audio ─────────────────────────────────────────────────────────
+    let _audioUnlocked = false;
+    function _unlockAudio() {
+        if (_audioUnlocked) return;
+        _audioUnlocked = true;
+        ['snd-warn','snd-expiry'].forEach(id => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.muted = true;
+            el.play().then(() => { el.pause(); el.muted = false; el.currentTime = 0; }).catch(() => {});
+        });
+    }
+    ['pointerdown','keydown'].forEach(ev =>
+        document.addEventListener(ev, _unlockAudio, { once: true })
+    );
+    function playAlarm(id) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.currentTime = 0;
+        el.play().catch(err => console.warn('[alarm] play blocked:', err.message));
+    }
 
     let companyName = localStorage.getItem('userCompany');
     if (!companyName) {
@@ -250,7 +276,19 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
     function loadInitialCountdowns() {
         CountdownsModule.fetchActiveCountdowns(companyName)
             .then(data => {
-                countdowns = data;
+                // Initialize alarm flags — suppress alarms for countdowns that are already
+                // past their threshold so reconnects / page loads don't replay old alarms.
+                countdowns = data.map(cd => {
+                    const tr = cd.remainingTime != null ? cd.remainingTime : (cd.timeRemaining || 0);
+                    return {
+                        ...cd,
+                        remainingTime:  tr,
+                        startTime:      cd.startTime || Date.now(),
+                        warnedAt60:     tr <= 60,
+                        alarmedExpiry:  tr === 0,
+                        expiredAt:      tr === 0 ? Date.now() : null
+                    };
+                });
                 renderCountdowns();
                 updateStatistics();
             })
@@ -281,63 +319,92 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
     }
 
     function updateAllCountdowns() {
-        const currentTime = Date.now();
-        
-        countdowns = countdowns.map(countdown => {
-            const elapsed = Math.floor((currentTime - countdown.startTime) / 1000);
-            const remainingTime = Math.max(0, countdown.initialDuration - elapsed);
-            
-            return {
-                ...countdown,
-                remainingTime: remainingTime,
-                remainingTimeFormatted: CountdownsModule.formatTime(remainingTime)
-            };
-        }).filter(c => c.remainingTime > 0);
+        const now = Date.now();
+
+        countdowns = countdowns.reduce((acc, cd) => {
+            // ── Expired phase: blink for 15 s then drop ──────────────────────
+            if (cd.expiredAt !== null) {
+                if (now - cd.expiredAt >= 15000) return acc; // drop after 15 s
+                acc.push({ ...cd, remainingTime: 0, remainingTimeFormatted: '0:00' });
+                return acc;
+            }
+
+            const prevRem = cd.remainingTime;
+            const elapsed = Math.floor((now - cd.startTime) / 1000);
+            const rem     = Math.max(0, cd.initialDuration - elapsed);
+
+            // ── 60-second warning (handles skipped ticks) ────────────────────
+            if (!cd.warnedAt60 && prevRem > 60 && rem <= 60) {
+                playAlarm('snd-warn');
+                cd.warnedAt60 = true;
+            }
+
+            if (rem === 0) {
+                // Transition to expired phase
+                if (!cd.alarmedExpiry) {
+                    playAlarm('snd-expiry');
+                    cd.alarmedExpiry = true;
+                }
+                acc.push({
+                    ...cd,
+                    remainingTime: 0,
+                    remainingTimeFormatted: '0:00',
+                    expiredAt: cd.expiredAt !== null ? cd.expiredAt : now,
+                    alarmedExpiry: true,
+                    warnedAt60: true
+                });
+                return acc;
+            }
+
+            acc.push({
+                ...cd,
+                remainingTime: rem,
+                remainingTimeFormatted: CountdownsModule.formatTime(rem)
+            });
+            return acc;
+        }, []);
 
         renderCountdowns();
         updateStatistics();
     }
 
     function updateCountdown(data) {
-        console.log('📥 Countdown ricevuto in sala:', data);
-        console.log(`🔍 Destinazione: "${data.destination}", Tavolo: ${data.tableNumber}, Tempo: ${data.timeRemaining}s`);
-        
-        // Verifica se esiste già un countdown per questo tavolo
+        const tr = data.timeRemaining;
         const existingIndex = countdowns.findIndex(c => c.tableNumber == data.tableNumber);
-        
+
         if (existingIndex !== -1) {
             const existing = countdowns[existingIndex];
-            
-            // Aggiungi destinazione se non presente
+
             if (data.destination && !existing.destinations.includes(data.destination)) {
                 existing.destinations.push(data.destination);
-                console.log(`📝 Destinazione "${data.destination}" aggiunta al tavolo ${data.tableNumber}. Destinazioni totali: [${existing.destinations.join(', ')}]`);
             }
-            
-            // Aggiorna il tempo con il countdown più recente
-            existing.remainingTime = data.timeRemaining;
-            existing.initialDuration = data.timeRemaining;
-            existing.startTime = Date.now();
-            existing.endsAt = Date.now() + (data.timeRemaining * 1000);
-            existing.remainingTimeFormatted = CountdownsModule.formatTime(data.timeRemaining);
-            
-            console.log(`🔄 Countdown tavolo ${data.tableNumber} aggiornato in sala`);
+
+            // If time was extended (new start), reset alarm flags
+            if (tr > 0 && tr > existing.remainingTime) {
+                existing.warnedAt60    = tr <= 60;
+                existing.alarmedExpiry = false;
+                existing.expiredAt     = null;
+            }
+
+            existing.remainingTime          = tr;
+            existing.initialDuration        = tr;
+            existing.startTime              = Date.now();
+            existing.remainingTimeFormatted = CountdownsModule.formatTime(tr);
         } else {
-            // Crea nuovo countdown
-            const newCountdown = {
-                tableNumber: data.tableNumber,
-                remainingTime: data.timeRemaining,
-                initialDuration: data.timeRemaining,
-                destinations: data.destination ? [data.destination] : [],
-                startedAt: new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
-                startTime: Date.now(),
-                endsAt: Date.now() + (data.timeRemaining * 1000),
-                status: 'active',
-                remainingTimeFormatted: CountdownsModule.formatTime(data.timeRemaining)
-            };
-            
-            countdowns.push(newCountdown);
-            console.log(`✅ Nuovo countdown tavolo ${data.tableNumber} aggiunto in sala con destinazione: [${newCountdown.destinations.join(', ')}]`);
+            // New arrival — suppress alarms that already passed (reconnect / mid-countdown join)
+            countdowns.push({
+                tableNumber:            data.tableNumber,
+                remainingTime:          tr,
+                initialDuration:        tr,
+                destinations:           data.destination ? [data.destination] : [],
+                startedAt:              new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
+                startTime:              Date.now(),
+                status:                 'active',
+                remainingTimeFormatted: CountdownsModule.formatTime(tr),
+                warnedAt60:             tr <= 60,
+                alarmedExpiry:          tr === 0,
+                expiredAt:              tr === 0 ? Date.now() : null
+            });
         }
 
         renderCountdowns();
@@ -379,12 +446,15 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
         }
 
         container.innerHTML = filtered.map(countdown => {
-            const alertLevel = CountdownsModule.getAlertLevel(countdown.remainingTime);
-            const statusClass = countdown.remainingTime < 120 ? 'alert' : 'active';
+            const isExpired   = countdown.expiredAt !== null;
+            const alertLevel  = isExpired
+                ? 'expired'
+                : CountdownsModule.getAlertLevel(countdown.remainingTime);
+            const statusClass = isExpired ? 'alert' : countdown.remainingTime < 120 ? 'alert' : 'active';
             const initialTimeFormatted = CountdownsModule.formatTime(countdown.initialDuration);
 
             const stationBadges = countdown.destinations && countdown.destinations.length > 0
-                ? countdown.destinations.map(dest => 
+                ? countdown.destinations.map(dest =>
                     `<span class="station-badge">${getStationIcon(dest)}</span>`
                   ).join('')
                 : '<span class="station-badge">🍳 Cucina</span>';
@@ -399,7 +469,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
                     </div>
                     <div class="cd-time ${alertLevel}">${countdown.remainingTimeFormatted}</div>
                     <span class="status-badge ${statusClass}">
-                        ${statusClass === 'alert' ? '🔥 Urgente' : '✅ Attivo'}
+                        ${isExpired ? '⏰ Scaduto' : statusClass === 'alert' ? '🔥 Urgente' : '✅ Attivo'}
                     </span>
                 </div>
             `;

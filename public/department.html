@@ -103,6 +103,8 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 .cdc.crit{border-color:rgba(239,68,68,.5);background:rgba(239,68,68,.05);}
 .cdc.crit{animation:pulse-border 1.2s ease-in-out infinite;}
 @keyframes pulse-border{0%,100%{border-color:rgba(239,68,68,.5);}50%{border-color:rgba(239,68,68,.9);}}
+.cdc.expired{border-color:rgba(239,68,68,.9);background:rgba(239,68,68,.09);animation:blink-expired .7s ease-in-out infinite;}
+@keyframes blink-expired{0%,100%{opacity:1;border-color:rgba(239,68,68,.9);}50%{opacity:.3;border-color:rgba(239,68,68,.15);}}
 .cdc-top{display:flex;align-items:center;gap:12px;margin-bottom:10px;}
 .cdc-tbl{display:flex;flex-direction:column;align-items:center;min-width:60px;}
 .cdc-tbl-lbl{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);}
@@ -376,6 +378,9 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
   </div>
 </main>
 
+<audio id="snd-warn"   src="alerte-346112.mp3"           preload="auto"></audio>
+<audio id="snd-expiry" src="costa-rica-eas-alarm-346194.mp3" preload="auto"></audio>
+
 <script src="js/ws-auth.js"></script>
 <script src="js/ptt-voice.js"></script>
 <script>
@@ -420,13 +425,42 @@ let vcCountInt  = null;
 // Map: messageId → { id, fromName, timestamp, blobUrl }
 let voiceMessages = new Map();
 
+// ── Alarm audio ──────────────────────────────────────────────────────────────
+// Browsers block audio until the user has interacted with the page.
+// We silently prime both elements on the first pointer/key event so that
+// subsequent playAlarm() calls succeed without a user-gesture requirement.
+let _audioUnlocked = false;
+function _unlockAudio() {
+  if (_audioUnlocked) return;
+  _audioUnlocked = true;
+  ['snd-warn','snd-expiry'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.muted = true;
+    el.play().then(() => { el.pause(); el.muted = false; el.currentTime = 0; }).catch(() => {});
+  });
+}
+['pointerdown','keydown'].forEach(ev =>
+  document.addEventListener(ev, _unlockAudio, { once: true })
+);
+
+// Play an alarm sound by element id.
+// Reset currentTime so rapid re-triggers always start from the beginning.
+// Silently swallows autoplay-policy errors (the unlock above covers most cases).
+function playAlarm(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.currentTime = 0;
+  el.play().catch(err => console.warn('[alarm] play blocked (interaction needed):', err.message));
+}
+
 // ── Utility ──────────────────────────────────────────────────────────────────
 function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function fmt(s){
   s = Math.max(0, s);
   return Math.floor(s/60) + ':' + (s%60).toString().padStart(2,'0');
 }
-function level(s){ return s < 120 ? 'crit' : s < 300 ? 'warn' : ''; }
+function level(s){ return s === 0 ? 'expired' : s < 120 ? 'crit' : s < 300 ? 'warn' : ''; }
 function nowTime(){ return new Date().toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'}); }
 
 // ── API: load departments ─────────────────────────────────────────────────────
@@ -869,12 +903,15 @@ function sendCountdown(){
   // ► Immediately add to local state (sender sees their own countdown right away)
   const existing = countdowns.get(tableNum);
   if(existing && existing.direction === 'sent'){
-    // Update existing sent countdown for same table
+    // Update existing sent countdown for same table — reset alarm flags for new duration
     existing.timeRemaining  = duration;
     existing.initialDuration= duration;
     existing.startTime      = Date.now();
     existing.startedAt      = startedAt;
     existing.destinations   = dests;
+    existing.warnedAt60     = duration <= 60;
+    existing.alarmedExpiry  = false;
+    existing.expiredAt      = null;
   } else {
     countdowns.set(tableNum, {
       tableNumber:     tableNum,
@@ -883,7 +920,10 @@ function sendCountdown(){
       startTime:       Date.now(),
       startedAt,
       destinations:    dests,
-      direction:       'sent'
+      direction:       'sent',
+      warnedAt60:      duration <= 60,
+      alarmedExpiry:   false,
+      expiredAt:       null
     });
   }
   renderCards();
@@ -1080,11 +1120,15 @@ async function processVoiceCmd(){
       existing.startTime       = Date.now();
       existing.startedAt       = startedAt;
       existing.destinations    = deptIds;
+      existing.warnedAt60      = durationS <= 60;
+      existing.alarmedExpiry   = false;
+      existing.expiredAt       = null;
     } else {
       countdowns.set(tableNum, {
         tableNumber: tableNum, timeRemaining: durationS,
         initialDuration: durationS, startTime: Date.now(),
-        startedAt, destinations: deptIds, direction: 'sent'
+        startedAt, destinations: deptIds, direction: 'sent',
+        warnedAt60: durationS <= 60, alarmedExpiry: false, expiredAt: null
       });
     }
     renderCards();
@@ -1217,24 +1261,37 @@ function connectWS(){
 function handleIncomingCountdown(data){
   const tableNum = String(data.tableNumber);
   const dest     = data.destination;
+  const tr       = data.timeRemaining;
 
   // Case 1: this page is the destination → show as received
   if(dest === myDeptId){
     const ex = countdowns.get(tableNum);
     if(ex){
-      // Update time on existing entry (keep direction)
-      ex.timeRemaining   = data.timeRemaining;
-      ex.initialDuration = data.timeRemaining;
+      // Update time on existing entry — reset alarm flags only if the time was extended
+      if(tr > 0 && tr > ex.timeRemaining){
+        // A new/extended countdown — reset flags so alarms fire again
+        ex.warnedAt60    = tr <= 60;
+        ex.alarmedExpiry = false;
+        ex.expiredAt     = null;
+      }
+      ex.timeRemaining   = tr;
+      ex.initialDuration = tr;
       ex.startTime       = Date.now();
     } else {
+      // Brand-new entry arriving from WS.
+      // If it's already ≤60 s or already at 0, mark alarms as "already fired" so we
+      // don't replay them on reconnects or page loads mid-countdown.
       countdowns.set(tableNum, {
         tableNumber:     tableNum,
-        timeRemaining:   data.timeRemaining,
-        initialDuration: data.timeRemaining,
+        timeRemaining:   tr,
+        initialDuration: tr,
         startTime:       Date.now(),
         startedAt:       nowTime(),
-        destinations:    [],         // we don't know the full dest list from this message
-        direction:       'received'
+        destinations:    [],
+        direction:       'received',
+        warnedAt60:      tr <= 60,    // already under threshold — suppress warn alarm
+        alarmedExpiry:   tr === 0,    // already expired   — suppress expiry alarm
+        expiredAt:       tr === 0 ? Date.now() : null
       });
     }
     renderCards();
@@ -1244,7 +1301,6 @@ function handleIncomingCountdown(data){
   // Case 2: this page sent it (echo from broadcast) — already in local state, just confirm/update
   const ex = countdowns.get(tableNum);
   if(ex && ex.direction === 'sent'){
-    // Confirm it went through — add this dest to the stored destinations if not present
     if(dest && !ex.destinations.includes(dest)) ex.destinations.push(dest);
     renderCards();
   }
@@ -1307,10 +1363,34 @@ function tick(){
   const now = Date.now();
   let changed = false;
   for(const [key, cd] of countdowns){
-    const elapsed = Math.floor((now - cd.startTime) / 1000);
-    const rem     = Math.max(0, cd.initialDuration - elapsed);
+    // ── Expired phase: show 00:00 + blink for 15 s, then remove ──────────────
+    if(cd.expiredAt !== null){
+      if(now - cd.expiredAt >= 15000){ countdowns.delete(key); changed = true; }
+      // timeRemaining is already 0 — nothing else to update
+      continue;
+    }
+
+    const prevRem = cd.timeRemaining;
+    const elapsed  = Math.floor((now - cd.startTime) / 1000);
+    const rem      = Math.max(0, cd.initialDuration - elapsed);
+
+    // ── 60-second warning (detect crossing even if a tick skips the exact value)
+    if(!cd.warnedAt60 && prevRem > 60 && rem <= 60){
+      playAlarm('snd-warn');
+      cd.warnedAt60 = true;
+    }
+
     if(rem !== cd.timeRemaining){ cd.timeRemaining = rem; changed = true; }
-    if(rem === 0){ countdowns.delete(key); changed = true; }
+
+    // ── Expiry: transition into the 15-second expired phase ──────────────────
+    if(rem === 0){
+      cd.expiredAt = now;
+      if(!cd.alarmedExpiry){
+        playAlarm('snd-expiry');
+        cd.alarmedExpiry = true;
+      }
+      changed = true;
+    }
   }
   if(changed) renderCards();
 }
