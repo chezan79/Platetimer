@@ -826,42 +826,36 @@ wss.on('connection', (ws, req) => {
 
                 console.log(`✅ Client aggiunto alla room: ${companyName} (${companyRooms.get(companyName).size} client)`);
 
-                // Invia tutti i countdown attivi al nuovo client (Soluzione 1 - con destinazioni multiple)
+                // Invia tutti i countdown attivi al nuovo client — un messaggio per tavolo.
+                // Criteri lifecycle: includi se Date.now() < endsAt + 15000 ms,
+                // allineato con duplicate-check e cleanup periodico.
                 if (activeCountdowns.has(companyName)) {
                     const companyCountdowns = activeCountdowns.get(companyName);
                     const countdownsToDelete = [];
 
                     companyCountdowns.forEach((countdown, tableNumber) => {
-                        // Calcola il tempo rimanente attuale
-                        const currentTime = Date.now();
-                        const elapsed = Math.floor((currentTime - countdown.startTime) / 1000);
-                        const remainingTime = Math.max(0, countdown.initialDuration - elapsed);
-
-                        if (remainingTime > 0) {
-                            // Invia un countdown per ogni destinazione
-                            const endsAt = countdown.startTime + countdown.initialDuration * 1000;
-                            countdown.destinations.forEach(destination => {
-                                const syncMessage = {
-                                    action: 'startCountdown',
-                                    tableNumber: tableNumber,
-                                    timeRemaining: remainingTime,
-                                    endsAt: endsAt,
-                                    initialDuration: countdown.initialDuration,
-                                    destination: destination
-                                };
-                                ws.send(JSON.stringify(syncMessage));
-                                console.log(`📡 Countdown sincronizzato inviato: Tavolo ${tableNumber}, Destinazione: ${destination}, ${Math.floor(remainingTime/60)}:${(remainingTime%60).toString().padStart(2, '0')}`);
-                            });
+                        const endsAt = countdown.endsAt || (countdown.startTime + countdown.initialDuration * 1000);
+                        const nowMs  = Date.now();
+                        if (nowMs < endsAt + 15000) {
+                            const remaining = Math.max(0, Math.floor((endsAt - nowMs) / 1000));
+                            const syncMessage = {
+                                action:          'startCountdown',
+                                tableNumber:     tableNumber,
+                                timeRemaining:   remaining,
+                                endsAt:          endsAt,
+                                initialDuration: countdown.initialDuration,
+                                destinations:    countdown.destinations
+                            };
+                            ws.send(JSON.stringify(syncMessage));
+                            console.log(`📡 Sync joinRoom: Tavolo ${tableNumber} → [${countdown.destinations.join(', ')}], rem=${remaining}s`);
                         } else {
-                            // Marca per eliminazione i countdown scaduti
                             countdownsToDelete.push(tableNumber);
                         }
                     });
 
-                    // Rimuovi countdown scaduti dalla memoria
                     countdownsToDelete.forEach(tableNumber => {
                         companyCountdowns.delete(tableNumber);
-                        console.log(`🗑️ Countdown scaduto rimosso durante sincronizzazione: Tavolo ${tableNumber}`);
+                        console.log(`🗑️ Countdown rimosso in joinRoom (lifecycle scaduto): Tavolo ${tableNumber}`);
                     });
                 }
 
@@ -884,44 +878,41 @@ wss.on('connection', (ws, req) => {
 
                     console.log(`📄 Client entrato in pagina ${data.pageType}: ${samePageClients.length} altri utenti già presenti`);
 
-                    // Sincronizza countdown specifici per la pagina (Soluzione 1 - filtro per destinazioni)
+                    // Sincronizza TUTTI i countdown dell'azienda alla pagina — un messaggio per tavolo.
+                    // Ogni pagina dipartimento mostra tutti i countdown della company room;
+                    // destinations[] è metadato (non un filtro di visibilità).
                     if (ws.companyRoom && activeCountdowns.has(ws.companyRoom)) {
                         const companyCountdowns = activeCountdowns.get(ws.companyRoom);
                         const countdownsToDelete = [];
                         let syncedCount = 0;
 
                         companyCountdowns.forEach((countdown, tableNumber) => {
-                            // Filtra countdown che includono la destinazione della pagina corrente
-                            if (countdown.destinations.includes(data.pageType)) {
-                                const currentTime = Date.now();
-                                const elapsed = Math.floor((currentTime - countdown.startTime) / 1000);
-                                const remainingTime = Math.max(0, countdown.initialDuration - elapsed);
-
-                                if (remainingTime > 0) {
-                                    const syncMessage = {
-                                        action: 'startCountdown',
-                                        tableNumber: tableNumber,
-                                        timeRemaining: remainingTime,
-                                        endsAt: countdown.startTime + countdown.initialDuration * 1000,
-                                        initialDuration: countdown.initialDuration,
-                                        destination: data.pageType
-                                    };
-                                    ws.send(JSON.stringify(syncMessage));
-                                    syncedCount++;
-                                    console.log(`📡 Countdown ${data.pageType}-specifico inviato: Tavolo ${tableNumber}, ${Math.floor(remainingTime/60)}:${(remainingTime%60).toString().padStart(2, '0')}`);
-                                } else {
-                                    countdownsToDelete.push(tableNumber);
-                                }
+                            const endsAt = countdown.endsAt || (countdown.startTime + countdown.initialDuration * 1000);
+                            const nowMs  = Date.now();
+                            if (nowMs < endsAt + 15000) {
+                                const remaining = Math.max(0, Math.floor((endsAt - nowMs) / 1000));
+                                const syncMessage = {
+                                    action:          'startCountdown',
+                                    tableNumber:     tableNumber,
+                                    timeRemaining:   remaining,
+                                    endsAt:          endsAt,
+                                    initialDuration: countdown.initialDuration,
+                                    destinations:    countdown.destinations
+                                };
+                                ws.send(JSON.stringify(syncMessage));
+                                syncedCount++;
+                                console.log(`📡 Sync joinPage (${data.pageType}): Tavolo ${tableNumber} → [${countdown.destinations.join(', ')}], rem=${remaining}s`);
+                            } else {
+                                countdownsToDelete.push(tableNumber);
                             }
                         });
 
-                        // Rimuovi countdown scaduti
                         countdownsToDelete.forEach(tableNumber => {
                             companyCountdowns.delete(tableNumber);
-                            console.log(`🗑️ Countdown scaduto rimosso per ${data.pageType}: Tavolo ${tableNumber}`);
+                            console.log(`🗑️ Countdown rimosso in joinPage (lifecycle scaduto): Tavolo ${tableNumber}`);
                         });
 
-                        console.log(`📊 Sincronizzazione ${data.pageType}: ${syncedCount} countdown inviati, ${countdownsToDelete.length} scaduti rimossi`);
+                        console.log(`📊 Sincronizzazione joinPage (${data.pageType}): ${syncedCount} countdown inviati, ${countdownsToDelete.length} rimossi`);
                     }
 
                     // Se ci sono altri utenti sulla stessa pagina, invia un avviso
@@ -1004,29 +995,46 @@ wss.on('connection', (ws, req) => {
                 // lowercase for alphanumeric names.  "012" → "12", "A12" → "a12".
                 const tableKey = normalizeTableNumber(data.tableNumber);
 
-                // ── Duplicate-table check (atomic under the single-threaded event loop) ──
-                // Uniqueness rule: companyId + normalizedTableNumber + active status.
-                // The same table may exist in two different companies; never twice in one.
+                // ── Duplicate-table check ─────────────────────────────────────────────
+                // Authoritative lifecycle: a table is occupied until endsAt + 15000 ms —
+                // the same 15-second expired-display window the client shows at 00:00.
+                // After that exact moment the entry is stale and a new countdown may replace it.
+                // Node.js single-threaded event loop makes the check+set below atomic.
                 if (companyCountdowns.has(tableKey)) {
-                    console.log(`⚠️ Countdown già attivo per tavolo "${tableKey}" in "${ws.companyRoom}" — rifiutato`);
-                    ws.send(JSON.stringify({
-                        action:      'countdownError',
-                        code:        'TABLE_ALREADY_ACTIVE',
-                        tableNumber: data.tableNumber,
-                        message:     `A countdown is already active for table ${data.tableNumber}.`
-                    }));
-                    return;
+                    const existingCd     = companyCountdowns.get(tableKey);
+                    const existingEndsAt = existingCd.endsAt || (existingCd.startTime + existingCd.initialDuration * 1000);
+
+                    if (Date.now() < existingEndsAt + 15000) {
+                        // Still within active + expired window — reject
+                        const msLeft = Math.ceil((existingEndsAt + 15000 - Date.now()) / 1000);
+                        console.log(`⚠️ TABLE_ALREADY_ACTIVE tavolo "${tableKey}" (${msLeft}s rimanenti nel lifecycle) — rifiutato`);
+                        ws.send(JSON.stringify({
+                            action:      'countdownError',
+                            code:        'TABLE_ALREADY_ACTIVE',
+                            tableNumber: data.tableNumber,
+                            message:     `A countdown is already active for table ${data.tableNumber}.`
+                        }));
+                        return;
+                    } else {
+                        // Lifecycle elapsed — remove stale entry; allow new creation
+                        companyCountdowns.delete(tableKey);
+                        console.log(`🗑️ Stale countdown rimosso per tavolo "${tableKey}" (lifecycle scaduto) — nuova creazione consentita`);
+                    }
                 }
 
                 // ── Create countdown ────────────────────────────────────────────────────
-                const startTime = Date.now();
+                // endsAt is stored on the object so all lifecycle logic (duplicate check,
+                // sync on join, periodic cleanup) shares the same authoritative source.
+                const startTime    = Date.now();
+                const serverEndsAt = startTime + data.timeRemaining * 1000;
                 companyCountdowns.set(tableKey, {
                     startTime,
                     initialDuration: data.timeRemaining,
+                    endsAt:          serverEndsAt,
                     tableNumber:     data.tableNumber,
                     destinations
                 });
-                console.log(`💾 Countdown creato per azienda "${ws.companyRoom}": Tavolo ${tableKey}, Destinazioni: [${destinations.join(', ')}]`);
+                console.log(`💾 Countdown creato per azienda "${ws.companyRoom}": Tavolo ${tableKey}, endsAt +${data.timeRemaining}s, Destinazioni: [${destinations.join(', ')}]`);
 
                 // Mark all destination departments as used (prevents accidental deletion)
                 let depsChanged = false;
@@ -1039,33 +1047,28 @@ wss.on('connection', (ws, req) => {
                 }
                 if (depsChanged) saveJSON(DEPARTMENTS_FILE, departmentsStore);
 
-                // ── Broadcast one startCountdown message per destination ─────────────
-                // All authenticated clients in the company room receive every message.
-                // Company isolation is enforced by ws.companyRoom which is derived from
-                // the server-verified session token — clients cannot spoof it.
+                // ── Broadcast ONE message to the entire company room ──────────────────
+                // Single message with destinations[] array replaces the previous N-per-destination
+                // broadcast.  All authenticated clients in the room receive it; company
+                // isolation is enforced via ws.companyRoom (server-verified session token).
                 if (companyRooms.has(ws.companyRoom)) {
-                    const roomClients  = companyRooms.get(ws.companyRoom);
-                    const storedCd     = companyCountdowns.get(tableKey);
-                    const serverEndsAt = storedCd.startTime + storedCd.initialDuration * 1000;
-
-                    destinations.forEach(destination => {
-                        const msg = JSON.stringify({
-                            action:          'startCountdown',
-                            tableNumber:     data.tableNumber,
-                            timeRemaining:   data.timeRemaining,
-                            endsAt:          serverEndsAt,
-                            initialDuration: storedCd.initialDuration,
-                            destination
-                        });
-                        let sentCount = 0;
-                        roomClients.forEach(client => {
-                            if (client.readyState === WebSocket.OPEN) {
-                                client.send(msg);
-                                sentCount++;
-                            }
-                        });
-                        console.log(`📡 Room "${ws.companyRoom}" (${sentCount}/${roomClients.size} client): Tavolo ${tableKey} → ${destination}, ${Math.floor(data.timeRemaining/60)}:${(data.timeRemaining%60).toString().padStart(2,'0')}`);
+                    const roomClients = companyRooms.get(ws.companyRoom);
+                    const msg = JSON.stringify({
+                        action:          'startCountdown',
+                        tableNumber:     data.tableNumber,
+                        timeRemaining:   data.timeRemaining,
+                        endsAt:          serverEndsAt,
+                        initialDuration: data.timeRemaining,
+                        destinations
                     });
+                    let sentCount = 0;
+                    roomClients.forEach(client => {
+                        if (client.readyState === WebSocket.OPEN) {
+                            client.send(msg);
+                            sentCount++;
+                        }
+                    });
+                    console.log(`📡 Room "${ws.companyRoom}" (${sentCount}/${roomClients.size} client): Tavolo ${tableKey} → [${destinations.join(', ')}], ${Math.floor(data.timeRemaining/60)}:${(data.timeRemaining%60).toString().padStart(2,'0')}`);
                 } else {
                     console.log('⚠️ Room non trovata per broadcast');
                 }
@@ -1631,16 +1634,16 @@ setInterval(() => {
         }
     }
 
-    // Pulisci countdown scaduti (Soluzione 1 - con destinazioni multiple)
+    // Pulisci countdown scaduti — criterio: endsAt + 15000 ms (allineato con duplicate-check e client)
+    // La vecchia regola "remainingTime <= -30" è stata rimossa: usava un calcolo indipendente
+    // che creava una finestra (15-30s) in cui il client vedeva il tavolo libero ma il server lo bloccava.
     let totalActiveCountdowns = 0;
     activeCountdowns.forEach((companyCountdowns, companyName) => {
         companyCountdowns.forEach((countdown, tableNumber) => {
-            const elapsed = Math.floor((now - countdown.startTime) / 1000);
-            const remainingTime = countdown.initialDuration - elapsed;
-
-            if (remainingTime <= -30) { // 30 secondi dopo la scadenza
+            const endsAt = countdown.endsAt || (countdown.startTime + countdown.initialDuration * 1000);
+            if (now >= endsAt + 15000) {
                 companyCountdowns.delete(tableNumber);
-                console.log(`🗑️ Countdown scaduto rimosso: Azienda "${companyName}", Tavolo ${tableNumber}, Destinazioni: [${countdown.destinations.join(', ')}]`);
+                console.log(`🗑️ Cleanup: Tavolo ${tableNumber} (${companyName}) rimosso — endsAt+15s scaduto`);
             } else {
                 totalActiveCountdowns++;
             }

@@ -386,9 +386,12 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
         if (existingIndex !== -1) {
             const existing = countdowns[existingIndex];
 
-            if (data.destination && !existing.destinations.includes(data.destination)) {
-                existing.destinations.push(data.destination);
-            }
+            const incomingDests = Array.isArray(data.destinations)
+                ? data.destinations
+                : (data.destination ? [data.destination] : []);
+            incomingDests.forEach(d => {
+                if (!existing.destinations.includes(d)) existing.destinations.push(d);
+            });
 
             // Update only the authoritative timing fields.
             // Alarm flags (warnedAt60, alarmedExpiry, expiredAt) are NEVER overwritten —
@@ -412,7 +415,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
                 remainingTime:          tr,
                 initialDuration:        data.initialDuration ?? tr,
                 endsAt:                 data.endsAt ?? (Date.now() + tr * 1000),
-                destinations:           data.destination ? [data.destination] : [],
+                destinations:           Array.isArray(data.destinations) ? data.destinations : (data.destination ? [data.destination] : []),
                 startedAt:              new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
                 startTime:              Date.now(),
                 status:                 'active',

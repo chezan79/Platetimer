@@ -129,13 +129,13 @@ const CountdownsModule = (() => {
 
                         if (data.action === 'startCountdown' && onCountdownUpdateCallback) {
                             console.log('📥 [COUNTDOWNS.JS] Countdown received:', data);
-                            console.log(`🔍 Destination passed: "${data.destination}", Table: ${data.tableNumber}`);
                             onCountdownUpdateCallback({
                                 tableNumber:            data.tableNumber,
                                 timeRemaining:          data.timeRemaining,
                                 endsAt:                 data.endsAt,
                                 initialDuration:        data.initialDuration,
-                                destination:            data.destination || 'cucina',
+                                destinations:           Array.isArray(data.destinations) ? data.destinations : (data.destination ? [data.destination] : []),
+                                destination:            data.destination,
                                 remainingTimeFormatted: formatTime(data.timeRemaining)
                             });
                         } else if (data.action === 'deleteCountdown' && onCountdownDeleteCallback) {
