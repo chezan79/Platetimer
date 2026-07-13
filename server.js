@@ -830,11 +830,14 @@ wss.on('connection', (ws, req) => {
 
                         if (remainingTime > 0) {
                             // Invia un countdown per ogni destinazione
+                            const endsAt = countdown.startTime + countdown.initialDuration * 1000;
                             countdown.destinations.forEach(destination => {
                                 const syncMessage = {
                                     action: 'startCountdown',
                                     tableNumber: tableNumber,
                                     timeRemaining: remainingTime,
+                                    endsAt: endsAt,
+                                    initialDuration: countdown.initialDuration,
                                     destination: destination
                                 };
                                 ws.send(JSON.stringify(syncMessage));
@@ -890,6 +893,8 @@ wss.on('connection', (ws, req) => {
                                         action: 'startCountdown',
                                         tableNumber: tableNumber,
                                         timeRemaining: remainingTime,
+                                        endsAt: countdown.startTime + countdown.initialDuration * 1000,
+                                        initialDuration: countdown.initialDuration,
                                         destination: data.pageType
                                     };
                                     ws.send(JSON.stringify(syncMessage));
@@ -1015,9 +1020,22 @@ wss.on('connection', (ws, req) => {
                 // Invia solo ai client della stessa room/azienda
                 if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
                     const roomClients = companyRooms.get(ws.companyRoom);
+                    // Retrieve the just-stored countdown to read the authoritative
+                    // startTime and initialDuration set by the server, then compute
+                    // endsAt server-side so every client receives the same value.
+                    const storedCd = activeCountdowns.has(ws.companyRoom)
+                        ? activeCountdowns.get(ws.companyRoom).get(data.tableNumber.toString())
+                        : null;
+                    const serverEndsAt = storedCd
+                        ? storedCd.startTime + storedCd.initialDuration * 1000
+                        : Date.now() + data.timeRemaining * 1000;
                     const messageToSend = JSON.stringify({
-                        ...data,
-                        destination: destination
+                        action:          data.action,
+                        tableNumber:     data.tableNumber,
+                        timeRemaining:   data.timeRemaining,
+                        endsAt:          serverEndsAt,
+                        initialDuration: storedCd ? storedCd.initialDuration : data.timeRemaining,
+                        destination:     destination
                     });
 
                     let sentCount = 0;

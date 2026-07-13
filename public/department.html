@@ -1274,20 +1274,23 @@ function handleIncomingCountdown(data){
       // They are managed exclusively by tick() so that frequent or out-of-order WS
       // messages cannot suppress or duplicate threshold crossings.
       if(!ex.expiredAt){
-        // While the countdown is still live, keep endsAt aligned with server time.
-        // Once expired, leave endsAt frozen so the 15-second phase is stable.
-        ex.endsAt = Date.now() + tr * 1000;
+        // Use the server-supplied endsAt (epoch ms, computed from server clock).
+        // Fall back to approximation only for old payloads that lack the field.
+        ex.endsAt = data.endsAt ?? (Date.now() + tr * 1000);
       }
-      ex.timeRemaining   = tr;
-      ex.initialDuration = tr;
+      ex.timeRemaining = tr;
+      // Preserve the original full duration so the progress bar calculation remains
+      // correct. Never replace it with the current remaining time.
+      // The server always sends initialDuration in the payload; use it if present.
+      ex.initialDuration = data.initialDuration ?? ex.initialDuration;
     } else {
       // Brand-new entry — initialize alarm flags from current server-reported time so
       // reconnects and mid-countdown page loads do not replay already-passed alarms.
       countdowns.set(tableNum, {
         tableNumber:     tableNum,
         timeRemaining:   tr,
-        initialDuration: tr,
-        endsAt:          Date.now() + tr * 1000,
+        initialDuration: data.initialDuration ?? tr,
+        endsAt:          data.endsAt ?? (Date.now() + tr * 1000),
         startedAt:       nowTime(),
         destinations:    [],
         direction:       'received',

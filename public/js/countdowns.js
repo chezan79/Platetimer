@@ -131,9 +131,11 @@ const CountdownsModule = (() => {
                             console.log('📥 [COUNTDOWNS.JS] Countdown received:', data);
                             console.log(`🔍 Destination passed: "${data.destination}", Table: ${data.tableNumber}`);
                             onCountdownUpdateCallback({
-                                tableNumber: data.tableNumber,
-                                timeRemaining: data.timeRemaining,
-                                destination: data.destination || 'cucina',
+                                tableNumber:            data.tableNumber,
+                                timeRemaining:          data.timeRemaining,
+                                endsAt:                 data.endsAt,
+                                initialDuration:        data.initialDuration,
+                                destination:            data.destination || 'cucina',
                                 remainingTimeFormatted: formatTime(data.timeRemaining)
                             });
                         } else if (data.action === 'deleteCountdown' && onCountdownDeleteCallback) {

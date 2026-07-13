@@ -395,12 +395,14 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
             // they are managed exclusively by updateAllCountdowns() so frequent or
             // out-of-order WS messages cannot suppress or duplicate threshold crossings.
             if (!existing.expiredAt) {
-                // Keep endsAt aligned with server while the countdown is still live.
-                // Once expired, leave it frozen so the 15-second phase is stable.
-                existing.endsAt = Date.now() + tr * 1000;
+                // Use the server-supplied endsAt (epoch ms, computed from server clock).
+                // Fall back to approximation only for old payloads that lack the field.
+                existing.endsAt = data.endsAt ?? (Date.now() + tr * 1000);
             }
-            existing.remainingTime          = tr;
-            existing.initialDuration        = tr;
+            existing.remainingTime = tr;
+            // Preserve the original full duration so the progress bar stays correct.
+            // Never replace it with the current remaining time.
+            existing.initialDuration        = data.initialDuration ?? existing.initialDuration;
             existing.remainingTimeFormatted = CountdownsModule.formatTime(tr);
         } else {
             // New arrival — initialize alarm flags so alarms already passed are not replayed
@@ -408,8 +410,8 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
             countdowns.push({
                 tableNumber:            data.tableNumber,
                 remainingTime:          tr,
-                initialDuration:        tr,
-                endsAt:                 Date.now() + tr * 1000,
+                initialDuration:        data.initialDuration ?? tr,
+                endsAt:                 data.endsAt ?? (Date.now() + tr * 1000),
                 destinations:           data.destination ? [data.destination] : [],
                 startedAt:              new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
                 startTime:              Date.now(),
