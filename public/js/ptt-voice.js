@@ -5,6 +5,12 @@
 //   - Company isolation is enforced server-side via the verified session token.
 //   - The client never sends companyId/companyName; the server derives it from ws.companyRoom.
 //   - No audio is recorded or stored; all audio is live peer-to-peer only.
+//
+// WebSocket reference model:
+//   - join() accepts a GETTER FUNCTION () => WebSocket, not a bare WebSocket object.
+//   - This ensures _send() always uses the current live socket, even after reconnects.
+//   - After every WS reconnect, the caller must invoke PttVoice.onWsReconnect() so the
+//     server voice-room state is restored on the new connection.
 
 'use strict';
 
@@ -17,7 +23,7 @@ const PttVoice = (() => {
   ];
 
   // ── Private state ──────────────────────────────────────────────────────────
-  let _ws          = null;
+  let _wsGetter    = null;   // () => WebSocket  — always call this, never cache the socket
   let _myPeerId    = null;
   let _myDeptName  = '';
   let _inCall      = false;
@@ -36,9 +42,13 @@ const PttVoice = (() => {
     return 'pt_' + Math.random().toString(36).substr(2, 10);
   }
 
+  // Always fetches the current socket from the getter — survives WS reconnects.
   function _send(obj) {
-    if (_ws && _ws.readyState === WebSocket.OPEN) {
-      _ws.send(JSON.stringify(obj));
+    const socket = _wsGetter && _wsGetter();
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify(obj));
+    } else {
+      console.warn('[ptt] _send: socket not open — action dropped:', obj.action);
     }
   }
 
@@ -54,6 +64,10 @@ const PttVoice = (() => {
     console.log(`[ptt] peer removed: ${peerId} (${_peers.size} remaining)`);
   }
 
+  function _clearAllPeers() {
+    _peers.forEach((_, peerId) => _removePeer(peerId));
+  }
+
   async function _createPeerConnection(remotePeerId, isOfferer) {
     if (_peers.has(remotePeerId)) return _peers.get(remotePeerId).pc;
 
@@ -65,15 +79,26 @@ const PttVoice = (() => {
       _localStream.getTracks().forEach(t => pc.addTrack(t, _localStream));
     }
 
-    // Play remote audio
+    // Play remote audio — resume AudioContext on first track to defeat autoplay block
     pc.ontrack = ev => {
       const audio = new Audio();
       audio.srcObject = ev.streams[0];
       audio.autoplay  = true;
       audio.volume    = 1.0;
+
+      // Defeat autoplay policy: resume on next user interaction if blocked
+      const tryPlay = () => {
+        audio.play().catch(err => {
+          console.warn('[ptt] autoplay blocked, will retry on next user gesture:', err.message);
+          const resume = () => { audio.play().catch(() => {}); document.removeEventListener('pointerdown', resume); };
+          document.addEventListener('pointerdown', resume, { once: true });
+        });
+      };
+
       document.body.appendChild(audio);
       const entry = _peers.get(remotePeerId);
       if (entry) entry.audioEl = audio;
+      tryPlay();
       console.log(`[ptt] remote audio attached for peer ${remotePeerId}`);
     };
 
@@ -103,10 +128,21 @@ const PttVoice = (() => {
 
   // ── Public API ─────────────────────────────────────────────────────────────
 
-  async function join(ws, myDeptName, onStatus, onTalking) {
+  /**
+   * Join the intercom voice room.
+   *
+   * @param {Function|WebSocket} wsOrGetter  A getter function (() => WebSocket) — preferred.
+   *                                          A bare WebSocket is also accepted for backwards compat
+   *                                          but will NOT survive reconnects.
+   * @param {string}   myDeptName  Department display name (for talkingStart label).
+   * @param {Function} onStatus    (text, cssClass) → void
+   * @param {Function} onTalking   (deptName, isTalking) → void
+   */
+  async function join(wsOrGetter, myDeptName, onStatus, onTalking) {
     if (_inCall) return true;
 
-    _ws         = ws;
+    // Accept either a getter function or a bare WebSocket
+    _wsGetter   = (typeof wsOrGetter === 'function') ? wsOrGetter : () => wsOrGetter;
     _myDeptName = myDeptName;
     _onStatus   = onStatus  || (() => {});
     _onTalking  = onTalking || (() => {});
@@ -117,9 +153,10 @@ const PttVoice = (() => {
       _localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
       // Start muted — PTT model: mic only active while button is held
       _localStream.getAudioTracks().forEach(t => { t.enabled = false; });
+      console.log('[ptt] microphone acquired, tracks muted until PTT press');
     } catch (e) {
       const denied = e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError';
-      _onStatus(denied ? '⚠️ Permesso microfono negato' : '⚠️ Errore microfono', 'error');
+      _onStatus(denied ? '⚠️ Permesso microfono negato' : '⚠️ Errore microfono: ' + e.message, 'error');
       console.error('[ptt] getUserMedia failed:', e);
       return false;
     }
@@ -140,7 +177,7 @@ const PttVoice = (() => {
 
     _send({ action: 'leaveVoice', peerId: _myPeerId });
 
-    _peers.forEach((_, peerId) => _removePeer(peerId));
+    _clearAllPeers();
 
     if (_localStream) {
       _localStream.getTracks().forEach(t => t.stop());
@@ -167,6 +204,34 @@ const PttVoice = (() => {
     if (_localStream) _localStream.getAudioTracks().forEach(t => { t.enabled = false; });
     _send({ action: 'talkingStop', peerId: _myPeerId });
     _onStatus('✅ Connesso — tieni premuto per parlare', 'connected');
+  }
+
+  /**
+   * Call this after every WebSocket reconnect completes authentication.
+   * Clears stale peer connections and re-announces presence in the voice room
+   * on the new socket so the server rebuilds its routing tables.
+   */
+  function onWsReconnect() {
+    if (!_inCall) return;
+    console.log('[ptt] WS reconnected — clearing stale peers and re-joining voice room');
+
+    // Stop talking if we were mid-press (mic track stays allocated)
+    if (_isTalking) {
+      _isTalking = false;
+      if (_localStream) _localStream.getAudioTracks().forEach(t => { t.enabled = false; });
+    }
+
+    // Close all stale RTCPeerConnections — their ICE state is dead
+    _clearAllPeers();
+
+    // Fresh peer ID so other clients know this is a new session
+    _myPeerId = _genPeerId();
+
+    // Re-announce on the new authenticated socket
+    _send({ action: 'joinVoice', room: VOICE_ROOM, peerId: _myPeerId });
+
+    _onStatus('✅ Connesso — tieni premuto per parlare', 'connected');
+    console.log(`[ptt] re-joined voice room after reconnect as ${_myPeerId}`);
   }
 
   // Handle WebRTC signaling messages routed from the main WS onmessage handler
@@ -247,6 +312,7 @@ const PttVoice = (() => {
     startTalking,
     stopTalking,
     handleSignal,
+    onWsReconnect,
     get inCall() { return _inCall; }
   };
 
