@@ -6,19 +6,19 @@
 <title>PlateTimer</title>
 <style>
 :root {
-  --bg:        #0d0d1a;
-  --panel:     #12122a;
-  --card:      #1a1a35;
-  --card-h:    #1f1f40;
-  --border:    rgba(255,255,255,0.07);
-  --border-l:  rgba(255,255,255,0.13);
-  --text:      #e2e2f0;
-  --muted:     rgba(255,255,255,0.35);
-  --accent:    #6366f1;
-  --accent2:   #818cf8;
-  --warn:      #f59e0b;
-  --danger:    #ef4444;
-  --ok:        #22c55e;
+  --bg:        #F1F5F9;
+  --panel:     #FFFFFF;
+  --card:      #FFFFFF;
+  --card-h:    #F8FAFC;
+  --border:    #E2E8F0;
+  --border-l:  #CBD5E1;
+  --text:      #0F172A;
+  --muted:     #64748B;
+  --accent:    #4F46E5;
+  --accent2:   #6366F1;
+  --warn:      #D97706;
+  --danger:    #DC2626;
+  --ok:        #16A34A;
   --hdr:       56px;
   --lw:        310px;
 }
@@ -218,6 +218,29 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
   .ra{margin-left:0;padding-top:20px;}
   .hdr-dept{max-width:120px;}
 }
+
+/* ── LIGHT THEME OVERRIDES ─────────────────────────────── */
+.hdr{background:rgba(255,255,255,.97);box-shadow:0 1px 3px rgba(0,0,0,.08);}
+.hdr-btn{background:rgba(0,0,0,.04);color:var(--text);border-color:var(--border-l);}
+.hdr-btn:hover{background:rgba(0,0,0,.09);}
+.hdr-btn.danger{border-color:rgba(220,38,38,.35);color:var(--danger);}
+.hdr-btn.danger:hover{background:rgba(220,38,38,.08);}
+/* Numpad keys: white with visible border */
+.nb{background:#F8FAFC;border-color:var(--border);}
+.nb:hover,.nb:active{background:var(--card-h);}
+/* Progress bar track (was rgba(255,255,255,.07) — invisible on white) */
+.cdc-prog{background:rgba(0,0,0,.08);}
+/* Countdown card state colours adjusted for light background */
+.cdc.warn{border-color:var(--warn);background:#FFFBEB;}
+.cdc.crit{border-color:var(--danger);background:#FFF5F5;}
+.cdc.expired{border-color:var(--danger);background:#FFF5F5;}
+/* Voice / PTT panel inputs */
+.lp-tabs{background:var(--card);border-color:var(--border-l);}
+.lp-tab{color:var(--muted);}
+.lp-tab.active{background:var(--accent);color:#fff;}
+.lp-tab:hover:not(.active){background:var(--card-h);color:var(--text);}
+/* Send error banner */
+#send-err{background:rgba(220,38,38,.08);border-color:rgba(220,38,38,.3);color:var(--danger);}
 </style>
 </head>
 <body>

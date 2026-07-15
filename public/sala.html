@@ -6,19 +6,19 @@
 <title>Servizio — PlateTimer</title>
 <style>
 :root {
-  --bg:       #0d0d1a;
-  --panel:    #12122a;
-  --card:     #1a1a35;
-  --card-h:   #1f1f40;
-  --border:   rgba(255,255,255,0.07);
-  --border-l: rgba(255,255,255,0.13);
-  --text:     #e2e2f0;
-  --muted:    rgba(255,255,255,0.35);
-  --accent:   #6366f1;
-  --accent2:  #818cf8;
-  --warn:     #f59e0b;
-  --danger:   #ef4444;
-  --ok:       #22c55e;
+  --bg:       #F1F5F9;
+  --panel:    #FFFFFF;
+  --card:     #FFFFFF;
+  --card-h:   #F8FAFC;
+  --border:   #E2E8F0;
+  --border-l: #CBD5E1;
+  --text:     #0F172A;
+  --muted:    #64748B;
+  --accent:   #4F46E5;
+  --accent2:  #6366F1;
+  --warn:     #D97706;
+  --danger:   #DC2626;
+  --ok:       #16A34A;
   --hdr:      56px;
 }
 *{box-sizing:border-box;margin:0;padding:0;}
@@ -132,6 +132,30 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
   .cd-time{font-size:22px;}
   .hdr-brand{max-width:120px;}
 }
+
+/* ── LIGHT THEME OVERRIDES ─────────────────────────────── */
+.hdr{background:rgba(255,255,255,.97);box-shadow:0 1px 3px rgba(0,0,0,.08);}
+.hdr-btn{background:rgba(0,0,0,.04);color:var(--text);border-color:var(--border-l);}
+.hdr-btn:hover{background:rgba(0,0,0,.09);}
+.hdr-btn.danger{border-color:rgba(220,38,38,.35);color:var(--danger);}
+.hdr-btn.danger:hover{background:rgba(220,38,38,.08);}
+/* Search input (was rgba(255,255,255,.05) — invisible on white) */
+.search-input{background:white;color:var(--text);}
+.search-input::placeholder{color:var(--muted);}
+/* Filter buttons */
+.filter-btn{background:rgba(0,0,0,.04);color:var(--text);}
+.filter-btn:hover{background:rgba(0,0,0,.08);color:var(--text);}
+.filter-btn.active{background:rgba(79,70,229,.1);border-color:var(--accent);color:var(--accent);}
+/* Stat cards get a subtle shadow */
+.stat-card{box-shadow:0 1px 3px rgba(0,0,0,.06);}
+/* Station badge (was rgba(255,255,255,.08) — invisible on white) */
+.station-badge{background:rgba(0,0,0,.06);color:var(--text);border-color:var(--border-l);}
+/* Countdown card warning/critical states on light background */
+.cd-card.warning{border-color:var(--warn);background:#FFFBEB;}
+.cd-card.critical{border-color:var(--danger);background:#FFF5F5;}
+.cd-card.expired{border-color:var(--danger);background:#FFF5F5;}
+/* Alert badge adjusted for light bg */
+.status-badge.alert{color:var(--danger);background:rgba(220,38,38,.08);border-color:rgba(220,38,38,.2);}
 </style>
 </head>
 <body>
