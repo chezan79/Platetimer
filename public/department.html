@@ -241,6 +241,72 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 .lp-tab:hover:not(.active){background:var(--card-h);color:var(--text);}
 /* Send error banner */
 #send-err{background:rgba(220,38,38,.08);border-color:rgba(220,38,38,.3);color:var(--danger);}
+
+/* ══ TABLET LANDSCAPE — 11" OPTIMISATIONS ════════════════════════
+   Target: 900 – 1300 px wide (covers 11" tablets in landscape mode).
+   Only sizing, spacing and layout are changed — no logic, no selectors
+   are added or removed.
+═══════════════════════════════════════════════════════════════════ */
+@media (min-width:900px) and (max-width:1300px) {
+
+  /* 1. Widen the sending panel */
+  :root { --lw: 420px; }
+  .lp { padding: 20px; gap: 18px; }
+
+  /* 2. Tab bar */
+  .lp-tab { padding: 14px 6px; font-size: 14px; }
+
+  /* 3. Section labels — override the inline-style font-size:11px */
+  .lp-section [style*="font-size:11px"] { font-size: 13px !important; margin-bottom: 8px !important; }
+
+  /* 4. Table-number display — readable from 1–2 m */
+  .tbl-disp { font-size: 56px; min-height: 92px; letter-spacing: 5px; padding: 12px 20px; }
+  .tbl-disp.empty { font-size: 15px; letter-spacing: 0; }
+
+  /* 5. Numeric keypad — 72px+ touch targets */
+  .numpad { gap: 9px; }
+  .nb {
+    padding: 19px 0;      /* ~72px total height with 30px font */
+    font-size: 30px;
+    border-radius: 10px;
+  }
+  .nb.del { font-size: 14px; }
+  .nb.clr { font-size: 14px; }
+
+  /* 6. Duration buttons — 3-column grid, large tap area */
+  .dur-wrap {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+  .db {
+    padding: 15px 8px;
+    font-size: 18px;
+    border-radius: 9px;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* 7. Destination checkboxes */
+  .dest-list { gap: 8px; max-height: none; overflow-y: visible; }
+  .di { padding: 14px 16px; border-radius: 10px; gap: 14px; }
+  .di label { font-size: 17px; }
+  .di input[type=checkbox] { width: 20px; height: 20px; }
+
+  /* 8. Main send button — dominant, easy to hit */
+  .send-btn {
+    padding: 24px 16px;
+    font-size: 22px;
+    border-radius: 12px;
+    min-height: 72px;
+    letter-spacing: .5px;
+  }
+
+  /* 9. Right panel — allow scroll independently */
+  .ra { overflow-y: auto; }
+}
 </style>
 </head>
 <body>
