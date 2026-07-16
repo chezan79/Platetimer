@@ -4,12 +4,21 @@ WORKDIR /app
 
 COPY package.json package-lock.json ./
 
-ARG DEPENDENCY_CACHE_BUST=2026-07-16-02
+ARG DEPENDENCY_CACHE_BUST=2026-07-16-05
 
-RUN npm install -g npm@11.7.0 \
-    && npm ci --omit=dev \
-    && npm ls express \
-    && node -e "require('express'); require('ws'); require('firebase-admin/app'); require('@google-cloud/speech'); console.log('Runtime dependencies verified')"
+RUN echo "Cache bust: ${DEPENDENCY_CACHE_BUST}" \
+    && node --version \
+    && npm --version
+
+RUN npm ci --omit=dev --no-audit --no-fund --loglevel=verbose
+
+RUN node -e "\
+console.log('Express:', require('express/package.json').version); \
+require('ws'); \
+require('firebase-admin/app'); \
+require('firebase-admin/firestore'); \
+require('@google-cloud/speech'); \
+console.log('Runtime dependencies verified');"
 
 COPY . .
 
