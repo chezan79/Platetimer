@@ -4,7 +4,11 @@ WORKDIR /app
 
 COPY package.json package-lock.json ./
 
-RUN npm ci --omit=dev
+ARG DEPENDENCY_CACHE_BUST=2026-07-16-01
+
+RUN npm ci --omit=dev \
+    && npm ls express \
+    && node -e "require('express'); require('ws'); require('firebase-admin/app'); require('@google-cloud/speech'); console.log('Runtime dependencies verified')"
 
 COPY . .
 
