@@ -39,12 +39,16 @@ Firestore collection: `platetimer_stores`, one document per store name above.
 - `companyRooms` — WebSocket connection rooms. Transient by design.
 - `authenticatedSessions`, `rateLimiter` — Runtime state.
 
-## Credential situation
+## Credential separation (HARD RULE — do not mix)
 
-- `GOOGLE_APPLICATION_CREDENTIALS_JSON` — service account from project `feisty-coder-461119-r0` (Google Cloud Speech API). Firestore API is NOT enabled on that project. Do NOT rely on this for Firestore.
-- `FIREBASE_ADMIN_SERVICE_ACCOUNT` — the required credential for Firestore persistence. Must be from the Firebase project (`app-dati-tavoli`).
+| Secret | Project | Purpose |
+|--------|---------|---------|
+| `FIREBASE_ADMIN_SERVICE_ACCOUNT` | `app-dati-tavoli` | Firestore Admin SDK only |
+| `GOOGLE_APPLICATION_CREDENTIALS_JSON` | `feisty-coder-461119-r0` | Google Cloud Speech only |
 
-**Why:** The two service accounts belong to different GCP projects. The Speech API SA cannot access `app-dati-tavoli` Firestore without explicit cross-project IAM grants.
+`initFirestoreAdmin()` reads ONLY `FIREBASE_ADMIN_SERVICE_ACCOUNT`. It hard-validates that `svcAccount.project_id === 'app-dati-tavoli'` before calling `initializeApp()`. If the var is missing, invalid JSON, or wrong project, `db` stays `null` and Firestore is skipped entirely — no fallback to the Speech credential.
+
+**Why:** Using the Speech SA (`feisty-coder-461119-r0`) for Firestore fails with PERMISSION_DENIED because that project has Firestore API disabled and the SA has no IAM role on `app-dati-tavoli`. This was the root cause of all Firestore failures.
 
 ## Setup instructions for Railway persistence
 

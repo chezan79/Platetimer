@@ -26,41 +26,59 @@ const FIREBASE_PROJECT_ID = process.env.FIREBASE_PROJECT_ID || 'app-dati-tavoli'
 const SESSION_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 // ===== Persistent Storage: Firestore Admin =====
-// Preferred: set FIREBASE_ADMIN_SERVICE_ACCOUNT to a Firebase Admin SDK service-account
-// JSON (from Firebase Console → Project Settings → Service Accounts → Generate new key).
-// Fallback: uses GOOGLE_APPLICATION_CREDENTIALS_JSON only if it is in a project that
-// has Firestore API enabled AND the service account has been granted the
-// "Cloud Datastore User" IAM role on that project.
-// If Firestore is unavailable the app writes to DATA_DIR (local files).
+// ONLY FIREBASE_ADMIN_SERVICE_ACCOUNT is used for Firestore — it must be a service-account
+// JSON key for Firebase project app-dati-tavoli (Firebase Console → Project Settings →
+// Service Accounts → Generate new private key).
+//
+// GOOGLE_APPLICATION_CREDENTIALS_JSON belongs to GCP project feisty-coder-461119-r0
+// (Google Cloud Speech only) and is NEVER used here. The two credentials are completely
+// separate and must never be mixed.
 let db = null;
 const STORE_COLLECTION = 'platetimer_stores';
 (function initFirestoreAdmin() {
+    // ── Step 1: require the dedicated Firestore credential ───────────────────
+    const raw = process.env.FIREBASE_ADMIN_SERVICE_ACCOUNT;
+    if (!raw) {
+        console.warn('⚠️ [STORE] FIREBASE_ADMIN_SERVICE_ACCOUNT non impostato — Firestore non disponibile.');
+        console.warn('⚠️ [STORE] I dati saranno ephemeral su Railway.');
+        console.warn('⚠️ [STORE] Per la persistenza: Firebase Console → app-dati-tavoli →');
+        console.warn('⚠️ [STORE]   Project Settings → Service Accounts → Genera nuova chiave privata.');
+        return; // db stays null → local-file fallback in initializeDataStores()
+    }
+
+    // ── Step 2: parse JSON safely ────────────────────────────────────────────
+    let svcAccount;
     try {
-        // Prefer a dedicated Firebase Admin credential; fall back to the Speech API credential.
-        const raw = process.env.FIREBASE_ADMIN_SERVICE_ACCOUNT || process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
-        if (!raw) {
-            console.warn('⚠️ [STORE] Nessuna credenziale Firestore — dati persistenti su file locale (ephemeral su Railway). ' +
-                'Per la persistenza su Railway: impostare FIREBASE_ADMIN_SERVICE_ACCOUNT ' +
-                '(Firebase Console → Project Settings → Service Accounts → Genera nuova chiave).');
-            return;
-        }
-        const svcAccount = JSON.parse(raw);
-        // For the dedicated admin credential use the Firebase project; for the speech
-        // credential fall back to its own project_id.
-        const storageProjectId = process.env.FIREBASE_ADMIN_SERVICE_ACCOUNT
-            ? FIREBASE_PROJECT_ID
-            : (svcAccount.project_id || FIREBASE_PROJECT_ID);
+        svcAccount = JSON.parse(raw);
+    } catch (e) {
+        console.error('❌ [STORE] FIREBASE_ADMIN_SERVICE_ACCOUNT contiene JSON non valido:', e.message);
+        console.error('❌ [STORE] Firestore non inizializzato — verificare il valore del secret.');
+        return;
+    }
+
+    // ── Step 3: verify the credential belongs to app-dati-tavoli ────────────
+    const credProjectId = svcAccount.project_id;
+    if (credProjectId !== FIREBASE_PROJECT_ID) {
+        console.error(`❌ [STORE] FIREBASE_ADMIN_SERVICE_ACCOUNT appartiene al progetto "${credProjectId}", non a "${FIREBASE_PROJECT_ID}".`);
+        console.error(`❌ [STORE] Usare la chiave del progetto Firebase corretto (${FIREBASE_PROJECT_ID}).`);
+        console.error('❌ [STORE] Nota: GOOGLE_APPLICATION_CREDENTIALS_JSON è riservato a Google Cloud Speech e non va usato qui.');
+        console.error('❌ [STORE] Firestore non inizializzato.');
+        return;
+    }
+
+    // ── Step 4: initialize Firestore Admin ───────────────────────────────────
+    try {
         if (!adminGetApps().length) {
             adminInitializeApp({
                 credential: adminCert(svcAccount),
-                projectId: storageProjectId
+                projectId: FIREBASE_PROJECT_ID
             });
         }
         db = getFirestore();
         db.settings({ ignoreUndefinedProperties: true });
-        console.log(`✅ [STORE] Firestore Admin connesso (project: ${storageProjectId}) — dati persistenti su deploy`);
+        console.log(`✅ [STORE] Firestore Admin connected (project: ${FIREBASE_PROJECT_ID})`);
     } catch (e) {
-        console.error('❌ [STORE] Firebase Admin init error:', e.message, '— fallback a file locali');
+        console.error('❌ [STORE] Firebase Admin init error:', e.message);
         db = null;
     }
 })();
