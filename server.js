@@ -596,6 +596,602 @@ app.get('/api/countdowns', (req, res) => {
     }
 });
 
+// =========================================================================
+// ===== CALENDAR MODULE ===================================================
+// =========================================================================
+const CALENDAR_EVENTS_FILE = path.join(DATA_DIR, 'calendar-events.json');
+const CALENDAR_NOTIF_FILE  = path.join(DATA_DIR, 'calendar-notif.json');
+
+let calendarEventsStore = loadJSON(CALENDAR_EVENTS_FILE);
+let calendarNotifStore  = loadJSON(CALENDAR_NOTIF_FILE);
+
+const CALENDAR_TZ = 'Europe/Zurich';
+
+const VALID_EVENT_TYPES = [
+    'reservation','group_reservation','staff_meeting','staff_shift_note',
+    'supplier_delivery','maintenance','inventory','haccp_control','training',
+    'private_event','birthday','anniversary','payment_deadline','reminder','other'
+];
+const VALID_PRIORITIES   = ['low','normal','high','urgent'];
+const VALID_STATUSES     = ['scheduled','confirmed','in_progress','completed','cancelled'];
+const VALID_VISIBILITIES = ['all_company','selected_departments','managers_only'];
+const VALID_RECUR_TYPES  = ['none','daily','weekly','monthly','selected_weekdays'];
+
+function genCalId()   { return 'cal_'   + Date.now() + '_' + crypto.randomBytes(3).toString('hex'); }
+function genNotifId() { return 'notif_' + Date.now() + '_' + crypto.randomBytes(3).toString('hex'); }
+
+// Return today's YYYY-MM-DD in Zurich timezone
+function todayZurich() {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: CALENDAR_TZ }).format(new Date());
+}
+
+// Convert any Date / ISO string / ms to YYYY-MM-DD in Zurich
+function toZurichDateStr(val) {
+    const d = (val instanceof Date) ? val : new Date(val);
+    return new Intl.DateTimeFormat('en-CA', { timeZone: CALENDAR_TZ }).format(d);
+}
+
+// Convert YYYY-MM-DD + HH:MM (Zurich local) → UTC ms
+function zurichLocalToMs(dateStr, timeStr) {
+    // Build an ambiguous-local string and use the Intl offset trick
+    const isoLocal = `${dateStr}T${timeStr || '00:00'}:00`;
+    // Try parsing with +01:00 and +02:00, pick the one whose Zurich repr matches
+    for (const offset of ['+02:00', '+01:00']) {
+        const candidate = new Date(`${isoLocal}${offset}`);
+        if (toZurichDateStr(candidate) === dateStr) return candidate.getTime();
+    }
+    return new Date(isoLocal).getTime();
+}
+
+function getCompanyCalEvents(companyId) { return calendarEventsStore[companyId] || []; }
+function saveCalEvents() { saveJSON(CALENDAR_EVENTS_FILE, calendarEventsStore); }
+function getCompanyNotifs(companyId)    { return calendarNotifStore[companyId]  || []; }
+function saveCalNotifs()  { saveJSON(CALENDAR_NOTIF_FILE,  calendarNotifStore); }
+
+// Sanitize event input — returns cleaned object or throws string error
+function sanitizeEventInput(body) {
+    const title = (body.title || '').trim();
+    if (!title) throw 'title is required';
+    if (title.length > 200) throw 'title too long (max 200)';
+
+    const date = (body.date || '').trim();
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw 'date must be YYYY-MM-DD';
+
+    const eventType = (body.eventType || '').trim();
+    if (!VALID_EVENT_TYPES.includes(eventType)) throw `eventType must be one of: ${VALID_EVENT_TYPES.join(', ')}`;
+
+    const startTime = (body.startTime || '00:00').trim();
+    if (!/^\d{2}:\d{2}$/.test(startTime)) throw 'startTime must be HH:MM';
+
+    const endTime = body.endTime ? (body.endTime).trim() : null;
+    if (endTime && !/^\d{2}:\d{2}$/.test(endTime)) throw 'endTime must be HH:MM';
+
+    const priority   = VALID_PRIORITIES.includes(body.priority)   ? body.priority   : 'normal';
+    const status     = VALID_STATUSES.includes(body.status)       ? body.status     : 'scheduled';
+    const visibility = VALID_VISIBILITIES.includes(body.visibility)? body.visibility : 'all_company';
+
+    const departmentIds   = Array.isArray(body.departmentIds)   ? body.departmentIds.filter(s => typeof s === 'string') : [];
+    const assignedUserIds = Array.isArray(body.assignedUserIds) ? body.assignedUserIds.filter(s => typeof s === 'string') : [];
+
+    const guestCount = body.guestCount != null ? parseInt(body.guestCount) || null : null;
+
+    const reminders = Array.isArray(body.reminders)
+        ? body.reminders
+            .map(r => ({ offsetMinutes: parseInt(r.offsetMinutes) }))
+            .filter(r => !isNaN(r.offsetMinutes) && r.offsetMinutes >= 0 && r.offsetMinutes <= 10080)
+        : [];
+
+    let recurrence = { type: 'none', interval: 1, weekdays: [], endDate: null };
+    if (body.recurrence && typeof body.recurrence === 'object') {
+        const rt = VALID_RECUR_TYPES.includes(body.recurrence.type) ? body.recurrence.type : 'none';
+        const ri = parseInt(body.recurrence.interval) || 1;
+        const rw = Array.isArray(body.recurrence.weekdays)
+            ? body.recurrence.weekdays.filter(n => Number.isInteger(n) && n >= 0 && n <= 6)
+            : [];
+        const re = body.recurrence.endDate && /^\d{4}-\d{2}-\d{2}$/.test(body.recurrence.endDate)
+            ? body.recurrence.endDate : null;
+        recurrence = { type: rt, interval: Math.max(1, ri), weekdays: rw, endDate: re };
+    }
+
+    return {
+        title,
+        description:      (body.description      || '').trim().slice(0, 2000),
+        eventType,
+        date,
+        startTime,
+        endTime:          endTime || null,
+        allDay:           body.allDay === true,
+        location:         (body.location         || '').trim().slice(0, 200),
+        priority,
+        status,
+        departmentIds,
+        assignedUserIds,
+        guestCount:       guestCount != null && guestCount > 0 ? guestCount : null,
+        tableNumber:      body.tableNumber != null ? String(body.tableNumber).slice(0, 20) : null,
+        customerName:     (body.customerName      || '').trim().slice(0, 200),
+        contactName:      (body.contactName       || '').trim().slice(0, 200),
+        phone:            (body.phone             || '').trim().slice(0, 50),
+        allergyNotes:     (body.allergyNotes      || '').trim().slice(0, 500),
+        dietaryNotes:     (body.dietaryNotes      || '').trim().slice(0, 500),
+        preparationNotes: (body.preparationNotes  || '').trim().slice(0, 1000),
+        visibility,
+        reminders,
+        recurrence
+    };
+}
+
+// Expand a recurring event into occurrences within [startDateStr, endDateStr]
+function expandRecurrence(event, startDateStr, endDateStr) {
+    if (!event.recurrence || event.recurrence.type === 'none') {
+        if (event.date >= startDateStr && event.date <= endDateStr) {
+            return [event];
+        }
+        return [];
+    }
+    const results = [];
+    const endDate = event.recurrence.endDate
+        ? (event.recurrence.endDate < endDateStr ? event.recurrence.endDate : endDateStr)
+        : endDateStr;
+
+    // Walk from event.date forward by the recurrence rule
+    let current = event.date;
+    let safetyLimit = 0;
+    while (current <= endDate && safetyLimit++ < 500) {
+        if (current >= startDateStr) {
+            // For selected_weekdays, check if the day matches
+            if (event.recurrence.type === 'selected_weekdays') {
+                const dow = new Date(current + 'T12:00:00Z').getUTCDay(); // 0=Sun
+                if (!event.recurrence.weekdays.includes(dow)) {
+                    current = addDays(current, 1);
+                    continue;
+                }
+            }
+            results.push({ ...event, date: current, id: event.id + '_' + current, baseId: event.id });
+        }
+        // Advance
+        current = advanceDate(current, event.recurrence);
+    }
+    return results;
+}
+
+function addDays(dateStr, n) {
+    const d = new Date(dateStr + 'T12:00:00Z');
+    d.setUTCDate(d.getUTCDate() + n);
+    return d.toISOString().slice(0, 10);
+}
+
+function advanceDate(dateStr, recurrence) {
+    const interval = recurrence.interval || 1;
+    switch (recurrence.type) {
+        case 'daily':            return addDays(dateStr, interval);
+        case 'weekly':           return addDays(dateStr, 7 * interval);
+        case 'selected_weekdays':return addDays(dateStr, 1);
+        case 'monthly': {
+            const d = new Date(dateStr + 'T12:00:00Z');
+            d.setUTCMonth(d.getUTCMonth() + interval);
+            return d.toISOString().slice(0, 10);
+        }
+        default: return addDays(dateStr, 1);
+    }
+}
+
+// Generate notifications for an event that are due now (within the window)
+function generatePendingNotifications(event, companyId) {
+    if (!event.reminders || event.reminders.length === 0) return;
+    if (['completed','cancelled'].includes(event.status)) return;
+
+    const notifs = calendarNotifStore[companyId] || [];
+    const now = Date.now();
+
+    const startMs = zurichLocalToMs(event.date, event.startTime || '00:00');
+
+    for (const reminder of event.reminders) {
+        const triggerMs = startMs - reminder.offsetMinutes * 60 * 1000;
+        // Only generate if trigger is in the past (it's due) but not too old (> 24h ago)
+        if (triggerMs > now) continue;
+        if (now - triggerMs > 24 * 60 * 60 * 1000) continue;
+
+        const key = `${event.id}:${reminder.offsetMinutes}`;
+        const alreadyExists = notifs.some(n => n.eventId === event.id && n.offsetMinutes === reminder.offsetMinutes);
+        if (alreadyExists) continue;
+
+        notifs.push({
+            id: genNotifId(),
+            companyId,
+            eventId: event.id,
+            eventTitle: event.title,
+            eventDate: event.date,
+            eventStartTime: event.startTime,
+            eventType: event.eventType,
+            offsetMinutes: reminder.offsetMinutes,
+            generatedAt: now,
+            deliveredAt: now,
+            readBy: [],
+            dismissedBy: []
+        });
+    }
+    if (!calendarNotifStore[companyId]) calendarNotifStore[companyId] = [];
+    calendarNotifStore[companyId] = notifs;
+    saveCalNotifs();
+}
+
+// Run notification generation for all due events across all companies
+function runNotificationGeneration() {
+    const today = todayZurich();
+    const yesterday = addDays(today, -1);
+    for (const companyId of Object.keys(calendarEventsStore)) {
+        const events = calendarEventsStore[companyId] || [];
+        for (const event of events) {
+            if (event.date < yesterday) continue;
+            if (event.date > addDays(today, 1)) continue;
+            generatePendingNotifications(event, companyId);
+        }
+    }
+}
+
+// Run once at startup and then every minute
+runNotificationGeneration();
+setInterval(runNotificationGeneration, 60 * 1000);
+
+// Helper: broadcast a calendar event to a company room (if WebSocket room exists)
+function broadcastCalendarEvent(companyId, action, payload) {
+    if (!companyRooms || !companyRooms.has(companyId)) return;
+    const room = companyRooms.get(companyId);
+    const msg = JSON.stringify({ action, ...payload });
+    room.forEach(client => {
+        if (client.readyState === 1) client.send(msg);
+    });
+}
+
+// ----- REST: Calendar Events -----
+
+// GET /api/calendar/events?start=YYYY-MM-DD&end=YYYY-MM-DD
+app.get('/api/calendar/events', (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const companyId = session.companyName;
+    const uid = session.uid;
+
+    const start = req.query.start || todayZurich();
+    const end   = req.query.end   || addDays(start, 30);
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end)) {
+        return res.status(400).json({ success: false, error: 'start/end must be YYYY-MM-DD' });
+    }
+
+    const allEvents = getCompanyCalEvents(companyId);
+    const result = [];
+
+    for (const event of allEvents) {
+        // Visibility filter: managers_only events are visible to all (no separate role here)
+        const occurrences = expandRecurrence(event, start, end);
+        for (const occ of occurrences) {
+            result.push(occ);
+        }
+    }
+
+    // Sort by date then startTime
+    result.sort((a, b) => {
+        const d = a.date.localeCompare(b.date);
+        if (d !== 0) return d;
+        return (a.startTime || '00:00').localeCompare(b.startTime || '00:00');
+    });
+
+    res.json({ success: true, events: result });
+});
+
+// GET /api/calendar/events/upcoming — today + next 48h
+app.get('/api/calendar/events/upcoming', (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const companyId = session.companyName;
+
+    const today = todayZurich();
+    const in2days = addDays(today, 2);
+    const now = Date.now();
+    const in2hours = now + 2 * 60 * 60 * 1000;
+
+    const allEvents = getCompanyCalEvents(companyId);
+    const today_events = [];
+    const next2h_events = [];
+    const urgent_events = [];
+    const this_week = [];
+    const completed_today = [];
+
+    const weekEnd = addDays(today, 7);
+
+    for (const event of allEvents) {
+        const occurrences = expandRecurrence(event, today, weekEnd);
+        for (const occ of occurrences) {
+            const startMs = zurichLocalToMs(occ.date, occ.startTime || '00:00');
+            const isToday = occ.date === today;
+            const isThisWeek = occ.date >= today && occ.date <= weekEnd;
+
+            if (isToday) {
+                if (occ.status === 'completed') {
+                    completed_today.push(occ);
+                } else {
+                    today_events.push(occ);
+                    if (startMs <= in2hours && startMs >= now - 30 * 60 * 1000) {
+                        next2h_events.push(occ);
+                    }
+                    if (occ.priority === 'urgent' || occ.priority === 'high') {
+                        urgent_events.push(occ);
+                    }
+                    // Overdue: started in the past, not completed/cancelled
+                    if (startMs < now && !['completed','cancelled'].includes(occ.status)) {
+                        occ._overdue = true;
+                    }
+                }
+            } else if (isThisWeek) {
+                this_week.push(occ);
+            }
+        }
+    }
+
+    const sortByTime = arr => arr.sort((a, b) =>
+        (a.startTime || '00:00').localeCompare(b.startTime || '00:00'));
+
+    res.json({
+        success: true,
+        today: sortByTime(today_events),
+        next2h: sortByTime(next2h_events),
+        urgent: urgent_events,
+        this_week: this_week.sort((a,b) => a.date.localeCompare(b.date) || (a.startTime||'00:00').localeCompare(b.startTime||'00:00')),
+        completed_today: sortByTime(completed_today),
+        today_date: today
+    });
+});
+
+// GET /api/calendar/events/:id
+app.get('/api/calendar/events/:id', (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const companyId = session.companyName;
+    const events = getCompanyCalEvents(companyId);
+    // Also search by baseId for recurring occurrences
+    const event = events.find(e => e.id === req.params.id || e.id === req.params.id.split('_').slice(0, -1).join('_'));
+    if (!event) return res.status(404).json({ success: false, error: 'Event not found' });
+    res.json({ success: true, event });
+});
+
+// POST /api/calendar/events
+app.post('/api/calendar/events', (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const companyId = session.companyName;
+
+    let cleaned;
+    try { cleaned = sanitizeEventInput(req.body); }
+    catch (err) { return res.status(400).json({ success: false, error: String(err) }); }
+
+    const now = Date.now();
+    const event = {
+        id: genCalId(),
+        companyId,
+        ...cleaned,
+        createdBy: session.uid,
+        createdAt: now,
+        updatedAt: now
+    };
+
+    if (!calendarEventsStore[companyId]) calendarEventsStore[companyId] = [];
+    calendarEventsStore[companyId].push(event);
+    saveCalEvents();
+
+    // Generate any immediate notifications
+    generatePendingNotifications(event, companyId);
+
+    // Broadcast
+    broadcastCalendarEvent(companyId, 'calendarEventCreated', { event });
+
+    console.log(`📅 Calendar event created: "${event.title}" for company "${companyId}" by uid=${session.uid}`);
+    res.status(201).json({ success: true, event });
+});
+
+// PUT /api/calendar/events/:id
+app.put('/api/calendar/events/:id', (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const companyId = session.companyName;
+
+    const events = calendarEventsStore[companyId] || [];
+    const idx = events.findIndex(e => e.id === req.params.id);
+    if (idx === -1) return res.status(404).json({ success: false, error: 'Event not found' });
+
+    let cleaned;
+    try { cleaned = sanitizeEventInput({ ...events[idx], ...req.body }); }
+    catch (err) { return res.status(400).json({ success: false, error: String(err) }); }
+
+    const updated = {
+        ...events[idx],
+        ...cleaned,
+        id: events[idx].id,
+        companyId,
+        createdBy: events[idx].createdBy,
+        createdAt: events[idx].createdAt,
+        updatedAt: Date.now()
+    };
+
+    calendarEventsStore[companyId][idx] = updated;
+    saveCalEvents();
+
+    broadcastCalendarEvent(companyId, 'calendarEventUpdated', { event: updated });
+
+    console.log(`📅 Calendar event updated: "${updated.title}" (${updated.id}) for company "${companyId}"`);
+    res.json({ success: true, event: updated });
+});
+
+// PATCH /api/calendar/events/:id/status — mark completed / cancelled / other status
+app.patch('/api/calendar/events/:id/status', (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const companyId = session.companyName;
+
+    const events = calendarEventsStore[companyId] || [];
+    const idx = events.findIndex(e => e.id === req.params.id);
+    if (idx === -1) return res.status(404).json({ success: false, error: 'Event not found' });
+
+    const newStatus = req.body.status;
+    if (!VALID_STATUSES.includes(newStatus)) {
+        return res.status(400).json({ success: false, error: `status must be one of: ${VALID_STATUSES.join(', ')}` });
+    }
+
+    events[idx].status = newStatus;
+    events[idx].updatedAt = Date.now();
+    if (newStatus === 'completed') events[idx].completedAt = Date.now();
+    saveCalEvents();
+
+    const action = newStatus === 'completed' ? 'calendarEventCompleted' : 'calendarEventCancelled';
+    broadcastCalendarEvent(companyId, action, { eventId: events[idx].id, status: newStatus, event: events[idx] });
+
+    res.json({ success: true, event: events[idx] });
+});
+
+// POST /api/calendar/events/:id/duplicate
+app.post('/api/calendar/events/:id/duplicate', (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const companyId = session.companyName;
+
+    const events = getCompanyCalEvents(companyId);
+    const source = events.find(e => e.id === req.params.id);
+    if (!source) return res.status(404).json({ success: false, error: 'Event not found' });
+
+    const now = Date.now();
+    const copy = {
+        ...source,
+        id: genCalId(),
+        title: source.title + ' (copia)',
+        status: 'scheduled',
+        createdBy: session.uid,
+        createdAt: now,
+        updatedAt: now,
+        completedAt: undefined
+    };
+    delete copy.completedAt;
+
+    if (!calendarEventsStore[companyId]) calendarEventsStore[companyId] = [];
+    calendarEventsStore[companyId].push(copy);
+    saveCalEvents();
+
+    res.status(201).json({ success: true, event: copy });
+});
+
+// DELETE /api/calendar/events/:id
+app.delete('/api/calendar/events/:id', (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const companyId = session.companyName;
+
+    const events = calendarEventsStore[companyId] || [];
+    const idx = events.findIndex(e => e.id === req.params.id);
+    if (idx === -1) return res.status(404).json({ success: false, error: 'Event not found' });
+
+    // Only creator can delete (or if no createdBy — allow for backwards compat)
+    const event = events[idx];
+    if (event.createdBy && event.createdBy !== session.uid) {
+        return res.status(403).json({ success: false, error: 'Only the event creator can delete this event.' });
+    }
+
+    calendarEventsStore[companyId].splice(idx, 1);
+    saveCalEvents();
+
+    // Remove associated notifications
+    if (calendarNotifStore[companyId]) {
+        calendarNotifStore[companyId] = calendarNotifStore[companyId].filter(n => n.eventId !== req.params.id);
+        saveCalNotifs();
+    }
+
+    broadcastCalendarEvent(companyId, 'calendarEventDeleted', { eventId: req.params.id });
+
+    console.log(`🗑️ Calendar event deleted: "${event.title}" (${event.id}) for company "${companyId}"`);
+    res.json({ success: true });
+});
+
+// ----- REST: Calendar Notifications -----
+
+// GET /api/calendar/notifications
+app.get('/api/calendar/notifications', (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const companyId = session.companyName;
+    const uid = session.uid;
+
+    // Trigger generation for any due reminders
+    const today = todayZurich();
+    const events = getCompanyCalEvents(companyId);
+    for (const event of events) {
+        if (event.date >= addDays(today, -1) && event.date <= addDays(today, 1)) {
+            generatePendingNotifications(event, companyId);
+        }
+    }
+
+    const notifs = getCompanyNotifs(companyId);
+    const result = notifs
+        .filter(n => !n.dismissedBy.includes(uid))
+        .map(n => ({
+            ...n,
+            read: n.readBy.includes(uid),
+            dismissed: n.dismissedBy.includes(uid)
+        }))
+        .sort((a, b) => b.generatedAt - a.generatedAt)
+        .slice(0, 50);
+
+    const unreadCount = result.filter(n => !n.read).length;
+    res.json({ success: true, notifications: result, unreadCount });
+});
+
+// PATCH /api/calendar/notifications/:id/read
+app.patch('/api/calendar/notifications/:id/read', (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const companyId = session.companyName;
+    const uid = session.uid;
+
+    const notifs = calendarNotifStore[companyId] || [];
+    const notif = notifs.find(n => n.id === req.params.id);
+    if (!notif) return res.status(404).json({ success: false, error: 'Notification not found' });
+
+    if (!notif.readBy.includes(uid)) notif.readBy.push(uid);
+    saveCalNotifs();
+    res.json({ success: true });
+});
+
+// PATCH /api/calendar/notifications/:id/dismiss
+app.patch('/api/calendar/notifications/:id/dismiss', (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const companyId = session.companyName;
+    const uid = session.uid;
+
+    const notifs = calendarNotifStore[companyId] || [];
+    const notif = notifs.find(n => n.id === req.params.id);
+    if (!notif) return res.status(404).json({ success: false, error: 'Notification not found' });
+
+    if (!notif.dismissedBy.includes(uid)) notif.dismissedBy.push(uid);
+    if (!notif.readBy.includes(uid)) notif.readBy.push(uid);
+    saveCalNotifs();
+    res.json({ success: true });
+});
+
+// PATCH /api/calendar/notifications/read-all
+app.patch('/api/calendar/notifications/read-all', (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const companyId = session.companyName;
+    const uid = session.uid;
+
+    const notifs = calendarNotifStore[companyId] || [];
+    notifs.forEach(n => { if (!n.readBy.includes(uid)) n.readBy.push(uid); });
+    saveCalNotifs();
+    res.json({ success: true });
+});
+
+// =========================================================================
+// ===== END CALENDAR MODULE ===============================================
+// =========================================================================
+
 // Store per le room delle aziende
 const companyRooms = new Map();
 

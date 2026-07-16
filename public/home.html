@@ -101,6 +101,38 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 .nav-card{box-shadow:0 1px 3px rgba(0,0,0,.06);}
 .nav-card.admin{border-color:var(--border);}
 .nav-card.admin .card-name{color:var(--muted);}
+
+/* ── CALENDAR CARD ─────────── */
+.nav-card.calendar{border-left:3px solid rgba(99,102,241,.5);}
+.nav-card.calendar:hover{border-left-color:var(--accent);}
+.card-notif-badge{display:inline-flex;align-items:center;justify-content:center;
+  min-width:18px;height:18px;background:var(--danger);color:#fff;
+  font-size:10px;font-weight:800;border-radius:10px;padding:0 4px;
+  margin-left:6px;vertical-align:middle;}
+
+/* ── TODAY SUMMARY ───────────── */
+.today-summary{background:var(--card);border:1.5px solid var(--border);
+  border-radius:13px;padding:18px 18px 14px;margin-bottom:28px;
+  box-shadow:0 1px 3px rgba(0,0,0,.06);}
+.today-summary-hdr{display:flex;align-items:center;justify-content:space-between;
+  margin-bottom:12px;}
+.today-summary-title{font-size:13px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.6px;color:var(--muted);}
+.today-summary-link{font-size:12px;color:var(--accent2);text-decoration:none;
+  font-weight:600;}
+.today-summary-link:hover{text-decoration:underline;}
+.today-event-row{display:flex;align-items:flex-start;gap:10px;
+  padding:8px 0;border-bottom:1px solid var(--border);}
+.today-event-row:last-child{border-bottom:none;padding-bottom:0;}
+.today-event-time{font-size:13px;font-weight:700;color:var(--accent2);
+  min-width:42px;flex-shrink:0;}
+.today-event-icon{font-size:16px;flex-shrink:0;}
+.today-event-body{flex:1;min-width:0;}
+.today-event-title{font-size:14px;font-weight:700;color:var(--text);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.today-event-sub{font-size:11px;color:var(--muted);margin-top:1px;}
+.today-empty{font-size:13px;color:var(--muted);text-align:center;
+  padding:12px 0;}
 </style>
 </head>
 <body>
@@ -141,11 +173,27 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
       <span class="card-name">Floor</span>
       <span class="card-sub">Monitoraggio tavoli</span>
     </a>
+    <a href="calendar.html" class="nav-card calendar">
+      <span class="card-icon" aria-hidden="true">📅</span>
+      <span class="card-name">Calendario<span id="cal-notif-badge" class="card-notif-badge" style="display:none;"></span></span>
+      <span class="card-sub">Agenda operativa</span>
+    </a>
     <a href="admin-departments.html" class="nav-card admin">
       <span class="card-icon" aria-hidden="true">⚙️</span>
       <span class="card-name">Gestione Reparti</span>
       <span class="card-sub">Configurazione</span>
     </a>
+  </div>
+
+  <!-- Today calendar summary -->
+  <div class="today-summary" id="today-summary" style="display:none;">
+    <div class="today-summary-hdr">
+      <span class="today-summary-title">📅 Oggi</span>
+      <a href="calendar.html" class="today-summary-link">Apri calendario →</a>
+    </div>
+    <div id="today-summary-body">
+      <div class="today-empty">Caricamento…</div>
+    </div>
   </div>
 
 </main>
@@ -465,11 +513,95 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
     // (covers back navigation, bfcache restore, and tab re-focus)
     window.addEventListener('pageshow', () => {
         loadDepartmentsGrid();
+        loadCalendarSummary();
     });
 
     // Also try immediately on first script execution using the stored token —
     // no need to wait for Firebase auth to resolve on repeat visits.
     loadDepartmentsGrid();
+    loadCalendarSummary();
+
+    // ── Calendar today summary ──────────────────────────────────────
+    const EVENT_TYPE_ICONS = {
+        reservation:'🪑', group_reservation:'👥', staff_meeting:'💬',
+        staff_shift_note:'📋', supplier_delivery:'🚚', maintenance:'🔧',
+        inventory:'📦', haccp_control:'🌡️', training:'📚',
+        private_event:'✨', birthday:'🎂', anniversary:'💐',
+        payment_deadline:'💳', reminder:'🔔', other:'📌'
+    };
+
+    async function loadCalendarSummary() {
+        const token = WsAuth.getStoredToken();
+        if (!token) return;
+        try {
+            const res = await fetch('/api/calendar/events/upcoming', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (!res.ok) return;
+            const data = await res.json();
+            if (!data.success) return;
+
+            const summaryEl = document.getElementById('today-summary');
+            const bodyEl    = document.getElementById('today-summary-body');
+            if (!summaryEl || !bodyEl) return;
+
+            summaryEl.style.display = '';
+
+            // Notification badge on the calendar card
+            const notifRes = await fetch('/api/calendar/notifications', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (notifRes.ok) {
+                const nd = await notifRes.json();
+                const unread = nd.unreadCount || 0;
+                const badge = document.getElementById('cal-notif-badge');
+                if (badge) {
+                    if (unread > 0) {
+                        badge.textContent = unread > 9 ? '9+' : unread;
+                        badge.style.display = '';
+                    } else {
+                        badge.style.display = 'none';
+                    }
+                }
+            }
+
+            const allToday = [...(data.today || []), ...(data.completed_today || [])];
+            // Show up to 4 events
+            const display = allToday.slice(0, 4);
+
+            if (display.length === 0) {
+                bodyEl.innerHTML = '<div class="today-empty">Nessun evento programmato per oggi.</div>';
+                return;
+            }
+
+            let html = '';
+            for (const ev of display) {
+                const icon = EVENT_TYPE_ICONS[ev.eventType] || '📌';
+                const timeStr = ev.allDay ? 'Todo il giorno' : (ev.startTime || '');
+                const sub = ev.guestCount ? `👥 ${ev.guestCount} coperti` :
+                            (ev.customerName ? ev.customerName : '');
+                const completed = ev.status === 'completed';
+                html += `<div class="today-event-row"${completed?' style="opacity:.55;"':''}>
+                  <span class="today-event-time">${timeStr}</span>
+                  <span class="today-event-icon">${icon}</span>
+                  <div class="today-event-body">
+                    <div class="today-event-title">${escHome(ev.title)}${completed?' ✓':''}</div>
+                    ${sub ? `<div class="today-event-sub">${escHome(sub)}</div>` : ''}
+                  </div>
+                </div>`;
+            }
+            if (allToday.length > 4) {
+                html += `<div class="today-empty" style="margin-top:6px;">+${allToday.length - 4} altri eventi → <a href="calendar.html" style="color:var(--accent2);">Apri calendario</a></div>`;
+            }
+            bodyEl.innerHTML = html;
+        } catch(e) {
+            // Silently fail — calendar is optional on home
+        }
+    }
+
+    function escHome(str) {
+        return String(str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
 </script>
 
 <!-- Plain script: sync header brand + logo monogram whenever company-name changes -->

@@ -1,0 +1,1655 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Calendario — PlateTimer</title>
+<style>
+:root {
+  --bg:       #F1F5F9;
+  --panel:    #FFFFFF;
+  --card:     #FFFFFF;
+  --card-h:   #F8FAFC;
+  --border:   #E2E8F0;
+  --border-l: #CBD5E1;
+  --text:     #0F172A;
+  --muted:    #64748B;
+  --accent:   #4F46E5;
+  --accent2:  #6366F1;
+  --warn:     #D97706;
+  --danger:   #DC2626;
+  --ok:       #16A34A;
+  --hdr:      56px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,sans-serif;min-height:100vh;}
+
+/* ── HEADER ── */
+.hdr{position:fixed;top:0;left:0;right:0;height:var(--hdr);
+  background:rgba(255,255,255,.97);box-shadow:0 1px 3px rgba(0,0,0,.08);
+  display:flex;align-items:center;gap:10px;padding:0 16px;z-index:300;}
+.hdr-brand{font-size:15px;font-weight:700;color:var(--accent2);white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;max-width:180px;}
+.hdr-sep{width:1px;height:20px;background:var(--border-l);flex-shrink:0;}
+.hdr-page{font-size:15px;font-weight:600;color:var(--text);flex:1;}
+.hdr-btn{padding:7px 14px;border:1px solid var(--border-l);border-radius:7px;
+  background:rgba(0,0,0,.04);color:var(--text);font-size:13px;cursor:pointer;
+  white-space:nowrap;flex-shrink:0;transition:background .15s;border:1px solid var(--border-l);}
+.hdr-btn:hover{background:rgba(0,0,0,.09);}
+.hdr-btn.danger{border-color:rgba(220,38,38,.35);color:var(--danger);}
+.hdr-btn.danger:hover{background:rgba(220,38,38,.08);}
+.notif-btn{position:relative;padding:7px 10px;border:1px solid var(--border-l);border-radius:7px;
+  background:rgba(0,0,0,.04);cursor:pointer;font-size:18px;transition:background .15s;flex-shrink:0;}
+.notif-btn:hover{background:rgba(0,0,0,.09);}
+.notif-badge{position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;
+  background:var(--danger);color:#fff;font-size:10px;font-weight:800;
+  border-radius:10px;display:none;align-items:center;justify-content:center;
+  padding:0 4px;border:2px solid var(--bg);}
+.notif-badge.visible{display:flex;}
+
+/* ── MAIN ── */
+.main{max-width:1200px;margin:0 auto;padding:calc(var(--hdr)+20px) 16px 120px;}
+
+/* ── STATS ROW ── */
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px;}
+@media(max-width:700px){.stats-row{grid-template-columns:repeat(2,1fr);}}
+@media(max-width:400px){.stats-row{grid-template-columns:1fr 1fr;gap:8px;}}
+.stat-card{background:var(--card);border:1.5px solid var(--border);border-radius:12px;
+  padding:14px 16px;text-align:center;cursor:pointer;transition:border-color .15s;}
+.stat-card:hover{border-color:var(--border-l);}
+.stat-card.urgent-card{border-color:rgba(220,38,38,.3);}
+.stat-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;
+  color:var(--muted);margin-bottom:5px;}
+.stat-value{font-size:26px;font-weight:800;color:var(--accent2);line-height:1;}
+.stat-card.urgent-card .stat-value{color:var(--danger);}
+.stat-sub{font-size:11px;color:var(--muted);margin-top:3px;}
+
+/* ── VIEW TABS ── */
+.view-tabs{display:flex;gap:6px;margin-bottom:18px;flex-wrap:wrap;}
+.view-tab{padding:8px 16px;border:1.5px solid var(--border-l);border-radius:8px;
+  background:var(--card);color:var(--muted);font-size:13px;font-weight:600;
+  cursor:pointer;transition:all .15s;white-space:nowrap;}
+.view-tab:hover{color:var(--text);background:var(--card-h);}
+.view-tab.active{background:rgba(99,102,241,.15);border-color:var(--accent);color:var(--accent2);}
+
+/* ── SECTION HEADER ── */
+.section-hdr{display:flex;align-items:center;gap:10px;margin-bottom:12px;}
+.section-title{font-size:13px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.6px;color:var(--muted);}
+.section-badge{font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;
+  background:rgba(99,102,241,.12);color:var(--accent2);border:1px solid rgba(99,102,241,.25);}
+.section-badge.warn{background:rgba(217,119,6,.12);color:var(--warn);border-color:rgba(217,119,6,.25);}
+.section-badge.danger{background:rgba(220,38,38,.12);color:var(--danger);border-color:rgba(220,38,38,.25);}
+
+/* ── VIEW SECTIONS ── */
+.view-section{margin-bottom:28px;}
+
+/* ── EVENT CARD ── */
+.event-card{background:var(--card);border:1.5px solid var(--border);border-radius:12px;
+  padding:14px 16px;margin-bottom:8px;cursor:pointer;
+  transition:border-color .15s,background .15s;display:flex;gap:12px;align-items:flex-start;}
+.event-card:hover{background:var(--card-h);border-color:var(--border-l);}
+.event-card.completed{opacity:.55;}
+.event-card.overdue{border-left:3px solid var(--danger);}
+.event-card.priority-urgent{border-left:3px solid var(--danger);}
+.event-card.priority-high{border-left:3px solid var(--warn);}
+.event-type-icon{font-size:20px;flex-shrink:0;width:32px;height:32px;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--bg);border-radius:8px;border:1px solid var(--border);}
+.event-main{flex:1;min-width:0;}
+.event-time-row{display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap;}
+.event-time{font-size:13px;font-weight:700;color:var(--accent2);}
+.event-badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;
+  white-space:nowrap;}
+.badge-priority-urgent{background:rgba(220,38,38,.15);color:var(--danger);}
+.badge-priority-high{background:rgba(217,119,6,.15);color:var(--warn);}
+.badge-priority-normal{background:rgba(99,102,241,.1);color:var(--accent2);}
+.badge-priority-low{background:rgba(100,116,139,.1);color:var(--muted);}
+.badge-status-scheduled{background:rgba(99,102,241,.1);color:var(--accent2);}
+.badge-status-confirmed{background:rgba(22,163,74,.12);color:var(--ok);}
+.badge-status-in_progress{background:rgba(217,119,6,.12);color:var(--warn);}
+.badge-status-completed{background:rgba(22,163,74,.1);color:var(--ok);}
+.badge-status-cancelled{background:rgba(100,116,139,.1);color:var(--muted);}
+.badge-overdue{background:rgba(220,38,38,.15);color:var(--danger);}
+.event-title{font-size:15px;font-weight:700;color:var(--text);margin-bottom:3px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.event-meta{font-size:12px;color:var(--muted);display:flex;gap:10px;flex-wrap:wrap;}
+.event-actions{display:flex;flex-direction:column;gap:6px;flex-shrink:0;}
+.ev-btn{padding:5px 10px;border:1px solid var(--border-l);border-radius:6px;
+  background:transparent;color:var(--muted);font-size:11px;font-weight:600;
+  cursor:pointer;white-space:nowrap;transition:all .15s;}
+.ev-btn:hover{background:var(--bg);color:var(--text);}
+.ev-btn.complete-btn{color:var(--ok);border-color:rgba(22,163,74,.3);}
+.ev-btn.complete-btn:hover{background:rgba(22,163,74,.08);}
+
+/* ── EMPTY / LOADING STATES ── */
+.empty-state{text-align:center;padding:32px 20px;color:var(--muted);font-size:14px;}
+.empty-state .empty-icon{font-size:36px;margin-bottom:10px;}
+.loading-state{text-align:center;padding:24px;color:var(--muted);font-size:14px;}
+.error-state{background:rgba(220,38,38,.06);border:1px solid rgba(220,38,38,.2);
+  border-radius:10px;padding:14px 16px;color:var(--danger);font-size:13px;margin-bottom:16px;}
+
+/* ── WEEK / MONTH VIEWS ── */
+.week-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:20px;}
+@media(max-width:600px){.week-grid{grid-template-columns:1fr;gap:4px;}}
+.week-col{background:var(--card);border:1.5px solid var(--border);border-radius:10px;
+  padding:10px 8px;min-height:80px;}
+.week-col.today-col{border-color:var(--accent);}
+.week-day-label{font-size:11px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.5px;color:var(--muted);margin-bottom:6px;}
+.week-day-num{font-size:18px;font-weight:800;color:var(--text);margin-bottom:6px;}
+.week-day-num.today-num{color:var(--accent2);}
+.week-event-pill{font-size:10px;font-weight:600;padding:2px 6px;border-radius:4px;
+  margin-bottom:2px;background:rgba(99,102,241,.12);color:var(--accent2);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;}
+.week-event-pill:hover{background:rgba(99,102,241,.2);}
+.week-nav{display:flex;align-items:center;gap:10px;margin-bottom:14px;}
+.week-nav-btn{padding:7px 14px;border:1.5px solid var(--border-l);border-radius:8px;
+  background:var(--card);color:var(--text);font-size:13px;font-weight:600;cursor:pointer;
+  transition:background .15s;}
+.week-nav-btn:hover{background:var(--card-h);}
+.week-range-label{flex:1;text-align:center;font-size:14px;font-weight:700;color:var(--text);}
+
+/* ── MONTH VIEW ── */
+.month-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:20px;}
+.month-day-header{font-size:10px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.5px;color:var(--muted);text-align:center;padding:6px 0;}
+.month-cell{background:var(--card);border:1px solid var(--border);
+  border-radius:6px;padding:6px;min-height:70px;cursor:pointer;transition:background .15s;}
+.month-cell:hover{background:var(--card-h);}
+.month-cell.other-month{opacity:.4;}
+.month-cell.today-cell{border-color:var(--accent);background:rgba(99,102,241,.04);}
+.month-date-num{font-size:12px;font-weight:700;color:var(--muted);margin-bottom:3px;}
+.month-cell.today-cell .month-date-num{color:var(--accent2);}
+.month-event-dot{font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;
+  margin-bottom:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  background:rgba(99,102,241,.12);color:var(--accent2);}
+@media(max-width:600px){.month-event-dot{display:none;}.month-cell{min-height:40px;}}
+
+/* ── FAB ── */
+.fab{position:fixed;bottom:28px;right:24px;
+  width:56px;height:56px;border-radius:50%;
+  background:var(--accent);color:#fff;border:none;
+  font-size:28px;cursor:pointer;box-shadow:0 4px 20px rgba(79,70,229,.4);
+  display:flex;align-items:center;justify-content:center;
+  transition:transform .15s,box-shadow .15s;z-index:100;}
+.fab:hover{transform:scale(1.08);box-shadow:0 6px 26px rgba(79,70,229,.5);}
+.fab-label{position:fixed;bottom:34px;right:90px;
+  background:var(--accent);color:#fff;padding:6px 14px;border-radius:8px;
+  font-size:13px;font-weight:700;white-space:nowrap;pointer-events:none;
+  box-shadow:0 2px 10px rgba(79,70,229,.3);z-index:100;
+  opacity:0;transition:opacity .15s;}
+.fab:hover + .fab-label,.fab:focus + .fab-label{opacity:1;}
+
+/* ── MODAL ── */
+.modal-overlay{position:fixed;inset:0;background:rgba(15,23,42,.5);
+  backdrop-filter:blur(4px);z-index:400;display:none;align-items:flex-start;
+  justify-content:center;padding:20px;overflow-y:auto;}
+.modal-overlay.open{display:flex;}
+.modal{background:var(--card);border-radius:16px;width:100%;max-width:680px;
+  box-shadow:0 20px 60px rgba(0,0,0,.2);margin:auto;
+  display:flex;flex-direction:column;max-height:calc(100vh - 40px);}
+.modal-hdr{display:flex;align-items:center;gap:12px;padding:18px 20px;
+  border-bottom:1px solid var(--border);flex-shrink:0;}
+.modal-title{font-size:16px;font-weight:800;color:var(--text);flex:1;}
+.modal-close{background:none;border:none;font-size:20px;cursor:pointer;
+  color:var(--muted);padding:4px;border-radius:6px;}
+.modal-close:hover{background:var(--bg);}
+.modal-body{overflow-y:auto;flex:1;padding:20px;}
+.modal-footer{padding:16px 20px;border-top:1px solid var(--border);
+  display:flex;gap:10px;justify-content:flex-end;flex-shrink:0;flex-wrap:wrap;}
+
+/* ── FORM TABS ── */
+.form-tabs{display:flex;gap:4px;margin-bottom:18px;background:var(--bg);
+  padding:4px;border-radius:10px;}
+.form-tab{flex:1;padding:7px 10px;border:none;border-radius:7px;
+  background:transparent;color:var(--muted);font-size:12px;font-weight:700;
+  cursor:pointer;transition:all .15s;text-align:center;}
+.form-tab.active{background:var(--card);color:var(--text);
+  box-shadow:0 1px 4px rgba(0,0,0,.1);}
+.form-panel{display:none;}
+.form-panel.active{display:block;}
+
+/* ── FORM FIELDS ── */
+.field{margin-bottom:14px;}
+.field label{display:block;font-size:12px;font-weight:700;color:var(--muted);
+  margin-bottom:5px;text-transform:uppercase;letter-spacing:.4px;}
+.field label .req{color:var(--danger);margin-left:2px;}
+.field input,.field select,.field textarea{width:100%;
+  padding:9px 12px;border:1.5px solid var(--border-l);border-radius:8px;
+  font-size:14px;color:var(--text);background:var(--card);
+  outline:none;transition:border-color .15s;font-family:inherit;}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--accent);}
+.field textarea{resize:vertical;min-height:72px;}
+.field-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+@media(max-width:420px){.field-row{grid-template-columns:1fr;}}
+.field-hint{font-size:11px;color:var(--muted);margin-top:3px;}
+.field-check{display:flex;align-items:center;gap:8px;padding:8px 0;}
+.field-check input[type=checkbox]{width:16px;height:16px;accent-color:var(--accent);}
+.field-check label{font-size:14px;color:var(--text);font-weight:500;margin:0;}
+
+/* Reminder rows */
+.reminder-list{display:flex;flex-direction:column;gap:6px;margin-bottom:8px;}
+.reminder-row{display:flex;align-items:center;gap:8px;}
+.reminder-row select{flex:1;}
+.reminder-remove{background:none;border:1px solid var(--border-l);border-radius:6px;
+  padding:6px 10px;cursor:pointer;color:var(--muted);font-size:12px;}
+.reminder-remove:hover{background:var(--bg);color:var(--danger);border-color:rgba(220,38,38,.3);}
+.add-reminder-btn{padding:7px 14px;border:1.5px dashed var(--border-l);border-radius:8px;
+  background:transparent;color:var(--muted);font-size:13px;font-weight:600;
+  cursor:pointer;width:100%;transition:all .15s;}
+.add-reminder-btn:hover{border-color:var(--accent);color:var(--accent2);}
+
+/* Dept checkboxes */
+.dept-checks{display:flex;flex-wrap:wrap;gap:8px;}
+.dept-check-pill{display:flex;align-items:center;gap:6px;
+  padding:6px 12px;border:1.5px solid var(--border-l);border-radius:8px;
+  cursor:pointer;background:var(--card);transition:all .15s;}
+.dept-check-pill:hover{border-color:var(--accent);}
+.dept-check-pill input[type=checkbox]{accent-color:var(--accent);}
+.dept-check-pill.checked{border-color:var(--accent);background:rgba(99,102,241,.08);}
+
+/* Btn */
+.btn{padding:9px 20px;border:none;border-radius:8px;font-size:14px;font-weight:700;
+  cursor:pointer;transition:all .15s;}
+.btn-primary{background:var(--accent);color:#fff;}
+.btn-primary:hover{background:#4338CA;}
+.btn-secondary{background:var(--bg);color:var(--text);border:1.5px solid var(--border-l);}
+.btn-secondary:hover{background:var(--card-h);}
+.btn-danger{background:rgba(220,38,38,.08);color:var(--danger);border:1.5px solid rgba(220,38,38,.25);}
+.btn-danger:hover{background:rgba(220,38,38,.15);}
+.btn-warn{background:rgba(217,119,6,.1);color:var(--warn);border:1.5px solid rgba(217,119,6,.25);}
+.btn-ok{background:rgba(22,163,74,.1);color:var(--ok);border:1.5px solid rgba(22,163,74,.25);}
+.btn:disabled{opacity:.5;cursor:not-allowed;}
+
+/* ── CONFIRM DIALOG ── */
+.confirm-overlay{position:fixed;inset:0;background:rgba(15,23,42,.6);
+  z-index:500;display:none;align-items:center;justify-content:center;padding:20px;}
+.confirm-overlay.open{display:flex;}
+.confirm-box{background:var(--card);border-radius:14px;padding:24px;
+  max-width:380px;width:100%;box-shadow:0 10px 40px rgba(0,0,0,.2);}
+.confirm-title{font-size:16px;font-weight:800;margin-bottom:10px;}
+.confirm-msg{font-size:14px;color:var(--muted);margin-bottom:20px;line-height:1.6;}
+.confirm-actions{display:flex;gap:10px;justify-content:flex-end;}
+
+/* ── NOTIFICATIONS DRAWER ── */
+.notif-drawer{position:fixed;top:var(--hdr);right:0;width:340px;max-width:100vw;
+  height:calc(100vh - var(--hdr));background:var(--card);
+  border-left:1.5px solid var(--border);z-index:250;
+  transform:translateX(100%);transition:transform .25s;
+  display:flex;flex-direction:column;box-shadow:-4px 0 20px rgba(0,0,0,.08);}
+.notif-drawer.open{transform:translateX(0);}
+.notif-drawer-hdr{padding:16px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:10px;flex-shrink:0;}
+.notif-drawer-title{font-size:14px;font-weight:800;flex:1;}
+.notif-drawer-list{overflow-y:auto;flex:1;padding:12px;}
+.notif-item{background:var(--bg);border:1.5px solid var(--border);border-radius:10px;
+  padding:12px;margin-bottom:8px;cursor:pointer;transition:border-color .15s;}
+.notif-item:hover{border-color:var(--border-l);}
+.notif-item.unread{border-left:3px solid var(--accent);}
+.notif-item-title{font-size:13px;font-weight:700;margin-bottom:3px;}
+.notif-item-msg{font-size:12px;color:var(--muted);margin-bottom:4px;}
+.notif-item-time{font-size:11px;color:var(--muted);}
+.notif-item-actions{display:flex;gap:6px;margin-top:8px;}
+.notif-item-btn{padding:3px 9px;border:1px solid var(--border-l);border-radius:5px;
+  background:transparent;color:var(--muted);font-size:11px;cursor:pointer;}
+.notif-item-btn:hover{background:var(--card);color:var(--text);}
+
+/* ── TTS TOGGLE ── */
+.tts-bar{background:rgba(99,102,241,.06);border:1.5px solid rgba(99,102,241,.2);
+  border-radius:10px;padding:10px 14px;margin-bottom:18px;
+  display:flex;align-items:center;gap:10px;font-size:13px;}
+.tts-toggle{position:relative;width:40px;height:22px;flex-shrink:0;}
+.tts-toggle input{opacity:0;width:0;height:0;}
+.tts-slider{position:absolute;cursor:pointer;inset:0;background:#CBD5E1;border-radius:22px;
+  transition:background .2s;}
+.tts-slider:before{position:absolute;content:'';height:16px;width:16px;left:3px;bottom:3px;
+  background:white;border-radius:50%;transition:transform .2s;}
+.tts-toggle input:checked + .tts-slider{background:var(--accent);}
+.tts-toggle input:checked + .tts-slider:before{transform:translateX(18px);}
+
+/* ── DETAIL VIEW ── */
+.detail-hdr{display:flex;align-items:flex-start;gap:14px;margin-bottom:18px;}
+.detail-icon{font-size:32px;width:52px;height:52px;background:var(--bg);border:1.5px solid var(--border);
+  border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.detail-title{font-size:20px;font-weight:800;line-height:1.3;margin-bottom:6px;}
+.detail-badges{display:flex;gap:6px;flex-wrap:wrap;}
+.detail-field{margin-bottom:12px;}
+.detail-field-label{font-size:11px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.5px;color:var(--muted);margin-bottom:3px;}
+.detail-field-value{font-size:14px;color:var(--text);}
+.detail-section{border-top:1px solid var(--border);padding-top:14px;margin-top:14px;}
+.detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+@media(max-width:400px){.detail-grid{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+
+<!-- ── HEADER ── -->
+<header class="hdr">
+  <span id="hdr-company" class="hdr-brand"></span>
+  <span class="hdr-sep"></span>
+  <span class="hdr-page">📅 Calendario</span>
+  <button class="notif-btn" onclick="toggleNotifDrawer()" title="Notifiche" aria-label="Notifiche">
+    🔔<span id="notif-badge" class="notif-badge"></span>
+  </button>
+  <button class="hdr-btn" onclick="window.location.href='home.html'">← Home</button>
+  <button class="hdr-btn danger" onclick="window.location.href='index.html'">Esci</button>
+</header>
+
+<!-- ── NOTIFICATION DRAWER ── -->
+<div id="notif-drawer" class="notif-drawer" role="complementary" aria-label="Notifiche">
+  <div class="notif-drawer-hdr">
+    <span class="notif-drawer-title">🔔 Notifiche</span>
+    <button class="btn btn-secondary" style="padding:5px 10px;font-size:12px;" onclick="markAllRead()">Segna tutte lette</button>
+    <button class="modal-close" onclick="toggleNotifDrawer()">✕</button>
+  </div>
+  <div id="notif-list" class="notif-drawer-list">
+    <div class="loading-state">Caricamento…</div>
+  </div>
+</div>
+
+<!-- ── MAIN ── -->
+<main class="main">
+
+  <!-- TTS toggle -->
+  <div class="tts-bar" id="tts-bar" style="display:none;">
+    <span>🔊</span>
+    <span style="flex:1;font-weight:600;">Promemoria vocali</span>
+    <label class="tts-toggle" title="Attiva/disattiva promemoria vocali">
+      <input type="checkbox" id="tts-toggle-input" onchange="onTtsToggle(this.checked)">
+      <span class="tts-slider"></span>
+    </label>
+    <span id="tts-status" style="color:var(--muted);font-size:12px;">Disattivato</span>
+  </div>
+
+  <!-- Error area -->
+  <div id="error-area"></div>
+
+  <!-- Stats row -->
+  <div class="stats-row">
+    <div class="stat-card" onclick="setView('today')">
+      <div class="stat-label">Oggi</div>
+      <div class="stat-value" id="stat-today">–</div>
+      <div class="stat-sub">eventi</div>
+    </div>
+    <div class="stat-card" onclick="setView('today')">
+      <div class="stat-label">Prossime 2h</div>
+      <div class="stat-value" id="stat-2h">–</div>
+      <div class="stat-sub">in arrivo</div>
+    </div>
+    <div class="stat-card urgent-card" onclick="setView('today')">
+      <div class="stat-label">Urgenti</div>
+      <div class="stat-value" id="stat-urgent">–</div>
+      <div class="stat-sub">alta priorità</div>
+    </div>
+    <div class="stat-card" onclick="toggleNotifDrawer()">
+      <div class="stat-label">Notifiche</div>
+      <div class="stat-value" id="stat-notif">–</div>
+      <div class="stat-sub">non lette</div>
+    </div>
+  </div>
+
+  <!-- View tabs -->
+  <div class="view-tabs">
+    <button class="view-tab active" onclick="setView('today')" data-view="today">☀️ Oggi</button>
+    <button class="view-tab" onclick="setView('agenda')" data-view="agenda">📋 Agenda</button>
+    <button class="view-tab" onclick="setView('week')" data-view="week">📅 Settimana</button>
+    <button class="view-tab" onclick="setView('month')" data-view="month">🗓️ Mese</button>
+  </div>
+
+  <!-- ── TODAY VIEW ── -->
+  <div id="view-today" class="view-content">
+    <div id="today-date-label" class="section-hdr" style="margin-bottom:16px;">
+      <span class="section-title" id="today-title">Caricamento…</span>
+    </div>
+
+    <div class="view-section">
+      <div class="section-hdr">
+        <span class="section-title">⚡ Prossime 2 ore</span>
+        <span id="badge-2h" class="section-badge">0</span>
+      </div>
+      <div id="list-2h"><div class="loading-state">Caricamento…</div></div>
+    </div>
+
+    <div class="view-section">
+      <div class="section-hdr">
+        <span class="section-title">🚨 Urgenti / In ritardo</span>
+        <span id="badge-urgent" class="section-badge danger">0</span>
+      </div>
+      <div id="list-urgent"></div>
+    </div>
+
+    <div class="view-section">
+      <div class="section-hdr">
+        <span class="section-title">📆 Tutti gli eventi di oggi</span>
+        <span id="badge-today" class="section-badge">0</span>
+      </div>
+      <div id="list-today"></div>
+    </div>
+
+    <div class="view-section">
+      <div class="section-hdr">
+        <span class="section-title">✅ Completati oggi</span>
+        <span id="badge-completed" class="section-badge">0</span>
+      </div>
+      <div id="list-completed"></div>
+    </div>
+  </div>
+
+  <!-- ── AGENDA VIEW ── -->
+  <div id="view-agenda" class="view-content" style="display:none;">
+    <div class="section-hdr" style="margin-bottom:14px;">
+      <span class="section-title">Prossimi 30 giorni</span>
+      <span id="badge-agenda" class="section-badge">0</span>
+    </div>
+    <div id="list-agenda"><div class="loading-state">Caricamento…</div></div>
+  </div>
+
+  <!-- ── WEEK VIEW ── -->
+  <div id="view-week" class="view-content" style="display:none;">
+    <div class="week-nav">
+      <button class="week-nav-btn" onclick="shiftWeek(-1)">← Precedente</button>
+      <span class="week-range-label" id="week-range-label"></span>
+      <button class="week-nav-btn" onclick="shiftWeek(1)">Successiva →</button>
+    </div>
+    <div id="week-grid" class="week-grid"></div>
+  </div>
+
+  <!-- ── MONTH VIEW ── -->
+  <div id="view-month" class="view-content" style="display:none;">
+    <div class="week-nav">
+      <button class="week-nav-btn" onclick="shiftMonth(-1)">← Precedente</button>
+      <span class="week-range-label" id="month-range-label"></span>
+      <button class="week-nav-btn" onclick="shiftMonth(1)">Successiva →</button>
+    </div>
+    <div id="month-grid" class="month-grid"></div>
+  </div>
+
+</main>
+
+<!-- ── FAB ── -->
+<button class="fab" onclick="openCreateModal()" aria-label="Nuovo evento">+</button>
+<span class="fab-label">Nuovo evento</span>
+
+<!-- ── EVENT MODAL ── -->
+<div id="event-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+  <div class="modal">
+    <div class="modal-hdr">
+      <span id="modal-title" class="modal-title">Nuovo evento</span>
+      <button class="modal-close" onclick="closeModal()" aria-label="Chiudi">✕</button>
+    </div>
+    <div class="modal-body" id="modal-body">
+      <!-- injected by JS -->
+    </div>
+    <div class="modal-footer" id="modal-footer">
+      <!-- injected by JS -->
+    </div>
+  </div>
+</div>
+
+<!-- ── CONFIRM DIALOG ── -->
+<div id="confirm-overlay" class="confirm-overlay" role="alertdialog">
+  <div class="confirm-box">
+    <div class="confirm-title" id="confirm-title">Conferma</div>
+    <div class="confirm-msg" id="confirm-msg"></div>
+    <div class="confirm-actions">
+      <button class="btn btn-secondary" onclick="closeConfirm()">Annulla</button>
+      <button class="btn btn-danger" id="confirm-ok-btn" onclick="doConfirm()">Conferma</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── SCRIPTS ── -->
+<script src="js/ws-auth.js"></script>
+<script>
+// =========================================================================
+// CONFIG & CONSTANTS
+// =========================================================================
+const CALENDAR_TZ = 'Europe/Zurich';
+
+const EVENT_TYPES = {
+    reservation:       { icon: '🪑', label: 'Prenotazione' },
+    group_reservation: { icon: '👥', label: 'Prenotazione gruppo' },
+    staff_meeting:     { icon: '💬', label: 'Riunione staff' },
+    staff_shift_note:  { icon: '📋', label: 'Nota turno' },
+    supplier_delivery: { icon: '🚚', label: 'Consegna fornitore' },
+    maintenance:       { icon: '🔧', label: 'Manutenzione' },
+    inventory:         { icon: '📦', label: 'Inventario' },
+    haccp_control:     { icon: '🌡️', label: 'Controllo HACCP' },
+    training:          { icon: '📚', label: 'Formazione' },
+    private_event:     { icon: '✨', label: 'Evento privato' },
+    birthday:          { icon: '🎂', label: 'Compleanno' },
+    anniversary:       { icon: '💐', label: 'Anniversario' },
+    payment_deadline:  { icon: '💳', label: 'Scadenza pagamento' },
+    reminder:          { icon: '🔔', label: 'Promemoria' },
+    other:             { icon: '📌', label: 'Altro' },
+};
+
+const PRIORITY_LABELS = { low:'Bassa', normal:'Normale', high:'Alta', urgent:'Urgente' };
+const STATUS_LABELS   = { scheduled:'Pianificato', confirmed:'Confermato',
+                          in_progress:'In corso', completed:'Completato', cancelled:'Annullato' };
+const VISIBILITY_LABELS = { all_company:'Tutta l\'azienda',
+                            selected_departments:'Reparti selezionati',
+                            managers_only:'Solo manager' };
+const REMINDER_OPTIONS = [
+    { val:0,   label:'Al momento dell\'evento' },
+    { val:5,   label:'5 minuti prima' },
+    { val:15,  label:'15 minuti prima' },
+    { val:30,  label:'30 minuti prima' },
+    { val:60,  label:'1 ora prima' },
+    { val:120, label:'2 ore prima' },
+    { val:1440,label:'1 giorno prima' },
+];
+
+const IT_MONTHS = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
+                   'Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
+const IT_DAYS_SHORT = ['Dom','Lun','Mar','Mer','Gio','Ven','Sab'];
+const IT_DAYS_LONG  = ['Domenica','Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato'];
+
+// =========================================================================
+// STATE
+// =========================================================================
+let currentView = 'today';
+let currentEventId = null; // editing
+let weekOffset = 0;  // weeks from current
+let monthYear  = null; // {y, m}
+let departments = [];
+let upcomingData = null;
+let notifDrawerOpen = false;
+let ttsEnabled = false;
+let ttsSpoken = new Set();
+let confirmCallback = null;
+
+// =========================================================================
+// UTILS
+// =========================================================================
+function todayStr() {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: CALENDAR_TZ }).format(new Date());
+}
+function nowMs() { return Date.now(); }
+
+function formatDate(dateStr) {
+    const [y,m,d] = dateStr.split('-').map(Number);
+    const dow = new Date(Date.UTC(y,m-1,d,12,0,0)).getUTCDay();
+    return `${IT_DAYS_LONG[dow]}, ${d} ${IT_MONTHS[m-1]} ${y}`;
+}
+
+function formatDateShort(dateStr) {
+    const [y,m,d] = dateStr.split('-').map(Number);
+    return `${d} ${IT_MONTHS[m-1].slice(0,3)}`;
+}
+
+function addDays(dateStr, n) {
+    const d = new Date(dateStr + 'T12:00:00Z');
+    d.setUTCDate(d.getUTCDate() + n);
+    return d.toISOString().slice(0, 10);
+}
+
+function getMondayOfWeek(dateStr) {
+    const [y,m,d] = dateStr.split('-').map(Number);
+    const dt = new Date(Date.UTC(y,m-1,d,12));
+    const dow = dt.getUTCDay();
+    const diff = (dow === 0) ? -6 : 1 - dow;
+    dt.setUTCDate(dt.getUTCDate() + diff);
+    return dt.toISOString().slice(0, 10);
+}
+
+function localToUTCMs(dateStr, timeStr) {
+    const isoLocal = `${dateStr}T${timeStr || '00:00'}:00`;
+    for (const off of ['+02:00', '+01:00']) {
+        const c = new Date(isoLocal + off);
+        const repr = new Intl.DateTimeFormat('en-CA', { timeZone: CALENDAR_TZ }).format(c);
+        if (repr === dateStr) return c.getTime();
+    }
+    return new Date(isoLocal).getTime();
+}
+
+function isOverdue(event) {
+    if (['completed','cancelled'].includes(event.status)) return false;
+    const startMs = localToUTCMs(event.date, event.startTime || '00:00');
+    return startMs < nowMs();
+}
+
+function apiHeaders() {
+    const token = WsAuth.getStoredToken();
+    return { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
+}
+
+function showError(msg) {
+    const el = document.getElementById('error-area');
+    el.innerHTML = `<div class="error-state">⚠️ ${msg}</div>`;
+    setTimeout(() => { el.innerHTML = ''; }, 6000);
+}
+
+// =========================================================================
+// INIT
+// =========================================================================
+document.addEventListener('DOMContentLoaded', () => {
+    const stored = localStorage.getItem('userCompany');
+    if (stored) {
+        document.getElementById('hdr-company').textContent = stored;
+    }
+
+    // Show TTS bar only after user gesture (browsers block autoplay)
+    document.getElementById('tts-bar').style.display = 'flex';
+    const ttsStored = localStorage.getItem('calendar_tts') === '1';
+    document.getElementById('tts-toggle-input').checked = ttsStored;
+    ttsEnabled = ttsStored;
+    document.getElementById('tts-status').textContent = ttsEnabled ? 'Attivato' : 'Disattivato';
+
+    const today = todayStr();
+    monthYear = { y: parseInt(today.slice(0,4)), m: parseInt(today.slice(5,7)) };
+
+    loadDepartments();
+    loadUpcoming();
+    loadNotifications();
+
+    // Auto-refresh upcoming every 2 minutes
+    setInterval(loadUpcoming, 120000);
+    setInterval(loadNotifications, 60000);
+});
+
+// =========================================================================
+// DEPARTMENTS
+// =========================================================================
+async function loadDepartments() {
+    try {
+        const res = await fetch('/api/departments', { headers: apiHeaders() });
+        const data = await res.json();
+        if (data.success) departments = (data.departments || []).filter(d => d.active);
+    } catch(e) { console.warn('Could not load departments', e); }
+}
+
+// =========================================================================
+// LOAD DATA
+// =========================================================================
+async function loadUpcoming() {
+    try {
+        const res = await fetch('/api/calendar/events/upcoming', { headers: apiHeaders() });
+        if (res.status === 401) { window.location.href = '/index.html'; return; }
+        const data = await res.json();
+        if (!data.success) { showError(data.error || 'Errore nel caricamento'); return; }
+        upcomingData = data;
+        renderStats(data);
+        if (currentView === 'today') renderTodayView(data);
+        checkTTS(data);
+    } catch(e) { showError('Errore di rete. Riprova.'); }
+}
+
+async function loadAgenda() {
+    const today = todayStr();
+    const end   = addDays(today, 30);
+    try {
+        const res = await fetch(`/api/calendar/events?start=${today}&end=${end}`, { headers: apiHeaders() });
+        const data = await res.json();
+        if (!data.success) { showError(data.error); return; }
+        renderAgendaView(data.events || []);
+    } catch(e) { showError('Errore di rete.'); }
+}
+
+async function loadWeek() {
+    const today = todayStr();
+    const monday = getMondayOfWeek(addDays(today, weekOffset * 7));
+    const sunday = addDays(monday, 6);
+    try {
+        const res = await fetch(`/api/calendar/events?start=${monday}&end=${sunday}`, { headers: apiHeaders() });
+        const data = await res.json();
+        if (!data.success) { showError(data.error); return; }
+        renderWeekView(data.events || [], monday, sunday);
+    } catch(e) { showError('Errore di rete.'); }
+}
+
+async function loadMonth() {
+    const firstDay = `${monthYear.y}-${String(monthYear.m).padStart(2,'0')}-01`;
+    const lastDay  = new Date(monthYear.y, monthYear.m, 0);
+    const endStr   = `${monthYear.y}-${String(monthYear.m).padStart(2,'0')}-${String(lastDay.getDate()).padStart(2,'0')}`;
+    // Extend a bit for rendering
+    const rangeStart = getMondayOfWeek(firstDay);
+    const rangeEnd   = addDays(endStr, 6);
+    try {
+        const res = await fetch(`/api/calendar/events?start=${rangeStart}&end=${rangeEnd}`, { headers: apiHeaders() });
+        const data = await res.json();
+        if (!data.success) { showError(data.error); return; }
+        renderMonthView(data.events || [], firstDay, endStr);
+    } catch(e) { showError('Errore di rete.'); }
+}
+
+// =========================================================================
+// STATS
+// =========================================================================
+function renderStats(data) {
+    document.getElementById('stat-today').textContent   = data.today ? data.today.length : 0;
+    document.getElementById('stat-2h').textContent      = data.next2h ? data.next2h.length : 0;
+    document.getElementById('stat-urgent').textContent  = data.urgent ? data.urgent.length : 0;
+}
+
+// =========================================================================
+// VIEW SWITCHING
+// =========================================================================
+function setView(view) {
+    currentView = view;
+    document.querySelectorAll('.view-content').forEach(el => el.style.display = 'none');
+    document.querySelectorAll('.view-tab').forEach(el =>
+        el.classList.toggle('active', el.dataset.view === view));
+
+    document.getElementById(`view-${view}`).style.display = '';
+
+    if (view === 'today' && upcomingData) renderTodayView(upcomingData);
+    if (view === 'agenda') loadAgenda();
+    if (view === 'week')   loadWeek();
+    if (view === 'month')  loadMonth();
+}
+
+// =========================================================================
+// TODAY VIEW
+// =========================================================================
+function renderTodayView(data) {
+    const today = data.today_date || todayStr();
+    document.getElementById('today-title').textContent = formatDate(today);
+
+    const todayEvents  = data.today || [];
+    const next2h       = data.next2h || [];
+    const urgent       = data.urgent || [];
+    const completed    = data.completed_today || [];
+
+    // Next 2h
+    document.getElementById('badge-2h').textContent = next2h.length;
+    renderEventList('list-2h', next2h, 'Nessun evento nelle prossime 2 ore.');
+
+    // Urgent / overdue
+    const overdueEvents = todayEvents.filter(e => e._overdue);
+    const urgentAll = [...overdueEvents, ...urgent.filter(e => !overdueEvents.find(o => o.id === e.id))];
+    document.getElementById('badge-urgent').textContent = urgentAll.length;
+    renderEventList('list-urgent', urgentAll, 'Nessun evento urgente o in ritardo.');
+
+    // All today
+    document.getElementById('badge-today').textContent = todayEvents.length;
+    renderEventList('list-today', todayEvents, 'Nessun evento programmato per oggi.',
+        e => e._overdue ? 'overdue' : '');
+
+    // Completed
+    document.getElementById('badge-completed').textContent = completed.length;
+    renderEventList('list-completed', completed, 'Nessun evento completato oggi.');
+}
+
+// =========================================================================
+// AGENDA VIEW
+// =========================================================================
+function renderAgendaView(events) {
+    document.getElementById('badge-agenda').textContent = events.length;
+    if (events.length === 0) {
+        document.getElementById('list-agenda').innerHTML =
+            '<div class="empty-state"><div class="empty-icon">📅</div>Nessun evento nei prossimi 30 giorni.</div>';
+        return;
+    }
+    // Group by date
+    const byDate = {};
+    for (const ev of events) {
+        if (!byDate[ev.date]) byDate[ev.date] = [];
+        byDate[ev.date].push(ev);
+    }
+    let html = '';
+    for (const date of Object.keys(byDate).sort()) {
+        html += `<div style="margin-bottom:6px;margin-top:16px;">
+          <div class="section-hdr"><span class="section-title">${formatDate(date)}</span>
+          <span class="section-badge">${byDate[date].length}</span></div></div>`;
+        html += byDate[date].map(ev => renderEventCardHTML(ev)).join('');
+    }
+    document.getElementById('list-agenda').innerHTML = html;
+}
+
+// =========================================================================
+// WEEK VIEW
+// =========================================================================
+function shiftWeek(delta) { weekOffset += delta; loadWeek(); }
+
+function renderWeekView(events, monday, sunday) {
+    const label_start = formatDateShort(monday);
+    const label_end   = formatDateShort(sunday);
+    document.getElementById('week-range-label').textContent = `${label_start} – ${label_end}`;
+
+    const today = todayStr();
+    const grid = document.getElementById('week-grid');
+    let html = '';
+
+    for (let i = 0; i < 7; i++) {
+        const dayStr = addDays(monday, i);
+        const [y,m,d] = dayStr.split('-').map(Number);
+        const isToday = dayStr === today;
+        const dayEvents = events.filter(e => e.date === dayStr);
+
+        html += `<div class="week-col${isToday?' today-col':''}">
+          <div class="week-day-label">${IT_DAYS_SHORT[(i+1)%7]}</div>
+          <div class="week-day-num${isToday?' today-num':''}">${d}</div>`;
+        if (dayEvents.length === 0) {
+            html += `<div style="font-size:11px;color:var(--muted);">–</div>`;
+        }
+        for (const ev of dayEvents) {
+            const tc = EVENT_TYPES[ev.eventType];
+            const icon = tc ? tc.icon : '📌';
+            html += `<div class="week-event-pill" onclick='openDetailModal(${JSON.stringify(ev)})' title="${esc(ev.title)}">${icon} ${esc(ev.startTime||'')} ${esc(ev.title)}</div>`;
+        }
+        html += `</div>`;
+    }
+    grid.innerHTML = html;
+}
+
+// =========================================================================
+// MONTH VIEW
+// =========================================================================
+function shiftMonth(delta) {
+    monthYear.m += delta;
+    if (monthYear.m > 12) { monthYear.m = 1; monthYear.y++; }
+    if (monthYear.m < 1)  { monthYear.m = 12; monthYear.y--; }
+    loadMonth();
+}
+
+function renderMonthView(events, firstDay, lastDay) {
+    document.getElementById('month-range-label').textContent =
+        `${IT_MONTHS[monthYear.m - 1]} ${monthYear.y}`;
+
+    const today = todayStr();
+    const monday = getMondayOfWeek(firstDay);
+    const grid = document.getElementById('month-grid');
+
+    let html = IT_DAYS_SHORT.map(d => `<div class="month-day-header">${d}</div>`).join('');
+    // Rearrange to start Monday
+    html = IT_DAYS_SHORT.slice(1).concat(IT_DAYS_SHORT[0])
+        .map(d => `<div class="month-day-header">${d}</div>`).join('');
+
+    // Figure out how many cells
+    const startDate = monday;
+    // Render 6 weeks max
+    for (let i = 0; i < 42; i++) {
+        const dayStr = addDays(startDate, i);
+        const [y,m,d] = dayStr.split('-').map(Number);
+        const inMonth = m === monthYear.m && y === monthYear.y;
+        const isToday = dayStr === today;
+        const dayEvents = events.filter(e => e.date === dayStr);
+
+        html += `<div class="month-cell${!inMonth?' other-month':''}${isToday?' today-cell':''}"
+                  onclick="onMonthDayClick('${dayStr}')">
+          <div class="month-date-num">${d}</div>`;
+        for (const ev of dayEvents.slice(0, 3)) {
+            const tc = EVENT_TYPES[ev.eventType];
+            html += `<div class="month-event-dot" onclick='event.stopPropagation();openDetailModal(${JSON.stringify(ev)})'
+              title="${esc(ev.title)}">${tc?tc.icon:'📌'} ${esc(ev.title)}</div>`;
+        }
+        if (dayEvents.length > 3) {
+            html += `<div style="font-size:9px;color:var(--muted);">+${dayEvents.length-3} altri</div>`;
+        }
+        html += `</div>`;
+    }
+    grid.innerHTML = html;
+}
+
+function onMonthDayClick(dateStr) {
+    openCreateModal(dateStr);
+}
+
+// =========================================================================
+// EVENT CARD RENDERING
+// =========================================================================
+function renderEventList(containerId, events, emptyMsg, extraClassFn) {
+    const el = document.getElementById(containerId);
+    if (!el) return;
+    if (events.length === 0) {
+        el.innerHTML = `<div class="empty-state">${emptyMsg}</div>`;
+        return;
+    }
+    el.innerHTML = events.map(ev => renderEventCardHTML(ev, extraClassFn)).join('');
+}
+
+function renderEventCardHTML(ev, extraClassFn) {
+    const tc = EVENT_TYPES[ev.eventType] || { icon: '📌', label: ev.eventType };
+    const overdue = ev._overdue || isOverdue(ev);
+    let extraClass = '';
+    if (extraClassFn) extraClass = extraClassFn(ev) || '';
+    if (overdue && !['completed','cancelled'].includes(ev.status)) extraClass += ' overdue';
+    if (ev.status === 'completed') extraClass += ' completed';
+    if (ev.priority === 'urgent' || ev.priority === 'high') extraClass += ` priority-${ev.priority}`;
+
+    const timeStr = ev.allDay ? 'Tutto il giorno' : (ev.startTime ? ev.startTime + (ev.endTime ? '–'+ev.endTime : '') : '');
+    const guestStr = ev.guestCount ? `👥 ${ev.guestCount}` : '';
+    const tableStr = ev.tableNumber ? `🪑 Tavolo ${ev.tableNumber}` : '';
+    const locStr   = ev.location ? `📍 ${ev.location}` : '';
+    const custStr  = ev.customerName ? `👤 ${ev.customerName}` : '';
+
+    const deptNames = departments.filter(d => (ev.departmentIds||[]).includes(d.id)).map(d => d.name);
+    const deptStr   = deptNames.length ? `🏢 ${deptNames.join(', ')}` : '';
+
+    const overdueTag = overdue && !['completed','cancelled'].includes(ev.status)
+        ? `<span class="event-badge badge-overdue">In ritardo</span>` : '';
+
+    const canComplete = !['completed','cancelled'].includes(ev.status);
+    const completeBtnHtml = canComplete
+        ? `<button class="ev-btn complete-btn" onclick="event.stopPropagation();quickComplete('${ev.id}','${ev.baseId||''}')" title="Segna completato">✓ Fatto</button>` : '';
+
+    const evJson = JSON.stringify(ev).replace(/'/g, '&#39;');
+
+    return `<div class="event-card${extraClass}" onclick='openDetailModal(${evJson})'>
+      <div class="event-type-icon" title="${tc.label}">${tc.icon}</div>
+      <div class="event-main">
+        <div class="event-time-row">
+          ${timeStr ? `<span class="event-time">${esc(timeStr)}</span>` : ''}
+          <span class="event-badge badge-priority-${ev.priority}">${PRIORITY_LABELS[ev.priority]||ev.priority}</span>
+          <span class="event-badge badge-status-${ev.status}">${STATUS_LABELS[ev.status]||ev.status}</span>
+          ${overdueTag}
+        </div>
+        <div class="event-title">${esc(ev.title)}</div>
+        <div class="event-meta">
+          ${guestStr?`<span>${guestStr}</span>`:''}
+          ${tableStr?`<span>${tableStr}</span>`:''}
+          ${locStr?`<span>${locStr}</span>`:''}
+          ${custStr?`<span>${custStr}</span>`:''}
+          ${deptStr?`<span>${deptStr}</span>`:''}
+        </div>
+      </div>
+      <div class="event-actions">
+        ${completeBtnHtml}
+      </div>
+    </div>`;
+}
+
+function esc(str) {
+    return String(str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// =========================================================================
+// QUICK COMPLETE
+// =========================================================================
+async function quickComplete(eventId, baseId) {
+    const id = baseId || eventId;
+    try {
+        const res = await fetch(`/api/calendar/events/${id}/status`, {
+            method:'PATCH', headers: apiHeaders(),
+            body: JSON.stringify({ status: 'completed' })
+        });
+        const data = await res.json();
+        if (!data.success) { showError(data.error); return; }
+        await loadUpcoming();
+        if (currentView === 'agenda') loadAgenda();
+    } catch(e) { showError('Errore di rete.'); }
+}
+
+// =========================================================================
+// DETAIL MODAL
+// =========================================================================
+function openDetailModal(ev) {
+    document.getElementById('modal-title').textContent = 'Dettaglio evento';
+    const tc = EVENT_TYPES[ev.eventType] || { icon: '📌', label: ev.eventType };
+    const deptNames = departments.filter(d => (ev.departmentIds||[]).includes(d.id)).map(d => d.name);
+    const overdue = isOverdue(ev);
+    const canComplete = !['completed','cancelled'].includes(ev.status);
+    const baseId = ev.baseId || ev.id;
+    const reminderStr = (ev.reminders||[]).map(r => {
+        const opt = REMINDER_OPTIONS.find(o => o.val === r.offsetMinutes);
+        return opt ? opt.label : `${r.offsetMinutes} min prima`;
+    }).join(', ');
+
+    const recTypeLabels = { none:'Nessuna', daily:'Giornaliera', weekly:'Settimanale',
+        monthly:'Mensile', selected_weekdays:'Giorni selezionati' };
+    const recStr = ev.recurrence && ev.recurrence.type !== 'none'
+        ? recTypeLabels[ev.recurrence.type] || ev.recurrence.type
+        : 'Nessuna';
+
+    let html = `
+      <div class="detail-hdr">
+        <div class="detail-icon">${tc.icon}</div>
+        <div>
+          <div class="detail-title">${esc(ev.title)}</div>
+          <div class="detail-badges">
+            <span class="event-badge badge-priority-${ev.priority}">${PRIORITY_LABELS[ev.priority]||ev.priority}</span>
+            <span class="event-badge badge-status-${ev.status}">${STATUS_LABELS[ev.status]||ev.status}</span>
+            ${overdue && !['completed','cancelled'].includes(ev.status) ? '<span class="event-badge badge-overdue">In ritardo</span>' : ''}
+          </div>
+        </div>
+      </div>
+      <div class="detail-grid">
+        <div class="detail-field"><div class="detail-field-label">Tipo</div><div class="detail-field-value">${tc.icon} ${tc.label}</div></div>
+        <div class="detail-field"><div class="detail-field-label">Data</div><div class="detail-field-value">${formatDate(ev.date)}</div></div>
+        <div class="detail-field"><div class="detail-field-label">Orario</div><div class="detail-field-value">${ev.allDay ? 'Tutto il giorno' : (ev.startTime||'–') + (ev.endTime ? ' → '+ev.endTime : '')}</div></div>
+        <div class="detail-field"><div class="detail-field-label">Visibilità</div><div class="detail-field-value">${VISIBILITY_LABELS[ev.visibility]||ev.visibility}</div></div>
+      </div>`;
+
+    if (ev.description) {
+        html += `<div class="detail-section"><div class="detail-field">
+          <div class="detail-field-label">Note operative</div>
+          <div class="detail-field-value" style="white-space:pre-line;">${esc(ev.description)}</div>
+        </div></div>`;
+    }
+
+    const hasContact = ev.customerName||ev.contactName||ev.phone||ev.guestCount||ev.tableNumber||ev.location;
+    if (hasContact) {
+        html += `<div class="detail-section"><div class="detail-grid">
+          ${ev.customerName ? `<div class="detail-field"><div class="detail-field-label">Cliente/Azienda</div><div class="detail-field-value">${esc(ev.customerName)}</div></div>` : ''}
+          ${ev.contactName  ? `<div class="detail-field"><div class="detail-field-label">Referente</div><div class="detail-field-value">${esc(ev.contactName)}</div></div>` : ''}
+          ${ev.phone        ? `<div class="detail-field"><div class="detail-field-label">Telefono</div><div class="detail-field-value"><a href="tel:${esc(ev.phone)}" style="color:var(--accent2);">${esc(ev.phone)}</a></div></div>` : ''}
+          ${ev.guestCount   ? `<div class="detail-field"><div class="detail-field-label">Coperti</div><div class="detail-field-value">${ev.guestCount}</div></div>` : ''}
+          ${ev.tableNumber  ? `<div class="detail-field"><div class="detail-field-label">Tavolo</div><div class="detail-field-value">${esc(ev.tableNumber)}</div></div>` : ''}
+          ${ev.location     ? `<div class="detail-field"><div class="detail-field-label">Luogo</div><div class="detail-field-value">${esc(ev.location)}</div></div>` : ''}
+        </div></div>`;
+    }
+
+    const hasNotes = ev.allergyNotes||ev.dietaryNotes||ev.preparationNotes;
+    if (hasNotes) {
+        html += `<div class="detail-section">
+          ${ev.allergyNotes     ? `<div class="detail-field"><div class="detail-field-label">⚠️ Allergie</div><div class="detail-field-value" style="color:var(--danger);">${esc(ev.allergyNotes)}</div></div>` : ''}
+          ${ev.dietaryNotes     ? `<div class="detail-field"><div class="detail-field-label">🥗 Diete</div><div class="detail-field-value">${esc(ev.dietaryNotes)}</div></div>` : ''}
+          ${ev.preparationNotes ? `<div class="detail-field"><div class="detail-field-label">👨‍🍳 Preparazione</div><div class="detail-field-value" style="white-space:pre-line;">${esc(ev.preparationNotes)}</div></div>` : ''}
+        </div>`;
+    }
+
+    if (deptNames.length) {
+        html += `<div class="detail-section"><div class="detail-field">
+          <div class="detail-field-label">Reparti</div>
+          <div class="detail-field-value">${deptNames.join(', ')}</div>
+        </div></div>`;
+    }
+
+    if (reminderStr) {
+        html += `<div class="detail-section"><div class="detail-field">
+          <div class="detail-field-label">🔔 Promemoria</div>
+          <div class="detail-field-value">${esc(reminderStr)}</div>
+        </div></div>`;
+    }
+
+    if (recStr !== 'Nessuna') {
+        html += `<div class="detail-section"><div class="detail-field">
+          <div class="detail-field-label">🔁 Ricorrenza</div>
+          <div class="detail-field-value">${esc(recStr)}${ev.recurrence.endDate ? ' fino al '+formatDateShort(ev.recurrence.endDate) : ''}</div>
+        </div></div>`;
+    }
+
+    document.getElementById('modal-body').innerHTML = html;
+
+    let footerHtml = `<button class="btn btn-secondary" onclick="closeModal()">Chiudi</button>`;
+
+    if (canComplete) {
+        footerHtml += `<button class="btn btn-ok" onclick="completeFromDetail('${baseId}')">✓ Segna completato</button>`;
+    }
+    if (!['completed','cancelled'].includes(ev.status)) {
+        footerHtml += `<button class="btn btn-warn" onclick="cancelFromDetail('${baseId}')">✕ Annulla evento</button>`;
+    }
+    footerHtml += `<button class="btn btn-secondary" onclick="duplicateEvent('${baseId}')">⧉ Duplica</button>`;
+    footerHtml += `<button class="btn btn-primary" onclick="openEditModal('${baseId}')">✏️ Modifica</button>`;
+    footerHtml += `<button class="btn btn-danger" onclick="askDeleteEvent('${baseId}')">🗑️ Elimina</button>`;
+
+    document.getElementById('modal-footer').innerHTML = footerHtml;
+    document.getElementById('event-modal').classList.add('open');
+}
+
+async function completeFromDetail(id) {
+    await quickComplete(id, '');
+    closeModal();
+}
+async function cancelFromDetail(id) {
+    try {
+        const res = await fetch(`/api/calendar/events/${id}/status`, {
+            method:'PATCH', headers: apiHeaders(), body: JSON.stringify({ status:'cancelled' })
+        });
+        const data = await res.json();
+        if (!data.success) { showError(data.error); return; }
+        closeModal(); await loadUpcoming();
+    } catch(e) { showError('Errore di rete.'); }
+}
+async function duplicateEvent(id) {
+    try {
+        const res = await fetch(`/api/calendar/events/${id}/duplicate`, { method:'POST', headers: apiHeaders() });
+        const data = await res.json();
+        if (!data.success) { showError(data.error); return; }
+        closeModal(); await loadUpcoming();
+        if (currentView !== 'today') setView(currentView);
+    } catch(e) { showError('Errore di rete.'); }
+}
+function askDeleteEvent(id) {
+    showConfirm('Elimina evento', 'Sei sicuro di voler eliminare questo evento? L\'operazione non può essere annullata.', async () => {
+        try {
+            const res = await fetch(`/api/calendar/events/${id}`, { method:'DELETE', headers: apiHeaders() });
+            const data = await res.json();
+            if (!data.success) { showError(data.error); return; }
+            closeModal(); await loadUpcoming();
+            if (currentView !== 'today') setView(currentView);
+        } catch(e) { showError('Errore di rete.'); }
+    }, 'Elimina');
+}
+
+// =========================================================================
+// EDIT MODAL — fetch fresh event then open form
+// =========================================================================
+async function openEditModal(id) {
+    try {
+        const res = await fetch(`/api/calendar/events/${id}`, { headers: apiHeaders() });
+        const data = await res.json();
+        if (!data.success) { showError(data.error); return; }
+        currentEventId = id;
+        renderEventForm(data.event);
+    } catch(e) { showError('Errore di rete.'); }
+}
+
+// =========================================================================
+// CREATE MODAL
+// =========================================================================
+function openCreateModal(prefillDate) {
+    currentEventId = null;
+    const today = todayStr();
+    renderEventForm({ date: prefillDate || today, eventType: 'reservation',
+        priority:'normal', status:'scheduled', visibility:'all_company',
+        reminders:[], recurrence:{ type:'none', interval:1, weekdays:[], endDate:null } });
+}
+
+// =========================================================================
+// EVENT FORM
+// =========================================================================
+function renderEventForm(ev) {
+    const isEdit = !!currentEventId;
+    document.getElementById('modal-title').textContent = isEdit ? 'Modifica evento' : 'Nuovo evento';
+
+    // Build department checkboxes
+    const deptChecks = departments.map(d => {
+        const checked = (ev.departmentIds||[]).includes(d.id);
+        return `<label class="dept-check-pill${checked?' checked':''}" onclick="toggleDeptPill(this)">
+          <input type="checkbox" name="deptId" value="${d.id}"${checked?' checked':''} style="display:none;">
+          ${esc(d.name)}
+        </label>`;
+    }).join('');
+
+    // Build reminder rows
+    const remHtml = buildReminderRows(ev.reminders || []);
+
+    // Event type options
+    const etOpts = Object.entries(EVENT_TYPES).map(([k,v]) =>
+        `<option value="${k}"${ev.eventType===k?' selected':''}>${v.icon} ${v.label}</option>`).join('');
+
+    const prioOpts = Object.entries(PRIORITY_LABELS).map(([k,v]) =>
+        `<option value="${k}"${ev.priority===k?' selected':''}>${v}</option>`).join('');
+    const statOpts = Object.entries(STATUS_LABELS).map(([k,v]) =>
+        `<option value="${k}"${ev.status===k?' selected':''}>${v}</option>`).join('');
+    const visOpts  = Object.entries(VISIBILITY_LABELS).map(([k,v]) =>
+        `<option value="${k}"${ev.visibility===k?' selected':''}>${v}</option>`).join('');
+
+    const recurType = ev.recurrence ? ev.recurrence.type || 'none' : 'none';
+    const recurEndDate = ev.recurrence ? ev.recurrence.endDate || '' : '';
+
+    const html = `
+    <div class="form-tabs">
+      <button type="button" class="form-tab active" onclick="switchFormTab(this,'tab-base')">Principale</button>
+      <button type="button" class="form-tab" onclick="switchFormTab(this,'tab-contact')">Contatto</button>
+      <button type="button" class="form-tab" onclick="switchFormTab(this,'tab-ops')">Operativo</button>
+      <button type="button" class="form-tab" onclick="switchFormTab(this,'tab-remind')">Promemoria</button>
+    </div>
+
+    <!-- TAB: Base -->
+    <div id="tab-base" class="form-panel active">
+      <div class="field">
+        <label>Titolo <span class="req">*</span></label>
+        <input type="text" id="f-title" value="${esc(ev.title||'')}" placeholder="Es. Prenotazione Rossi" required>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>Tipo evento <span class="req">*</span></label>
+          <select id="f-type">${etOpts}</select>
+        </div>
+        <div class="field">
+          <label>Priorità</label>
+          <select id="f-priority">${prioOpts}</select>
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>Data <span class="req">*</span></label>
+          <input type="date" id="f-date" value="${esc(ev.date||'')}" required>
+        </div>
+        <div class="field">
+          <label>Stato</label>
+          <select id="f-status">${statOpts}</select>
+        </div>
+      </div>
+      <div class="field-check">
+        <input type="checkbox" id="f-allday"${ev.allDay?' checked':''} onchange="toggleAllDay(this.checked)">
+        <label for="f-allday">Tutto il giorno</label>
+      </div>
+      <div id="time-fields" class="field-row"${ev.allDay?' style="display:none;"':''}>
+        <div class="field">
+          <label>Ora inizio</label>
+          <input type="time" id="f-start-time" value="${esc(ev.startTime||'12:00')}">
+        </div>
+        <div class="field">
+          <label>Ora fine (opz.)</label>
+          <input type="time" id="f-end-time" value="${esc(ev.endTime||'')}">
+        </div>
+      </div>
+      <div class="field">
+        <label>Luogo (opz.)</label>
+        <input type="text" id="f-location" value="${esc(ev.location||'')}" placeholder="Es. Sala privata, Cucina...">
+      </div>
+      <div class="field">
+        <label>Visibilità</label>
+        <select id="f-visibility">${visOpts}</select>
+      </div>
+      ${departments.length ? `<div class="field"><label>Reparti coinvolti</label><div class="dept-checks">${deptChecks}</div></div>` : ''}
+      <div class="field">
+        <label>Note operative</label>
+        <textarea id="f-desc" placeholder="Istruzioni, dettagli, preparazioni…">${esc(ev.description||'')}</textarea>
+      </div>
+    </div>
+
+    <!-- TAB: Contatto -->
+    <div id="tab-contact" class="form-panel">
+      <div class="field-row">
+        <div class="field">
+          <label>Coperti / Ospiti</label>
+          <input type="number" id="f-guests" value="${ev.guestCount||''}" min="1" max="9999" placeholder="Numero coperti">
+        </div>
+        <div class="field">
+          <label>Numero tavolo</label>
+          <input type="text" id="f-table" value="${esc(ev.tableNumber||'')}" placeholder="Es. 12, A3...">
+        </div>
+      </div>
+      <div class="field">
+        <label>Nome cliente / azienda</label>
+        <input type="text" id="f-customer" value="${esc(ev.customerName||'')}" placeholder="Cognome o nome azienda">
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>Referente</label>
+          <input type="text" id="f-contact" value="${esc(ev.contactName||'')}" placeholder="Nome contatto">
+        </div>
+        <div class="field">
+          <label>Telefono</label>
+          <input type="tel" id="f-phone" value="${esc(ev.phone||'')}" placeholder="+39 ...">
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB: Operativo -->
+    <div id="tab-ops" class="form-panel">
+      <div class="field">
+        <label>⚠️ Allergie / Intolleranze</label>
+        <textarea id="f-allergy" placeholder="Es. glutine, lattosio, frutta secca…">${esc(ev.allergyNotes||'')}</textarea>
+      </div>
+      <div class="field">
+        <label>🥗 Diete / Preferenze alimentari</label>
+        <textarea id="f-dietary" placeholder="Es. vegano, kosher, halal…">${esc(ev.dietaryNotes||'')}</textarea>
+      </div>
+      <div class="field">
+        <label>👨‍🍳 Note di preparazione</label>
+        <textarea id="f-prep" placeholder="Dettagli per la cucina…">${esc(ev.preparationNotes||'')}</textarea>
+      </div>
+    </div>
+
+    <!-- TAB: Promemoria & Ricorrenza -->
+    <div id="tab-remind" class="form-panel">
+      <div class="field">
+        <label>🔔 Promemoria</label>
+        <div id="reminder-list" class="reminder-list">${remHtml}</div>
+        <button type="button" class="add-reminder-btn" onclick="addReminder()">+ Aggiungi promemoria</button>
+      </div>
+      <div class="field" style="margin-top:20px;">
+        <label>🔁 Ricorrenza</label>
+        <select id="f-recur-type" onchange="onRecurTypeChange(this.value)">
+          <option value="none"${recurType==='none'?' selected':''}>Nessuna</option>
+          <option value="daily"${recurType==='daily'?' selected':''}>Giornaliera</option>
+          <option value="weekly"${recurType==='weekly'?' selected':''}>Settimanale</option>
+          <option value="monthly"${recurType==='monthly'?' selected':''}>Mensile</option>
+          <option value="selected_weekdays"${recurType==='selected_weekdays'?' selected':''}>Giorni selezionati</option>
+        </select>
+      </div>
+      <div id="recur-extra" style="${recurType==='none'?'display:none':''}">
+        <div id="weekday-picker" class="field" style="${recurType==='selected_weekdays'?'':'display:none'}">
+          <label>Giorni della settimana</label>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            ${[['1','Lun'],['2','Mar'],['3','Mer'],['4','Gio'],['5','Ven'],['6','Sab'],['0','Dom']].map(([v,l]) => {
+              const wds = ev.recurrence ? ev.recurrence.weekdays || [] : [];
+              return `<label class="dept-check-pill${wds.includes(parseInt(v))?' checked':''}" onclick="toggleDeptPill(this)">
+                <input type="checkbox" name="weekday" value="${v}"${wds.includes(parseInt(v))?' checked':''} style="display:none;">
+                ${l}
+              </label>`;
+            }).join('')}
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>Ripeti ogni</label>
+            <input type="number" id="f-recur-interval" value="${ev.recurrence?ev.recurrence.interval||1:1}" min="1" max="52">
+          </div>
+          <div class="field">
+            <label>Fine ricorrenza (opz.)</label>
+            <input type="date" id="f-recur-end" value="${recurEndDate}">
+          </div>
+        </div>
+      </div>
+    </div>`;
+
+    document.getElementById('modal-body').innerHTML = html;
+    document.getElementById('modal-footer').innerHTML = `
+      <button class="btn btn-secondary" onclick="closeModal()">Annulla</button>
+      ${isEdit ? `<button class="btn btn-danger" onclick="askDeleteEvent('${currentEventId}')">🗑️ Elimina</button>` : ''}
+      <button class="btn btn-primary" onclick="submitEventForm()">${isEdit ? '💾 Salva modifiche' : '＋ Crea evento'}</button>`;
+
+    document.getElementById('event-modal').classList.add('open');
+    onRecurTypeChange(recurType);
+}
+
+function toggleAllDay(checked) {
+    document.getElementById('time-fields').style.display = checked ? 'none' : '';
+}
+
+function switchFormTab(btn, panelId) {
+    document.querySelectorAll('.form-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.form-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(panelId).classList.add('active');
+}
+
+function toggleDeptPill(label) {
+    const cb = label.querySelector('input[type=checkbox]');
+    // Toggle is handled by onclick before browser toggles checkbox
+    // We need to flip after browser does it (slight delay)
+    setTimeout(() => label.classList.toggle('checked', cb.checked), 0);
+}
+
+function onRecurTypeChange(val) {
+    const extra = document.getElementById('recur-extra');
+    const wdPicker = document.getElementById('weekday-picker');
+    if (val === 'none') { extra.style.display = 'none'; }
+    else {
+        extra.style.display = '';
+        wdPicker.style.display = val === 'selected_weekdays' ? '' : 'none';
+    }
+}
+
+function buildReminderRows(reminders) {
+    return reminders.map((r, i) => {
+        const opts = REMINDER_OPTIONS.map(o =>
+            `<option value="${o.val}"${r.offsetMinutes===o.val?' selected':''}>${o.label}</option>`
+        ).join('');
+        return `<div class="reminder-row">
+          <select class="reminder-select">${opts}</select>
+          <button type="button" class="reminder-remove" onclick="this.parentElement.remove()">✕</button>
+        </div>`;
+    }).join('');
+}
+
+function addReminder() {
+    const list = document.getElementById('reminder-list');
+    const opts = REMINDER_OPTIONS.map(o => `<option value="${o.val}">${o.label}</option>`).join('');
+    const row = document.createElement('div');
+    row.className = 'reminder-row';
+    row.innerHTML = `<select class="reminder-select">${opts}</select>
+      <button type="button" class="reminder-remove" onclick="this.parentElement.remove()">✕</button>`;
+    list.appendChild(row);
+}
+
+// =========================================================================
+// FORM SUBMIT
+// =========================================================================
+async function submitEventForm() {
+    const title = document.getElementById('f-title').value.trim();
+    const date  = document.getElementById('f-date').value;
+    const eventType = document.getElementById('f-type').value;
+
+    if (!title) { alert('Il titolo è obbligatorio.'); return; }
+    if (!date)  { alert('La data è obbligatoria.'); return; }
+
+    const allDay = document.getElementById('f-allday').checked;
+    const startTime = allDay ? '00:00' : (document.getElementById('f-start-time').value || '00:00');
+    const endTime   = allDay ? null : (document.getElementById('f-end-time').value || null);
+
+    // Departments
+    const deptIds = Array.from(document.querySelectorAll('input[name=deptId]:checked')).map(c => c.value);
+
+    // Reminders
+    const reminders = Array.from(document.querySelectorAll('.reminder-select')).map(s => ({
+        offsetMinutes: parseInt(s.value)
+    }));
+
+    // Recurrence
+    const recurType = document.getElementById('f-recur-type').value;
+    const recurInterval = parseInt(document.getElementById('f-recur-interval')?.value || 1);
+    const recurEnd = document.getElementById('f-recur-end')?.value || null;
+    const weekdays = Array.from(document.querySelectorAll('input[name=weekday]:checked'))
+        .map(c => parseInt(c.value));
+
+    const payload = {
+        title,
+        date,
+        eventType,
+        startTime,
+        endTime: endTime || undefined,
+        allDay,
+        priority:     document.getElementById('f-priority').value,
+        status:       document.getElementById('f-status').value,
+        visibility:   document.getElementById('f-visibility').value,
+        location:     document.getElementById('f-location').value.trim(),
+        description:  document.getElementById('f-desc').value.trim(),
+        guestCount:   parseInt(document.getElementById('f-guests').value) || null,
+        tableNumber:  document.getElementById('f-table').value.trim() || null,
+        customerName: document.getElementById('f-customer').value.trim(),
+        contactName:  document.getElementById('f-contact').value.trim(),
+        phone:        document.getElementById('f-phone').value.trim(),
+        allergyNotes: document.getElementById('f-allergy').value.trim(),
+        dietaryNotes: document.getElementById('f-dietary').value.trim(),
+        preparationNotes: document.getElementById('f-prep').value.trim(),
+        departmentIds: deptIds,
+        reminders,
+        recurrence: { type: recurType, interval: recurInterval,
+                      weekdays, endDate: recurEnd || null }
+    };
+
+    const url    = currentEventId ? `/api/calendar/events/${currentEventId}` : '/api/calendar/events';
+    const method = currentEventId ? 'PUT' : 'POST';
+
+    try {
+        const btn = document.querySelector('#modal-footer .btn-primary');
+        if (btn) { btn.disabled = true; btn.textContent = 'Salvataggio…'; }
+        const res = await fetch(url, { method, headers: apiHeaders(), body: JSON.stringify(payload) });
+        const data = await res.json();
+        if (!data.success) { showError(data.error || 'Errore nel salvataggio.'); if(btn){btn.disabled=false;btn.textContent=currentEventId?'💾 Salva modifiche':'＋ Crea evento';} return; }
+        closeModal();
+        await loadUpcoming();
+        if (currentView !== 'today') setView(currentView);
+    } catch(e) { showError('Errore di rete.'); }
+}
+
+// =========================================================================
+// CLOSE MODAL
+// =========================================================================
+function closeModal() {
+    document.getElementById('event-modal').classList.remove('open');
+    currentEventId = null;
+}
+document.getElementById('event-modal').addEventListener('click', e => {
+    if (e.target === document.getElementById('event-modal')) closeModal();
+});
+
+// =========================================================================
+// CONFIRM DIALOG
+// =========================================================================
+function showConfirm(title, msg, cb, okLabel) {
+    document.getElementById('confirm-title').textContent = title;
+    document.getElementById('confirm-msg').textContent = msg;
+    document.getElementById('confirm-ok-btn').textContent = okLabel || 'Conferma';
+    confirmCallback = cb;
+    document.getElementById('confirm-overlay').classList.add('open');
+}
+function closeConfirm() {
+    document.getElementById('confirm-overlay').classList.remove('open');
+    confirmCallback = null;
+}
+function doConfirm() {
+    closeConfirm();
+    if (confirmCallback) confirmCallback();
+}
+
+// =========================================================================
+// NOTIFICATIONS
+// =========================================================================
+async function loadNotifications() {
+    try {
+        const res = await fetch('/api/calendar/notifications', { headers: apiHeaders() });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!data.success) return;
+        const unread = data.unreadCount || 0;
+        const badge = document.getElementById('notif-badge');
+        document.getElementById('stat-notif').textContent = unread;
+        if (unread > 0) {
+            badge.textContent = unread > 9 ? '9+' : unread;
+            badge.classList.add('visible');
+        } else {
+            badge.classList.remove('visible');
+        }
+        renderNotifList(data.notifications || []);
+        if (ttsEnabled) speakNotifications(data.notifications || []);
+    } catch(e) {}
+}
+
+function renderNotifList(notifs) {
+    const el = document.getElementById('notif-list');
+    if (notifs.length === 0) {
+        el.innerHTML = '<div class="empty-state"><div class="empty-icon">🔔</div>Nessuna notifica recente.</div>';
+        return;
+    }
+    el.innerHTML = notifs.map(n => {
+        const ago = formatTimeAgo(n.generatedAt);
+        const msg = buildNotifMessage(n);
+        return `<div class="notif-item${!n.read?' unread':''}" id="notif-${n.id}">
+          <div class="notif-item-title">${esc(n.eventTitle)}</div>
+          <div class="notif-item-msg">${esc(msg)}</div>
+          <div class="notif-item-time">${ago}</div>
+          <div class="notif-item-actions">
+            ${!n.read ? `<button class="notif-item-btn" onclick="markRead('${n.id}')">Segna letta</button>` : ''}
+            <button class="notif-item-btn" onclick="dismissNotif('${n.id}')">Ignora</button>
+          </div>
+        </div>`;
+    }).join('');
+}
+
+function buildNotifMessage(n) {
+    const tc = EVENT_TYPES[n.eventType] || { icon: '📌' };
+    const when = n.eventStartTime ? `alle ${n.eventStartTime}` : '';
+    if (n.offsetMinutes === 0) return `${tc.icon} ${n.eventTitle} inizia ora ${when}`;
+    if (n.offsetMinutes < 60)  return `${tc.icon} ${n.eventTitle} inizia in ${n.offsetMinutes} min ${when}`;
+    if (n.offsetMinutes < 1440) return `${tc.icon} ${n.eventTitle} inizia in ${Math.round(n.offsetMinutes/60)}h ${when}`;
+    return `${tc.icon} ${n.eventTitle} domani ${when}`;
+}
+
+function formatTimeAgo(ms) {
+    const diff = Math.floor((Date.now() - ms) / 60000);
+    if (diff < 1) return 'Adesso';
+    if (diff < 60) return `${diff} min fa`;
+    if (diff < 1440) return `${Math.floor(diff/60)}h fa`;
+    return `${Math.floor(diff/1440)} giorni fa`;
+}
+
+async function markRead(id) {
+    try {
+        await fetch(`/api/calendar/notifications/${id}/read`, { method:'PATCH', headers: apiHeaders() });
+        loadNotifications();
+    } catch(e) {}
+}
+async function dismissNotif(id) {
+    try {
+        await fetch(`/api/calendar/notifications/${id}/dismiss`, { method:'PATCH', headers: apiHeaders() });
+        loadNotifications();
+    } catch(e) {}
+}
+async function markAllRead() {
+    try {
+        await fetch('/api/calendar/notifications/read-all', { method:'PATCH', headers: apiHeaders() });
+        loadNotifications();
+    } catch(e) {}
+}
+
+function toggleNotifDrawer() {
+    notifDrawerOpen = !notifDrawerOpen;
+    document.getElementById('notif-drawer').classList.toggle('open', notifDrawerOpen);
+    if (notifDrawerOpen) loadNotifications();
+}
+
+// =========================================================================
+// TEXT-TO-SPEECH
+// =========================================================================
+function onTtsToggle(enabled) {
+    ttsEnabled = enabled;
+    localStorage.setItem('calendar_tts', enabled ? '1' : '0');
+    document.getElementById('tts-status').textContent = enabled ? 'Attivato' : 'Disattivato';
+    if (!enabled) { speechSynthesis.cancel(); }
+}
+
+function speakNotifications(notifs) {
+    if (!ttsEnabled || !window.speechSynthesis) return;
+    for (const n of notifs) {
+        if (n.read || n.dismissed) continue;
+        const key = n.id;
+        if (ttsSpoken.has(key)) continue;
+        ttsSpoken.add(key);
+        const msg = buildNotifMessage(n);
+        const utt = new SpeechSynthesisUtterance(msg);
+        utt.lang = 'it-IT';
+        utt.rate = 1.0;
+        speechSynthesis.speak(utt);
+    }
+}
+
+function checkTTS(data) {
+    if (!ttsEnabled) return;
+    const upcoming = data.next2h || [];
+    const urgent   = data.urgent || [];
+    [...upcoming, ...urgent].forEach(ev => {
+        const key = `tts_${ev.id}_${ev.date}`;
+        if (ttsSpoken.has(key)) return;
+        const tc = EVENT_TYPES[ev.eventType] || { label: 'Evento' };
+        const startMs = localToUTCMs(ev.date, ev.startTime || '00:00');
+        const diffMin = Math.round((startMs - nowMs()) / 60000);
+        if (diffMin <= 0 || diffMin > 120) return;
+        ttsSpoken.add(key);
+        const msg = diffMin <= 5
+            ? `Attenzione: ${ev.title} inizia tra pochi minuti.`
+            : `Promemoria: ${ev.title} inizia tra ${diffMin} minuti.`;
+        if (window.speechSynthesis) {
+            const utt = new SpeechSynthesisUtterance(msg);
+            utt.lang = 'it-IT';
+            speechSynthesis.speak(utt);
+        }
+    });
+}
+
+// =========================================================================
+// KEYBOARD
+// =========================================================================
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+        if (document.getElementById('confirm-overlay').classList.contains('open')) closeConfirm();
+        else if (document.getElementById('event-modal').classList.contains('open')) closeModal();
+        else if (notifDrawerOpen) toggleNotifDrawer();
+    }
+});
+</script>
+
+<script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+    import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyDZ0FdjenO-ngblcuXKdwWwvRV5liiR18I",
+        authDomain: "app-dati-tavoli.firebaseapp.com",
+        projectId: "app-dati-tavoli",
+        storageBucket: "app-dati-tavoli.appspot.com",
+        messagingSenderId: "267339065819",
+        appId: "1:267339065819:web:1e74647f740bdf1d725ffe"
+    };
+    const fbApp = initializeApp(firebaseConfig);
+    const auth  = getAuth(fbApp);
+
+    onAuthStateChanged(auth, user => {
+        if (!user) {
+            const token = WsAuth.getStoredToken();
+            if (!token) window.location.href = '/index.html';
+        }
+    });
+</script>
+</body>
+</html>
