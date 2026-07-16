@@ -55,21 +55,23 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
   padding:12px 16px;text-align:center;font-size:34px;font-weight:800;letter-spacing:3px;
   min-height:62px;display:flex;align-items:center;justify-content:center;color:var(--text);}
 .tbl-disp.empty{font-size:13px;font-weight:400;color:var(--muted);letter-spacing:0;}
-/* Numpad */
-.numpad{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
-.nb{padding:13px 0;background:var(--card);border:1px solid var(--border);border-radius:8px;
-  color:var(--text);font-size:17px;font-weight:600;cursor:pointer;text-align:center;
+/* Numpad — base sizes apply everywhere (including Replit preview ≈ 600px).
+   Mobile (<700px) scales back. Tablet (900–1300px) scales up further. */
+.numpad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+.nb{padding:16px 0;background:var(--card);border:1px solid var(--border);border-radius:9px;
+  color:var(--text);font-size:26px;font-weight:700;cursor:pointer;text-align:center;
   transition:background .12s;user-select:none;}
 .nb:active{background:var(--card-h);}
 .nb:hover{background:var(--card-h);}
-.nb.del{font-size:12px;color:var(--muted);}
-.nb.clr{font-size:12px;color:var(--danger);border-color:rgba(239,68,68,.2);}
-/* Duration */
-.dur-wrap{display:flex;flex-wrap:wrap;gap:5px;}
-.db{padding:7px 10px;background:var(--card);border:1.5px solid var(--border);border-radius:7px;
-  color:var(--muted);font-size:13px;cursor:pointer;transition:all .12s;user-select:none;}
+.nb.del{font-size:15px;font-weight:600;color:var(--muted);}
+.nb.clr{font-size:15px;font-weight:600;color:var(--danger);border-color:rgba(239,68,68,.2);}
+/* Duration — 3-column grid at all sizes */
+.dur-wrap{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+.db{padding:13px 8px;background:var(--card);border:1.5px solid var(--border);border-radius:8px;
+  color:var(--muted);font-size:20px;font-weight:600;cursor:pointer;transition:all .12s;user-select:none;
+  display:flex;align-items:center;justify-content:center;text-align:center;white-space:nowrap;}
 .db:hover{border-color:var(--border-l);color:var(--text);}
-.db.sel{background:rgba(99,102,241,.2);border-color:var(--accent);color:var(--accent2);font-weight:700;}
+.db.sel{background:rgba(79,70,229,.15);border-color:var(--accent);color:var(--accent);font-weight:700;}
 /* Destinations */
 .dest-list{display:flex;flex-direction:column;gap:5px;max-height:180px;overflow-y:auto;}
 .di{display:flex;align-items:center;gap:10px;padding:9px 12px;
@@ -217,6 +219,10 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
   .lp{position:relative;top:auto;width:100%;border-right:none;border-bottom:1px solid var(--border);}
   .ra{margin-left:0;padding-top:20px;}
   .hdr-dept{max-width:120px;}
+  /* Scale back slightly on small phones so numpad still fits */
+  .nb{padding:11px 0;font-size:20px;}
+  .nb.del,.nb.clr{font-size:13px;}
+  .db{padding:9px 6px;font-size:15px;}
 }
 
 /* ── LIGHT THEME OVERRIDES ─────────────────────────────── */
