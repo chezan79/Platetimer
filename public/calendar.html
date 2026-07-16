@@ -133,16 +133,31 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 .week-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:20px;}
 @media(max-width:600px){.week-grid{grid-template-columns:1fr;gap:4px;}}
 .week-col{background:var(--card);border:1.5px solid var(--border);border-radius:10px;
-  padding:10px 8px;min-height:80px;}
+  overflow:hidden;display:flex;flex-direction:column;min-height:100px;}
 .week-col.today-col{border-color:var(--accent);}
-.week-day-label{font-size:11px;font-weight:700;text-transform:uppercase;
-  letter-spacing:.5px;color:var(--muted);margin-bottom:6px;}
-.week-day-num{font-size:18px;font-weight:800;color:var(--text);margin-bottom:6px;}
+
+/* Day header — fixed, never shifts when events are added */
+.week-col-hdr{padding:8px 8px 6px;text-align:center;flex-shrink:0;}
+.week-col.today-col .week-col-hdr{background:rgba(99,102,241,.06);}
+
+/* Events section — visually separated, expands naturally */
+.week-col-events{flex:1;padding:5px;border-top:1.5px solid var(--border);
+  display:flex;flex-direction:column;gap:3px;}
+.week-col.today-col .week-col-events{border-top-color:rgba(99,102,241,.3);}
+
+.week-day-label{font-size:10px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.5px;color:var(--muted);margin-bottom:3px;}
+.week-day-num{font-size:20px;font-weight:800;color:var(--text);line-height:1;}
 .week-day-num.today-num{color:var(--accent2);}
-.week-event-pill{font-size:10px;font-weight:600;padding:2px 6px;border-radius:4px;
-  margin-bottom:2px;background:rgba(99,102,241,.12);color:var(--accent2);
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;}
+
+/* Event pill → small card, wraps long titles, no overlap with header */
+.week-event-pill{font-size:11px;font-weight:600;padding:4px 6px;border-radius:6px;
+  background:rgba(99,102,241,.10);color:var(--accent2);
+  border:1px solid rgba(99,102,241,.16);
+  white-space:normal;word-break:break-word;line-height:1.4;cursor:pointer;
+  transition:background .12s;}
 .week-event-pill:hover{background:rgba(99,102,241,.2);}
+.week-empty-day{font-size:11px;color:var(--muted);text-align:center;padding:4px 0;}
 .week-nav{display:flex;align-items:center;gap:10px;margin-bottom:14px;}
 .week-nav-btn{padding:7px 14px;border:1.5px solid var(--border-l);border-radius:8px;
   background:var(--card);color:var(--text);font-size:13px;font-weight:600;cursor:pointer;
@@ -820,17 +835,20 @@ function renderWeekView(events, monday, sunday) {
         const dayEvents = events.filter(e => e.date === dayStr);
 
         html += `<div class="week-col${isToday?' today-col':''}">
-          <div class="week-day-label">${IT_DAYS_SHORT[(i+1)%7]}</div>
-          <div class="week-day-num${isToday?' today-num':''}">${d}</div>`;
+          <div class="week-col-hdr">
+            <div class="week-day-label">${IT_DAYS_SHORT[(i+1)%7]}</div>
+            <div class="week-day-num${isToday?' today-num':''}">${d}</div>
+          </div>
+          <div class="week-col-events">`;
         if (dayEvents.length === 0) {
-            html += `<div style="font-size:11px;color:var(--muted);">–</div>`;
+            html += `<div class="week-empty-day">–</div>`;
         }
         for (const ev of dayEvents) {
             const tc = EVENT_TYPES[ev.eventType];
             const icon = tc ? tc.icon : '📌';
             html += `<div class="week-event-pill" onclick='openDetailModal(${JSON.stringify(ev)})' title="${esc(ev.title)}">${icon} ${esc(ev.startTime||'')} ${esc(ev.title)}</div>`;
         }
-        html += `</div>`;
+        html += `</div></div>`;
     }
     grid.innerHTML = html;
 }
