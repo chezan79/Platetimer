@@ -4,9 +4,10 @@ description: Architecture decisions for the PlateTimer operational calendar feat
 ---
 
 ## Storage
-- `data/calendar-events.json` — `{ [companyId]: CalendarEvent[] }`
-- `data/calendar-notif.json` — `{ [companyId]: CalendarNotification[] }`
+- `data/calendar-events.json` — `{ [companyId]: CalendarEvent[] }` (local, ephemeral on Railway)
+- `data/calendar-notif.json` — `{ [companyId]: CalendarNotification[] }` (local, ephemeral on Railway)
 - Same `loadJSON`/`saveJSON` pattern as departments.
+- `saveJSON` now also fire-and-forgets to Firestore (`platetimer_stores` collection) when `db` is available.
 
 ## companyId isolation
 All calendar endpoints use `requireAuth` → `session.companyName` as the companyId. The client can never supply or override it.
