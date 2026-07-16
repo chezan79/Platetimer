@@ -213,6 +213,42 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
   color:#fff;text-align:center;padding:8px;font-size:13px;font-weight:600;z-index:150;
   display:none;}
 
+/* ── STEP WIZARD ─────────────────────────────── */
+.step-ind{display:flex;align-items:center;gap:2px;padding:4px 0;}
+.si-btn{display:flex;align-items:center;gap:6px;background:none;border:2px solid transparent;
+  cursor:pointer;padding:6px 8px;border-radius:8px;transition:background .12s;flex-shrink:0;}
+.si-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+.si-btn[disabled]{cursor:default;pointer-events:none;opacity:.55;}
+.si-btn.si-active{background:rgba(79,70,229,.10);}
+.si-num{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:12px;font-weight:700;background:var(--border);color:var(--muted);flex-shrink:0;
+  border:1.5px solid var(--border-l);transition:all .15s;}
+.si-btn.si-active .si-num{background:var(--accent);color:#fff;border-color:var(--accent);}
+.si-btn.si-done .si-num{background:var(--ok);color:#fff;border-color:var(--ok);}
+.si-lbl{font-size:12px;font-weight:600;color:var(--muted);white-space:nowrap;transition:color .15s;}
+.si-btn.si-active .si-lbl{color:var(--accent);}
+.si-btn.si-done .si-lbl{color:var(--ok);}
+.si-line{flex:1;height:2px;background:var(--border);border-radius:2px;min-width:6px;transition:background .2s;}
+.si-line.si-done{background:var(--ok);}
+.step-panel{display:flex;flex-direction:column;gap:14px;}
+.step-summ{background:rgba(79,70,229,.07);border:1px solid rgba(79,70,229,.18);border-radius:10px;
+  padding:10px 14px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
+.step-summ-item{display:flex;flex-direction:column;gap:1px;}
+.step-summ-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);}
+.step-summ-val{font-size:22px;font-weight:800;color:var(--text);line-height:1;}
+.step-summ-sep{font-size:18px;color:var(--border-l);align-self:center;}
+.step1-cont{width:100%;padding:14px;background:linear-gradient(135deg,#6366f1,#8b5cf6);
+  border:none;border-radius:10px;color:#fff;font-size:15px;font-weight:700;cursor:pointer;
+  transition:all .2s;letter-spacing:.3px;}
+.step1-cont:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 6px 20px rgba(99,102,241,.35);}
+.step1-cont:disabled{opacity:.3;cursor:not-allowed;transform:none;}
+.step1-cont:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+.back-btn{width:100%;padding:12px 14px;background:transparent;border:1.5px solid var(--border-l);
+  border-radius:10px;color:var(--muted);font-size:14px;font-weight:600;cursor:pointer;
+  transition:all .18s;text-align:center;}
+.back-btn:hover{background:var(--card-h);color:var(--text);}
+.back-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+
 /* ── RESPONSIVE ─────────────────────────────── */
 @media(max-width:700px){
   :root{--lw:100%;}
@@ -315,6 +351,15 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 
   /* 9. Right panel — allow scroll independently */
   .ra { overflow-y: auto; }
+
+  /* 10. Step wizard */
+  .si-btn { padding: 8px 10px; }
+  .si-num { width: 28px; height: 28px; font-size: 14px; }
+  .si-lbl { font-size: 13px; }
+  .step-summ { padding: 12px 18px; gap: 16px; }
+  .step-summ-val { font-size: 28px; }
+  .step1-cont { padding: 24px 16px; font-size: 22px; border-radius: 12px; min-height: 72px; }
+  .back-btn { padding: 16px 14px; font-size: 16px; border-radius: 12px; }
 }
 </style>
 </head>
@@ -345,58 +390,103 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 
   <!-- ── COUNTDOWN SECTION ──────────────────────── -->
   <div id="section-cd" class="lp-section">
-    <div class="lp-title">Nuovo Countdown</div>
 
-    <!-- Table number -->
-    <div>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">NUMERO TAVOLO</div>
-      <div id="tbl-disp" class="tbl-disp empty">—</div>
-    </div>
+    <!-- Step indicator -->
+    <nav class="step-ind" id="step-ind" aria-label="Wizard countdown">
+      <button class="si-btn si-active" id="si-1" onclick="tryGoStep(1)"
+              aria-current="step" aria-label="Step 1: Tavolo">
+        <span class="si-num" aria-hidden="true">1</span>
+        <span class="si-lbl">Tavolo</span>
+      </button>
+      <div class="si-line" id="si-line-1" aria-hidden="true"></div>
+      <button class="si-btn" id="si-2" onclick="tryGoStep(2)" disabled
+              aria-label="Step 2: Minuti">
+        <span class="si-num" aria-hidden="true">2</span>
+        <span class="si-lbl">Minuti</span>
+      </button>
+      <div class="si-line" id="si-line-2" aria-hidden="true"></div>
+      <button class="si-btn" id="si-3" onclick="tryGoStep(3)" disabled
+              aria-label="Step 3: Invia a">
+        <span class="si-num" aria-hidden="true">3</span>
+        <span class="si-lbl">Invia a</span>
+      </button>
+    </nav>
 
-    <!-- Numpad -->
-    <div class="numpad">
-      <div class="nb" onclick="npPress('1')">1</div>
-      <div class="nb" onclick="npPress('2')">2</div>
-      <div class="nb" onclick="npPress('3')">3</div>
-      <div class="nb" onclick="npPress('4')">4</div>
-      <div class="nb" onclick="npPress('5')">5</div>
-      <div class="nb" onclick="npPress('6')">6</div>
-      <div class="nb" onclick="npPress('7')">7</div>
-      <div class="nb" onclick="npPress('8')">8</div>
-      <div class="nb" onclick="npPress('9')">9</div>
-      <div class="nb clr" onclick="npClear()">Canc</div>
-      <div class="nb" onclick="npPress('0')">0</div>
-      <div class="nb del" onclick="npDel()">⌫ Del</div>
-    </div>
-
-    <!-- Duration -->
-    <div>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">DURATA</div>
-      <div class="dur-wrap" id="dur-wrap">
-        <div class="db" onclick="selectDur(this,4)">4'</div>
-        <div class="db" onclick="selectDur(this,5)">5'</div>
-        <div class="db" onclick="selectDur(this,6)">6'</div>
-        <div class="db" onclick="selectDur(this,7)">7'</div>
-        <div class="db" onclick="selectDur(this,8)">8'</div>
-        <div class="db" onclick="selectDur(this,9)">9'</div>
-        <div class="db" onclick="selectDur(this,10)">10'</div>
-        <div class="db" onclick="selectDur(this,12)">12'</div>
-        <div class="db" onclick="selectDur(this,15)">15'</div>
+    <!-- ── Step 1: Table number ── -->
+    <div class="step-panel" id="step-panel-1">
+      <div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">NUMERO TAVOLO</div>
+        <div id="tbl-disp" class="tbl-disp empty" aria-live="polite" aria-label="Numero tavolo selezionato">—</div>
       </div>
-    </div>
-
-    <!-- Destinations (countdown) -->
-    <div>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">INVIA A</div>
-      <div class="dest-list" id="dest-list">
-        <div class="no-dests">Caricamento reparti...</div>
+      <div class="numpad" role="group" aria-label="Tastierino numerico">
+        <div class="nb" onclick="npPress('1')" role="button" tabindex="0" aria-label="1">1</div>
+        <div class="nb" onclick="npPress('2')" role="button" tabindex="0" aria-label="2">2</div>
+        <div class="nb" onclick="npPress('3')" role="button" tabindex="0" aria-label="3">3</div>
+        <div class="nb" onclick="npPress('4')" role="button" tabindex="0" aria-label="4">4</div>
+        <div class="nb" onclick="npPress('5')" role="button" tabindex="0" aria-label="5">5</div>
+        <div class="nb" onclick="npPress('6')" role="button" tabindex="0" aria-label="6">6</div>
+        <div class="nb" onclick="npPress('7')" role="button" tabindex="0" aria-label="7">7</div>
+        <div class="nb" onclick="npPress('8')" role="button" tabindex="0" aria-label="8">8</div>
+        <div class="nb" onclick="npPress('9')" role="button" tabindex="0" aria-label="9">9</div>
+        <div class="nb clr" onclick="npClear()" role="button" tabindex="0" aria-label="Cancella tutto">Canc</div>
+        <div class="nb" onclick="npPress('0')" role="button" tabindex="0" aria-label="0">0</div>
+        <div class="nb del" onclick="npDel()" role="button" tabindex="0" aria-label="Cancella ultimo">⌫ Del</div>
       </div>
+      <button class="step1-cont" id="step1-cont" onclick="goToStep(2)" disabled>
+        Continua →
+      </button>
     </div>
 
-    <button id="send-btn" class="send-btn" onclick="sendCountdown()" disabled>
-      Avvia Countdown
-    </button>
-    <div id="send-err"></div>
+    <!-- ── Step 2: Duration ── -->
+    <div class="step-panel" id="step-panel-2" style="display:none;">
+      <div class="step-summ">
+        <div class="step-summ-item">
+          <span class="step-summ-lbl">Tavolo</span>
+          <span class="step-summ-val" id="summ-table-2">—</span>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">DURATA</div>
+        <div class="dur-wrap" id="dur-wrap" role="group" aria-label="Seleziona durata">
+          <div class="db" onclick="selectDur(this,4)" role="button" tabindex="0" aria-label="4 minuti">4'</div>
+          <div class="db" onclick="selectDur(this,5)" role="button" tabindex="0" aria-label="5 minuti">5'</div>
+          <div class="db" onclick="selectDur(this,6)" role="button" tabindex="0" aria-label="6 minuti">6'</div>
+          <div class="db" onclick="selectDur(this,7)" role="button" tabindex="0" aria-label="7 minuti">7'</div>
+          <div class="db" onclick="selectDur(this,8)" role="button" tabindex="0" aria-label="8 minuti">8'</div>
+          <div class="db" onclick="selectDur(this,9)" role="button" tabindex="0" aria-label="9 minuti">9'</div>
+          <div class="db" onclick="selectDur(this,10)" role="button" tabindex="0" aria-label="10 minuti">10'</div>
+          <div class="db" onclick="selectDur(this,12)" role="button" tabindex="0" aria-label="12 minuti">12'</div>
+          <div class="db" onclick="selectDur(this,15)" role="button" tabindex="0" aria-label="15 minuti">15'</div>
+        </div>
+      </div>
+      <button class="back-btn" onclick="goToStep(1)" aria-label="Torna allo step 1">← Indietro</button>
+    </div>
+
+    <!-- ── Step 3: Send to ── -->
+    <div class="step-panel" id="step-panel-3" style="display:none;">
+      <div class="step-summ">
+        <div class="step-summ-item">
+          <span class="step-summ-lbl">Tavolo</span>
+          <span class="step-summ-val" id="summ-table-3">—</span>
+        </div>
+        <div class="step-summ-sep" aria-hidden="true">•</div>
+        <div class="step-summ-item">
+          <span class="step-summ-lbl">Durata</span>
+          <span class="step-summ-val" id="summ-dur-3">—</span>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">INVIA A</div>
+        <div class="dest-list" id="dest-list">
+          <div class="no-dests">Caricamento reparti...</div>
+        </div>
+      </div>
+      <button id="send-btn" class="send-btn" onclick="sendCountdown()" disabled>
+        Avvia Countdown
+      </button>
+      <div id="send-err" role="alert"></div>
+      <button class="back-btn" onclick="goToStep(2)" aria-label="Torna allo step 2">← Indietro</button>
+    </div>
 
     <!-- Voice command section (inside countdown tab) -->
     <div class="vc-sep"></div>
@@ -508,6 +598,9 @@ let countdowns    = new Map();
 let ws            = null;
 let wsConnected   = false;
 let tickTimer     = null;
+
+// ── Step wizard state ─────────────────────────────────────────────────────────
+let currentStep = 1;
 
 // ── Voice message state ───────────────────────────────────────────────────────
 let voiceDests           = new Set();
@@ -950,6 +1043,75 @@ function pttRelease(ev) {
   PttVoice.stopTalking();
 }
 
+// ── Step wizard ───────────────────────────────────────────────────────────────
+function goToStep(n){
+  if(n === 2 && !tableInput) return;
+  if(n === 3 && (!tableInput || selectedDur <= 0)) return;
+
+  currentStep = n;
+
+  // Show/hide panels
+  [1,2,3].forEach(i => {
+    const p = document.getElementById(`step-panel-${i}`);
+    if(p) p.style.display = i === n ? 'flex' : 'none';
+  });
+
+  // Update summaries
+  const t2 = document.getElementById('summ-table-2');
+  const t3 = document.getElementById('summ-table-3');
+  const d3 = document.getElementById('summ-dur-3');
+  if(t2) t2.textContent = tableInput || '—';
+  if(t3) t3.textContent = tableInput || '—';
+  if(d3) d3.textContent = selectedDur > 0 ? Math.round(selectedDur/60) + "'" : '—';
+
+  updateStepInd();
+}
+
+function tryGoStep(n){
+  // Only allow navigating to current or completed steps
+  if(n >= currentStep) return;
+  goToStep(n);
+}
+
+function updateStepInd(){
+  [1,2,3].forEach(i => {
+    const btn = document.getElementById(`si-${i}`);
+    if(!btn) return;
+    const numEl = btn.querySelector('.si-num');
+    btn.classList.remove('si-active','si-done');
+    btn.removeAttribute('aria-current');
+
+    if(i === currentStep){
+      btn.classList.add('si-active');
+      btn.setAttribute('aria-current','step');
+      btn.disabled = false;
+      if(numEl) numEl.textContent = i;
+    } else if(i < currentStep){
+      btn.classList.add('si-done');
+      btn.disabled = false;
+      if(numEl) numEl.textContent = '✓';
+    } else {
+      btn.disabled = true;
+      if(numEl) numEl.textContent = i;
+    }
+  });
+
+  const line1 = document.getElementById('si-line-1');
+  const line2 = document.getElementById('si-line-2');
+  if(line1) line1.classList.toggle('si-done', currentStep > 1);
+  if(line2) line2.classList.toggle('si-done', currentStep > 2);
+}
+
+// Keyboard support for numpad and duration divs
+document.addEventListener('keydown', e => {
+  if((e.key === 'Enter' || e.key === ' ') && e.target.classList.contains('nb')){
+    e.preventDefault(); e.target.click();
+  }
+  if((e.key === 'Enter' || e.key === ' ') && e.target.classList.contains('db')){
+    e.preventDefault(); e.target.click();
+  }
+});
+
 // ── Numpad ────────────────────────────────────────────────────────────────────
 function npPress(d){
   if(tableInput.length >= 3) return;
@@ -962,6 +1124,9 @@ function updateTblDisp(){
   const el = document.getElementById('tbl-disp');
   if(tableInput){ el.textContent = tableInput; el.classList.remove('empty'); }
   else { el.textContent = '—'; el.classList.add('empty'); }
+  // Enable/disable the Step 1 continue button
+  const cont = document.getElementById('step1-cont');
+  if(cont){ cont.disabled = !tableInput; }
   refreshSendBtn();
 }
 
@@ -971,6 +1136,8 @@ function selectDur(btn, mins){
   btn.classList.add('sel');
   selectedDur = mins * 60;
   refreshSendBtn();
+  // Auto-advance to Step 3 when a duration is picked from Step 2
+  if(currentStep === 2) goToStep(3);
 }
 
 // ── Destinations ──────────────────────────────────────────────────────────────
@@ -1041,6 +1208,8 @@ function sendCountdown(){
   document.querySelectorAll('.db').forEach(el => el.classList.remove('sel'));
   updateTblDisp();
   refreshSendBtn();
+  // Return to Step 1 after a successful send
+  goToStep(1);
 }
 
 // ── Voice command: countdown by voice ─────────────────────────────────────────
