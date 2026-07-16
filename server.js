@@ -81,26 +81,31 @@ function loadJSON(filePath) {
     return {};
 }
 function saveJSON(filePath, data) {
-    // 1. Always write local file synchronously (fast backup, used on next restart if Firestore fails)
-    try { fs.writeFileSync(filePath, JSON.stringify(data, null, 2)); }
-    catch (e) { console.error('Error saving local file', filePath, e.message); }
-    // 2. Mirror to Firestore asynchronously (survives Railway deploys)
-    //    STORE_NAMES is defined later in the file but saveJSON is only ever
-    //    CALLED at request-time, by which point all constants are initialised.
     if (db) {
+        // Firestore is the single source of truth — never write local files when connected.
+        // getStoreNameForFile is a hoisted function declaration; safe to call here even though
+        // it is defined later in the file (all constants are set by request-time).
         try {
             const storeName = getStoreNameForFile(filePath);
             if (storeName) {
                 db.collection(STORE_COLLECTION).doc(storeName)
                     .set({ store: data, updatedAt: Date.now() })
-                    .catch(e => console.error(`❌ [FIRESTORE] save "${storeName}":`, e.message));
+                    .catch(e => console.error(`❌ [FIRESTORE] save "${storeName}" fallito:`, e.message));
             }
         } catch (_) {}
+    } else {
+        // Firestore not configured (local dev / missing credential) — write to local file.
+        // NOTE: local files are ephemeral on Railway; configure FIREBASE_ADMIN_SERVICE_ACCOUNT
+        // for production persistence.
+        try { fs.writeFileSync(filePath, JSON.stringify(data, null, 2)); }
+        catch (e) { console.error('❌ [STORE] Errore scrittura file locale', filePath, e.message); }
     }
 }
 
-let departmentsStore = loadJSON(DEPARTMENTS_FILE);
-let plansStore = loadJSON(PLANS_FILE);
+// Stores start empty; initializeDataStores() populates them from Firestore
+// (or local files in local-dev mode) BEFORE the HTTP server accepts connections.
+let departmentsStore = {};
+let plansStore = {};
 
 function getCompanyDepts(companyId) { return departmentsStore[companyId] || []; }
 function getCompanyPlan(companyId) { return plansStore[companyId] || 'base'; }
@@ -661,8 +666,9 @@ app.get('/api/countdowns', (req, res) => {
 const CALENDAR_EVENTS_FILE = path.join(DATA_DIR, 'calendar-events.json');
 const CALENDAR_NOTIF_FILE  = path.join(DATA_DIR, 'calendar-notif.json');
 
-let calendarEventsStore = loadJSON(CALENDAR_EVENTS_FILE);
-let calendarNotifStore  = loadJSON(CALENDAR_NOTIF_FILE);
+// Populated by initializeDataStores() at startup — do not loadJSON here.
+let calendarEventsStore = {};
+let calendarNotifStore  = {};
 
 // Maps local file paths → Firestore document names used by saveJSON / initializeDataStores.
 // Defined here because this is the first point where ALL four file constants exist.
@@ -2352,54 +2358,74 @@ setInterval(() => {
 }, 300000); // Ogni 5 minuti
 
 
-// ===== Data-store initialisation from Firestore =====
+// ===== Data-store initialisation =====
 // Runs once at startup, BEFORE the HTTP server starts accepting connections.
-// Loads each store from Firestore (persistent across Railway deploys) and
-// merges with any local JSON data so existing data is always migrated up.
+//
+// When Firestore is configured (FIREBASE_ADMIN_SERVICE_ACCOUNT set):
+//   • Firestore is the SOLE persistent source of truth.
+//   • Local files are checked only if Firestore has no data yet (one-time migration).
+//   • After migration, local files play no further role — Firestore handles everything.
+//
+// When Firestore is NOT configured (local dev / missing credential):
+//   • Falls back to local JSON files with a loud warning.
+//   • Data is ephemeral on Railway; configure the secret for production.
 async function initializeDataStores() {
+    const stores = [
+        { name: 'departments',     file: DEPARTMENTS_FILE,     setter: v => { departmentsStore    = v; } },
+        { name: 'plans',           file: PLANS_FILE,           setter: v => { plansStore          = v; } },
+        { name: 'calendar_events', file: CALENDAR_EVENTS_FILE, setter: v => { calendarEventsStore = v; } },
+        { name: 'calendar_notifs', file: CALENDAR_NOTIF_FILE,  setter: v => { calendarNotifStore  = v; } },
+    ];
+
     if (!db) {
-        console.warn('⚠️ [STORE] Firestore non disponibile — utilizzo solo file locali (dati ephemeral su Railway)');
+        // ── Local-dev / no-credential fallback ──────────────────────────────
+        console.warn('');
+        console.warn('⚠️  ─────────────────────────────────────────────────────────');
+        console.warn('⚠️  FIRESTORE NON CONFIGURATO — caricamento da file locali.');
+        console.warn('⚠️  I dati NON sopravvivono ai deploy Railway.');
+        console.warn('⚠️  Per la persistenza in produzione:');
+        console.warn('⚠️    1. Firebase Console → app-dati-tavoli → Project Settings');
+        console.warn('⚠️       → Service Accounts → Genera nuova chiave privata');
+        console.warn('⚠️    2. In Railway: aggiungi il secret FIREBASE_ADMIN_SERVICE_ACCOUNT');
+        console.warn('⚠️       con il contenuto JSON del file scaricato.');
+        console.warn('⚠️  ─────────────────────────────────────────────────────────');
+        console.warn('');
+        for (const store of stores) {
+            store.setter(loadJSON(store.file));
+        }
         return;
     }
 
-    const stores = [
-        { name: 'departments',     file: DEPARTMENTS_FILE,      getter: () => departmentsStore,    setter: v => { departmentsStore = v; } },
-        { name: 'plans',           file: PLANS_FILE,            getter: () => plansStore,           setter: v => { plansStore = v; } },
-        { name: 'calendar_events', file: CALENDAR_EVENTS_FILE,  getter: () => calendarEventsStore,  setter: v => { calendarEventsStore = v; } },
-        { name: 'calendar_notifs', file: CALENDAR_NOTIF_FILE,   getter: () => calendarNotifStore,   setter: v => { calendarNotifStore = v; } },
-    ];
-
+    // ── Firestore mode ───────────────────────────────────────────────────────
     for (const store of stores) {
         try {
             const doc = await db.collection(STORE_COLLECTION).doc(store.name).get();
-            const firestoreData = (doc.exists && doc.data().store) ? doc.data().store : {};
-            const localData = store.getter();
+            const fsData = doc.exists ? doc.data()?.store : null;
 
-            // Merge: Firestore is the primary source.
-            // Any company present in localData but missing from Firestore is migrated up.
-            const merged = Object.assign({}, firestoreData);
-            let migrated = 0;
-            for (const [companyId, value] of Object.entries(localData)) {
-                if (!merged[companyId] ||
-                    (Array.isArray(merged[companyId]) && merged[companyId].length === 0)) {
-                    merged[companyId] = value;
-                    migrated++;
+            if (fsData && Object.keys(fsData).length > 0) {
+                // ── Firestore has data → sole authority, ignore local files ──
+                store.setter(fsData);
+                console.log(`✅ [STORE] "${store.name}" caricato da Firestore (${Object.keys(fsData).length} ristoranti)`);
+            } else {
+                // ── Firestore empty → one-time migration from local file ──────
+                const localData = loadJSON(store.file);
+                const localCount = Object.keys(localData).length;
+                if (localCount > 0) {
+                    await db.collection(STORE_COLLECTION).doc(store.name)
+                        .set({ store: localData, updatedAt: Date.now() });
+                    store.setter(localData);
+                    console.log(`✅ [STORE] "${store.name}" migrato da file locale → Firestore (${localCount} ristoranti). File locale non più necessario.`);
+                } else {
+                    store.setter({});
+                    console.log(`✅ [STORE] "${store.name}" inizializzato vuoto in Firestore`);
                 }
             }
-
-            store.setter(merged);
-
-            if (migrated > 0) {
-                // Persist the freshly-migrated local data to Firestore
-                await db.collection(STORE_COLLECTION).doc(store.name)
-                    .set({ store: merged, updatedAt: Date.now() });
-                console.log(`✅ [STORE] "${store.name}" migrato da file locale → Firestore (${migrated} company/ies)`);
-            } else {
-                const count = Object.keys(merged).length;
-                console.log(`✅ [STORE] "${store.name}" caricato da Firestore (${count} company/ies)`);
-            }
         } catch (e) {
-            console.error(`❌ [STORE] initializeDataStores "${store.name}":`, e.message, '— uso dati locali');
+            // Individual store failure — emergency fallback to local file for this store only.
+            console.error(`❌ [STORE] Errore caricamento "${store.name}" da Firestore:`, e.message);
+            const localData = loadJSON(store.file);
+            store.setter(localData);
+            console.warn(`⚠️ [STORE] "${store.name}" caricato da file locale come emergenza — verificare le credenziali Firestore.`);
         }
     }
 }
@@ -2419,11 +2445,13 @@ initializeDataStores().then(() => {
             console.error('❌ Errore avvio server:', error);
         });
 }).catch(err => {
-    console.error('❌ [STORE] initializeDataStores fallito — avvio con dati locali:', err.message);
+    // Catastrophic failure in initializeDataStores (should not happen — errors are caught per-store).
+    console.error('❌ [STORE] initializeDataStores fallito completamente:', err.message);
+    console.error('❌ [STORE] Il server si avvia con store vuoti — i dati non sono garantiti.');
     server
         .listen(PORT, '0.0.0.0', () => {
             console.log(`🛡️ Server avviato su http://0.0.0.0:${PORT}`);
-            console.log('⚠️ Avviato senza Firestore — i dati potrebbero non essere persistenti');
+            console.warn('⚠️ Avviato con store vuoti — verificare le credenziali Firestore.');
         })
         .on('error', (error) => {
             console.error('❌ Errore avvio server:', error);
