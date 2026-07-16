@@ -263,30 +263,33 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
   .tbl-disp { font-size: 56px; min-height: 92px; letter-spacing: 5px; padding: 12px 20px; }
   .tbl-disp.empty { font-size: 15px; letter-spacing: 0; }
 
-  /* 5. Numeric keypad — 72px+ touch targets */
+  /* 5. Numeric keypad — 80px touch targets, 38px numbers */
   .numpad { gap: 9px; }
   .nb {
-    padding: 19px 0;      /* ~72px total height with 30px font */
-    font-size: 30px;
+    padding: 21px 0;      /* 21 + 38 (line-height≈1) + 21 ≈ 80px */
+    font-size: 38px;
+    font-weight: 700;
     border-radius: 10px;
   }
-  .nb.del { font-size: 14px; }
-  .nb.clr { font-size: 14px; }
+  .nb.del { font-size: 16px; font-weight: 600; }
+  .nb.clr { font-size: 16px; font-weight: 600; }
 
-  /* 6. Duration buttons — 3-column grid, large tap area */
+  /* 6. Duration buttons — 3-column grid, 65px touch targets, 30px text */
   .dur-wrap {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 8px;
   }
   .db {
-    padding: 15px 8px;
-    font-size: 18px;
+    padding: 18px 8px;    /* 18 + 30 + 18 ≈ 66px */
+    font-size: 30px;
+    font-weight: 600;
     border-radius: 9px;
     text-align: center;
     display: flex;
     align-items: center;
     justify-content: center;
+    white-space: nowrap;
   }
 
   /* 7. Destination checkboxes */
