@@ -1262,10 +1262,12 @@ app.delete('/api/calendar/events/:id', async (req, res) => {
     const session = requireAuth(req, res);
     if (!session) return;
     const companyId = session.companyName;
-    console.log(`[CALENDAR] Deleting event ${req.params.id} for companyId ${companyId}`);
+    const requestedId = req.params.id;
+    console.log(`[CALENDAR DELETE] company=${companyId} requestedId=${requestedId}`);
 
     const events = calendarEventsStore[companyId] || [];
-    // Support both base IDs and occurrence IDs (strip trailing _YYYY-MM-DD suffix if needed)
+
+    // Resolve: support occurrence IDs by stripping trailing _YYYY-MM-DD date suffix
     const resolveIdx = id => {
         let i = events.findIndex(e => e.id === id);
         if (i === -1) {
@@ -1274,31 +1276,48 @@ app.delete('/api/calendar/events/:id', async (req, res) => {
         }
         return i;
     };
-    const idx = resolveIdx(req.params.id);
+    const idx = resolveIdx(requestedId);
     if (idx === -1) {
-        console.warn(`[CALENDAR] DELETE 404: event "${req.params.id}" not found for company "${companyId}" (${(calendarEventsStore[companyId]||[]).length} events in store)`);
+        console.warn(`[CALENDAR DELETE] Failed status=404 reason=event not found (${events.length} events in store for company "${companyId}")`);
         return res.status(404).json({ success: false, error: 'Event not found' });
     }
 
     const event = events[idx];
-    const [removed] = calendarEventsStore[companyId].splice(idx, 1);
+    const resolvedId = event.id;
+    console.log(`[CALENDAR DELETE] Event found resolvedId=${resolvedId}`);
+
+    // Step 1 — build the updated array WITHOUT mutating the live store yet
+    const updatedEvents = events.filter((_, i) => i !== idx);
+
+    // Step 2 — persist to Firestore (or local file) first; only then commit to memory
+    const prevEvents = calendarEventsStore[companyId];
+    calendarEventsStore[companyId] = updatedEvents;
 
     try {
         await saveCalEventsAsync(companyId);
+        console.log(`[CALENDAR DELETE] Firestore save completed`);
     } catch (e) {
-        calendarEventsStore[companyId].splice(idx, 0, removed); // rollback in-memory
-        return res.status(500).json({ success: false, error: '[CALENDAR] Firestore save failed: ' + e.message });
+        // Restore in-memory state — event is NOT deleted
+        calendarEventsStore[companyId] = prevEvents;
+        console.error(`[CALENDAR DELETE] Failed status=500 reason=${e.message}`);
+        return res.status(500).json({ success: false, error: 'Errore nel salvataggio. Riprova.' });
     }
 
-    // Remove associated notifications
-    if (calendarNotifStore[companyId]) {
-        calendarNotifStore[companyId] = calendarNotifStore[companyId].filter(n => n.eventId !== req.params.id);
-        saveCalNotifs();
+    // Step 3 — notification cleanup (non-fatal: failures must never block the deletion)
+    try {
+        if (calendarNotifStore[companyId]) {
+            calendarNotifStore[companyId] = calendarNotifStore[companyId]
+                .filter(n => n.eventId !== resolvedId && n.eventId !== requestedId);
+            saveCalNotifs();
+        }
+    } catch (notifErr) {
+        console.error(`[CALENDAR DELETE] Notification cleanup error (non-fatal): ${notifErr.message}`);
     }
 
-    broadcastCalendarEvent(companyId, 'calendarEventDeleted', { eventId: req.params.id });
+    // Step 4 — broadcast and respond
+    broadcastCalendarEvent(companyId, 'calendarEventDeleted', { eventId: resolvedId });
 
-    console.log(`[CALENDAR] Saved event ${event.id} deleted for companyId ${companyId}`);
+    console.log(`[CALENDAR DELETE] Response 200 eventId=${resolvedId}`);
     res.json({ success: true });
 });
 

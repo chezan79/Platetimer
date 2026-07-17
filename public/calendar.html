@@ -1123,13 +1123,27 @@ async function duplicateEvent(id) {
 }
 function askDeleteEvent(id) {
     showConfirm('Elimina evento', 'Sei sicuro di voler eliminare questo evento? L\'operazione non può essere annullata.', async () => {
+        console.log(`[CALENDAR DELETE] Clicked eventId=${id}`);
+        const url = `/api/calendar/events/${encodeURIComponent(id)}`;
+        console.log(`[CALENDAR DELETE] Request DELETE ${url}`);
         try {
-            const res = await fetch(`/api/calendar/events/${id}`, { method:'DELETE', headers: apiHeaders() });
-            const data = await res.json();
-            if (!data.success) { showError(data.error); return; }
-            closeModal(); await loadUpcoming();
+            const res = await fetch(url, { method: 'DELETE', headers: apiHeaders() });
+            let data;
+            try { data = await res.json(); } catch (_) { data = {}; }
+            if (!res.ok || !data.success) {
+                const reason = data.error || `HTTP ${res.status}`;
+                console.warn(`[CALENDAR DELETE] Failed status=${res.status} reason=${reason}`);
+                showError(data.error || 'Errore durante l\'eliminazione.');
+                return;
+            }
+            console.log(`[CALENDAR DELETE] Response ${res.status} — success`);
+            closeModal();
+            await loadUpcoming();
             if (currentView !== 'today') setView(currentView);
-        } catch(e) { showError('Errore di rete.'); }
+        } catch (e) {
+            console.error(`[CALENDAR DELETE] Network error: ${e.message}`);
+            showError('Errore di rete durante l\'eliminazione.');
+        }
     }, 'Elimina');
 }
 
@@ -1497,8 +1511,9 @@ function closeConfirm() {
     confirmCallback = null;
 }
 function doConfirm() {
+    const cb = confirmCallback;
     closeConfirm();
-    if (confirmCallback) confirmCallback();
+    if (cb) cb();
 }
 
 // =========================================================================
