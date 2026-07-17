@@ -1137,13 +1137,13 @@ function askDeleteEvent(id) {
 // EDIT MODAL — fetch fresh event then open form
 // =========================================================================
 async function openEditModal(id) {
+    currentEventId = id;
     try {
         const res = await fetch(`/api/calendar/events/${id}`, { headers: apiHeaders() });
         const data = await res.json();
-        if (!data.success) { showError(data.error); return; }
-        currentEventId = id;
+        if (!data.success) { showError(data.error); currentEventId = null; return; }
         renderEventForm(data.event);
-    } catch(e) { showError('Errore di rete.'); }
+    } catch(e) { showError('Errore di rete.'); currentEventId = null; }
 }
 
 // =========================================================================

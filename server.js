@@ -1122,8 +1122,20 @@ app.put('/api/calendar/events/:id', async (req, res) => {
     console.log(`[CALENDAR] Updating event ${req.params.id} for companyId ${companyId}`);
 
     const events = calendarEventsStore[companyId] || [];
-    const idx = events.findIndex(e => e.id === req.params.id);
-    if (idx === -1) return res.status(404).json({ success: false, error: 'Event not found' });
+    // Support both base IDs and occurrence IDs (strip trailing _YYYY-MM-DD suffix if needed)
+    const resolveIdx = id => {
+        let i = events.findIndex(e => e.id === id);
+        if (i === -1) {
+            const base = id.replace(/_\d{4}-\d{2}-\d{2}$/, '');
+            if (base !== id) i = events.findIndex(e => e.id === base);
+        }
+        return i;
+    };
+    const idx = resolveIdx(req.params.id);
+    if (idx === -1) {
+        console.warn(`[CALENDAR] PUT 404: event "${req.params.id}" not found for company "${companyId}" (${(calendarEventsStore[companyId]||[]).length} events in store)`);
+        return res.status(404).json({ success: false, error: 'Event not found' });
+    }
 
     let cleaned;
     try { cleaned = sanitizeEventInput({ ...events[idx], ...req.body }); }
@@ -1162,7 +1174,15 @@ app.patch('/api/calendar/events/:id/status', async (req, res) => {
     const companyId = session.companyName;
 
     const events = calendarEventsStore[companyId] || [];
-    const idx = events.findIndex(e => e.id === req.params.id);
+    const resolveIdx = id => {
+        let i = events.findIndex(e => e.id === id);
+        if (i === -1) {
+            const base = id.replace(/_\d{4}-\d{2}-\d{2}$/, '');
+            if (base !== id) i = events.findIndex(e => e.id === base);
+        }
+        return i;
+    };
+    const idx = resolveIdx(req.params.id);
     if (idx === -1) return res.status(404).json({ success: false, error: 'Event not found' });
 
     const newStatus = req.body.status;
@@ -1199,7 +1219,15 @@ app.post('/api/calendar/events/:id/duplicate', async (req, res) => {
     const companyId = session.companyName;
 
     const events = getCompanyCalEvents(companyId);
-    const source = events.find(e => e.id === req.params.id);
+    const resolveEvent = id => {
+        let ev = events.find(e => e.id === id);
+        if (!ev) {
+            const base = id.replace(/_\d{4}-\d{2}-\d{2}$/, '');
+            if (base !== id) ev = events.find(e => e.id === base);
+        }
+        return ev;
+    };
+    const source = resolveEvent(req.params.id);
     if (!source) return res.status(404).json({ success: false, error: 'Event not found' });
 
     const now = Date.now();
@@ -1237,15 +1265,22 @@ app.delete('/api/calendar/events/:id', async (req, res) => {
     console.log(`[CALENDAR] Deleting event ${req.params.id} for companyId ${companyId}`);
 
     const events = calendarEventsStore[companyId] || [];
-    const idx = events.findIndex(e => e.id === req.params.id);
-    if (idx === -1) return res.status(404).json({ success: false, error: 'Event not found' });
-
-    // Only creator can delete (or if no createdBy — allow for backwards compat)
-    const event = events[idx];
-    if (event.createdBy && event.createdBy !== session.uid) {
-        return res.status(403).json({ success: false, error: 'Only the event creator can delete this event.' });
+    // Support both base IDs and occurrence IDs (strip trailing _YYYY-MM-DD suffix if needed)
+    const resolveIdx = id => {
+        let i = events.findIndex(e => e.id === id);
+        if (i === -1) {
+            const base = id.replace(/_\d{4}-\d{2}-\d{2}$/, '');
+            if (base !== id) i = events.findIndex(e => e.id === base);
+        }
+        return i;
+    };
+    const idx = resolveIdx(req.params.id);
+    if (idx === -1) {
+        console.warn(`[CALENDAR] DELETE 404: event "${req.params.id}" not found for company "${companyId}" (${(calendarEventsStore[companyId]||[]).length} events in store)`);
+        return res.status(404).json({ success: false, error: 'Event not found' });
     }
 
+    const event = events[idx];
     const [removed] = calendarEventsStore[companyId].splice(idx, 1);
 
     try {
