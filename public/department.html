@@ -361,6 +361,140 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
   .step1-cont { padding: 24px 16px; font-size: 22px; border-radius: 12px; min-height: 72px; }
   .back-btn { padding: 16px 14px; font-size: 16px; border-radius: 12px; }
 }
+
+/* ── Sticky footer buttons ────────────────────────────────────────────────
+   .lp has overflow-y:auto → it is the scroll container.
+   position:sticky keeps Send / Continue pinned to the bottom of the
+   visible panel even when content slightly overflows.               ──── */
+.send-btn   { position: sticky; bottom: 8px; z-index: 2; }
+.step1-cont { position: sticky; bottom: 8px; z-index: 2; }
+
+/* ══ HEIGHT-AWARE COMPACT MODE ═══════════════════════════════════════════
+   Placed AFTER the width query so these rules win the cascade at small
+   heights regardless of screen width.
+   Target viewports: 10"–13" tablets in landscape and portrait.
+═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── ≤ 850 px tall — compact tablet (10"–12" landscape) ─────────────── */
+@media (max-height: 850px) {
+
+  /* Panel gaps and padding */
+  .lp         { padding: 14px; gap: 12px; }
+  .lp-section { gap: 12px; }
+  .step-panel { gap: 10px; }
+
+  /* Tab bar */
+  .lp-tab { padding: 10px 8px; font-size: 13px; }
+
+  /* Table number display */
+  .tbl-disp {
+    font-size: clamp(28px, 5vw, 44px);
+    min-height: 58px;
+    padding: 8px 14px;
+    letter-spacing: clamp(2px, 0.5vw, 4px);
+  }
+
+  /* Numpad — still comfortable touch targets (≈ 52 px rows) */
+  .numpad { gap: 7px; }
+  .nb {
+    padding: 13px 0;
+    font-size: clamp(20px, 3vw, 32px);
+    border-radius: 9px;
+  }
+  .nb.del, .nb.clr { font-size: clamp(12px, 1.6vw, 15px); }
+
+  /* Duration buttons */
+  .dur-wrap { gap: 7px; }
+  .db {
+    padding: 11px 6px;
+    font-size: clamp(16px, 2.4vw, 24px);
+    border-radius: 8px;
+  }
+
+  /* Destination list */
+  .dest-list { max-height: 140px; overflow-y: auto; gap: 5px; }
+  .di { padding: 9px 12px; }
+  .di label { font-size: 14px; }
+  .di input[type=checkbox] { width: 17px; height: 17px; }
+
+  /* Summary bar */
+  .step-summ     { padding: 8px 14px; gap: 12px; }
+  .step-summ-val { font-size: 22px; }
+
+  /* Step indicator */
+  .step-ind { padding: 2px 0; }
+  .si-btn   { padding: 6px 8px; }
+  .si-num   { width: 24px; height: 24px; font-size: 12px; }
+  .si-lbl   { font-size: 12px; }
+
+  /* Action buttons — override min-height set by width query */
+  .send-btn   { padding: 14px; font-size: 15px; min-height: auto; }
+  .step1-cont { padding: 14px; font-size: 15px; min-height: auto; }
+  .back-btn   { padding: 10px 12px; font-size: 13px; border-radius: 10px; }
+}
+
+/* ── ≤ 720 px tall — very limited height (10" portrait / small landscape) */
+@media (max-height: 720px) {
+
+  /* Panel: tightest padding */
+  .lp         { padding: 10px; gap: 8px; }
+  .lp-section { gap: 8px; }
+  .step-panel { gap: 8px; }
+
+  /* Tab bar */
+  .lp-tab { padding: 9px 6px; font-size: 12px; }
+
+  /* Table display */
+  .tbl-disp {
+    font-size: clamp(22px, 4.5vw, 34px);
+    min-height: 48px;
+    padding: 6px 10px;
+    letter-spacing: 2px;
+  }
+
+  /* Numpad — minimum comfortable touch target ≈ 48 px rows */
+  .numpad { gap: 5px; }
+  .nb {
+    padding: 10px 0;
+    font-size: clamp(17px, 2.6vw, 26px);
+    border-radius: 8px;
+  }
+  .nb.del, .nb.clr { font-size: clamp(11px, 1.4vw, 14px); }
+
+  /* Duration buttons */
+  .dur-wrap { gap: 5px; }
+  .db {
+    padding: 8px 4px;
+    font-size: clamp(14px, 2vw, 20px);
+    border-radius: 7px;
+  }
+
+  /* Destination list */
+  .dest-list { max-height: 110px; overflow-y: auto; gap: 4px; }
+  .di { padding: 6px 10px; }
+  .di label { font-size: 13px; }
+  .di input[type=checkbox] { width: 15px; height: 15px; }
+
+  /* Summary bar */
+  .step-summ     { padding: 6px 10px; gap: 10px; }
+  .step-summ-val { font-size: 19px; }
+  .step-summ-lbl { font-size: 9px; }
+
+  /* Step indicator — condensed */
+  .step-ind { padding: 1px 0; }
+  .si-btn   { padding: 4px 6px; gap: 5px; }
+  .si-num   { width: 20px; height: 20px; font-size: 11px; }
+  .si-lbl   { font-size: 11px; }
+
+  /* Action buttons */
+  .send-btn   { padding: 11px; font-size: 14px; min-height: auto; }
+  .step1-cont { padding: 11px; font-size: 14px; min-height: auto; }
+  .back-btn   { padding: 8px 10px; font-size: 12px; border-radius: 9px; }
+
+  /* Voice hint: omit non-essential text to save vertical space */
+  .vc-hint { display: none; }
+  .vc-sep  { margin: 0; }
+}
 </style>
 </head>
 <body>
