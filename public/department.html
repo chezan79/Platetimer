@@ -230,7 +230,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 .si-btn.si-done .si-lbl{color:var(--ok);}
 .si-line{flex:1;height:2px;background:var(--border);border-radius:2px;min-width:6px;transition:background .2s;}
 .si-line.si-done{background:var(--ok);}
-.step-panel{display:flex;flex-direction:column;gap:14px;}
+.step-panel{display:flex;flex-direction:column;gap:0;}
 .step-summ{background:rgba(79,70,229,.07);border:1px solid rgba(79,70,229,.18);border-radius:10px;
   padding:10px 14px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
 .step-summ-item{display:flex;flex-direction:column;gap:1px;}
@@ -362,12 +362,37 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
   .back-btn { padding: 16px 14px; font-size: 16px; border-radius: 12px; }
 }
 
-/* ── Sticky footer buttons ────────────────────────────────────────────────
-   .lp has overflow-y:auto → it is the scroll container.
-   position:sticky keeps Send / Continue pinned to the bottom of the
-   visible panel even when content slightly overflows.               ──── */
-.send-btn   { position: sticky; bottom: 8px; z-index: 2; }
-.step1-cont { position: sticky; bottom: 8px; z-index: 2; }
+/* ── Step body & footer structure ────────────────────────────────────────
+   .lp (overflow-y:auto) is the scroll container.
+   .step-body holds the scrollable content of each wizard step.
+   .step-footer is position:sticky so Back / Continue / Send are always
+   pinned to the bottom of the visible panel — never scroll out of view.
+   Both buttons in the footer are rendered together so they never overlap. */
+.step-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 4px;
+}
+.step-footer {
+  position: sticky;
+  bottom: 0;
+  flex-shrink: 0;
+  display: flex;
+  gap: 8px;
+  padding: 10px 0 12px;
+  background: var(--panel);
+  border-top: 1px solid var(--border);
+  z-index: 3;
+}
+/* Back button: fixed minimum width, does not grow */
+.step-footer .back-btn { flex: 0 0 auto; min-width: 88px; width: auto; }
+/* When Back is the only button (Step 2): full width */
+.step-footer .back-btn:only-child { flex: 1; width: 100%; }
+/* Continue (Step 1): always full width */
+.step-footer .step1-cont { flex: 1; width: 100%; }
+/* Send (Step 3): fills remaining space beside Back */
+.step-footer .send-btn { flex: 1; }
 
 /* ══ HEIGHT-AWARE COMPACT MODE ═══════════════════════════════════════════
    Placed AFTER the width query so these rules win the cascade at small
@@ -381,7 +406,8 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
   /* Panel gaps and padding */
   .lp         { padding: 14px; gap: 12px; }
   .lp-section { gap: 12px; }
-  .step-panel { gap: 10px; }
+  .step-body  { gap: 10px; }
+  .step-footer { padding: 8px 0 10px; }
 
   /* Tab bar */
   .lp-tab { padding: 10px 8px; font-size: 13px; }
@@ -439,7 +465,8 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
   /* Panel: tightest padding */
   .lp         { padding: 10px; gap: 8px; }
   .lp-section { gap: 8px; }
-  .step-panel { gap: 8px; }
+  .step-body  { gap: 8px; }
+  .step-footer { padding: 6px 0 8px; }
 
   /* Tab bar */
   .lp-tab { padding: 9px 6px; font-size: 12px; }
@@ -548,78 +575,90 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 
     <!-- ── Step 1: Table number ── -->
     <div class="step-panel" id="step-panel-1">
-      <div>
-        <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">NUMERO TAVOLO</div>
-        <div id="tbl-disp" class="tbl-disp empty" aria-live="polite" aria-label="Numero tavolo selezionato">—</div>
+      <div class="step-body">
+        <div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">NUMERO TAVOLO</div>
+          <div id="tbl-disp" class="tbl-disp empty" aria-live="polite" aria-label="Numero tavolo selezionato">—</div>
+        </div>
+        <div class="numpad" role="group" aria-label="Tastierino numerico">
+          <div class="nb" onclick="npPress('1')" role="button" tabindex="0" aria-label="1">1</div>
+          <div class="nb" onclick="npPress('2')" role="button" tabindex="0" aria-label="2">2</div>
+          <div class="nb" onclick="npPress('3')" role="button" tabindex="0" aria-label="3">3</div>
+          <div class="nb" onclick="npPress('4')" role="button" tabindex="0" aria-label="4">4</div>
+          <div class="nb" onclick="npPress('5')" role="button" tabindex="0" aria-label="5">5</div>
+          <div class="nb" onclick="npPress('6')" role="button" tabindex="0" aria-label="6">6</div>
+          <div class="nb" onclick="npPress('7')" role="button" tabindex="0" aria-label="7">7</div>
+          <div class="nb" onclick="npPress('8')" role="button" tabindex="0" aria-label="8">8</div>
+          <div class="nb" onclick="npPress('9')" role="button" tabindex="0" aria-label="9">9</div>
+          <div class="nb clr" onclick="npClear()" role="button" tabindex="0" aria-label="Cancella tutto">Canc</div>
+          <div class="nb" onclick="npPress('0')" role="button" tabindex="0" aria-label="0">0</div>
+          <div class="nb del" onclick="npDel()" role="button" tabindex="0" aria-label="Cancella ultimo">⌫ Del</div>
+        </div>
       </div>
-      <div class="numpad" role="group" aria-label="Tastierino numerico">
-        <div class="nb" onclick="npPress('1')" role="button" tabindex="0" aria-label="1">1</div>
-        <div class="nb" onclick="npPress('2')" role="button" tabindex="0" aria-label="2">2</div>
-        <div class="nb" onclick="npPress('3')" role="button" tabindex="0" aria-label="3">3</div>
-        <div class="nb" onclick="npPress('4')" role="button" tabindex="0" aria-label="4">4</div>
-        <div class="nb" onclick="npPress('5')" role="button" tabindex="0" aria-label="5">5</div>
-        <div class="nb" onclick="npPress('6')" role="button" tabindex="0" aria-label="6">6</div>
-        <div class="nb" onclick="npPress('7')" role="button" tabindex="0" aria-label="7">7</div>
-        <div class="nb" onclick="npPress('8')" role="button" tabindex="0" aria-label="8">8</div>
-        <div class="nb" onclick="npPress('9')" role="button" tabindex="0" aria-label="9">9</div>
-        <div class="nb clr" onclick="npClear()" role="button" tabindex="0" aria-label="Cancella tutto">Canc</div>
-        <div class="nb" onclick="npPress('0')" role="button" tabindex="0" aria-label="0">0</div>
-        <div class="nb del" onclick="npDel()" role="button" tabindex="0" aria-label="Cancella ultimo">⌫ Del</div>
+      <div class="step-footer">
+        <button class="step1-cont" id="step1-cont" onclick="goToStep(2)" disabled>
+          Continua →
+        </button>
       </div>
-      <button class="step1-cont" id="step1-cont" onclick="goToStep(2)" disabled>
-        Continua →
-      </button>
     </div>
 
     <!-- ── Step 2: Duration ── -->
     <div class="step-panel" id="step-panel-2" style="display:none;">
-      <div class="step-summ">
-        <div class="step-summ-item">
-          <span class="step-summ-lbl">Tavolo</span>
-          <span class="step-summ-val" id="summ-table-2">—</span>
+      <div class="step-body">
+        <div class="step-summ">
+          <div class="step-summ-item">
+            <span class="step-summ-lbl">Tavolo</span>
+            <span class="step-summ-val" id="summ-table-2">—</span>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">DURATA</div>
+          <div class="dur-wrap" id="dur-wrap" role="group" aria-label="Seleziona durata">
+            <div class="db" onclick="selectDur(this,4)" role="button" tabindex="0" aria-label="4 minuti">4'</div>
+            <div class="db" onclick="selectDur(this,5)" role="button" tabindex="0" aria-label="5 minuti">5'</div>
+            <div class="db" onclick="selectDur(this,6)" role="button" tabindex="0" aria-label="6 minuti">6'</div>
+            <div class="db" onclick="selectDur(this,7)" role="button" tabindex="0" aria-label="7 minuti">7'</div>
+            <div class="db" onclick="selectDur(this,8)" role="button" tabindex="0" aria-label="8 minuti">8'</div>
+            <div class="db" onclick="selectDur(this,9)" role="button" tabindex="0" aria-label="9 minuti">9'</div>
+            <div class="db" onclick="selectDur(this,10)" role="button" tabindex="0" aria-label="10 minuti">10'</div>
+            <div class="db" onclick="selectDur(this,12)" role="button" tabindex="0" aria-label="12 minuti">12'</div>
+            <div class="db" onclick="selectDur(this,15)" role="button" tabindex="0" aria-label="15 minuti">15'</div>
+          </div>
         </div>
       </div>
-      <div>
-        <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">DURATA</div>
-        <div class="dur-wrap" id="dur-wrap" role="group" aria-label="Seleziona durata">
-          <div class="db" onclick="selectDur(this,4)" role="button" tabindex="0" aria-label="4 minuti">4'</div>
-          <div class="db" onclick="selectDur(this,5)" role="button" tabindex="0" aria-label="5 minuti">5'</div>
-          <div class="db" onclick="selectDur(this,6)" role="button" tabindex="0" aria-label="6 minuti">6'</div>
-          <div class="db" onclick="selectDur(this,7)" role="button" tabindex="0" aria-label="7 minuti">7'</div>
-          <div class="db" onclick="selectDur(this,8)" role="button" tabindex="0" aria-label="8 minuti">8'</div>
-          <div class="db" onclick="selectDur(this,9)" role="button" tabindex="0" aria-label="9 minuti">9'</div>
-          <div class="db" onclick="selectDur(this,10)" role="button" tabindex="0" aria-label="10 minuti">10'</div>
-          <div class="db" onclick="selectDur(this,12)" role="button" tabindex="0" aria-label="12 minuti">12'</div>
-          <div class="db" onclick="selectDur(this,15)" role="button" tabindex="0" aria-label="15 minuti">15'</div>
-        </div>
+      <div class="step-footer">
+        <button class="back-btn" onclick="goToStep(1)" aria-label="Torna allo step 1">← Indietro</button>
       </div>
-      <button class="back-btn" onclick="goToStep(1)" aria-label="Torna allo step 1">← Indietro</button>
     </div>
 
     <!-- ── Step 3: Send to ── -->
     <div class="step-panel" id="step-panel-3" style="display:none;">
-      <div class="step-summ">
-        <div class="step-summ-item">
-          <span class="step-summ-lbl">Tavolo</span>
-          <span class="step-summ-val" id="summ-table-3">—</span>
+      <div class="step-body">
+        <div class="step-summ">
+          <div class="step-summ-item">
+            <span class="step-summ-lbl">Tavolo</span>
+            <span class="step-summ-val" id="summ-table-3">—</span>
+          </div>
+          <div class="step-summ-sep" aria-hidden="true">•</div>
+          <div class="step-summ-item">
+            <span class="step-summ-lbl">Durata</span>
+            <span class="step-summ-val" id="summ-dur-3">—</span>
+          </div>
         </div>
-        <div class="step-summ-sep" aria-hidden="true">•</div>
-        <div class="step-summ-item">
-          <span class="step-summ-lbl">Durata</span>
-          <span class="step-summ-val" id="summ-dur-3">—</span>
+        <div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">INVIA A</div>
+          <div class="dest-list" id="dest-list">
+            <div class="no-dests">Caricamento reparti...</div>
+          </div>
         </div>
+        <div id="send-err" role="alert"></div>
       </div>
-      <div>
-        <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">INVIA A</div>
-        <div class="dest-list" id="dest-list">
-          <div class="no-dests">Caricamento reparti...</div>
-        </div>
+      <div class="step-footer">
+        <button class="back-btn" onclick="goToStep(2)" aria-label="Torna allo step 2">← Indietro</button>
+        <button id="send-btn" class="send-btn" onclick="sendCountdown()" disabled>
+          Avvia Countdown
+        </button>
       </div>
-      <button id="send-btn" class="send-btn" onclick="sendCountdown()" disabled>
-        Avvia Countdown
-      </button>
-      <div id="send-err" role="alert"></div>
-      <button class="back-btn" onclick="goToStep(2)" aria-label="Torna allo step 2">← Indietro</button>
     </div>
 
     <!-- Voice command section (inside countdown tab) -->
