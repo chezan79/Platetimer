@@ -110,7 +110,9 @@ function saveJSON(filePath, data) {
                     .set({ store: data, updatedAt: Date.now() })
                     .catch(e => console.error(`❌ [FIRESTORE] save "${storeName}" fallito:`, e.message));
             }
-        } catch (_) {}
+        } catch (e) {
+            console.error(`❌ [FIRESTORE] saveJSON errore sincrono per "${filePath}":`, e.message);
+        }
     } else {
         // Firestore not configured (local dev / missing credential) — write to local file.
         // NOTE: local files are ephemeral on Railway; configure FIREBASE_ADMIN_SERVICE_ACCOUNT
@@ -741,6 +743,29 @@ function saveCalEvents() { saveJSON(CALENDAR_EVENTS_FILE, calendarEventsStore); 
 function getCompanyNotifs(companyId)    { return calendarNotifStore[companyId]  || []; }
 function saveCalNotifs()  { saveJSON(CALENDAR_NOTIF_FILE,  calendarNotifStore); }
 
+// Awaited Firestore save for calendar events.  Returns a resolved Promise on
+// success or throws (so callers can return HTTP 500 and the frontend knows).
+async function saveCalEventsAsync(companyId) {
+    if (db) {
+        try {
+            await db.collection(STORE_COLLECTION).doc('calendar_events')
+                .set({ store: calendarEventsStore, updatedAt: Date.now() });
+            console.log(`[CALENDAR] Saved ${(calendarEventsStore[companyId] || []).length} events for companyId ${companyId}`);
+        } catch (e) {
+            console.error(`[CALENDAR] Firestore save failed: ${e.message}`);
+            throw e;
+        }
+    } else {
+        try {
+            fs.writeFileSync(CALENDAR_EVENTS_FILE, JSON.stringify(calendarEventsStore, null, 2));
+            console.log(`[CALENDAR] Saved ${(calendarEventsStore[companyId] || []).length} events for companyId ${companyId} (local file)`);
+        } catch (e) {
+            console.error(`[CALENDAR] Local file save failed: ${e.message}`);
+            throw e;
+        }
+    }
+}
+
 // Sanitize event input — returns cleaned object or throws string error
 function sanitizeEventInput(body) {
     const title = (body.title || '').trim();
@@ -1049,10 +1074,11 @@ app.get('/api/calendar/events/:id', (req, res) => {
 });
 
 // POST /api/calendar/events
-app.post('/api/calendar/events', (req, res) => {
+app.post('/api/calendar/events', async (req, res) => {
     const session = requireAuth(req, res);
     if (!session) return;
     const companyId = session.companyName;
+    console.log(`[CALENDAR] Creating event for companyId ${companyId}`);
 
     let cleaned;
     try { cleaned = sanitizeEventInput(req.body); }
@@ -1070,7 +1096,13 @@ app.post('/api/calendar/events', (req, res) => {
 
     if (!calendarEventsStore[companyId]) calendarEventsStore[companyId] = [];
     calendarEventsStore[companyId].push(event);
-    saveCalEvents();
+
+    try {
+        await saveCalEventsAsync(companyId);
+    } catch (e) {
+        calendarEventsStore[companyId].pop(); // rollback in-memory
+        return res.status(500).json({ success: false, error: '[CALENDAR] Firestore save failed: ' + e.message });
+    }
 
     // Generate any immediate notifications
     generatePendingNotifications(event, companyId);
@@ -1078,15 +1110,16 @@ app.post('/api/calendar/events', (req, res) => {
     // Broadcast
     broadcastCalendarEvent(companyId, 'calendarEventCreated', { event });
 
-    console.log(`📅 Calendar event created: "${event.title}" for company "${companyId}" by uid=${session.uid}`);
+    console.log(`[CALENDAR] Saved event ${event.id} for companyId ${companyId}`);
     res.status(201).json({ success: true, event });
 });
 
 // PUT /api/calendar/events/:id
-app.put('/api/calendar/events/:id', (req, res) => {
+app.put('/api/calendar/events/:id', async (req, res) => {
     const session = requireAuth(req, res);
     if (!session) return;
     const companyId = session.companyName;
+    console.log(`[CALENDAR] Updating event ${req.params.id} for companyId ${companyId}`);
 
     const events = calendarEventsStore[companyId] || [];
     const idx = events.findIndex(e => e.id === req.params.id);
@@ -1096,6 +1129,7 @@ app.put('/api/calendar/events/:id', (req, res) => {
     try { cleaned = sanitizeEventInput({ ...events[idx], ...req.body }); }
     catch (err) { return res.status(400).json({ success: false, error: String(err) }); }
 
+    const prevEvent = { ...events[idx] };
     const updated = {
         ...events[idx],
         ...cleaned,
@@ -1107,16 +1141,22 @@ app.put('/api/calendar/events/:id', (req, res) => {
     };
 
     calendarEventsStore[companyId][idx] = updated;
-    saveCalEvents();
+
+    try {
+        await saveCalEventsAsync(companyId);
+    } catch (e) {
+        calendarEventsStore[companyId][idx] = prevEvent; // rollback in-memory
+        return res.status(500).json({ success: false, error: '[CALENDAR] Firestore save failed: ' + e.message });
+    }
 
     broadcastCalendarEvent(companyId, 'calendarEventUpdated', { event: updated });
 
-    console.log(`📅 Calendar event updated: "${updated.title}" (${updated.id}) for company "${companyId}"`);
+    console.log(`[CALENDAR] Saved event ${updated.id} for companyId ${companyId}`);
     res.json({ success: true, event: updated });
 });
 
 // PATCH /api/calendar/events/:id/status — mark completed / cancelled / other status
-app.patch('/api/calendar/events/:id/status', (req, res) => {
+app.patch('/api/calendar/events/:id/status', async (req, res) => {
     const session = requireAuth(req, res);
     if (!session) return;
     const companyId = session.companyName;
@@ -1130,11 +1170,22 @@ app.patch('/api/calendar/events/:id/status', (req, res) => {
         return res.status(400).json({ success: false, error: `status must be one of: ${VALID_STATUSES.join(', ')}` });
     }
 
-    events[idx].status = newStatus;
+    const prevStatus    = events[idx].status;
+    const prevUpdatedAt = events[idx].updatedAt;
+    events[idx].status    = newStatus;
     events[idx].updatedAt = Date.now();
     if (newStatus === 'completed') events[idx].completedAt = Date.now();
-    saveCalEvents();
 
+    try {
+        await saveCalEventsAsync(companyId);
+    } catch (e) {
+        events[idx].status    = prevStatus;    // rollback in-memory
+        events[idx].updatedAt = prevUpdatedAt;
+        if (newStatus === 'completed') delete events[idx].completedAt;
+        return res.status(500).json({ success: false, error: '[CALENDAR] Firestore save failed: ' + e.message });
+    }
+
+    console.log(`[CALENDAR] Saved event ${events[idx].id} for companyId ${companyId}`);
     const action = newStatus === 'completed' ? 'calendarEventCompleted' : 'calendarEventCancelled';
     broadcastCalendarEvent(companyId, action, { eventId: events[idx].id, status: newStatus, event: events[idx] });
 
@@ -1142,7 +1193,7 @@ app.patch('/api/calendar/events/:id/status', (req, res) => {
 });
 
 // POST /api/calendar/events/:id/duplicate
-app.post('/api/calendar/events/:id/duplicate', (req, res) => {
+app.post('/api/calendar/events/:id/duplicate', async (req, res) => {
     const session = requireAuth(req, res);
     if (!session) return;
     const companyId = session.companyName;
@@ -1166,16 +1217,24 @@ app.post('/api/calendar/events/:id/duplicate', (req, res) => {
 
     if (!calendarEventsStore[companyId]) calendarEventsStore[companyId] = [];
     calendarEventsStore[companyId].push(copy);
-    saveCalEvents();
 
+    try {
+        await saveCalEventsAsync(companyId);
+    } catch (e) {
+        calendarEventsStore[companyId].pop(); // rollback in-memory
+        return res.status(500).json({ success: false, error: '[CALENDAR] Firestore save failed: ' + e.message });
+    }
+
+    console.log(`[CALENDAR] Saved event ${copy.id} for companyId ${companyId}`);
     res.status(201).json({ success: true, event: copy });
 });
 
 // DELETE /api/calendar/events/:id
-app.delete('/api/calendar/events/:id', (req, res) => {
+app.delete('/api/calendar/events/:id', async (req, res) => {
     const session = requireAuth(req, res);
     if (!session) return;
     const companyId = session.companyName;
+    console.log(`[CALENDAR] Deleting event ${req.params.id} for companyId ${companyId}`);
 
     const events = calendarEventsStore[companyId] || [];
     const idx = events.findIndex(e => e.id === req.params.id);
@@ -1187,8 +1246,14 @@ app.delete('/api/calendar/events/:id', (req, res) => {
         return res.status(403).json({ success: false, error: 'Only the event creator can delete this event.' });
     }
 
-    calendarEventsStore[companyId].splice(idx, 1);
-    saveCalEvents();
+    const [removed] = calendarEventsStore[companyId].splice(idx, 1);
+
+    try {
+        await saveCalEventsAsync(companyId);
+    } catch (e) {
+        calendarEventsStore[companyId].splice(idx, 0, removed); // rollback in-memory
+        return res.status(500).json({ success: false, error: '[CALENDAR] Firestore save failed: ' + e.message });
+    }
 
     // Remove associated notifications
     if (calendarNotifStore[companyId]) {
@@ -1198,7 +1263,7 @@ app.delete('/api/calendar/events/:id', (req, res) => {
 
     broadcastCalendarEvent(companyId, 'calendarEventDeleted', { eventId: req.params.id });
 
-    console.log(`🗑️ Calendar event deleted: "${event.title}" (${event.id}) for company "${companyId}"`);
+    console.log(`[CALENDAR] Saved event ${event.id} deleted for companyId ${companyId}`);
     res.json({ success: true });
 });
 
@@ -2424,6 +2489,11 @@ async function initializeDataStores() {
                 // ── Firestore has data → sole authority, ignore local files ──
                 store.setter(fsData);
                 console.log(`✅ [STORE] "${store.name}" caricato da Firestore (${Object.keys(fsData).length} ristoranti)`);
+                if (store.name === 'calendar_events') {
+                    const total = Object.values(calendarEventsStore)
+                        .reduce((s, a) => s + (Array.isArray(a) ? a.length : 0), 0);
+                    console.log(`[CALENDAR] Loaded ${total} events for ${Object.keys(calendarEventsStore).length} companies from Firestore`);
+                }
             } else {
                 // ── Firestore empty → one-time migration from local file ──────
                 const localData = loadJSON(store.file);
