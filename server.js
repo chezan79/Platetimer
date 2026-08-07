@@ -372,17 +372,19 @@ app.post('/api/voice-message', (req, res) => {
             return res.status(400).json({ error: 'Dati mancanti' });
         }
 
-        // [SECURITY] Validate that every destination belongs to the authenticated company
+        // [SECURITY] Validate that every destination belongs to the authenticated company.
+        // '__sala__' is the virtual ID for the floor/sala page and is always permitted.
+        const SALA_VIRTUAL_ID = '__sala__';
         const companyDeptsRest = getCompanyDepts(companyName);
         const activeDeptIdsRest = companyDeptsRest.filter(d => d.active).map(d => d.id);
         if (activeDeptIdsRest.length > 0) {
             for (const destId of destList) {
-                if (!activeDeptIdsRest.includes(destId)) {
+                if (destId !== SALA_VIRTUAL_ID && !activeDeptIdsRest.includes(destId)) {
                     console.log(`⛔ [SECURITY] Voice message rejected — invalid destination "${destId}" for company "${companyName}"`);
                     return res.status(400).json({ error: `Reparto destinatario non valido: ${destId}` });
                 }
             }
-            if (from && !activeDeptIdsRest.includes(from)) {
+            if (from && from !== SALA_VIRTUAL_ID && !activeDeptIdsRest.includes(from)) {
                 console.log(`⛔ [SECURITY] Voice message rejected — invalid source "${from}" for company "${companyName}"`);
                 return res.status(400).json({ error: 'Reparto mittente non valido' });
             }
@@ -1940,12 +1942,14 @@ wss.on('connection', (ws, req) => {
                     return;
                 }
 
-                // [SECURITY] Validate every destination against company's active departments
+                // [SECURITY] Validate every destination against company's active departments.
+                // '__sala__' is the virtual ID for the floor/sala page and is always permitted.
+                const vmSalaVirtualId = '__sala__';
                 const vmCompanyDepts = getCompanyDepts(ws.companyRoom);
                 const vmActiveDeptIds = vmCompanyDepts.filter(d => d.active).map(d => d.id);
                 if (vmActiveDeptIds.length > 0) {
                     for (const destId of vmDestList) {
-                        if (!vmActiveDeptIds.includes(destId)) {
+                        if (destId !== vmSalaVirtualId && !vmActiveDeptIds.includes(destId)) {
                             console.log(`⛔ [SECURITY] voiceMessage rejected — invalid destination "${destId}" for "${ws.companyRoom}"`);
                             ws.send(JSON.stringify({ action: 'error', message: 'Destination department not found.' }));
                             return;

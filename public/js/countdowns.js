@@ -77,6 +77,8 @@ const CountdownsModule = (() => {
             onCountdownUpdate,
             onCountdownDelete,
             onConnectionStatus,
+            onVoiceMessage,
+            pageType,
             reconnectDelay = 3000
         } = config;
 
@@ -104,8 +106,8 @@ const CountdownsModule = (() => {
                     // There is intentionally no fallback to bare companyName: the server requires a token
                     // and would reject any bare joinRoom, so a fallback would only produce a silent failure.
                     if (typeof WsAuth !== 'undefined') {
-                        WsAuth.joinRoom(ws, null, () => {
-                            console.log(`✅ [SECURITY] Authenticated joinRoom sent (sala)`);
+                        WsAuth.joinRoom(ws, pageType || null, () => {
+                            console.log(`✅ [SECURITY] Authenticated joinRoom sent (sala${pageType ? ', pageType=' + pageType : ''})`);
                         });
                     } else {
                         console.error('[SECURITY] WsAuth not loaded — cannot join room. Ensure ws-auth.js is loaded before countdowns.js.');
@@ -140,6 +142,8 @@ const CountdownsModule = (() => {
                             });
                         } else if (data.action === 'deleteCountdown' && onCountdownDeleteCallback) {
                             onCountdownDeleteCallback(data.tableNumber);
+                        } else if (data.action === 'voiceMessage' && onVoiceMessage) {
+                            onVoiceMessage(data);
                         }
                     } catch (error) {
                         console.error('Error parsing WebSocket message:', error);

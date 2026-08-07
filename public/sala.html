@@ -139,6 +139,46 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 .hdr-btn:hover{background:rgba(0,0,0,.09);}
 .hdr-btn.danger{border-color:rgba(220,38,38,.35);color:var(--danger);}
 .hdr-btn.danger:hover{background:rgba(220,38,38,.08);}
+.hdr-btn.voice-active{background:rgba(239,68,68,.15);border-color:rgba(239,68,68,.4);color:var(--danger);}
+
+/* ── VOICE PANEL ─────────────────────────── */
+.voice-panel{position:fixed;top:var(--hdr);right:0;width:300px;max-height:calc(100vh - var(--hdr));
+  overflow-y:auto;background:#fff;border-left:1.5px solid var(--border);
+  border-bottom:1.5px solid var(--border);border-bottom-left-radius:12px;
+  box-shadow:-4px 4px 20px rgba(0,0,0,.1);z-index:190;
+  display:none;padding:16px;}
+.voice-panel.open{display:block;}
+.vp-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;
+  color:var(--muted);margin-bottom:10px;}
+.vp-section{margin-bottom:14px;}
+.vp-dest-all{display:flex;align-items:center;gap:8px;padding:7px 10px;
+  border-radius:7px;background:rgba(79,70,229,.06);border:1.5px solid rgba(79,70,229,.15);
+  cursor:pointer;margin-bottom:6px;font-size:13px;font-weight:600;color:var(--accent);}
+.vp-dest-all input{accent-color:var(--accent);}
+.di{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:7px;
+  border:1.5px solid var(--border);cursor:pointer;margin-bottom:4px;font-size:13px;
+  transition:all .15s;}
+.di:hover{background:rgba(0,0,0,.03);}
+.di.sel{background:rgba(79,70,229,.08);border-color:var(--accent);}
+.di label{cursor:pointer;flex:1;}
+.di input{accent-color:var(--accent);}
+.voice-btn-main{width:100%;padding:10px;border:none;border-radius:8px;
+  background:var(--accent);color:#fff;font-size:14px;font-weight:700;cursor:pointer;
+  transition:background .15s;margin-top:4px;}
+.voice-btn-main:disabled{background:#94a3b8;cursor:not-allowed;}
+.voice-btn-main.recording{background:var(--danger);}
+.voice-status{font-size:12px;color:var(--muted);margin-top:6px;min-height:18px;text-align:center;}
+.no-depts{font-size:13px;color:var(--muted);}
+
+/* ── INCOMING VOICE MESSAGES ─────────────── */
+.vm-section{margin-top:20px;}
+.vm-item{background:#fff;border:1.5px solid var(--border);border-radius:10px;
+  padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;gap:10px;}
+.vm-from{font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;}
+.vm-audio{flex:1;height:36px;}
+.vm-dismiss{border:none;background:none;cursor:pointer;color:var(--muted);font-size:16px;
+  padding:2px 6px;border-radius:4px;transition:color .15s;}
+.vm-dismiss:hover{color:var(--danger);}
 /* Search input (was rgba(255,255,255,.05) — invisible on white) */
 .search-input{background:white;color:var(--text);}
 .search-input::placeholder{color:var(--muted);}
@@ -166,9 +206,30 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
   <span class="hdr-sep"></span>
   <span class="hdr-page">Servizio</span>
   <span id="connectionStatus" class="conn-badge">🔴 Riconnessione…</span>
+  <button id="voice-toggle-btn" class="hdr-btn" onclick="toggleVoicePanel()" title="Messaggi vocali">🎙️ Vocale</button>
   <button class="hdr-btn" onclick="window.location.href='home.html'">Home</button>
   <button class="hdr-btn danger" onclick="window.location.href='index.html'">Esci</button>
 </header>
+
+<!-- ── VOICE PANEL ──────────────────────── -->
+<div id="voice-panel" class="voice-panel">
+  <div class="vp-title">📤 Invia messaggio vocale</div>
+
+  <div class="vp-section">
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:8px;">INVIA A</div>
+    <!-- "All departments" shortcut -->
+    <div class="vp-dest-all" onclick="toggleAllDepts()">
+      <input type="checkbox" id="vchk-all" onclick="event.stopPropagation()">
+      <label for="vchk-all" style="cursor:pointer;">Tutti i reparti</label>
+    </div>
+    <div id="voice-dest-list"><div class="no-depts">Caricamento reparti…</div></div>
+  </div>
+
+  <div class="vp-section">
+    <button id="voice-btn" class="voice-btn-main" onclick="toggleRec()" disabled>🎙️ Avvia registrazione</button>
+    <div id="voice-status-txt" class="voice-status">Seleziona destinatario</div>
+  </div>
+</div>
 
 <!-- ── MAIN ───────────────────────────── -->
 <main class="main">
@@ -204,6 +265,15 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
   </div>
   <div class="cd-list" id="countdownsList"></div>
 
+  <!-- Incoming voice messages (hidden until a message arrives) -->
+  <div id="voice-msgs-section" class="vm-section" style="display:none;">
+    <div class="section-hdr">
+      <span class="section-title">📥 Messaggi vocali ricevuti</span>
+      <span class="section-count" id="voice-msg-count">0</span>
+    </div>
+    <div id="voice-msg-list"></div>
+  </div>
+
 </main>
 
 <audio id="snd-warn"   src="alerte-346112.mp3"           preload="auto"></audio>
@@ -219,6 +289,10 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
     let subscription = null;
     let updateInterval = null;
 
+    // ── Virtual sala ID (voice endpoint) ────────────────────────────────────
+    // This constant is shared with the server — never change it without updating server.js.
+    const SALA_ID = '__sala__';
+
     // ── Alarm audio ─────────────────────────────────────────────────────────
     let _audioUnlocked = false;
     function _unlockAudio() {
@@ -230,6 +304,10 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
             el.muted = true;
             el.play().then(() => { el.pause(); el.muted = false; el.currentTime = 0; }).catch(() => {});
         });
+        // Also drain any queued voice messages waiting for user gesture.
+        const banner = document.getElementById('audio-unlock-banner');
+        if (banner) banner.remove();
+        if (!_vmPlaying && _vmQueue.length) _vmPlayNext();
     }
     ['pointerdown','keydown'].forEach(ev =>
         document.addEventListener(ev, _unlockAudio, { once: true })
@@ -239,6 +317,339 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
         if (!el) return;
         el.currentTime = 0;
         el.play().catch(err => console.warn('[alarm] play blocked:', err.message));
+    }
+
+    // ── Voice auto-play queue ────────────────────────────────────────────────
+    let _vmQueue   = [];
+    let _vmPlaying = false;
+
+    function _vmEnqueuePlay(blobUrl) {
+        if (!blobUrl) return;
+        _vmQueue.push(blobUrl);
+        if (!_vmPlaying) _vmPlayNext();
+    }
+    function _vmPlayNext() {
+        if (_vmQueue.length === 0) { _vmPlaying = false; return; }
+        _vmPlaying = true;
+        const url = _vmQueue.shift();
+        const audio = new Audio(url);
+        audio.onended = () => _vmPlayNext();
+        audio.onerror = () => { console.warn('[voice] playback error, skipping'); _vmPlayNext(); };
+        audio.play().catch(err => {
+            console.warn('[voice] autoplay blocked:', err.message);
+            _vmQueue.unshift(url);
+            _vmPlaying = false;
+            _showAudioUnlockBanner();
+        });
+    }
+    function _showAudioUnlockBanner() {
+        if (document.getElementById('audio-unlock-banner')) return;
+        const banner = document.createElement('div');
+        banner.id = 'audio-unlock-banner';
+        banner.style.cssText = [
+            'position:fixed','bottom:20px','left:50%','transform:translateX(-50%)',
+            'z-index:9999','background:#1e3a5f','color:#fff',
+            'padding:12px 20px','border-radius:10px',
+            'box-shadow:0 4px 20px rgba(0,0,0,.45)',
+            'display:flex','align-items:center','gap:12px',
+            'font-size:14px','font-family:inherit'
+        ].join(';');
+        banner.innerHTML =
+            '<span>🔊 Attiva audio per i messaggi vocali</span>' +
+            '<button id="audio-unlock-btn" style="background:#3b82f6;color:#fff;border:none;' +
+            'border-radius:6px;padding:7px 16px;cursor:pointer;font-size:13px;font-family:inherit;">' +
+            'Attiva audio</button>';
+        document.body.appendChild(banner);
+        document.getElementById('audio-unlock-btn').addEventListener('click', () => {
+            banner.remove();
+            _audioUnlocked = true;
+            if (!_vmPlaying && _vmQueue.length) _vmPlayNext();
+        }, { once: true });
+    }
+
+    // ── Voice panel toggle ───────────────────────────────────────────────────
+    let _voicePanelOpen = false;
+    function toggleVoicePanel() {
+        _voicePanelOpen = !_voicePanelOpen;
+        document.getElementById('voice-panel').classList.toggle('open', _voicePanelOpen);
+        document.getElementById('voice-toggle-btn').classList.toggle('voice-active', _voicePanelOpen);
+    }
+
+    // ── Voice send state ─────────────────────────────────────────────────────
+    let voiceDests           = new Set();
+    let mediaRec             = null;
+    let audioChunks          = [];
+    let isRecording          = false;
+    let currentVoiceState    = 'idle';
+    let recAutoStopTimer     = null;
+    let recCountdownInterval = null;
+    let voiceMessages        = new Map(); // messageId → { id, fromName, timestamp, blobUrl }
+
+    function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+    function blobToBase64(blob) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload  = () => resolve(reader.result.split(',')[1]);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+        });
+    }
+
+    function getSupportedMimeType() {
+        if (!window.MediaRecorder) return '';
+        const types = ['audio/webm;codecs=opus','audio/webm','audio/ogg;codecs=opus','audio/mp4'];
+        for (const t of types) { if (MediaRecorder.isTypeSupported(t)) return t; }
+        return '';
+    }
+
+    function setVoiceState(state) {
+        currentVoiceState = state;
+        const btn = document.getElementById('voice-btn');
+        const sts = document.getElementById('voice-status-txt');
+        if (!btn) return;
+        btn.classList.toggle('recording', state === 'recording');
+        if (state === 'recording') { btn.textContent = '⏹ Ferma'; }
+        else if (state === 'sending') { btn.textContent = '📤 Invio…'; btn.disabled = true; }
+        else if (state === 'done') {
+            btn.textContent = '✅ Inviato';
+            btn.disabled = true;
+            if (sts) sts.textContent = 'Messaggio inviato!';
+            setTimeout(() => setVoiceState('idle'), 2500);
+        } else if (state === 'failed') {
+            btn.textContent = '❌ Errore';
+        } else { // idle
+            btn.textContent = '🎙️ Avvia registrazione';
+            refreshVoiceBtn();
+        }
+    }
+
+    // ── Voice destination list ───────────────────────────────────────────────
+    function buildVoiceDestList() {
+        const others = Object.values(departmentMap).filter(d => d.active);
+        const el = document.getElementById('voice-dest-list');
+        if (!el) return;
+        if (!others.length) {
+            el.innerHTML = '<div class="no-depts">Nessun reparto attivo.</div>';
+            return;
+        }
+        el.innerHTML = others.map(d => `
+            <div class="di" id="vdi-${d.id}" onclick="toggleVoiceDest('${d.id}')">
+              <input type="checkbox" id="vchk-${d.id}" onclick="event.stopPropagation()">
+              <label for="vchk-${d.id}">${esc(d.name)}</label>
+            </div>`).join('');
+        others.forEach(d => {
+            document.getElementById(`vchk-${d.id}`).addEventListener('change', e => {
+                e.stopPropagation();
+                toggleVoiceDestById(d.id, e.target.checked);
+            });
+        });
+    }
+
+    function toggleVoiceDest(id) { toggleVoiceDestById(id, !voiceDests.has(id)); }
+    function toggleVoiceDestById(id, on) {
+        if (on) voiceDests.add(id); else voiceDests.delete(id);
+        const item = document.getElementById(`vdi-${id}`);
+        const chk  = document.getElementById(`vchk-${id}`);
+        if (item) item.classList.toggle('sel', on);
+        if (chk)  chk.checked = on;
+        // Sync "all" checkbox
+        const allIds = Object.values(departmentMap).filter(d => d.active).map(d => d.id);
+        const allChk = document.getElementById('vchk-all');
+        if (allChk) allChk.checked = allIds.length > 0 && allIds.every(i => voiceDests.has(i));
+        refreshVoiceBtn();
+    }
+
+    function toggleAllDepts() {
+        const allIds = Object.values(departmentMap).filter(d => d.active).map(d => d.id);
+        const allChk = document.getElementById('vchk-all');
+        const selectAll = allChk ? !allChk.checked : true; // toggle
+        if (allChk) allChk.checked = selectAll;
+        allIds.forEach(id => toggleVoiceDestById(id, selectAll));
+    }
+
+    function refreshVoiceBtn() {
+        const btn = document.getElementById('voice-btn');
+        if (!btn) return;
+        const locked = currentVoiceState === 'sending' || currentVoiceState === 'done';
+        btn.disabled = locked || (!isRecording && voiceDests.size === 0);
+        if (!locked && !isRecording) {
+            const sts = document.getElementById('voice-status-txt');
+            if (sts) sts.textContent = voiceDests.size === 0 ? 'Seleziona destinatario' : `${voiceDests.size} reparto/i selezionato/i`;
+        }
+    }
+
+    // ── Recording ────────────────────────────────────────────────────────────
+    const MAX_REC_SECONDS = 5;
+
+    async function toggleRec() {
+        if (!isRecording) { await startRec(); } else { stopRec(); }
+    }
+
+    async function startRec() {
+        const sts = document.getElementById('voice-status-txt');
+        if (voiceDests.size === 0) {
+            if (sts) sts.textContent = 'Seleziona almeno un reparto.';
+            return;
+        }
+        if (!navigator.mediaDevices || !window.MediaRecorder) {
+            if (sts) sts.textContent = 'Registrazione non supportata in questo browser.';
+            setVoiceState('failed');
+            setTimeout(() => setVoiceState('idle'), 4000);
+            return;
+        }
+        try {
+            const stream   = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const mimeType = getSupportedMimeType();
+            audioChunks    = [];
+            mediaRec       = mimeType
+                ? new MediaRecorder(stream, { mimeType })
+                : new MediaRecorder(stream);
+            mediaRec.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
+            mediaRec.onstop = sendVoiceMsg;
+            mediaRec.start();
+            isRecording = true;
+            setVoiceState('recording');
+
+            let secondsLeft = MAX_REC_SECONDS;
+            if (sts) sts.textContent = `Registrazione… ${secondsLeft}s`;
+            recCountdownInterval = setInterval(() => {
+                secondsLeft--;
+                if (sts) sts.textContent = secondsLeft > 0
+                    ? `Registrazione… ${secondsLeft}s` : 'Invio automatico…';
+            }, 1000);
+            recAutoStopTimer = setTimeout(() => stopRec(), MAX_REC_SECONDS * 1000);
+        } catch (e) {
+            console.error('[voice] mic error:', e);
+            const msg = (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError')
+                ? 'Accesso microfono negato.' : 'Errore microfono.';
+            const sts2 = document.getElementById('voice-status-txt');
+            if (sts2) sts2.textContent = msg;
+            setVoiceState('failed');
+            setTimeout(() => setVoiceState('idle'), 4000);
+        }
+    }
+
+    function stopRec() {
+        clearInterval(recCountdownInterval);
+        clearTimeout(recAutoStopTimer);
+        recCountdownInterval = null;
+        recAutoStopTimer = null;
+        if (mediaRec && isRecording) {
+            mediaRec.stop();
+            mediaRec.stream.getTracks().forEach(t => t.stop());
+            isRecording = false;
+            setVoiceState('sending');
+        }
+    }
+
+    async function sendVoiceMsg() {
+        try {
+            const actualMime = (mediaRec && mediaRec.mimeType) ? mediaRec.mimeType : 'audio/webm';
+            const blob = new Blob(audioChunks, { type: actualMime });
+            if (blob.size > 6_000_000) {
+                const sts = document.getElementById('voice-status-txt');
+                if (sts) sts.textContent = 'Messaggio troppo lungo.';
+                setVoiceState('failed');
+                setTimeout(() => setVoiceState('idle'), 4000);
+                return;
+            }
+            const b64   = await blobToBase64(blob);
+            const msgId = 'vm_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+            const tk    = WsAuth.getStoredToken();
+            const resp  = await fetch('/api/voice-message', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${tk}` },
+                body: JSON.stringify({
+                    audioData:    b64,
+                    messageId:    msgId,
+                    destinations: Array.from(voiceDests),
+                    from:         SALA_ID
+                })
+            });
+            if (resp.status === 413) {
+                const sts = document.getElementById('voice-status-txt');
+                if (sts) sts.textContent = 'Messaggio troppo pesante.';
+                setVoiceState('failed');
+                setTimeout(() => setVoiceState('idle'), 4000);
+                return;
+            }
+            let result;
+            try { result = await resp.json(); } catch { result = { success: false }; }
+            if (!result.success) {
+                const sts = document.getElementById('voice-status-txt');
+                if (sts) sts.textContent = result.error || 'Invio fallito. Riprova.';
+                setVoiceState('failed');
+                setTimeout(() => setVoiceState('idle'), 4000);
+                return;
+            }
+            setVoiceState('done');
+        } catch (e) {
+            console.error('[voice] send error:', e);
+            const sts = document.getElementById('voice-status-txt');
+            if (sts) sts.textContent = 'Errore di rete.';
+            setVoiceState('failed');
+            setTimeout(() => setVoiceState('idle'), 4000);
+        }
+    }
+
+    // ── Incoming voice messages ──────────────────────────────────────────────
+    function handleVoiceMessage(data) {
+        // Filter: __sala__ must be in the destinations array
+        const dests = Array.isArray(data.destinations) ? data.destinations
+                    : (data.destination ? [data.destination] : []);
+        if (!dests.includes(SALA_ID)) return;
+
+        // Resolve sender name from departmentMap
+        const srcId    = data.sourceDepartmentId || data.from || '';
+        const fromName = (srcId && departmentMap[srcId]) ? departmentMap[srcId].name : 'Reparto';
+
+        let blobUrl = null;
+        if (data.audioData) {
+            try {
+                const bytes = atob(data.audioData);
+                const arr   = new Uint8Array(bytes.length);
+                for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+                blobUrl = URL.createObjectURL(new Blob([arr], { type: 'audio/webm' }));
+            } catch (e) { console.error('[voice] decode error:', e); }
+        }
+
+        voiceMessages.set(data.messageId, {
+            id:        data.messageId,
+            fromName,
+            timestamp: data.timestamp || new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
+            blobUrl,
+            text:      data.message || ''
+        });
+        renderVoiceMessages();
+        // Auto-play: queue and play sequentially without user action.
+        _vmEnqueuePlay(blobUrl);
+    }
+
+    function dismissVoice(id) {
+        const vm = voiceMessages.get(id);
+        if (!vm) return;
+        if (vm.blobUrl) URL.revokeObjectURL(vm.blobUrl);
+        voiceMessages.delete(id);
+        renderVoiceMessages();
+    }
+
+    function renderVoiceMessages() {
+        const section = document.getElementById('voice-msgs-section');
+        const list    = document.getElementById('voice-msg-list');
+        const badge   = document.getElementById('voice-msg-count');
+        if (!section || !list) return;
+        if (!voiceMessages.size) { section.style.display = 'none'; return; }
+        section.style.display = 'block';
+        if (badge) badge.textContent = voiceMessages.size;
+        list.innerHTML = Array.from(voiceMessages.values()).reverse().map(vm => `
+            <div class="vm-item">
+              <span class="vm-from">📞 ${esc(vm.fromName)}</span>
+              ${vm.blobUrl
+                ? `<audio class="vm-audio" controls src="${vm.blobUrl}"></audio>`
+                : `<span style="flex:1;font-size:13px;color:var(--muted);">${esc(vm.text)}</span>`}
+              <button class="vm-dismiss" onclick="dismissVoice('${esc(vm.id)}')" title="Rimuovi">✕</button>
+            </div>`).join('');
     }
 
     let companyName = localStorage.getItem('userCompany');
@@ -264,6 +675,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
                 departmentMap = {};
                 data.departments.forEach(d => { departmentMap[d.id] = d; });
                 buildFilterButtons(data.departments.filter(d => d.active));
+                buildVoiceDestList();
             }
         } catch (e) { console.warn('Could not load departments for sala:', e.message); }
     }
@@ -328,6 +740,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
     function subscribeToUpdates() {
         subscription = CountdownsModule.subscribeCountdowns({
             companyName: companyName,
+            pageType: SALA_ID,
             onCountdownUpdate: (data) => {
                 updateCountdown(data);
             },
@@ -336,6 +749,9 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
             },
             onConnectionStatus: (connected) => {
                 updateConnectionStatus(connected);
+            },
+            onVoiceMessage: (data) => {
+                handleVoiceMessage(data);
             }
         });
     }
