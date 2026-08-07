@@ -1327,7 +1327,9 @@ function toggleDestById(id, on){
   refreshSendBtn();
 }
 function refreshSendBtn(){
-  const ok = tableInput.length > 0 && selectedDur > 0 && selectedDests.size > 0;
+  // Destinations are optional: the current department is always implicitly
+  // eligible to start a countdown for its own dishes.
+  const ok = tableInput.length > 0 && selectedDur > 0;
   document.getElementById('send-btn').disabled = !ok;
 }
 
@@ -1345,11 +1347,15 @@ function showSendError(msg){
 // ── Send countdown ─────────────────────────────────────────────────────────────
 function sendCountdown(){
   if(!wsConnected){ alert('WebSocket non connesso. Riprova.'); return; }
-  if(!tableInput || selectedDur <= 0 || selectedDests.size === 0) return;
+  if(!tableInput || selectedDur <= 0) return;
 
   const tableNum = tableInput;
   const duration = selectedDur;
+  // The current department is always implicitly included so its own active
+  // list and the sala view show the countdown (receive path filters on
+  // dests.includes(myDeptId)). Other selected departments are optional extras.
   const dests    = Array.from(selectedDests);
+  if(!dests.includes(myDeptId)) dests.push(myDeptId);
 
   // ► Local pre-check for already-active table (fast UX; server is authoritative)
   const existing = countdowns.get(tableNum);
@@ -1530,9 +1536,10 @@ async function processVoiceCmd(){
 
     // Require all three fields — no partial countdowns
     const missing = [];
+    // Destination departments are optional: the current department is always
+    // implicitly eligible (same rule as sendCountdown).
     if(!parsed.tableNumber)              missing.push('numero tavolo');
     if(!parsed.durationMinutes)          missing.push('durata');
-    if(parsed.matchedDepts.length === 0) missing.push('reparto destinatario');
     if(missing.length > 0){
       showVcError(`Comando non riconosciuto.\nMancano: ${missing.join(', ')}.\nRipeti il comando.`);
       return;
@@ -1546,6 +1553,7 @@ async function processVoiceCmd(){
     const tableNum  = parsed.tableNumber.toString();
     const durationS = parsed.durationMinutes * 60;           // seconds
     const deptIds   = parsed.matchedDepts.map(d => d.id);
+    if(!deptIds.includes(myDeptId)) deptIds.push(myDeptId);
 
     // Register as pending so the server echo is tagged as 'sent' on this page.
     // No optimistic insertion — display deferred until authoritative server echo.
@@ -1571,7 +1579,8 @@ async function processVoiceCmd(){
 
 function showVcSuccess(parsed){
   setVcState('idle');
-  const deptList = parsed.matchedDepts.map(d => d.name).join('<br>');
+  const myName   = departmentMap[myDeptId] ? departmentMap[myDeptId].name : 'Questo reparto';
+  const deptList = [myName].concat(parsed.matchedDepts.map(d => d.name)).join('<br>');
   const res = document.getElementById('vc-result');
   if(!res) return;
   res.className   = 'vc-result ok';
