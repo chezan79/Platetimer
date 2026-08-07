@@ -152,3 +152,6 @@ attached_assets/*
 *.pem
 *.p12
 *.key
+
+!package.json
+!package-lock.json
