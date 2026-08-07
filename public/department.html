@@ -806,10 +806,68 @@ function _unlockAudio() {
     el.muted = true;
     el.play().then(() => { el.pause(); el.muted = false; el.currentTime = 0; }).catch(() => {});
   });
+  // Also dismiss the voice-unlock banner and drain the playback queue if waiting.
+  const banner = document.getElementById('audio-unlock-banner');
+  if (banner) banner.remove();
+  if (!_vmPlaying && _vmQueue.length) _vmPlayNext();
 }
 ['pointerdown','keydown'].forEach(ev =>
   document.addEventListener(ev, _unlockAudio, { once: true })
 );
+
+// ── Voice-message auto-play queue ────────────────────────────────────────────
+// Incoming voice messages are queued and played sequentially without any
+// manual action.  If the browser blocks autoplay a one-time "Attiva audio"
+// banner is shown; after that single tap all subsequent messages play freely.
+let _vmQueue   = [];    // Array of blobUrls waiting to be played
+let _vmPlaying = false;
+
+function _vmEnqueuePlay(blobUrl) {
+  if (!blobUrl) return;
+  _vmQueue.push(blobUrl);
+  if (!_vmPlaying) _vmPlayNext();
+}
+
+function _vmPlayNext() {
+  if (_vmQueue.length === 0) { _vmPlaying = false; return; }
+  _vmPlaying = true;
+  const url = _vmQueue.shift();
+  const audio = new Audio(url);
+  audio.onended = () => _vmPlayNext();
+  audio.onerror = () => { console.warn('[voice] playback error, skipping'); _vmPlayNext(); };
+  audio.play().catch(err => {
+    // Autoplay blocked — put the url back and show the one-time unlock banner.
+    console.warn('[voice] autoplay blocked:', err.message);
+    _vmQueue.unshift(url);
+    _vmPlaying = false;
+    _showAudioUnlockBanner();
+  });
+}
+
+function _showAudioUnlockBanner() {
+  if (document.getElementById('audio-unlock-banner')) return; // already shown
+  const banner = document.createElement('div');
+  banner.id = 'audio-unlock-banner';
+  banner.style.cssText = [
+    'position:fixed','bottom:20px','left:50%','transform:translateX(-50%)',
+    'z-index:9999','background:#1e3a5f','color:#fff',
+    'padding:12px 20px','border-radius:10px',
+    'box-shadow:0 4px 20px rgba(0,0,0,.45)',
+    'display:flex','align-items:center','gap:12px',
+    'font-size:14px','font-family:inherit'
+  ].join(';');
+  banner.innerHTML =
+    '<span>🔊 Attiva audio per i messaggi vocali</span>' +
+    '<button id="audio-unlock-btn" style="background:#3b82f6;color:#fff;border:none;' +
+    'border-radius:6px;padding:7px 16px;cursor:pointer;font-size:13px;font-family:inherit;">' +
+    'Attiva audio</button>';
+  document.body.appendChild(banner);
+  document.getElementById('audio-unlock-btn').addEventListener('click', () => {
+    banner.remove();
+    _audioUnlocked = true; // Mark as unlocked so alarms also work
+    if (!_vmPlaying && _vmQueue.length) _vmPlayNext();
+  }, { once: true });
+}
 
 // Play an alarm sound by element id.
 // Reset currentTime so rapid re-triggers always start from the beginning.
@@ -1126,6 +1184,8 @@ function handleVoiceMessage(data){
     text:     data.message || ''
   });
   renderVoiceMessages();
+  // Auto-play: enqueue so messages play sequentially without user action.
+  _vmEnqueuePlay(blobUrl);
 }
 
 function dismissVoice(id){
