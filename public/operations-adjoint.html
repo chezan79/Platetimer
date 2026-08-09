@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Operations — Adjoint — PlateTimer</title>
+<link rel="stylesheet" href="css/operations.css">
+</head>
+<body>
+
+<header class="hdr">
+  <span id="hdr-company" class="hdr-brand"></span>
+  <span class="hdr-sep"></span>
+  <span class="hdr-page">Operations · Adjoint</span>
+  <button class="hdr-btn" onclick="location.href='operations-tasks.html'">Compiti</button>
+  <button class="hdr-btn" onclick="location.href='home.html'">Home</button>
+  <button class="hdr-btn danger" onclick="OpsCommon.logout()">Esci</button>
+</header>
+
+<main class="main">
+  <div class="pg-heading">
+    <h1 class="pg-title">Dashboard Adjoint</h1>
+    <p class="pg-sub"><span id="me-name"></span> · <span id="me-role" class="role-badge"></span></p>
+  </div>
+
+  <div id="ops-error" class="msg msg-error" style="display:none"></div>
+
+  <!-- Brief -->
+  <div class="brief-card">
+    <div class="brief-text" id="brief-text">Caricamento…</div>
+  </div>
+
+  <!-- Quick Actions -->
+  <p class="section-title" style="margin-top:0">Azioni rapide</p>
+  <div class="qa-grid">
+    <button class="qa-btn qa-primary" onclick="location.href='operations-tasks.html?action=create'">
+      <span class="qa-icon">➕</span>Crea compito
+    </button>
+    <button class="qa-btn" onclick="location.href='operations-tasks.html?filter=today'">
+      <span class="qa-icon">📅</span>Lavoro di oggi
+    </button>
+    <button class="qa-btn qa-danger" onclick="location.href='operations-tasks.html?filter=urgent'">
+      <span class="qa-icon">⚡</span>Urgenti
+    </button>
+  </div>
+
+  <!-- Stats -->
+  <div class="stat-row" style="grid-template-columns:repeat(4,1fr);margin-bottom:24px">
+    <div class="stat-card"><div class="stat-num" id="stat-mine">—</div><div class="stat-lbl">Miei compiti</div></div>
+    <div class="stat-card danger"><div class="stat-num" id="stat-overdue">—</div><div class="stat-lbl">In ritardo (team)</div></div>
+    <div class="stat-card danger"><div class="stat-num" id="stat-urgent">—</div><div class="stat-lbl">Urgenti</div></div>
+    <div class="stat-card"><div class="stat-num" id="stat-today">—</div><div class="stat-lbl">In scadenza oggi</div></div>
+  </div>
+
+  <div id="main-content"></div>
+</main>
+
+<script src="js/ws-auth.js"></script>
+<script src="js/operations-common.js"></script>
+<script>
+const esc = OpsCommon.escHtml;
+
+async function load() {
+  const me = await OpsCommon.loadMe();
+  if (!me) return;
+  if (me.user.role !== 'ADJOINT') { location.replace('operations.html'); return; }
+  document.getElementById('me-name').textContent = me.user.name || '';
+  document.getElementById('me-role').textContent = OpsCommon.roleLabel(me.user.role);
+  const myId = me.user.id;
+
+  const data = await OpsCommon.api('/api/operations/tasks');
+  if (!data || !data.success) { OpsCommon.showError(data && data.error); return; }
+  const tasks = data.tasks, users = data.users;
+  const now = new Date();
+
+  const active  = tasks.filter(t => t.status !== 'CANCELLED' && t.status !== 'COMPLETED');
+  const mine    = active.filter(t => t.assigneeId === myId);
+  const overdue = tasks.filter(t => (t.effectiveStatus||t.status)==='OVERDUE' || (t.dueDate && new Date(t.dueDate) < now && t.status !== 'COMPLETED' && t.status !== 'CANCELLED'));
+  const urgent  = active.filter(t => t.priority === 'URGENT');
+  const today   = active.filter(t => OpsCommon.isToday(t.dueDate));
+  const cdbTasks = active.filter(t => { const u = users[t.assigneeId]; return u && u.role === 'CHEF_DE_BRIGADE'; });
+  // Escalated tasks that have ADJOINT in their notification path (escalationLevel >= 1, assignee is CdB whose chain includes Adjoint)
+  const escalatedForMe = tasks.filter(t => t.escalationLevel >= 1 && t.escalationNotified && t.escalationNotified.length > 0);
+
+  document.getElementById('stat-mine').textContent   = mine.length;
+  document.getElementById('stat-overdue').textContent = overdue.length;
+  document.getElementById('stat-urgent').textContent  = urgent.length;
+  document.getElementById('stat-today').textContent   = today.length;
+
+  document.getElementById('brief-text').innerHTML = `
+    ${esc(OpsCommon.greeting())}. Hai <span class="brief-num">${mine.length}</span> compiti attivi.
+    ${overdue.length > 0 ? `<span class="brief-num red">${overdue.length}</span> ${overdue.length===1?'compito richiede':'compiti richiedono'} coordinamento (in ritardo).` : ''}
+    ${urgent.length > 0 ? `<span class="brief-num warn">${urgent.length}</span> urgenti da gestire.` : ''}
+    ${overdue.length===0 && urgent.length===0 ? '<span style="color:var(--ok)">✅ Nessuna criticità.</span>' : ''}
+  `;
+
+  const container = document.getElementById('main-content');
+  container.innerHTML = '';
+
+  // Overdue first
+  OpsCommon.renderSection(container, '🕐 In ritardo (tutto il team)', overdue.slice(0,8), users, 'Nessun compito in ritardo. Ottimo!');
+
+  // My tasks
+  OpsCommon.renderSection(container, '👤 I miei compiti', mine.slice(0,8), users, 'Nessun compito assegnato a te.');
+
+  // CdB tasks
+  OpsCommon.renderSection(container, 'Chef de Brigade', cdbTasks.slice(0,8), users, 'Nessun compito assegnato ai Chef de Brigade.');
+
+  // Urgent
+  const urgentOnly = urgent.filter(t => !overdue.find(o=>o.id===t.id));
+  OpsCommon.renderSection(container, '⚡ Urgenti', urgentOnly.slice(0,5), users, 'Nessun compito urgente.');
+
+  // Today
+  OpsCommon.renderSection(container, '📅 In scadenza oggi', today.slice(0,8), users, 'Nessun compito in scadenza oggi.');
+
+  // Escalation
+  if (escalatedForMe.length) {
+    OpsCommon.renderSection(container, '🚨 Escalation che ti riguardano', escalatedForMe.slice(0,5), users, '');
+  }
+}
+
+load();
+</script>
+</body>
+</html>

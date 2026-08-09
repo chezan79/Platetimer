@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Operations — Direttore — PlateTimer</title>
+<link rel="stylesheet" href="css/operations.css">
+</head>
+<body>
+
+<header class="hdr">
+  <span id="hdr-company" class="hdr-brand"></span>
+  <span class="hdr-sep"></span>
+  <span class="hdr-page">Operations · Direttore</span>
+  <button class="hdr-btn" onclick="location.href='operations-tasks.html'">Compiti</button>
+  <button class="hdr-btn" onclick="location.href='operations-team.html'">Team</button>
+  <button class="hdr-btn" onclick="location.href='operations-templates.html'">🔁 Template</button>
+  <button class="hdr-btn" onclick="location.href='home.html'">Home</button>
+  <button class="hdr-btn danger" onclick="OpsCommon.logout()">Esci</button>
+</header>
+
+<main class="main">
+  <div class="pg-heading" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px">
+    <div>
+      <h1 class="pg-title">Dashboard Direttore</h1>
+      <p class="pg-sub"><span id="me-name"></span> · <span id="me-role" class="role-badge"></span></p>
+    </div>
+  </div>
+
+  <div id="ops-error" class="msg msg-error" style="display:none"></div>
+
+  <!-- Today's Brief -->
+  <div class="brief-card" id="brief-card">
+    <div class="brief-text" id="brief-text">Caricamento…</div>
+  </div>
+
+  <!-- Quick Actions -->
+  <p class="section-title" style="margin-top:0">Azioni rapide</p>
+  <div class="qa-grid">
+    <button class="qa-btn qa-primary" onclick="location.href='operations-tasks.html?action=create'">
+      <span class="qa-icon">➕</span>Crea compito
+    </button>
+    <button class="qa-btn" onclick="location.href='operations-team.html?action=create'">
+      <span class="qa-icon">👤</span>Crea utente
+    </button>
+    <button class="qa-btn" onclick="location.href='operations-templates.html?action=create'">
+      <span class="qa-icon">🔁</span>Crea template
+    </button>
+    <button class="qa-btn qa-danger" id="qa-esc-btn" onclick="scrollTo(0,document.getElementById('attention-section').offsetTop - 80)">
+      <span class="qa-icon">🚨</span>Escalation
+    </button>
+    <button class="qa-btn" onclick="location.href='operations-tasks.html?filter=today'">
+      <span class="qa-icon">📅</span>Operazioni oggi
+    </button>
+  </div>
+
+  <!-- Requires Attention -->
+  <div id="attention-section">
+    <p class="section-title">🔴 Richiede la tua attenzione</p>
+    <div id="attention-content"></div>
+  </div>
+
+  <!-- Today's Operations Stats -->
+  <p class="section-title">Operazioni di oggi</p>
+  <div class="stat-row" style="grid-template-columns:repeat(4,1fr);margin-bottom:24px">
+    <div class="stat-card ok"><div class="stat-num" id="stat-done-today">—</div><div class="stat-lbl">Completati oggi</div></div>
+    <div class="stat-card"><div class="stat-num" id="stat-open-today">—</div><div class="stat-lbl">Aperti oggi</div></div>
+    <div class="stat-card danger"><div class="stat-num" id="stat-urgent-cnt">—</div><div class="stat-lbl">Urgenti</div></div>
+    <div class="stat-card accent"><div class="stat-num" id="stat-recurring-today">—</div><div class="stat-lbl">Ricorrenti generati</div></div>
+  </div>
+
+  <!-- Company overview -->
+  <div class="stat-row" style="grid-template-columns:repeat(4,1fr);margin-bottom:24px">
+    <div class="stat-card"><div class="stat-num" id="stat-open-all">—</div><div class="stat-lbl">Totale aperti</div></div>
+    <div class="stat-card accent"><div class="stat-num" id="stat-ip-all">—</div><div class="stat-lbl">In corso</div></div>
+    <div class="stat-card danger"><div class="stat-num" id="stat-overdue-all">—</div><div class="stat-lbl">In ritardo</div></div>
+    <div class="stat-card ok"><div class="stat-num" id="stat-done-all">—</div><div class="stat-lbl">Completati totale</div></div>
+  </div>
+
+  <!-- Delegated Work -->
+  <p class="section-title">Lavoro delegato</p>
+  <div class="card" style="margin-bottom:24px" id="workload-card">
+    <div class="empty-state" style="padding:16px 0">Caricamento…</div>
+  </div>
+
+  <!-- Overdue by dept -->
+  <div id="dept-section" style="display:none;margin-bottom:24px">
+    <p class="section-title">In ritardo per reparto</p>
+    <div class="card" id="dept-bars"></div>
+  </div>
+</main>
+
+<script src="js/ws-auth.js"></script>
+<script src="js/operations-common.js"></script>
+<script>
+const esc = OpsCommon.escHtml;
+const fmt = OpsCommon.fmtDue;
+
+async function load() {
+  const me = await OpsCommon.loadMe();
+  if (!me) return;
+  if (me.user.role !== 'DIRECTOR') { location.replace('operations.html'); return; }
+  document.getElementById('me-name').textContent = me.user.name || '';
+  document.getElementById('me-role').textContent = OpsCommon.roleLabel(me.user.role);
+
+  // Parallel API calls
+  const [taskRes, statsRes, escRes] = await Promise.all([
+    OpsCommon.api('/api/operations/tasks'),
+    OpsCommon.api('/api/operations/stats'),
+    OpsCommon.api('/api/operations/escalation-status'),
+  ]);
+
+  if (!taskRes || !taskRes.success) { OpsCommon.showError(taskRes && taskRes.error); return; }
+  const tasks = taskRes.tasks, users = taskRes.users, myId = taskRes.me.id;
+  const now = new Date();
+  const todayStr = now.toISOString().slice(0,10);
+
+  // Derive counts
+  const allActive  = tasks.filter(t => t.status !== 'CANCELLED');
+  const doneToday  = tasks.filter(t => OpsCommon.isCompletedToday(t));
+  const openToday  = tasks.filter(t => OpsCommon.isToday(t.dueDate) && t.status !== 'COMPLETED' && t.status !== 'CANCELLED');
+  const urgent     = tasks.filter(t => t.priority === 'URGENT' && t.status !== 'COMPLETED' && t.status !== 'CANCELLED');
+  const overdue    = tasks.filter(t => (t.effectiveStatus||t.status) === 'OVERDUE' || (t.dueDate && new Date(t.dueDate) < now && t.status !== 'COMPLETED' && t.status !== 'CANCELLED'));
+  const recurring  = tasks.filter(t => t.templateId && OpsCommon.isToday(t.dueDate));
+  const escalated  = (escRes && escRes.success) ? escRes.escalated : [];
+  const cancelled  = tasks.filter(t => t.status === 'CANCELLED');
+
+  // Stats
+  document.getElementById('stat-done-today').textContent = doneToday.length;
+  document.getElementById('stat-open-today').textContent = openToday.length;
+  document.getElementById('stat-urgent-cnt').textContent = urgent.length;
+  document.getElementById('stat-recurring-today').textContent = recurring.length;
+
+  if (statsRes && statsRes.success) {
+    const s = statsRes.stats;
+    document.getElementById('stat-open-all').textContent  = s.open;
+    document.getElementById('stat-ip-all').textContent    = s.inProgress;
+    document.getElementById('stat-overdue-all').textContent = s.overdue;
+    document.getElementById('stat-done-all').textContent  = s.completed;
+  }
+
+  // Today's Brief
+  const escCount = escalated.length;
+  const overdueCount = overdue.length;
+  document.getElementById('brief-text').innerHTML = `
+    ${esc(OpsCommon.greeting())}. Oggi ci sono <span class="brief-num">${allActive.length}</span> compiti operativi.
+    <span class="brief-num ok">${doneToday.length}</span> sono già completati.
+    ${overdueCount > 0 ? `<span class="brief-num red">${overdueCount}</span> ${overdueCount===1?'compito è in ritardo':'compiti sono in ritardo'}.` : ''}
+    ${escCount > 0 ? `<span class="brief-num red">${escCount}</span> ${escCount===1?'escalation richiede':'escalation richiedono'} la tua attenzione.` : ''}
+    ${overdueCount===0 && escCount===0 ? '<span style="color:var(--ok)">✅ Tutto sotto controllo.</span>' : ''}
+  `;
+
+  // Quick action escalation badge
+  if (escCount > 0) {
+    document.getElementById('qa-esc-btn').innerHTML = `<span class="qa-icon">🚨</span>Escalation <span style="background:var(--danger);color:#fff;border-radius:20px;padding:1px 7px;font-size:11px">${escCount}</span>`;
+  }
+
+  // Requires Attention
+  const attentionDiv = document.getElementById('attention-content');
+  const attItems = [
+    ...overdue.slice(0,5).map(t => renderAttentionCard(t, users, '🕐 In ritardo')),
+    ...escalated.slice(0,5).map(t => renderAttentionCard(t, users, '🚨 In escalation', '#dc2626')),
+    ...urgent.filter(t => !overdue.find(o=>o.id===t.id)).slice(0,3).map(t => renderAttentionCard(t, users, '⚡ Urgente', '#d97706')),
+  ];
+  if (attItems.length) {
+    attentionDiv.innerHTML = attItems.join('');
+  } else {
+    attentionDiv.innerHTML = '<div class="empty-state" style="padding:18px 0;text-align:left;font-size:14px;color:var(--ok)">✅ Nessuna urgenza operativa. Tutto è sotto controllo.</div>';
+  }
+
+  // Workload
+  if (statsRes && Array.isArray(statsRes.workload) && statsRes.workload.length) {
+    const wl = statsRes.workload.filter(w => w.role === 'CHEF_CUISINE' || w.role === 'ADJOINT');
+    const allWl = statsRes.workload;
+    const maxTasks = Math.max(...allWl.map(w => w.activeTasks), 1);
+    document.getElementById('workload-card').innerHTML = allWl.map(w => `
+      <div class="workload-member">
+        <div>
+          <div class="workload-member-name">${esc(w.name)}</div>
+          <div class="workload-member-role">${esc(OpsCommon.roleLabel(w.role))}</div>
+        </div>
+        <div style="flex:1;margin:0 16px">
+          <div class="workload-bar" style="height:8px"><div class="workload-fill" style="width:${Math.round(w.activeTasks/maxTasks*100)}%;background:${w.activeTasks>8?'var(--danger)':w.activeTasks>5?'var(--warn)':'var(--accent)'}"></div></div>
+        </div>
+        <div class="workload-member-count${w.activeTasks>8?' critical':w.activeTasks>5?' high':''}">${w.activeTasks}</div>
+      </div>`).join('');
+  } else {
+    document.getElementById('workload-card').innerHTML = '<div class="empty-state" style="padding:12px 0">Nessun membro del team da mostrare.</div>';
+  }
+
+  // Overdue by department
+  if (escRes && escRes.success) {
+    const depts = escRes.overdueByDepartment;
+    if (Object.keys(depts).length) {
+      document.getElementById('dept-section').style.display = '';
+      const maxV = Math.max(...Object.values(depts), 1);
+      document.getElementById('dept-bars').innerHTML = Object.entries(depts).sort((a,b)=>b[1]-a[1]).map(([dept,cnt]) => `
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+          <span style="font-size:13px;font-weight:700;min-width:130px">${esc(dept)}</span>
+          <div class="task-progress" style="flex:1;height:8px"><div class="progress-fill" style="width:${Math.round(cnt/maxV*100)}%;background:#dc2626"></div></div>
+          <span style="font-size:14px;font-weight:800;min-width:28px;text-align:right;color:var(--danger)">${cnt}</span>
+        </div>`).join('');
+    }
+  }
+}
+
+function renderAttentionCard(t, users, label, color='#dc2626') {
+  const assignee = users[t.assigneeId];
+  return `<div class="task-card attention-card" style="cursor:pointer;margin-bottom:8px" onclick="location.href='operations-tasks.html#${esc(t.id)}'">
+    <div style="font-size:11px;font-weight:800;letter-spacing:.5px;color:${color};margin-bottom:6px">${esc(label)}</div>
+    <div class="task-title">${esc(t.title)}</div>
+    <div style="font-size:12px;color:var(--muted);margin-top:4px">
+      ${assignee ? '👤 '+esc(assignee.name||t.assigneeName||'')+'&nbsp;·&nbsp;' : ''}
+      📅 ${esc(fmt(t.dueDate))}
+      ${t.escalationLevel > 0 ? `&nbsp;·&nbsp;<span style="color:#dc2626;font-weight:700">Livello ${t.escalationLevel}</span>` : ''}
+    </div>
+  </div>`;
+}
+
+load();
+</script>
+</body>
+</html>

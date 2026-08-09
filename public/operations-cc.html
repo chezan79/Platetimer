@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Operations — Chef di Cucina — PlateTimer</title>
+<link rel="stylesheet" href="css/operations.css">
+</head>
+<body>
+
+<header class="hdr">
+  <span id="hdr-company" class="hdr-brand"></span>
+  <span class="hdr-sep"></span>
+  <span class="hdr-page">Operations · Chef di Cucina</span>
+  <button class="hdr-btn" onclick="location.href='operations-tasks.html'">Compiti</button>
+  <button class="hdr-btn" onclick="location.href='home.html'">Home</button>
+  <button class="hdr-btn danger" onclick="OpsCommon.logout()">Esci</button>
+</header>
+
+<main class="main">
+  <div class="pg-heading">
+    <h1 class="pg-title">Dashboard Cucina</h1>
+    <p class="pg-sub"><span id="me-name"></span> · <span id="me-role" class="role-badge"></span></p>
+  </div>
+
+  <div id="ops-error" class="msg msg-error" style="display:none"></div>
+
+  <!-- Today's Briefing -->
+  <div class="brief-card">
+    <div class="brief-text" id="brief-text">Caricamento…</div>
+  </div>
+
+  <!-- Quick Actions -->
+  <p class="section-title" style="margin-top:0">Azioni rapide</p>
+  <div class="qa-grid">
+    <button class="qa-btn qa-primary" onclick="location.href='operations-tasks.html?action=create'">
+      <span class="qa-icon">➕</span>Crea compito cucina
+    </button>
+    <button class="qa-btn qa-danger" onclick="location.href='operations-tasks.html?filter=overdue'">
+      <span class="qa-icon">🕐</span>In ritardo
+    </button>
+    <button class="qa-btn" onclick="location.href='operations-tasks.html?filter=today'">
+      <span class="qa-icon">📅</span>Compiti di oggi
+    </button>
+    <button class="qa-btn" onclick="location.href='operations-tasks.html?filter=recurring'">
+      <span class="qa-icon">🔁</span>Ricorrenti cucina
+    </button>
+  </div>
+
+  <!-- Stats -->
+  <div class="stat-row" style="grid-template-columns:repeat(4,1fr);margin-bottom:24px">
+    <div class="stat-card ok"><div class="stat-num" id="stat-done">—</div><div class="stat-lbl">Completati oggi</div></div>
+    <div class="stat-card"><div class="stat-num" id="stat-today">—</div><div class="stat-lbl">Totale oggi</div></div>
+    <div class="stat-card danger"><div class="stat-num" id="stat-overdue">—</div><div class="stat-lbl">In ritardo</div></div>
+    <div class="stat-card danger"><div class="stat-num" id="stat-urgent">—</div><div class="stat-lbl">Urgenti</div></div>
+  </div>
+
+  <!-- Main content -->
+  <div id="main-content"></div>
+</main>
+
+<script src="js/ws-auth.js"></script>
+<script src="js/operations-common.js"></script>
+<script>
+const esc = OpsCommon.escHtml;
+
+async function load() {
+  const me = await OpsCommon.loadMe();
+  if (!me) return;
+  if (me.user.role !== 'CHEF_CUISINE') { location.replace('operations.html'); return; }
+  document.getElementById('me-name').textContent = me.user.name || '';
+  document.getElementById('me-role').textContent = OpsCommon.roleLabel(me.user.role);
+  const myId = me.user.id;
+
+  const data = await OpsCommon.api('/api/operations/tasks');
+  if (!data || !data.success) { OpsCommon.showError(data && data.error); return; }
+  const tasks = data.tasks, users = data.users;
+  const now = new Date();
+
+  // Kitchen = all visible tasks (CC sees their team: SousChef, CdB, themselves)
+  const active  = tasks.filter(t => t.status !== 'CANCELLED');
+  const overdue = active.filter(t => (t.effectiveStatus||t.status)==='OVERDUE' || (t.dueDate && new Date(t.dueDate) < now && t.status !== 'COMPLETED'));
+  const urgent  = active.filter(t => t.priority === 'URGENT' && t.status !== 'COMPLETED');
+  const today   = active.filter(t => OpsCommon.isToday(t.dueDate));
+  const done    = tasks.filter(t => OpsCommon.isCompletedToday(t));
+  const recurringToday = active.filter(t => t.templateId && OpsCommon.isToday(t.dueDate));
+
+  // My tasks vs sous chef vs CdB
+  const mine      = active.filter(t => t.assigneeId === myId && t.status !== 'COMPLETED');
+  const sousChefTasks = active.filter(t => { const u = users[t.assigneeId]; return u && u.role === 'SOUS_CHEF' && t.status !== 'COMPLETED'; });
+  const cdbTasks  = active.filter(t => { const u = users[t.assigneeId]; return u && u.role === 'CHEF_DE_BRIGADE' && t.status !== 'COMPLETED'; });
+
+  // Stats
+  document.getElementById('stat-done').textContent    = done.length;
+  document.getElementById('stat-today').textContent   = today.length;
+  document.getElementById('stat-overdue').textContent = overdue.length;
+  document.getElementById('stat-urgent').textContent  = urgent.length;
+
+  // Briefing
+  document.getElementById('brief-text').innerHTML = `
+    La cucina ha <span class="brief-num">${today.length}</span> compiti pianificati oggi.
+    <span class="brief-num ok">${done.length}</span> sono già stati completati.
+    ${overdue.length > 0 ? `<span class="brief-num red">${overdue.length}</span> ${overdue.length===1?'compito è in ritardo':'compiti sono in ritardo'}.` : ''}
+    ${overdue.length===0 ? '<span style="color:var(--ok)">✅ Nessun ritardo.</span>' : ''}
+  `;
+
+  // Render
+  const container = document.getElementById('main-content');
+  container.innerHTML = '';
+
+  // Overdue first
+  OpsCommon.renderSection(container, '🕐 In ritardo', overdue.slice(0,8), users, 'Nessun compito in ritardo. Ottimo!');
+
+  // Urgent (not already in overdue)
+  const urgentOnly = urgent.filter(t => !overdue.find(o=>o.id===t.id));
+  OpsCommon.renderSection(container, '⚡ Urgenti', urgentOnly.slice(0,5), users, 'Nessun compito urgente.');
+
+  // I miei compiti
+  OpsCommon.renderSection(container, '👤 I miei compiti', mine.slice(0,5), users, 'Nessun compito assegnato a te.');
+
+  // Sous Chef tasks
+  OpsCommon.renderSection(container, 'Sous Chef', sousChefTasks.slice(0,5), users, 'Nessun compito assegnato ai Sous Chef.');
+
+  // Chef de Brigade tasks
+  OpsCommon.renderSection(container, 'Chef de Brigade', cdbTasks.slice(0,5), users, 'Nessun compito assegnato ai Chef de Brigade.');
+
+  // Recurring today
+  OpsCommon.renderSection(container, '🔁 Ricorrenti di oggi', recurringToday.slice(0,5), users, 'Nessun compito ricorrente pianificato per oggi.');
+}
+
+load();
+</script>
+</body>
+</html>

@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Operations — Sous Chef — PlateTimer</title>
+<link rel="stylesheet" href="css/operations.css">
+</head>
+<body>
+
+<header class="hdr">
+  <span id="hdr-company" class="hdr-brand"></span>
+  <span class="hdr-sep"></span>
+  <span class="hdr-page">Operations · Sous Chef</span>
+  <button class="hdr-btn" onclick="location.href='operations-tasks.html'">Compiti</button>
+  <button class="hdr-btn" onclick="location.href='home.html'">Home</button>
+  <button class="hdr-btn danger" onclick="OpsCommon.logout()">Esci</button>
+</header>
+
+<main class="main">
+  <div class="pg-heading">
+    <h1 class="pg-title">Il mio lavoro</h1>
+    <p class="pg-sub"><span id="me-name"></span> · <span id="me-role" class="role-badge"></span></p>
+  </div>
+
+  <div id="ops-error" class="msg msg-error" style="display:none"></div>
+
+  <!-- Next task highlight -->
+  <div id="next-task-section" style="display:none">
+    <div class="next-task-card" id="next-task-card">
+      <div class="next-task-label">⭐ PROSSIMO COMPITO</div>
+      <div class="next-task-title" id="nt-title">—</div>
+      <div class="next-task-meta" id="nt-meta">—</div>
+      <div class="next-task-actions">
+        <button class="btn btn-primary" id="nt-start-btn">▶ Inizia ora</button>
+        <button class="btn btn-ok" id="nt-complete-btn">✓ Completa</button>
+        <button class="btn btn-neutral" id="nt-view-btn">Dettagli →</button>
+      </div>
+    </div>
+  </div>
+  <div id="no-next-task" style="display:none;margin-bottom:24px">
+    <div class="brief-card" style="border-color:var(--ok)">
+      <div class="brief-text" style="color:var(--ok)">✅ Tutti i compiti completati. Ottimo lavoro!</div>
+    </div>
+  </div>
+
+  <!-- Stats (minimal) -->
+  <div class="stat-row" style="grid-template-columns:repeat(4,1fr);margin-bottom:24px">
+    <div class="stat-card danger"><div class="stat-num" id="stat-urgent">—</div><div class="stat-lbl">Urgenti</div></div>
+    <div class="stat-card danger"><div class="stat-num" id="stat-overdue">—</div><div class="stat-lbl">In ritardo</div></div>
+    <div class="stat-card"><div class="stat-num" id="stat-today">—</div><div class="stat-lbl">Scadono oggi</div></div>
+    <div class="stat-card ok"><div class="stat-num" id="stat-done">—</div><div class="stat-lbl">Completati oggi</div></div>
+  </div>
+
+  <div id="main-content"></div>
+</main>
+
+<script src="js/ws-auth.js"></script>
+<script src="js/operations-common.js"></script>
+<script>
+const esc = OpsCommon.escHtml;
+let myNextTask = null;
+
+async function load() {
+  const me = await OpsCommon.loadMe();
+  if (!me) return;
+  if (me.user.role !== 'SOUS_CHEF') { location.replace('operations.html'); return; }
+  document.getElementById('me-name').textContent = me.user.name || '';
+  document.getElementById('me-role').textContent = OpsCommon.roleLabel(me.user.role);
+  const myId = me.user.id;
+
+  const data = await OpsCommon.api('/api/operations/tasks');
+  if (!data || !data.success) { OpsCommon.showError(data && data.error); return; }
+  const tasks = data.tasks, users = data.users;
+  const now = new Date();
+
+  const mine    = tasks.filter(t => t.assigneeId === myId);
+  const active  = mine.filter(t => t.status !== 'COMPLETED' && t.status !== 'CANCELLED');
+  const urgent  = active.filter(t => t.priority === 'URGENT');
+  const overdue = active.filter(t => (t.effectiveStatus||t.status)==='OVERDUE' || (t.dueDate && new Date(t.dueDate) < now));
+  const today   = active.filter(t => OpsCommon.isToday(t.dueDate) && !overdue.find(o=>o.id===t.id));
+  const dueSoon = active.filter(t => {
+    if (!t.dueDate) return false;
+    const d = new Date(t.dueDate), diff = d - now;
+    return diff > 0 && diff < 48 * 3600000;
+  });
+  const done    = mine.filter(t => OpsCommon.isCompletedToday(t));
+
+  document.getElementById('stat-urgent').textContent  = urgent.length;
+  document.getElementById('stat-overdue').textContent = overdue.length;
+  document.getElementById('stat-today').textContent   = today.length;
+  document.getElementById('stat-done').textContent    = done.length;
+
+  // Next task
+  myNextTask = OpsCommon.nextTask(tasks, myId);
+  if (myNextTask) {
+    document.getElementById('next-task-section').style.display = '';
+    document.getElementById('nt-title').textContent = myNextTask.title;
+    document.getElementById('nt-meta').textContent  = '📅 ' + OpsCommon.fmtDue(myNextTask.dueDate) +
+      (myNextTask.department ? '  ·  🏠 ' + myNextTask.department : '') +
+      '  ·  ' + (OpsCommon.PRIORITY_LABELS[myNextTask.priority] || myNextTask.priority);
+
+    const startBtn    = document.getElementById('nt-start-btn');
+    const completeBtn = document.getElementById('nt-complete-btn');
+
+    if (myNextTask.status !== 'OPEN') startBtn.style.display = 'none';
+    startBtn.onclick = async () => {
+      startBtn.disabled = true;
+      const r = await OpsCommon.api('/api/operations/tasks/' + myNextTask.id + '/start', { method: 'POST' });
+      if (r && r.success) load(); else { OpsCommon.showError(r && r.error); startBtn.disabled = false; }
+    };
+    completeBtn.onclick = async () => {
+      completeBtn.disabled = true;
+      const r = await OpsCommon.api('/api/operations/tasks/' + myNextTask.id + '/complete', { method: 'POST' });
+      if (r && r.success) load(); else { OpsCommon.showError(r && r.error); completeBtn.disabled = false; }
+    };
+    document.getElementById('nt-view-btn').onclick = () => { location.href = 'operations-tasks.html#' + myNextTask.id; };
+  } else {
+    document.getElementById('no-next-task').style.display = '';
+  }
+
+  const container = document.getElementById('main-content');
+  container.innerHTML = '';
+
+  OpsCommon.renderSection(container, '🕐 In ritardo', overdue, users, 'Nessun compito in ritardo.');
+  OpsCommon.renderSection(container, '⚡ Urgenti', urgent.filter(t=>!overdue.find(o=>o.id===t.id)), users, 'Nessun compito urgente.');
+  OpsCommon.renderSection(container, '📅 Scadono oggi', today, users, 'Nessun compito in scadenza oggi.');
+  OpsCommon.renderSection(container, '🕐 In scadenza a breve (48h)', dueSoon.filter(t=>!today.find(x=>x.id===t.id)), users, 'Nessun compito a breve scadenza.');
+  OpsCommon.renderSection(container, '✅ Completati oggi', done, users, 'Nessun compito completato oggi.');
+}
+
+load();
+</script>
+</body>
+</html>

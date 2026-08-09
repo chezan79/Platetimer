@@ -217,10 +217,97 @@ const OpsCommon = (() => {
         window.location.href = 'index.html';
     }
 
+    // Sprint 4: deterministic "next task" selection
+    // Priority: URGENT → OVERDUE/effectiveStatus=OVERDUE → due today → oldest OPEN
+    function nextTask(tasks, myId) {
+        const today = new Date(); today.setHours(23,59,59,999);
+        const todayStart = new Date(); todayStart.setHours(0,0,0,0);
+        const mine = tasks.filter(t =>
+            t.assigneeId === myId &&
+            t.status !== 'COMPLETED' && t.status !== 'CANCELLED'
+        );
+        if (!mine.length) return null;
+        function score(t) {
+            const eff = t.effectiveStatus || t.status;
+            if (t.priority === 'URGENT') return 0;
+            if (eff === 'OVERDUE' || (t.dueDate && new Date(t.dueDate) < new Date())) return 1;
+            if (t.dueDate) {
+                const d = new Date(t.dueDate);
+                if (d >= todayStart && d <= today) return 2;
+            }
+            return 3;
+        }
+        return mine.sort((a,b) => {
+            const sa = score(a), sb = score(b);
+            if (sa !== sb) return sa - sb;
+            return new Date(a.createdAt) - new Date(b.createdAt);
+        })[0];
+    }
+
+    // Sprint 4: is a task due today?
+    function isToday(dateStr) {
+        if (!dateStr) return false;
+        const d = new Date(dateStr);
+        const now = new Date();
+        return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+    }
+
+    // Sprint 4: is task completed today?
+    function isCompletedToday(t) {
+        return t.status === 'COMPLETED' && (isToday(t.updatedAt) || isToday(t.completedAt));
+    }
+
+    // Sprint 4: hour-of-day greeting
+    function greeting() {
+        const h = new Date().getHours();
+        if (h < 12) return 'Buongiorno';
+        if (h < 18) return 'Buon pomeriggio';
+        return 'Buonasera';
+    }
+
+    // Sprint 4: render a compact task card (clickable → operations-tasks.html)
+    function taskCard(t, users, opts = {}) {
+        const eff = t.effectiveStatus || t.status;
+        const isOverdue = eff === 'OVERDUE';
+        const isUrgent  = t.priority === 'URGENT';
+        const isCompleted = t.status === 'COMPLETED';
+        const assignee = users[t.assigneeId];
+        const extraClass = isOverdue ? ' overdue-card' : isUrgent ? ' urgent-card' : isCompleted ? ' completed-card' : '';
+        const dotColor = isOverdue ? 'var(--danger)' : isUrgent ? 'var(--warn)' : isCompleted ? 'var(--ok)' : 'var(--border-l)';
+        return `<div class="task-card${extraClass}" style="cursor:pointer;border-left:3px solid ${dotColor}"
+                     onclick="location.href='operations-tasks.html#${escHtml(t.id)}'">
+          <div class="task-card-header">
+            <div style="flex:1;min-width:0">
+              <div class="task-title" style="margin-bottom:3px">${escHtml(t.title)}</div>
+              <div style="font-size:12px;color:var(--muted)">
+                ${assignee ? '👤 '+escHtml(assignee.name)+' · ' : ''}📅 ${escHtml(fmtDue(t.dueDate))}
+                ${t.department ? ' · '+escHtml(t.department) : ''}
+                ${t.templateId ? ' · 🔁' : ''}
+              </div>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
+              <span class="badge badge-${(t.priority||'medium').toLowerCase()}">${PRIORITY_LABELS[t.priority]||t.priority}</span>
+              <span class="badge badge-status-${eff.toLowerCase()}">${STATUS_LABELS[eff]||eff}</span>
+            </div>
+          </div>
+          ${opts.showProgress && t.completionPercent > 0 ? `<div class="task-progress" style="margin-top:8px;height:5px"><div class="progress-fill" style="width:${t.completionPercent}%"></div></div>` : ''}
+        </div>`;
+    }
+
+    // Sprint 4: render a task list section with title and optional empty state
+    function renderSection(container, title, tasks, users, emptyMsg) {
+        if (!tasks.length) {
+            container.innerHTML += `<p class="section-title-sm">${escHtml(title)}</p><div class="empty-state" style="padding:18px 0;text-align:left;font-size:13px;color:var(--ok)">✅ ${escHtml(emptyMsg)}</div>`;
+        } else {
+            container.innerHTML += `<p class="section-title-sm">${escHtml(title)}</p>` + tasks.map(t => taskCard(t, users)).join('');
+        }
+    }
+
     return {
         api, loadMe, showError, escHtml,
         fmtDue, fmtDatetime, fmtDateShort,
         roleLabel, buildAssigneeSelect, renderTaskList, historyLine,
-        logout, ROLE_LABELS, PRIORITY_LABELS, STATUS_LABELS, HISTORY_LABELS
+        logout, ROLE_LABELS, PRIORITY_LABELS, STATUS_LABELS, HISTORY_LABELS,
+        nextTask, isToday, isCompletedToday, greeting, taskCard, renderSection
     };
 })();
