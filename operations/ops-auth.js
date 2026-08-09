@@ -69,6 +69,38 @@ function canManageUsers(actor) {
     return !!actor && actor.role === 'DIRECTOR';
 }
 
+// May `actor` edit or perform status actions on `target`?
+// Director + same company + never self (Director cannot manage their own account via these actions).
+function canManageOpsUser(actor, target) {
+    if (!actor || !target) return false;
+    if (actor.companyId !== target.companyId) return false;
+    if (actor.id === target.id) return false;
+    return actor.role === 'DIRECTOR';
+}
+
+// May `actor` permanently delete `target`? Same rules as canManageOpsUser.
+// Dependency check (hasUserDependencies) must be performed separately before deletion.
+function canDeleteOpsUser(actor, target) {
+    return canManageOpsUser(actor, target);
+}
+
+// Does `target` user have any historical/operational dependencies that prevent hard deletion?
+// Checks tasks (assigned, created, comments, history entries) and recurring templates.
+// `tasks` and `templates` must be the company's own arrays (caller enforces company isolation).
+function hasUserDependencies(targetId, tasks, templates) {
+    const taskDep = (tasks || []).some(t =>
+        t.assigneeId === targetId ||
+        t.createdBy  === targetId ||
+        (t.comments || []).some(c => c.authorId === targetId) ||
+        (t.history  || []).some(h => h.actorId  === targetId)
+    );
+    const tplDep = (templates || []).some(t =>
+        t.defaultAssigneeId === targetId ||
+        t.createdBy         === targetId
+    );
+    return taskDep || tplDep;
+}
+
 // List of company users the actor may assign tasks to (for the UX dropdown —
 // backend still enforces on every request).
 function allowedAssignees(actor, companyUsers) {
@@ -137,6 +169,9 @@ module.exports = {
     canUpdateProgress,
     canCancelTask,
     canManageUsers,
+    canManageOpsUser,
+    canDeleteOpsUser,
+    hasUserDependencies,
     allowedAssignees,
     getEscalationChain,
 };

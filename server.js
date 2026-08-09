@@ -1519,6 +1519,16 @@ function requireOpsAuth(req, res) {
             return null;
         }
     }
+    // Status-specific messages must be checked before the generic active flag,
+    // because suspend/archive both set active=false.
+    if (opsUser.status === 'SUSPENDED') {
+        res.status(403).json({ error: 'Account Operations sospeso. Contatta il Direttore.' });
+        return null;
+    }
+    if (opsUser.status === 'ARCHIVED') {
+        res.status(403).json({ error: 'Account Operations archiviato. Contatta il Direttore.' });
+        return null;
+    }
     if (opsUser.active === false) {
         res.status(403).json({ error: 'Account Operations disattivato. Contatta il Direttore.' });
         return null;
@@ -1533,7 +1543,13 @@ function opsUsersById(companyId) {
 }
 
 function publicOpsUser(u) {
-    return { id: u.id, name: u.name, email: u.email, role: u.role, active: u.active !== false, status: u.status, createdAt: u.createdAt };
+    return {
+        id: u.id, name: u.name, email: u.email, role: u.role,
+        active: u.active !== false, status: u.status, createdAt: u.createdAt,
+        // hasFirebaseAccount: whether this user has a bound Firebase UID.
+        // Used by the frontend to warn that Firebase Auth is NOT deleted on record deletion.
+        hasFirebaseAccount: !!u.uid,
+    };
 }
 
 // Compute effective status. OVERDUE if not completed/cancelled and dueDate passed.
@@ -1572,17 +1588,27 @@ app.get('/api/operations/me', (req, res) => {
 });
 
 // ── GET /api/operations/users — Director only: full team list ──
+// Query: ?status=active|invited|suspended|archived|all
+// Default (no param): ACTIVE + INVITED + SUSPENDED — archived excluded from normal view.
 app.get('/api/operations/users', (req, res) => {
     const ctx = requireOpsAuth(req, res);
     if (!ctx) return;
     if (!opsAuth.canManageUsers(ctx.opsUser)) {
         return res.status(403).json({ error: 'Solo il Direttore può gestire gli utenti.' });
     }
-    const users = getOpsUsers(ctx.opsUser.companyId).map(u => ({
+    const statusFilter = (req.query.status || '').toLowerCase();
+    let users = getOpsUsers(ctx.opsUser.companyId);
+    if      (statusFilter === 'active')    users = users.filter(u => u.status === 'ACTIVE');
+    else if (statusFilter === 'invited')   users = users.filter(u => u.status === 'INVITED');
+    else if (statusFilter === 'suspended') users = users.filter(u => u.status === 'SUSPENDED');
+    else if (statusFilter === 'archived')  users = users.filter(u => u.status === 'ARCHIVED');
+    else if (statusFilter === 'all')       { /* no filter */ }
+    else    users = users.filter(u => u.status !== 'ARCHIVED'); // default: hide archived
+    const result = users.map(u => ({
         ...publicOpsUser(u),
         inviteCode: u.status === 'INVITED' ? u.inviteCode : undefined
     }));
-    res.json({ success: true, users });
+    res.json({ success: true, users: result });
 });
 
 // ── GET /api/operations/assignees — users the actor may assign tasks to (UX) ──
@@ -1712,23 +1738,185 @@ app.post('/api/operations/users/:id/resend-invite', async (req, res) => {
     });
 });
 
-// ── PUT /api/operations/users/:id — Director only: activate/deactivate ──
+// ── PUT /api/operations/users/:id — Director only: edit user fields ──
+// Editable: name (all statuses), role (all, not self), email (INVITED only — no Firebase uid yet).
+// Legacy: {active: boolean} still accepted for backwards compat with older clients.
 app.put('/api/operations/users/:id', (req, res) => {
     const ctx = requireOpsAuth(req, res);
     if (!ctx) return;
     if (!opsAuth.canManageUsers(ctx.opsUser)) {
         return res.status(403).json({ error: 'Solo il Direttore può gestire gli utenti.' });
     }
-    const users = getOpsUsers(ctx.opsUser.companyId); // company isolation: only own company searched
+    const companyId = ctx.opsUser.companyId;
+    const users = getOpsUsers(companyId); // company isolation: only own company searched
     const user = users.find(u => u.id === req.params.id);
     if (!user) return res.status(404).json({ error: 'Utente non trovato.' });
-    if (user.id === ctx.opsUser.id && req.body.active === false) {
-        return res.status(400).json({ error: 'Non puoi disattivare il tuo stesso account.' });
+
+    // Legacy: active toggle (kept for backwards compatibility)
+    if (typeof req.body.active === 'boolean') {
+        if (user.id === ctx.opsUser.id && req.body.active === false) {
+            return res.status(400).json({ error: 'Non puoi disattivare il tuo stesso account.' });
+        }
+        user.active = req.body.active;
     }
-    if (typeof req.body.active === 'boolean') user.active = req.body.active;
+
+    // Name
+    if (req.body.name !== undefined) {
+        const name = req.body.name.toString().trim().substring(0, 80);
+        if (!name) return res.status(400).json({ error: 'Nome obbligatorio.' });
+        user.name = name;
+    }
+
+    // Email — editable only for INVITED users (no Firebase uid bound yet).
+    // Once the user activates (uid set), their Firebase email is the identity; changing
+    // it here would desync the ops record from Firebase Auth.
+    if (req.body.email !== undefined) {
+        if (user.status !== 'INVITED' || user.uid) {
+            return res.status(400).json({ error: 'L\'email non è modificabile per utenti già attivati (account Firebase già collegato).' });
+        }
+        const email = req.body.email.toString().trim().toLowerCase();
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            return res.status(400).json({ error: 'Email non valida.' });
+        }
+        if (users.some(u => u.email === email && u.id !== user.id)) {
+            return res.status(409).json({ error: 'Esiste già un utente con questa email in azienda.' });
+        }
+        user.email = email;
+    }
+
+    // Role — [SECURITY] cannot change own role; validates against known roles.
+    if (req.body.role !== undefined) {
+        const role = req.body.role.toString().trim();
+        if (!opsAuth.isValidRole(role)) {
+            return res.status(400).json({ error: `Ruolo non valido. Ruoli ammessi: ${opsAuth.ROLES.join(', ')}` });
+        }
+        if (user.id === ctx.opsUser.id) {
+            return res.status(400).json({ error: 'Non puoi modificare il tuo stesso ruolo.' });
+        }
+        user.role = role;
+    }
+
+    user.updatedAt = Date.now();
     saveOpsUsers();
-    console.log(`✅ [OPS] User ${user.id} active=${user.active} (company "${ctx.opsUser.companyId}")`);
+    console.log(`✅ [OPS] User ${user.id} updated by Director ${ctx.opsUser.id} (company "${companyId}")`);
     res.json({ success: true, user: publicOpsUser(user) });
+});
+
+// ── POST /api/operations/users/:id/suspend — Director only ──
+app.post('/api/operations/users/:id/suspend', (req, res) => {
+    const ctx = requireOpsAuth(req, res);
+    if (!ctx) return;
+    if (!opsAuth.canManageUsers(ctx.opsUser)) return res.status(403).json({ error: 'Solo il Direttore può sospendere gli utenti.' });
+    const companyId = ctx.opsUser.companyId;
+    const user = getOpsUsers(companyId).find(u => u.id === req.params.id);
+    if (!user) return res.status(404).json({ error: 'Utente non trovato.' });
+    if (!opsAuth.canManageOpsUser(ctx.opsUser, user)) return res.status(403).json({ error: 'Non puoi sospendere questo utente.' });
+    if (user.status === 'SUSPENDED') return res.status(400).json({ error: 'L\'utente è già sospeso.' });
+    // Count open tasks so Director is aware
+    const openTasks = getOpsTasks(companyId).filter(t =>
+        t.assigneeId === user.id && t.status !== 'COMPLETED' && t.status !== 'CANCELLED'
+    ).length;
+    user.status = 'SUSPENDED';
+    user.active = false;
+    user.suspendedAt = Date.now();
+    user.updatedAt   = Date.now();
+    saveOpsUsers();
+    console.log(`✅ [OPS] User ${user.id} suspended by Director ${ctx.opsUser.id} (company "${companyId}", openTasks=${openTasks})`);
+    res.json({ success: true, user: publicOpsUser(user), openTasks });
+});
+
+// ── POST /api/operations/users/:id/reactivate — Director only (SUSPENDED → ACTIVE) ──
+app.post('/api/operations/users/:id/reactivate', (req, res) => {
+    const ctx = requireOpsAuth(req, res);
+    if (!ctx) return;
+    if (!opsAuth.canManageUsers(ctx.opsUser)) return res.status(403).json({ error: 'Solo il Direttore può riattivare gli utenti.' });
+    const companyId = ctx.opsUser.companyId;
+    const user = getOpsUsers(companyId).find(u => u.id === req.params.id);
+    if (!user) return res.status(404).json({ error: 'Utente non trovato.' });
+    if (!opsAuth.canManageOpsUser(ctx.opsUser, user)) return res.status(403).json({ error: 'Non puoi riattivare questo utente.' });
+    if (user.status !== 'SUSPENDED') return res.status(400).json({ error: 'L\'utente non è sospeso.' });
+    user.status = 'ACTIVE';
+    user.active = true;
+    user.reactivatedAt = Date.now();
+    user.updatedAt     = Date.now();
+    saveOpsUsers();
+    console.log(`✅ [OPS] User ${user.id} reactivated by Director ${ctx.opsUser.id} (company "${companyId}")`);
+    res.json({ success: true, user: publicOpsUser(user) });
+});
+
+// ── POST /api/operations/users/:id/archive — Director only ──
+app.post('/api/operations/users/:id/archive', (req, res) => {
+    const ctx = requireOpsAuth(req, res);
+    if (!ctx) return;
+    if (!opsAuth.canManageUsers(ctx.opsUser)) return res.status(403).json({ error: 'Solo il Direttore può archiviare gli utenti.' });
+    const companyId = ctx.opsUser.companyId;
+    const user = getOpsUsers(companyId).find(u => u.id === req.params.id);
+    if (!user) return res.status(404).json({ error: 'Utente non trovato.' });
+    if (!opsAuth.canManageOpsUser(ctx.opsUser, user)) return res.status(403).json({ error: 'Non puoi archiviare questo utente.' });
+    if (user.status === 'ARCHIVED') return res.status(400).json({ error: 'L\'utente è già archiviato.' });
+    user.status = 'ARCHIVED';
+    user.active = false;
+    user.archivedAt = Date.now();
+    user.updatedAt  = Date.now();
+    saveOpsUsers();
+    console.log(`✅ [OPS] User ${user.id} archived by Director ${ctx.opsUser.id} (company "${companyId}")`);
+    res.json({ success: true, user: publicOpsUser(user) });
+});
+
+// ── POST /api/operations/users/:id/restore — Director only (ARCHIVED → ACTIVE) ──
+app.post('/api/operations/users/:id/restore', (req, res) => {
+    const ctx = requireOpsAuth(req, res);
+    if (!ctx) return;
+    if (!opsAuth.canManageUsers(ctx.opsUser)) return res.status(403).json({ error: 'Solo il Direttore può ripristinare gli utenti.' });
+    const companyId = ctx.opsUser.companyId;
+    const user = getOpsUsers(companyId).find(u => u.id === req.params.id);
+    if (!user) return res.status(404).json({ error: 'Utente non trovato.' });
+    if (!opsAuth.canManageOpsUser(ctx.opsUser, user)) return res.status(403).json({ error: 'Non puoi ripristinare questo utente.' });
+    if (user.status !== 'ARCHIVED') return res.status(400).json({ error: 'L\'utente non è archiviato.' });
+    user.status = 'ACTIVE';
+    user.active = true;
+    user.restoredAt = Date.now();
+    user.updatedAt  = Date.now();
+    saveOpsUsers();
+    console.log(`✅ [OPS] User ${user.id} restored by Director ${ctx.opsUser.id} (company "${companyId}")`);
+    res.json({ success: true, user: publicOpsUser(user) });
+});
+
+// ── DELETE /api/operations/users/:id — Director only: permanent deletion ──
+// [SECURITY] Only allowed when the user has NO historical/operational dependencies.
+// If the user has a Firebase uid, the Firebase Auth account is NOT deleted here —
+// Firebase Admin Auth is not configured for this project. The ops record is removed,
+// preventing Operations access; the Firebase account becomes an orphan but cannot
+// re-enter the system (bootstrap only fires for companies with zero ops users).
+app.delete('/api/operations/users/:id', (req, res) => {
+    const ctx = requireOpsAuth(req, res);
+    if (!ctx) return;
+    if (!opsAuth.canManageUsers(ctx.opsUser)) return res.status(403).json({ error: 'Solo il Direttore può eliminare gli utenti.' });
+    const companyId = ctx.opsUser.companyId;
+    const users = getOpsUsers(companyId);
+    const idx   = users.findIndex(u => u.id === req.params.id);
+    if (idx === -1) return res.status(404).json({ error: 'Utente non trovato.' });
+    const user = users[idx];
+    if (!opsAuth.canDeleteOpsUser(ctx.opsUser, user)) {
+        return res.status(403).json({ error: 'Non puoi eliminare questo utente.' });
+    }
+    const hasDeps = opsAuth.hasUserDependencies(user.id, getOpsTasks(companyId), getOpsTemplates(companyId));
+    if (hasDeps) {
+        return res.status(409).json({
+            error: 'Questo utente possiede dati storici. Archivialo invece di eliminarlo.',
+            suggestArchive: true
+        });
+    }
+    const hadFirebaseAccount = !!user.uid;
+    opsUsersStore[companyId].splice(idx, 1);
+    saveOpsUsers();
+    console.log(`✅ [OPS] User ${user.id} permanently deleted by Director ${ctx.opsUser.id} (company "${companyId}", hadFirebase=${hadFirebaseAccount})`);
+    res.json({
+        success: true,
+        firebaseNote: hadFirebaseAccount
+            ? 'Account Operations eliminato. L\'account Firebase Authentication associato NON è stato eliminato — richiede intervento manuale nella Firebase Console.'
+            : null
+    });
 });
 
 // ── GET /api/operations/invitations/:code — public info for the activation page ──

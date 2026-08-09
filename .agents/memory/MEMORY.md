@@ -6,4 +6,5 @@
 - [Operations Sprint 2 task model](ops-sprint2-model.md) — extended task schema; explicit action endpoints; canEditTask requires creator still has assignment rights over assignee; PUT kept for compat; audit history server-only.
 - [Operations Sprint 3 model](ops-sprint3-model.md) — recurring templates, reminder engine, escalation chain, scheduler phases, preferences; 94 new tests; 206 total passing.
 - [Operations Sprint 4 model](ops-sprint4-model.md) — 5 role dashboards + role router; nextTask algorithm; Sprint 4 CSS classes; 109 new tests; 315 total passing.
+- [Operations user management](ops-usermgmt.md) — ACTIVE/SUSPENDED/ARCHIVED/INVITED status model; canManageOpsUser/canDeleteOpsUser/hasUserDependencies in ops-auth.js; 5 new endpoints; 57 tests; 372 total passing.
 - [Persistence architecture](persistence-arch.md) — all file stores mirror to Firestore via firebase-admin v14 submodule imports; DATA_DIR env var enables Railway Volume fallback; FIREBASE_ADMIN_SERVICE_ACCOUNT is the dedicated credential; Speech API SA (feisty-coder-461119-r0) does NOT have Firestore enabled.

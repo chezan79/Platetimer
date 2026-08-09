@@ -50,16 +50,85 @@
     <!-- Team list -->
     <div>
       <p class="section-title" style="margin-top:0">Membri del team</p>
-      <div id="user-list" class="task-list"><div class="empty-state">Caricamento…</div></div>
+
+      <!-- Status filter tabs -->
+      <div class="team-tabs">
+        <button class="team-tab active" data-filter="" onclick="setFilter(this)">Attivi e Invitati</button>
+        <button class="team-tab" data-filter="suspended" onclick="setFilter(this)">Sospesi</button>
+        <button class="team-tab" data-filter="archived" onclick="setFilter(this)">Archiviati</button>
+        <button class="team-tab" data-filter="all" onclick="setFilter(this)">Tutti</button>
+      </div>
+
+      <div id="user-list"><div class="empty-state">Caricamento…</div></div>
     </div>
   </div>
 </main>
 
+<!-- ── Edit modal ───────────────────────────────────────────────────────── -->
+<div id="edit-modal" class="modal-overlay" onclick="closeEditIfOutside(event)">
+  <div class="modal-box">
+    <p class="modal-title">✏️ Modifica utente</p>
+    <p class="modal-sub" id="edit-modal-sub"></p>
+
+    <label class="form-label">Nome</label>
+    <input id="edit-name" class="form-input" maxlength="80">
+
+    <label class="form-label">Email</label>
+    <div id="edit-email-wrap"></div><!-- filled by openEdit() -->
+
+    <label class="form-label">Ruolo</label>
+    <select id="edit-role" class="form-select">
+      <option value="DIRECTOR">Direttore</option>
+      <option value="CHEF_CUISINE">Chef di Cucina</option>
+      <option value="ADJOINT">Adjoint</option>
+      <option value="SOUS_CHEF">Sous Chef</option>
+      <option value="CHEF_DE_BRIGADE">Chef de Brigade</option>
+    </select>
+
+    <div id="edit-msg" style="display:none" class="msg" style="margin-top:10px"></div>
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="closeEdit()">Annulla</button>
+      <button class="btn btn-primary" onclick="saveEdit()">Salva modifiche</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Delete confirm modal ─────────────────────────────────────────────── -->
+<div id="del-modal" class="modal-overlay" onclick="closeDelIfOutside(event)">
+  <div class="modal-box">
+    <p class="modal-title">Eliminare definitivamente questo utente?</p>
+    <p class="modal-sub" id="del-modal-name"></p>
+    <p class="modal-sub" style="color:#dc2626;">Questa operazione è irreversibile.</p>
+    <div id="del-msg" style="display:none" class="msg"></div>
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="closeDel()">Annulla</button>
+      <button class="btn btn-danger" onclick="confirmDelete()">Elimina definitivamente</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Archive suggestion modal ─────────────────────────────────────────── -->
+<div id="arch-modal" class="modal-overlay" onclick="closeArchIfOutside(event)">
+  <div class="modal-box">
+    <p class="modal-title">📦 Impossibile eliminare</p>
+    <p class="modal-sub" id="arch-modal-msg"></p>
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="closeArch()">Annulla</button>
+      <button class="btn btn-primary" onclick="archiveFromModal()">📦 Archivia utente</button>
+    </div>
+  </div>
+</div>
+
 <script src="js/ws-auth.js"></script>
 <script src="js/operations-common.js"></script>
 <script>
-let myOpsId = null;
+let myOpsId    = null;
+let currentFilter = '';
+let editTarget = null;  // { id, status, hasFirebaseAccount }
+let delTarget  = null;
+let archTarget = null;
 
+// ── Initialise ──────────────────────────────────────────────────────────────
 async function load() {
   const me = await OpsCommon.loadMe();
   if (!me) return;
@@ -72,62 +141,303 @@ async function load() {
   await loadUsers();
 }
 
-async function loadUsers() {
-  const data = await OpsCommon.api('/api/operations/users');
-  const list = document.getElementById('user-list');
-  if (!data || !data.success) return OpsCommon.showError(data && data.error);
-  if (!data.users.length) { list.innerHTML = '<div class="empty-state">Nessun membro.</div>'; return; }
-  list.innerHTML = data.users.map(u => `
-    <div class="task-item ${u.active ? '' : 'completed'}">
-      <div class="task-meta">
-        <div class="task-title">${OpsCommon.escHtml(u.name)}</div>
-        <div class="task-sub">${OpsCommon.escHtml(u.email || '—')}
-          ${u.status === 'INVITED' ? ' · <b>In attesa di attivazione</b>' : ''}</div>
-        ${u.inviteCode ? `<div class="task-sub">Link attivazione: <code>${location.origin}/operations-activate.html?code=${OpsCommon.escHtml(u.inviteCode)}</code></div>` : ''}
-      </div>
-      <span class="role-badge">${OpsCommon.roleLabel(u.role)}</span>
-      <span class="badge ${u.active ? 'badge-status-completed' : 'badge-status-overdue'}">${u.active ? 'Attivo' : 'Disattivato'}</span>
-      ${u.id !== myOpsId ? `<button class="btn btn-sm ${u.active ? 'btn-danger' : 'btn-ok'}" data-toggle="${OpsCommon.escHtml(u.id)}" data-active="${!u.active}">${u.active ? 'Disattiva' : 'Riattiva'}</button>` : ''}
-    </div>`).join('');
+// ── Filter tabs ─────────────────────────────────────────────────────────────
+function setFilter(btn) {
+  document.querySelectorAll('.team-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentFilter = btn.dataset.filter;
+  loadUsers();
+}
 
-  list.querySelectorAll('[data-toggle]').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      btn.disabled = true;
-      const r = await OpsCommon.api(`/api/operations/users/${btn.dataset.toggle}`,
-        { method: 'PUT', body: JSON.stringify({ active: btn.dataset.active === 'true' }) });
-      if (r && r.success) await loadUsers();
-      else { OpsCommon.showError(r && r.error); btn.disabled = false; }
+// ── Load & render team list ─────────────────────────────────────────────────
+async function loadUsers() {
+  const qs   = currentFilter ? `?status=${currentFilter}` : '';
+  const data = await OpsCommon.api('/api/operations/users' + qs);
+  const list = document.getElementById('user-list');
+  if (!data || !data.success) { OpsCommon.showError(data && data.error); return; }
+  if (!data.users.length) {
+    list.innerHTML = '<div class="empty-state">Nessun membro in questa categoria.</div>';
+    return;
+  }
+  list.innerHTML = data.users.map(u => renderUserRow(u)).join('');
+
+  // Wire dropdown toggles
+  list.querySelectorAll('.action-menu-btn').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      closeAllDropdowns();
+      const drop = btn.nextElementSibling;
+      drop.classList.toggle('open');
     });
   });
 }
 
+function renderUserRow(u) {
+  const isSelf = u.id === myOpsId;
+  const statusClass = u.status === 'SUSPENDED' ? 'suspended' : u.status === 'ARCHIVED' ? 'archived' : '';
+  const statusBadge = statusBadgeHtml(u.status);
+  const inviteLink  = u.inviteCode
+    ? `<div class="team-row-sub">Link: <code>${location.origin}/operations-activate.html?code=${OpsCommon.escHtml(u.inviteCode)}</code></div>`
+    : '';
+
+  const menu = isSelf ? '' : `
+    <div class="action-menu-wrap">
+      <button class="action-menu-btn" title="Azioni">⋯</button>
+      <div class="action-dropdown">${menuItems(u)}</div>
+    </div>`;
+
+  return `<div class="team-row ${statusClass}">
+    <div class="team-row-info">
+      <div class="team-row-name">${OpsCommon.escHtml(u.name)}</div>
+      <div class="team-row-email">${OpsCommon.escHtml(u.email || '—')}</div>
+      ${u.status === 'INVITED' ? '<div class="team-row-sub"><b>In attesa di attivazione</b></div>' : ''}
+      ${inviteLink}
+    </div>
+    <div class="team-row-badges">
+      <span class="role-badge">${OpsCommon.roleLabel(u.role)}</span>
+      ${statusBadge}
+    </div>
+    ${menu}
+  </div>`;
+}
+
+function statusBadgeHtml(status) {
+  const map = {
+    ACTIVE:    ['badge-active',    'Attivo'],
+    INVITED:   ['badge-invited',   'Invitato'],
+    SUSPENDED: ['badge-suspended', 'Sospeso'],
+    ARCHIVED:  ['badge-archived',  'Archiviato'],
+  };
+  const [cls, label] = map[status] || ['badge-archived', status];
+  return `<span class="badge ${cls}">${label}</span>`;
+}
+
+function menuItems(u) {
+  const id = OpsCommon.escHtml(u.id);
+  const lines = [];
+  if (u.status === 'ACTIVE' || u.status === 'INVITED' || u.status === 'SUSPENDED') {
+    lines.push(`<button onclick="openEdit('${id}')">✏️ Modifica</button>`);
+  }
+  if (u.status === 'INVITED') {
+    lines.push(`<button onclick="resendInvite('${id}')">✉️ Reinvia invito</button>`);
+  }
+  if (u.status === 'ACTIVE') {
+    lines.push(`<button onclick="suspendUser('${id}')">⏸️ Sospendi</button>`);
+    lines.push(`<button onclick="archiveUser('${id}')">📦 Archivia</button>`);
+  }
+  if (u.status === 'SUSPENDED') {
+    lines.push(`<button onclick="reactivateUser('${id}')">▶️ Riattiva</button>`);
+    lines.push(`<button onclick="archiveUser('${id}')">📦 Archivia</button>`);
+  }
+  if (u.status === 'ARCHIVED') {
+    lines.push(`<button onclick="restoreUser('${id}')">♻️ Ripristina</button>`);
+  }
+  if (lines.length) lines.push('<hr>');
+  lines.push(`<button class="danger" onclick="openDelete('${id}')">🗑️ Elimina</button>`);
+  return lines.join('');
+}
+
+function closeAllDropdowns() {
+  document.querySelectorAll('.action-dropdown.open').forEach(d => d.classList.remove('open'));
+}
+document.addEventListener('click', closeAllDropdowns);
+
+// ── Invite new member ────────────────────────────────────────────────────────
 async function inviteUser() {
   const btn = document.getElementById('invite-btn');
   const msg = document.getElementById('form-msg');
   const linkEl = document.getElementById('invite-link');
   msg.style.display = 'none'; linkEl.style.display = 'none';
   const body = {
-    name: document.getElementById('u-name').value.trim(),
+    name:  document.getElementById('u-name').value.trim(),
     email: document.getElementById('u-email').value.trim(),
-    role: document.getElementById('u-role').value
+    role:  document.getElementById('u-role').value
   };
   btn.disabled = true;
   const r = await OpsCommon.api('/api/operations/users', { method: 'POST', body: JSON.stringify(body) });
   btn.disabled = false;
   if (r && r.success) {
-    const emailSent = r.emailResult === 'SENT';
+    const sent = r.emailResult === 'SENT';
     msg.innerHTML = '<strong>Account creato con successo.</strong><br>' +
-      (emailSent
-        ? '✅ Email di invito inviata.'
-        : '⚠️ ' + OpsCommon.escHtml(r.emailNote || 'Email non inviata: condividi manualmente il link.'));
-    msg.className = 'msg ' + (emailSent ? 'msg-success' : 'msg-warn'); msg.style.display = 'block';
+      (sent ? '✅ Email di invito inviata.'
+             : '⚠️ ' + OpsCommon.escHtml(r.emailNote || 'Email non inviata: condividi manualmente il link.'));
+    msg.className = 'msg ' + (sent ? 'msg-success' : 'msg-warn');
+    msg.style.display = 'block';
     linkEl.innerHTML = 'Link di attivazione da condividere:<br><code>' + location.origin + OpsCommon.escHtml(r.activationUrl) + '</code>';
     linkEl.style.display = 'block';
     document.getElementById('u-name').value = '';
     document.getElementById('u-email').value = '';
     await loadUsers();
   } else {
-    msg.textContent = (r && r.error) || 'Errore.'; msg.className = 'msg msg-error'; msg.style.display = 'block';
+    msg.textContent = (r && r.error) || 'Errore.';
+    msg.className = 'msg msg-error';
+    msg.style.display = 'block';
+  }
+}
+
+// ── Resend invite ────────────────────────────────────────────────────────────
+async function resendInvite(id) {
+  closeAllDropdowns();
+  const r = await OpsCommon.api(`/api/operations/users/${id}/resend-invite`, { method: 'POST', body: '{}' });
+  if (r && r.success) {
+    alert(r.emailResult === 'SENT' ? '✅ Invito reinviato.' : '⚠️ ' + (r.emailNote || 'Reinvio non riuscito.'));
+  } else {
+    alert('Errore: ' + ((r && r.error) || 'sconosciuto'));
+  }
+}
+
+// ── Edit user ────────────────────────────────────────────────────────────────
+async function openEdit(id) {
+  closeAllDropdowns();
+  // Fetch current data from already-loaded list
+  const qs   = currentFilter ? `?status=${currentFilter}` : '';
+  const data = await OpsCommon.api('/api/operations/users?status=all');
+  if (!data || !data.success) return;
+  const u = data.users.find(x => x.id === id);
+  if (!u) return;
+
+  editTarget = u;
+  document.getElementById('edit-modal-sub').textContent = `${u.name} · ${u.email || '—'}`;
+  document.getElementById('edit-name').value = u.name;
+  document.getElementById('edit-role').value = u.role;
+
+  // Email: editable only for INVITED users without a Firebase account
+  const emailWrap = document.getElementById('edit-email-wrap');
+  if (u.status === 'INVITED' && !u.hasFirebaseAccount) {
+    emailWrap.innerHTML = `<input id="edit-email" class="form-input" type="email" value="${OpsCommon.escHtml(u.email || '')}">`;
+  } else {
+    emailWrap.innerHTML = `<div class="field-readonly">${OpsCommon.escHtml(u.email || '—')}</div>
+      <p style="font-size:11px;color:var(--muted);margin:4px 0 10px;">Email non modificabile: account Firebase già collegato.</p>`;
+  }
+
+  document.getElementById('edit-msg').style.display = 'none';
+  document.getElementById('edit-modal').classList.add('open');
+}
+
+function closeEdit() { document.getElementById('edit-modal').classList.remove('open'); editTarget = null; }
+function closeEditIfOutside(e) { if (e.target === document.getElementById('edit-modal')) closeEdit(); }
+
+async function saveEdit() {
+  if (!editTarget) return;
+  const body = {
+    name: document.getElementById('edit-name').value.trim(),
+    role: document.getElementById('edit-role').value,
+  };
+  const emailInput = document.getElementById('edit-email');
+  if (emailInput) body.email = emailInput.value.trim();
+
+  const r = await OpsCommon.api(`/api/operations/users/${editTarget.id}`, { method: 'PUT', body: JSON.stringify(body) });
+  const msg = document.getElementById('edit-msg');
+  if (r && r.success) {
+    closeEdit();
+    await loadUsers();
+  } else {
+    msg.textContent = (r && r.error) || 'Errore.';
+    msg.className = 'msg msg-error';
+    msg.style.display = 'block';
+  }
+}
+
+// ── Suspend ──────────────────────────────────────────────────────────────────
+async function suspendUser(id) {
+  closeAllDropdowns();
+  if (!confirm('Sospendere questo utente? Non potrà più accedere a Operations. I suoi compiti aperti saranno preservati.')) return;
+  const r = await OpsCommon.api(`/api/operations/users/${id}/suspend`, { method: 'POST', body: '{}' });
+  if (r && r.success) {
+    if (r.openTasks > 0) alert(`⚠️ Utente sospeso. Ha ${r.openTasks} compito/i ancora aperti — controlla e riassegna se necessario.`);
+    await loadUsers();
+  } else {
+    OpsCommon.showError((r && r.error) || 'Errore durante la sospensione.');
+  }
+}
+
+// ── Reactivate ───────────────────────────────────────────────────────────────
+async function reactivateUser(id) {
+  closeAllDropdowns();
+  const r = await OpsCommon.api(`/api/operations/users/${id}/reactivate`, { method: 'POST', body: '{}' });
+  if (r && r.success) {
+    await loadUsers();
+  } else {
+    OpsCommon.showError((r && r.error) || 'Errore durante la riattivazione.');
+  }
+}
+
+// ── Archive ──────────────────────────────────────────────────────────────────
+async function archiveUser(id) {
+  closeAllDropdowns();
+  if (!confirm('Archiviare questo utente? Non apparirà più nella lista normale. I suoi dati storici sono preservati.')) return;
+  const r = await OpsCommon.api(`/api/operations/users/${id}/archive`, { method: 'POST', body: '{}' });
+  if (r && r.success) {
+    await loadUsers();
+  } else {
+    OpsCommon.showError((r && r.error) || 'Errore durante l\'archiviazione.');
+  }
+}
+
+// ── Restore ──────────────────────────────────────────────────────────────────
+async function restoreUser(id) {
+  closeAllDropdowns();
+  const r = await OpsCommon.api(`/api/operations/users/${id}/restore`, { method: 'POST', body: '{}' });
+  if (r && r.success) {
+    await loadUsers();
+  } else {
+    OpsCommon.showError((r && r.error) || 'Errore durante il ripristino.');
+  }
+}
+
+// ── Delete (with confirmation modal) ────────────────────────────────────────
+function openDelete(id) {
+  closeAllDropdowns();
+  delTarget = id;
+  archTarget = id;
+  // Try to show name
+  const row = document.querySelector(`.action-dropdown .danger[onclick="openDelete('${id}')"]`);
+  const teamRow = row ? row.closest('.team-row') : null;
+  const name = teamRow ? teamRow.querySelector('.team-row-name').textContent : id;
+  document.getElementById('del-modal-name').textContent = name;
+  document.getElementById('del-msg').style.display = 'none';
+  document.getElementById('del-modal').classList.add('open');
+}
+
+function closeDel() { document.getElementById('del-modal').classList.remove('open'); delTarget = null; }
+function closeDelIfOutside(e) { if (e.target === document.getElementById('del-modal')) closeDel(); }
+
+async function confirmDelete() {
+  if (!delTarget) return;
+  const btn = document.querySelector('#del-modal .btn-danger');
+  btn.disabled = true;
+  const r = await OpsCommon.api(`/api/operations/users/${delTarget}`, { method: 'DELETE' });
+  btn.disabled = false;
+
+  if (r && r.success) {
+    if (r.firebaseNote) alert('ℹ️ ' + r.firebaseNote);
+    closeDel();
+    await loadUsers();
+  } else if (r && r.suggestArchive) {
+    // Has historical data — suggest archive instead
+    closeDel();
+    document.getElementById('arch-modal-msg').textContent = (r.error || 'L\'utente ha dati storici.') + '\n\nVuoi archiviarlo invece?';
+    document.getElementById('arch-modal').classList.add('open');
+  } else {
+    const msg = document.getElementById('del-msg');
+    msg.textContent = (r && r.error) || 'Errore durante l\'eliminazione.';
+    msg.className = 'msg msg-error';
+    msg.style.display = 'block';
+  }
+}
+
+// ── Archive-suggestion modal ─────────────────────────────────────────────────
+function closeArch() { document.getElementById('arch-modal').classList.remove('open'); archTarget = null; }
+function closeArchIfOutside(e) { if (e.target === document.getElementById('arch-modal')) closeArch(); }
+
+async function archiveFromModal() {
+  if (!archTarget) return;
+  const r = await OpsCommon.api(`/api/operations/users/${archTarget}/archive`, { method: 'POST', body: '{}' });
+  if (r && r.success) {
+    closeArch();
+    await loadUsers();
+  } else {
+    alert('Errore: ' + ((r && r.error) || 'sconosciuto'));
   }
 }
 
