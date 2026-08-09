@@ -1440,11 +1440,17 @@ let opsUsersStore = {};
 let opsTasksStore = {};
 
 const OPS_PRIORITIES = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'];
-const OPS_STATUSES = ['OPEN', 'IN_PROGRESS', 'COMPLETED']; // OVERDUE is computed, never stored
+// OVERDUE is computed dynamically (never stored). CANCELLED = soft-deleted.
+const OPS_STATUSES = ['OPEN', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'];
 
-function genOpsUserId() { return 'opsu_' + Date.now() + '_' + crypto.randomBytes(3).toString('hex'); }
-function genOpsTaskId() { return 'opst_' + Date.now() + '_' + crypto.randomBytes(3).toString('hex'); }
-function genInviteCode() { return crypto.randomBytes(16).toString('hex'); }
+const PRIORITY_ORDER = { URGENT: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
+const EFF_STATUS_ORDER = { OVERDUE: 0, IN_PROGRESS: 1, OPEN: 2, COMPLETED: 3, CANCELLED: 4 };
+
+function genOpsUserId()      { return 'opsu_' + Date.now() + '_' + crypto.randomBytes(3).toString('hex'); }
+function genOpsTaskId()      { return 'opst_' + Date.now() + '_' + crypto.randomBytes(3).toString('hex'); }
+function genOpsCommentId()   { return 'opsc_' + Date.now() + '_' + crypto.randomBytes(3).toString('hex'); }
+function genOpsAttachmentId(){ return 'opsa_' + Date.now() + '_' + crypto.randomBytes(3).toString('hex'); }
+function genInviteCode()     { return crypto.randomBytes(16).toString('hex'); }
 
 function getOpsUsers(companyId) { return opsUsersStore[companyId] || []; }
 function getOpsTasks(companyId) { return opsTasksStore[companyId] || []; }
@@ -1512,14 +1518,26 @@ function publicOpsUser(u) {
     return { id: u.id, name: u.name, email: u.email, role: u.role, active: u.active !== false, status: u.status, createdAt: u.createdAt };
 }
 
-// Compute effective status: OVERDUE if not completed and dueDate passed.
+// Compute effective status. OVERDUE if not completed/cancelled and dueDate passed.
 function opsTaskWithComputedStatus(t) {
     let effectiveStatus = t.status;
-    if (t.status !== 'COMPLETED' && t.dueDate) {
+    if (t.status !== 'COMPLETED' && t.status !== 'CANCELLED' && t.dueDate) {
         const due = new Date(t.dueDate).getTime();
         if (!isNaN(due) && Date.now() > due) effectiveStatus = 'OVERDUE';
     }
     return { ...t, effectiveStatus };
+}
+
+// [SECURITY] Audit history events are ALWAYS created server-side.
+// actorId/actorName come from the verified ops-user session record — never from the client.
+function addHistory(task, type, actorId, actorName, data) {
+    if (!Array.isArray(task.history)) task.history = [];
+    task.history.push({ type, actorId, actorName, at: Date.now(), ...(data || {}) });
+}
+
+// Lookup a task by id within a company — returns null for cross-company or missing.
+function findOpsTask(companyId, taskId) {
+    return (getOpsTasks(companyId) || []).find(t => t.id === taskId) || null;
 }
 
 // ── GET /api/operations/me — current ops profile (bootstraps first Director) ──
@@ -1762,7 +1780,7 @@ app.post('/api/operations/activate', async (req, res) => {
     }
 });
 
-// ── Task input sanitizer ──
+// ── Task input sanitizers ──
 function sanitizeOpsTaskInput(body) {
     const title = (body.title || '').trim();
     if (!title) throw 'Titolo obbligatorio.';
@@ -1776,7 +1794,35 @@ function sanitizeOpsTaskInput(body) {
         dueDate = body.dueDate;
     }
     const department = body.department ? body.department.toString().trim().substring(0, 80) : null;
-    return { title, description, priority, dueDate, department };
+    const notes = body.notes !== undefined ? body.notes.toString().trim().substring(0, 5000) : undefined;
+    return { title, description, priority, dueDate, department, ...(notes !== undefined ? { notes } : {}) };
+}
+
+// Patch sanitizer — only the fields present in the body are sanitized/returned.
+function sanitizeOpsTaskPatch(body) {
+    const out = {};
+    if (body.title !== undefined) {
+        const t = body.title.toString().trim();
+        if (!t) throw 'Titolo obbligatorio.';
+        if (t.length > 200) throw 'Titolo troppo lungo (max 200).';
+        out.title = t;
+    }
+    if (body.description !== undefined) out.description = body.description.toString().trim().substring(0, 2000);
+    if (body.priority !== undefined) {
+        if (!OPS_PRIORITIES.includes(body.priority)) throw `Priorità non valida. Valori ammessi: ${OPS_PRIORITIES.join(', ')}`;
+        out.priority = body.priority;
+    }
+    if (body.dueDate !== undefined) {
+        if (body.dueDate === null || body.dueDate === '') { out.dueDate = null; }
+        else {
+            const d = new Date(body.dueDate);
+            if (isNaN(d.getTime())) throw 'Data di scadenza non valida.';
+            out.dueDate = body.dueDate;
+        }
+    }
+    if (body.department !== undefined) out.department = body.department ? body.department.toString().trim().substring(0, 80) : null;
+    if (body.notes !== undefined) out.notes = body.notes.toString().trim().substring(0, 5000);
+    return out;
 }
 
 // ── POST /api/operations/tasks — create (hierarchy-enforced assignment) ──
@@ -1811,15 +1857,27 @@ app.post('/api/operations/tasks', async (req, res) => {
         title: clean.title,
         description: clean.description,
         assigneeId: assignee.id,
+        assigneeName: assignee.name,   // snapshot for display/search
         createdBy: actor.id,           // always from session — never from payload
+        createdByName: actor.name,     // snapshot
         priority: clean.priority,
         status: 'OPEN',
         dueDate: clean.dueDate,
         department: clean.department,
+        notes: '',
+        completionPercent: 0,
+        startedAt: null,
         createdAt: now,
         updatedAt: now,
-        completedAt: null
+        completedAt: null,
+        attachments: [],               // metadata only — actual upload not yet wired
+        comments: [],
+        history: []
     };
+    addHistory(task, 'TASK_CREATED', actor.id, actor.name, {
+        assigneeId: assignee.id, assigneeName: assignee.name,
+        priority: task.priority, dueDate: task.dueDate
+    });
     if (!opsTasksStore[companyId]) opsTasksStore[companyId] = [];
     opsTasksStore[companyId].push(task);
     saveOpsTasks(); // persist FIRST …
@@ -1849,31 +1907,75 @@ app.post('/api/operations/tasks', async (req, res) => {
 });
 
 // ── GET /api/operations/tasks — list, SERVER-FILTERED per hierarchy ──
+// Query params (applied AFTER visibility — cannot expose unauthorized data):
+//   my=1         → only assigned to me
+//   status=OPEN|IN_PROGRESS|COMPLETED|CANCELLED|OVERDUE
+//   priority=LOW|MEDIUM|HIGH|URGENT
+//   assigneeId=<id>
+//   department=<string>   (substring match)
+//   q=<text>              (title+description+assigneeName+department)
+//   sort=dueDate|priority|createdAt|status|assignee  (default: smart)
 app.get('/api/operations/tasks', (req, res) => {
     const ctx = requireOpsAuth(req, res);
     if (!ctx) return;
     const actor = ctx.opsUser;
     const byId = opsUsersById(actor.companyId);
-    // Server-side filtering — never fetch-all-and-hide-in-browser
-    const visible = getOpsTasks(actor.companyId)
+
+    // Visibility is always server-enforced first
+    let tasks = getOpsTasks(actor.companyId)
         .filter(t => opsAuth.canViewTask(actor, t, byId))
         .map(opsTaskWithComputedStatus);
+
+    const { status, priority, assigneeId, department, q, sort, my: myOnly } = req.query;
+    if (myOnly === '1') tasks = tasks.filter(t => t.assigneeId === actor.id);
+    if (status) {
+        const s = status.toUpperCase();
+        tasks = tasks.filter(t => s === 'OVERDUE' ? t.effectiveStatus === 'OVERDUE' : t.status === s);
+    }
+    if (priority && OPS_PRIORITIES.includes(priority.toUpperCase()))
+        tasks = tasks.filter(t => t.priority === priority.toUpperCase());
+    if (assigneeId) tasks = tasks.filter(t => t.assigneeId === assigneeId);
+    if (department) tasks = tasks.filter(t => (t.department || '').toLowerCase().includes(department.toLowerCase()));
+    if (q) {
+        const lq = q.toLowerCase();
+        tasks = tasks.filter(t =>
+            t.title.toLowerCase().includes(lq) ||
+            (t.description || '').toLowerCase().includes(lq) ||
+            (t.assigneeName || '').toLowerCase().includes(lq) ||
+            (t.department || '').toLowerCase().includes(lq));
+    }
+
+    switch ((sort || '').toLowerCase()) {
+        case 'priority': tasks.sort((a, b) => (PRIORITY_ORDER[a.priority] ?? 9) - (PRIORITY_ORDER[b.priority] ?? 9)); break;
+        case 'createdat': tasks.sort((a, b) => b.createdAt - a.createdAt); break;
+        case 'duedate': tasks.sort((a, b) => (a.dueDate || '9999') < (b.dueDate || '9999') ? -1 : 1); break;
+        case 'assignee': tasks.sort((a, b) => (a.assigneeName || '').localeCompare(b.assigneeName || '')); break;
+        case 'status': tasks.sort((a, b) => (EFF_STATUS_ORDER[a.effectiveStatus] ?? 9) - (EFF_STATUS_ORDER[b.effectiveStatus] ?? 9)); break;
+        default: // smart: OVERDUE → due-soon IN_PROGRESS → OPEN → COMPLETED → CANCELLED
+            tasks.sort((a, b) => {
+                const sa = EFF_STATUS_ORDER[a.effectiveStatus] ?? 9;
+                const sb = EFF_STATUS_ORDER[b.effectiveStatus] ?? 9;
+                if (sa !== sb) return sa - sb;
+                return (a.dueDate || '9999') < (b.dueDate || '9999') ? -1 : 1;
+            });
+    }
+
     const usersPublic = {};
     Object.values(byId).forEach(u => { usersPublic[u.id] = { id: u.id, name: u.name, role: u.role }; });
-    res.json({ success: true, tasks: visible, users: usersPublic, me: publicOpsUser(actor) });
+    res.json({ success: true, tasks, users: usersPublic, me: publicOpsUser(actor) });
 });
 
-// ── PUT /api/operations/tasks/:id — edit / status change / complete ──
+// ── PUT /api/operations/tasks/:id — legacy combined endpoint (kept for backward compat) ──
+// New callers should prefer the explicit action endpoints below.
 app.put('/api/operations/tasks/:id', (req, res) => {
     const ctx = requireOpsAuth(req, res);
     if (!ctx) return;
     const actor = ctx.opsUser;
-    const companyId = actor.companyId; // only own-company store searched
+    const companyId = actor.companyId;
     const tasks = getOpsTasks(companyId);
     const task = tasks.find(t => t.id === req.params.id);
     const byId = opsUsersById(companyId);
     if (!task || !opsAuth.canViewTask(actor, task, byId)) {
-        // 404 for both not-found and not-visible — don't leak existence
         return res.status(404).json({ error: 'Compito non trovato.' });
     }
 
@@ -1888,16 +1990,22 @@ app.put('/api/operations/tasks/:id', (req, res) => {
             return res.status(403).json({ error: 'Solo l\'assegnatario può completare il compito.' });
         }
         if (task.status !== 'COMPLETED') {
+            const prevStatus = task.status;
             task.status = 'COMPLETED';
             task.completedAt = Date.now();
+            if (typeof task.completionPercent !== 'number' || task.completionPercent < 100) task.completionPercent = 100;
+            addHistory(task, 'TASK_COMPLETED', actor.id, actor.name, { from: prevStatus, to: 'COMPLETED' });
         }
     } else if (wantsStatus) {
         if (!OPS_STATUSES.includes(req.body.status)) return res.status(400).json({ error: 'Stato non valido.' });
         if (!opsAuth.canCompleteTask(actor, task) && !opsAuth.canEditTask(actor, task, byId)) {
             return res.status(403).json({ error: 'Non autorizzato a modificare lo stato.' });
         }
-        if (task.status === 'COMPLETED' && req.body.status !== 'COMPLETED') task.completedAt = null;
+        const prevStatus = task.status;
+        if (task.status === 'COMPLETED' && req.body.status !== 'COMPLETED') { task.completedAt = null; task.completionPercent = 0; }
+        if (req.body.status === 'IN_PROGRESS' && !task.startedAt) task.startedAt = Date.now();
         task.status = req.body.status;
+        if (prevStatus !== task.status) addHistory(task, 'STATUS_CHANGED', actor.id, actor.name, { from: prevStatus, to: task.status });
     }
 
     if (wantsEdit) {
@@ -1908,12 +2016,17 @@ app.put('/api/operations/tasks/:id', (req, res) => {
             if (req.body.title !== undefined || req.body.description !== undefined ||
                 req.body.priority !== undefined || req.body.dueDate !== undefined ||
                 req.body.department !== undefined) {
+                const prevPriority = task.priority, prevDue = task.dueDate;
                 const clean = sanitizeOpsTaskInput({ ...task, ...req.body });
                 task.title = clean.title;
                 task.description = clean.description;
                 task.priority = clean.priority;
                 task.dueDate = clean.dueDate;
                 task.department = clean.department;
+                addHistory(task, 'TASK_EDITED', actor.id, actor.name, {
+                    ...(prevPriority !== task.priority ? { priorityFrom: prevPriority, priorityTo: task.priority } : {}),
+                    ...(prevDue !== task.dueDate ? { dueDateFrom: prevDue, dueDateTo: task.dueDate } : {})
+                });
             }
         } catch (msg) { return res.status(400).json({ error: msg }); }
 
@@ -1925,13 +2038,20 @@ app.put('/api/operations/tasks/:id', (req, res) => {
                 return res.status(403).json({ error: `Il tuo ruolo non può assegnare compiti a ${newAssignee.role}.` });
             }
             const oldAssigneeId = task.assigneeId;
+            const oldAssigneeName = task.assigneeName;
             task.assigneeId = newAssignee.id;
+            task.assigneeName = newAssignee.name;
+            if (newAssignee.id !== oldAssigneeId) {
+                addHistory(task, 'ASSIGNEE_CHANGED', actor.id, actor.name, {
+                    from: oldAssigneeId, fromName: oldAssigneeName,
+                    to: newAssignee.id, toName: newAssignee.name
+                });
+            }
             if (newAssignee.id !== actor.id && newAssignee.id !== oldAssigneeId) {
-                // persist first (below), then notify
                 setImmediate(() => {
                     opsEmail.sendTaskAssignmentEmail({
                         to: newAssignee.email, toName: newAssignee.name, task,
-                        assignedByName: actor.name, appUrl: '/operations.html'
+                        assignedByName: actor.name, appUrl: '/operations-tasks.html'
                     }).catch(e => console.error('📧 [OPS-EMAIL] reassignment notification failed (non-fatal):', e.message));
                 });
             }
@@ -1941,6 +2061,382 @@ app.put('/api/operations/tasks/:id', (req, res) => {
     task.updatedAt = Date.now();
     saveOpsTasks();
     res.json({ success: true, task: opsTaskWithComputedStatus(task) });
+});
+
+// =========================================================================
+// ===== SPRINT 2 — EXPLICIT TASK ACTION ENDPOINTS =========================
+// =========================================================================
+
+// Helper — find task visible to actor or 404
+function requireOpsTask(req, res, ctx) {
+    const actor = ctx.opsUser;
+    const byId = opsUsersById(actor.companyId);
+    const task = findOpsTask(actor.companyId, req.params.id);
+    if (!task || !opsAuth.canViewTask(actor, task, byId)) {
+        res.status(404).json({ error: 'Compito non trovato.' });
+        return null;
+    }
+    return { task, byId };
+}
+
+// ── GET /api/operations/tasks/:id — full task detail (history + comments) ──
+app.get('/api/operations/tasks/:id', (req, res) => {
+    const ctx = requireOpsAuth(req, res);
+    if (!ctx) return;
+    const r = requireOpsTask(req, res, ctx);
+    if (!r) return;
+    const usersPublic = {};
+    Object.values(r.byId).forEach(u => { usersPublic[u.id] = { id: u.id, name: u.name, role: u.role }; });
+    res.json({ success: true, task: opsTaskWithComputedStatus(r.task), users: usersPublic, me: publicOpsUser(ctx.opsUser) });
+});
+
+// ── PATCH /api/operations/tasks/:id — field-level edit (canEditTask) ──
+// [SECURITY] Only explicit approved fields patched — no bulk object replacement.
+// Immutable fields (companyId, createdBy, history, etc.) are never touched here.
+app.patch('/api/operations/tasks/:id', (req, res) => {
+    const ctx = requireOpsAuth(req, res);
+    if (!ctx) return;
+    const actor = ctx.opsUser;
+    const r = requireOpsTask(req, res, ctx);
+    if (!r) return;
+    const { task, byId } = r;
+
+    if (!opsAuth.canEditTask(actor, task, byId)) {
+        console.log(`⛔ [OPS-SECURITY] PATCH rejected — ${actor.role} ${actor.id} cannot edit task ${task.id}`);
+        return res.status(403).json({ error: 'Non autorizzato a modificare questo compito.' });
+    }
+
+    let patch;
+    try { patch = sanitizeOpsTaskPatch(req.body); }
+    catch (msg) { return res.status(400).json({ error: msg }); }
+
+    if (Object.keys(patch).length === 0)
+        return res.status(400).json({ error: 'Nessun campo modificabile fornito.' });
+
+    const histData = {};
+    if (patch.priority !== undefined && patch.priority !== task.priority)
+        histData.priorityFrom = task.priority, histData.priorityTo = patch.priority;
+    if (patch.dueDate !== undefined && patch.dueDate !== task.dueDate)
+        histData.dueDateFrom = task.dueDate, histData.dueDateTo = patch.dueDate;
+    if (patch.title !== undefined && patch.title !== task.title) histData.titleChanged = true;
+    if (patch.description !== undefined && patch.description !== task.description) histData.descriptionChanged = true;
+    if (patch.notes !== undefined && patch.notes !== task.notes) histData.notesChanged = true;
+    if (patch.department !== undefined && patch.department !== task.department)
+        histData.departmentFrom = task.department, histData.departmentTo = patch.department;
+
+    Object.assign(task, patch);
+    addHistory(task, 'TASK_EDITED', actor.id, actor.name, histData);
+    task.updatedAt = Date.now();
+    saveOpsTasks();
+    console.log(`✅ [OPS] Task patched: ${task.id} by ${actor.id} — fields: ${Object.keys(patch).join(',')}`);
+    res.json({ success: true, task: opsTaskWithComputedStatus(task) });
+});
+
+// ── POST /api/operations/tasks/:id/start — assignee starts task ──
+app.post('/api/operations/tasks/:id/start', (req, res) => {
+    const ctx = requireOpsAuth(req, res);
+    if (!ctx) return;
+    const actor = ctx.opsUser;
+    const r = requireOpsTask(req, res, ctx);
+    if (!r) return;
+    const { task } = r;
+
+    if (!opsAuth.canCompleteTask(actor, task)) // assignee-only guard reused
+        return res.status(403).json({ error: 'Solo l\'assegnatario può avviare il compito.' });
+    if (task.status === 'COMPLETED' || task.status === 'CANCELLED')
+        return res.status(400).json({ error: 'Il compito non può essere avviato in questo stato.' });
+
+    const prevStatus = task.status;
+    task.status = 'IN_PROGRESS';
+    if (!task.startedAt) task.startedAt = Date.now();
+    if ((task.completionPercent || 0) === 0) task.completionPercent = 0; // stays 0 — updated separately
+    addHistory(task, 'TASK_STARTED', actor.id, actor.name, { from: prevStatus });
+    task.updatedAt = Date.now();
+    saveOpsTasks();
+    res.json({ success: true, task: opsTaskWithComputedStatus(task) });
+});
+
+// ── POST /api/operations/tasks/:id/progress — update completion percent ──
+// [SECURITY] canUpdateProgress: assignee OR editor (Director/creator with visibility)
+app.post('/api/operations/tasks/:id/progress', (req, res) => {
+    const ctx = requireOpsAuth(req, res);
+    if (!ctx) return;
+    const actor = ctx.opsUser;
+    const r = requireOpsTask(req, res, ctx);
+    if (!r) return;
+    const { task, byId } = r;
+
+    if (!opsAuth.canUpdateProgress(actor, task, byId))
+        return res.status(403).json({ error: 'Non autorizzato ad aggiornare il progresso.' });
+    if (task.status === 'CANCELLED')
+        return res.status(400).json({ error: 'Impossibile aggiornare un compito cancellato.' });
+
+    const pct = parseInt(req.body.completionPercent, 10);
+    if (isNaN(pct) || pct < 0 || pct > 100)
+        return res.status(400).json({ error: 'completionPercent deve essere un intero tra 0 e 100.' });
+
+    const prevPct = task.completionPercent || 0;
+    const prevStatus = task.status;
+    task.completionPercent = pct;
+
+    // Auto-transition rules (spec §4)
+    if (pct === 100) {
+        task.status = 'COMPLETED';
+        if (!task.completedAt) task.completedAt = Date.now();
+        if (!task.startedAt) task.startedAt = task.completedAt;
+        addHistory(task, 'TASK_COMPLETED', actor.id, actor.name, { from: prevStatus, to: 'COMPLETED' });
+    } else if (pct > 0 && task.status === 'OPEN') {
+        task.status = 'IN_PROGRESS';
+        if (!task.startedAt) task.startedAt = Date.now();
+        addHistory(task, 'TASK_STARTED', actor.id, actor.name, { from: 'OPEN' });
+    } else if (pct === 0 && task.status === 'IN_PROGRESS') {
+        // Allow reverting to OPEN if progress is reset to 0
+        task.status = 'OPEN';
+        task.startedAt = null;
+    }
+    if (prevPct !== pct)
+        addHistory(task, 'PROGRESS_CHANGED', actor.id, actor.name, { from: prevPct, to: pct });
+
+    task.updatedAt = Date.now();
+    saveOpsTasks();
+    res.json({ success: true, task: opsTaskWithComputedStatus(task) });
+});
+
+// ── POST /api/operations/tasks/:id/complete — assignee completes task ──
+app.post('/api/operations/tasks/:id/complete', (req, res) => {
+    const ctx = requireOpsAuth(req, res);
+    if (!ctx) return;
+    const actor = ctx.opsUser;
+    const r = requireOpsTask(req, res, ctx);
+    if (!r) return;
+    const { task } = r;
+
+    if (!opsAuth.canCompleteTask(actor, task)) {
+        console.log(`⛔ [OPS-SECURITY] complete rejected — ${actor.id} is not assignee of ${task.id}`);
+        return res.status(403).json({ error: 'Solo l\'assegnatario può completare il compito.' });
+    }
+    if (task.status === 'CANCELLED')
+        return res.status(400).json({ error: 'Impossibile completare un compito cancellato.' });
+
+    const prevStatus = task.status;
+    if (task.status !== 'COMPLETED') {
+        task.status = 'COMPLETED';
+        task.completionPercent = 100;
+        task.completedAt = Date.now();
+        if (!task.startedAt) task.startedAt = task.completedAt;
+        addHistory(task, 'TASK_COMPLETED', actor.id, actor.name, { from: prevStatus, to: 'COMPLETED' });
+    }
+    task.updatedAt = Date.now();
+    saveOpsTasks();
+    res.json({ success: true, task: opsTaskWithComputedStatus(task) });
+});
+
+// ── POST /api/operations/tasks/:id/reassign — reassign to a different user ──
+// [SECURITY] Same hierarchy as task creation. persist → audit → email.
+app.post('/api/operations/tasks/:id/reassign', async (req, res) => {
+    const ctx = requireOpsAuth(req, res);
+    if (!ctx) return;
+    const actor = ctx.opsUser;
+    const r = requireOpsTask(req, res, ctx);
+    if (!r) return;
+    const { task, byId } = r;
+
+    // canEditTask covers Director + creator with hierarchy
+    if (!opsAuth.canEditTask(actor, task, byId)) {
+        console.log(`⛔ [OPS-SECURITY] reassign rejected (no edit rights) — ${actor.role} ${actor.id}`);
+        return res.status(403).json({ error: 'Non autorizzato a riassegnare questo compito.' });
+    }
+    if (task.status === 'CANCELLED')
+        return res.status(400).json({ error: 'Impossibile riassegnare un compito cancellato.' });
+
+    const newAssigneeId = (req.body.assigneeId || '').toString().trim();
+    if (!newAssigneeId) return res.status(400).json({ error: 'assigneeId obbligatorio.' });
+
+    const newAssignee = byId[newAssigneeId];
+    if (!newAssignee || newAssignee.active === false) {
+        console.log(`⛔ [OPS-SECURITY] reassign rejected — assignee "${newAssigneeId}" not found/active in "${actor.companyId}"`);
+        return res.status(400).json({ error: 'Assegnatario non valido.' });
+    }
+    if (!opsAuth.canAssignTaskTo(actor, newAssignee)) {
+        console.log(`⛔ [OPS-SECURITY] reassign rejected — ${actor.role} cannot assign to ${newAssignee.role}`);
+        return res.status(403).json({ error: `Il tuo ruolo non può assegnare compiti a ${newAssignee.role}.` });
+    }
+
+    const oldAssigneeId = task.assigneeId;
+    const oldAssigneeName = task.assigneeName || '';
+    const isReallyChanged = newAssignee.id !== oldAssigneeId;
+
+    task.assigneeId = newAssignee.id;
+    task.assigneeName = newAssignee.name;
+
+    if (isReallyChanged) {
+        addHistory(task, 'ASSIGNEE_CHANGED', actor.id, actor.name, {
+            from: oldAssigneeId, fromName: oldAssigneeName,
+            to: newAssignee.id, toName: newAssignee.name
+        });
+    }
+
+    task.updatedAt = Date.now();
+    saveOpsTasks(); // persist FIRST
+
+    // Then email (failure never rolls back the persisted change)
+    let notificationResult = opsEmail.RESULT.SKIPPED;
+    if (isReallyChanged && newAssignee.id !== actor.id) {
+        try {
+            const emailRes = await opsEmail.sendTaskAssignmentEmail({
+                to: newAssignee.email, toName: newAssignee.name, task,
+                assignedByName: actor.name, appUrl: '/operations-tasks.html'
+            });
+            notificationResult = emailRes.result;
+        } catch (e) {
+            console.error('📧 [OPS-EMAIL] reassign notification failed (non-fatal):', e.message);
+            notificationResult = opsEmail.RESULT.FAILED;
+        }
+        console.log(`📧 [OPS] Reassign notification: ${notificationResult} → ${newAssignee.email} (task: ${task.id})`);
+    }
+
+    console.log(`✅ [OPS] Task ${task.id} reassigned: ${oldAssigneeId} → ${newAssignee.id} by ${actor.id}`);
+    res.json({ success: true, task: opsTaskWithComputedStatus(task), notificationResult });
+});
+
+// ── POST /api/operations/tasks/:id/cancel — soft-cancel (Director only) ──
+app.post('/api/operations/tasks/:id/cancel', (req, res) => {
+    const ctx = requireOpsAuth(req, res);
+    if (!ctx) return;
+    const actor = ctx.opsUser;
+    if (!opsAuth.canManageUsers(actor)) // Director only
+        return res.status(403).json({ error: 'Solo il Direttore può cancellare compiti.' });
+    const r = requireOpsTask(req, res, ctx);
+    if (!r) return;
+    const { task } = r;
+
+    if (task.status === 'CANCELLED')
+        return res.status(400).json({ error: 'Il compito è già cancellato.' });
+
+    const prevStatus = task.status;
+    task.status = 'CANCELLED';
+    const reason = (req.body.reason || '').toString().trim().substring(0, 500);
+    addHistory(task, 'STATUS_CHANGED', actor.id, actor.name, { from: prevStatus, to: 'CANCELLED', reason });
+    task.updatedAt = Date.now();
+    saveOpsTasks();
+    console.log(`✅ [OPS] Task ${task.id} cancelled by Director ${actor.id}`);
+    res.json({ success: true, task: opsTaskWithComputedStatus(task) });
+});
+
+// ── POST /api/operations/tasks/:id/comments — add comment ──
+// [SECURITY] authorId/companyId always from server-side session — never from client.
+// Anyone who can view the task may comment (canViewTask enforced by requireOpsTask).
+app.post('/api/operations/tasks/:id/comments', (req, res) => {
+    const ctx = requireOpsAuth(req, res);
+    if (!ctx) return;
+    const actor = ctx.opsUser;
+    const r = requireOpsTask(req, res, ctx);
+    if (!r) return;
+    const { task } = r;
+
+    const text = (req.body.text || '').toString().trim();
+    if (!text) return res.status(400).json({ error: 'Il testo del commento è obbligatorio.' });
+    if (text.length > 2000) return res.status(400).json({ error: 'Commento troppo lungo (max 2000 caratteri).' });
+
+    if (!Array.isArray(task.comments)) task.comments = [];
+    const comment = {
+        id: genOpsCommentId(),
+        authorId: actor.id,        // always from session
+        authorName: actor.name,
+        text,
+        createdAt: Date.now()
+    };
+    task.comments.push(comment);
+    addHistory(task, 'COMMENT_ADDED', actor.id, actor.name, { commentId: comment.id, preview: text.substring(0, 80) });
+    task.updatedAt = Date.now();
+    saveOpsTasks();
+    res.json({ success: true, comment, task: opsTaskWithComputedStatus(task) });
+});
+
+// ── POST /api/operations/tasks/:id/attachments — register attachment metadata ──
+// Actual file upload requires Firebase Storage (not yet configured).
+// This endpoint stores metadata only; the client must supply a pre-obtained storagePath
+// from the upload provider. Sprint 3 will wire the full upload flow.
+app.post('/api/operations/tasks/:id/attachments', (req, res) => {
+    const ctx = requireOpsAuth(req, res);
+    if (!ctx) return;
+    const actor = ctx.opsUser;
+    if (!opsAuth.canEditTask(actor, null, {})) { // Director or creator — use canManageUsers as proxy
+        // Actually check: actor must be editor (Director or task creator)
+    }
+    const r = requireOpsTask(req, res, ctx);
+    if (!r) return;
+    const { task, byId } = r;
+
+    if (!opsAuth.canEditTask(actor, task, byId))
+        return res.status(403).json({ error: 'Non autorizzato ad aggiungere allegati.' });
+
+    const { filename, mimeType, size, storagePath } = req.body;
+    if (!filename || !filename.toString().trim()) return res.status(400).json({ error: 'filename obbligatorio.' });
+    if (!storagePath || !storagePath.toString().trim())
+        return res.status(501).json({ error: 'Upload file non ancora configurato. Fornire storagePath da Firebase Storage.' });
+
+    if (!Array.isArray(task.attachments)) task.attachments = [];
+    const attachment = {
+        id: genOpsAttachmentId(),
+        filename: filename.toString().trim().substring(0, 255),
+        mimeType: (mimeType || 'application/octet-stream').toString().substring(0, 100),
+        size: typeof size === 'number' ? size : null,
+        storagePath: storagePath.toString().substring(0, 1000),
+        uploadedBy: actor.id,
+        uploadedByName: actor.name,
+        uploadedAt: Date.now()
+    };
+    task.attachments.push(attachment);
+    addHistory(task, 'ATTACHMENT_ADDED', actor.id, actor.name, { filename: attachment.filename, id: attachment.id });
+    task.updatedAt = Date.now();
+    saveOpsTasks();
+    res.json({ success: true, attachment, task: opsTaskWithComputedStatus(task) });
+});
+
+// ── GET /api/operations/stats — dashboard summary per actor ──
+app.get('/api/operations/stats', (req, res) => {
+    const ctx = requireOpsAuth(req, res);
+    if (!ctx) return;
+    const actor = ctx.opsUser;
+    const byId = opsUsersById(actor.companyId);
+    const tasks = getOpsTasks(actor.companyId)
+        .filter(t => opsAuth.canViewTask(actor, t, byId))
+        .map(opsTaskWithComputedStatus);
+
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const mine = tasks.filter(t => t.assigneeId === actor.id);
+    const myOpen = mine.filter(t => t.status !== 'COMPLETED' && t.status !== 'CANCELLED');
+    const myInProgress = mine.filter(t => t.status === 'IN_PROGRESS');
+
+    const stats = {
+        my:         myOpen.length,
+        myInProgress: myInProgress.length,
+        today:      myOpen.filter(t => t.dueDate && t.dueDate.slice(0, 10) === todayStr).length,
+        overdue:    mine.filter(t => t.effectiveStatus === 'OVERDUE').length,
+        completed:  mine.filter(t => t.status === 'COMPLETED').length,
+        open:       tasks.filter(t => t.status === 'OPEN').length,
+        inProgress: tasks.filter(t => t.status === 'IN_PROGRESS').length,
+        urgent:     tasks.filter(t => t.priority === 'URGENT' && t.status !== 'COMPLETED' && t.status !== 'CANCELLED').length,
+        avgCompletion: (() => {
+            const active = tasks.filter(t => t.status !== 'CANCELLED');
+            if (!active.length) return 0;
+            return Math.round(active.reduce((s, t) => s + (t.completionPercent || 0), 0) / active.length);
+        })()
+    };
+
+    // Team workload: per visible subordinate, count of active tasks (Directors + managers)
+    let workload = null;
+    if (actor.role !== 'SOUS_CHEF' && actor.role !== 'CHEF_DE_BRIGADE') {
+        const subordinates = Object.values(byId)
+            .filter(u => u.id !== actor.id && u.active !== false && opsAuth.canAssignTaskTo(actor, u));
+        workload = subordinates.map(u => ({
+            userId: u.id, name: u.name, role: u.role,
+            activeTasks: tasks.filter(t => t.assigneeId === u.id && t.status !== 'COMPLETED' && t.status !== 'CANCELLED').length
+        }));
+    }
+
+    res.json({ success: true, stats, workload, me: publicOpsUser(actor) });
 });
 
 // =========================================================================

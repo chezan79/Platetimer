@@ -40,11 +40,21 @@ function canViewTask(actor, task, usersById) {
     return canAssignTaskTo(actor, assignee);
 }
 
-// May `actor` edit `task` (title, description, priority, due date, reassignment)?
-// Creator or Director; must also still be able to view it.
+// May `actor` edit `task` (title, description, priority, due date, notes)?
+// Director: may edit any visible task in their company.
+// Creator: may edit only if they still have assignment rights over the current assignee.
+//   (Spec §5: "can edit their own created task if they still have permission over the assignee.")
+// This prevents a creator from editing after the assignee has been moved to a role
+// they can no longer manage.
 function canEditTask(actor, task, usersById) {
     if (!canViewTask(actor, task, usersById)) return false;
-    return actor.role === 'DIRECTOR' || task.createdBy === actor.id;
+    if (actor.role === 'DIRECTOR') return true;
+    if (task.createdBy === actor.id) {
+        const assignee = (usersById || {})[task.assigneeId];
+        if (!assignee) return false;
+        return canAssignTaskTo(actor, assignee);
+    }
+    return false;
 }
 
 // May `actor` complete `task`? Assignee only (per Sprint 1 rules).
@@ -84,6 +94,21 @@ function validateActivationAccount(fbUser, invitation) {
     return { ok: true };
 }
 
+// May `actor` update completionPercent on `task`?
+// Assignee can always update their own task's progress.
+// Anyone who can edit the task (Director / task creator) may also update progress.
+function canUpdateProgress(actor, task, usersById) {
+    if (!actor || !task) return false;
+    if (actor.companyId !== task.companyId) return false;
+    if (task.assigneeId === actor.id) return true;
+    return canEditTask(actor, task, usersById || {});
+}
+
+// May `actor` cancel (soft-delete) a task? Director only.
+function canCancelTask(actor) {
+    return !!actor && actor.role === 'DIRECTOR';
+}
+
 module.exports = {
     validateActivationAccount,
     ROLES,
@@ -93,6 +118,8 @@ module.exports = {
     canViewTask,
     canEditTask,
     canCompleteTask,
+    canUpdateProgress,
+    canCancelTask,
     canManageUsers,
     allowedAssignees
 };

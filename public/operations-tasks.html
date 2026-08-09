@@ -19,122 +19,478 @@
 </header>
 
 <main class="main">
-  <div class="pg-heading">
-    <h1 class="pg-title">Compiti</h1>
-    <p class="pg-sub"><span id="me-name"></span> · <span id="me-role" class="role-badge"></span></p>
+  <div class="pg-heading" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+    <div>
+      <h1 class="pg-title">Compiti</h1>
+      <p class="pg-sub"><span id="me-name"></span> · <span id="me-role" class="role-badge"></span></p>
+    </div>
+    <button class="btn btn-primary" id="new-task-btn" onclick="openCreatePanel()">+ Nuovo compito</button>
+  </div>
+
+  <!-- Filter / search bar -->
+  <div class="filter-bar">
+    <input id="flt-search" class="form-input flt-input" placeholder="🔍 Cerca titolo, descrizione, assegnatario…" oninput="scheduleFilter()">
+    <select id="flt-status" class="form-select flt-select" onchange="applyFilters()">
+      <option value="">Tutti gli stati</option>
+      <option value="OPEN">Aperti</option>
+      <option value="IN_PROGRESS">In corso</option>
+      <option value="OVERDUE">In ritardo</option>
+      <option value="COMPLETED">Completati</option>
+      <option value="CANCELLED">Cancellati</option>
+    </select>
+    <select id="flt-priority" class="form-select flt-select" onchange="applyFilters()">
+      <option value="">Tutte le priorità</option>
+      <option value="URGENT">Urgente</option>
+      <option value="HIGH">Alta</option>
+      <option value="MEDIUM">Media</option>
+      <option value="LOW">Bassa</option>
+    </select>
+    <select id="flt-sort" class="form-select flt-select" onchange="applyFilters()">
+      <option value="">Ordinamento smart</option>
+      <option value="dueDate">Per scadenza</option>
+      <option value="priority">Per priorità</option>
+      <option value="createdAt">Per data creazione</option>
+      <option value="status">Per stato</option>
+      <option value="assignee">Per assegnatario</option>
+    </select>
+    <label class="flt-check"><input type="checkbox" id="flt-my" onchange="applyFilters()"> Solo i miei</label>
   </div>
 
   <div id="ops-error" class="msg msg-error" style="display:none"></div>
+  <div id="task-list" class="task-list"><div class="empty-state">Caricamento…</div></div>
+</main>
 
-  <div class="two-col">
-    <!-- Create form -->
-    <div class="card">
-      <p class="card-title">Nuovo compito</p>
-      <label class="form-label" for="t-title">Titolo</label>
-      <input id="t-title" class="form-input" maxlength="200" placeholder="es. Preparare mise en place">
-      <label class="form-label" for="t-desc">Descrizione</label>
-      <textarea id="t-desc" class="form-textarea" maxlength="2000" placeholder="Dettagli (facoltativo)"></textarea>
-      <label class="form-label" for="t-assignee">Assegna a</label>
-      <select id="t-assignee" class="form-select"></select>
-      <label class="form-label" for="t-priority">Priorità</label>
-      <select id="t-priority" class="form-select">
+<!-- Panel overlay -->
+<div id="panel-overlay" class="panel-overlay" onclick="closePanel()"></div>
+
+<!-- Side panel: detail + create share this element -->
+<div id="side-panel" class="detail-panel">
+  <div id="panel-inner"></div>
+</div>
+
+<script src="js/ws-auth.js"></script>
+<script src="js/operations-common.js"></script>
+<script>
+// ── State ──
+let allTasks = [], allUsers = {}, meData = null;
+let assignableUsers = [];
+let filterTimer = null;
+const esc = OpsCommon.escHtml;
+
+// ── Boot ──
+async function load() {
+  meData = await OpsCommon.loadMe();
+  if (!meData) return;
+  document.getElementById('me-name').textContent = meData.user.name || '';
+  document.getElementById('me-role').textContent = OpsCommon.roleLabel(meData.user.role);
+  if (meData.user.role === 'DIRECTOR') document.getElementById('team-btn').style.display = '';
+
+  const aData = await OpsCommon.api('/api/operations/assignees');
+  assignableUsers = (aData && aData.assignees) || [];
+
+  await loadTasks();
+}
+
+// ── Filter helpers ──
+function scheduleFilter() {
+  clearTimeout(filterTimer);
+  filterTimer = setTimeout(applyFilters, 280);
+}
+
+function applyFilters() {
+  clearTimeout(filterTimer);
+  loadTasks();
+}
+
+async function loadTasks() {
+  const params = new URLSearchParams();
+  const status = document.getElementById('flt-status').value;
+  const priority = document.getElementById('flt-priority').value;
+  const sort = document.getElementById('flt-sort').value;
+  const my = document.getElementById('flt-my').checked;
+  const q = document.getElementById('flt-search').value.trim();
+  if (status)   params.set('status', status);
+  if (priority) params.set('priority', priority);
+  if (sort)     params.set('sort', sort);
+  if (my)       params.set('my', '1');
+  if (q)        params.set('q', q);
+
+  const data = await OpsCommon.api('/api/operations/tasks?' + params);
+  if (!data || !data.success) { OpsCommon.showError(data && data.error); return; }
+  allTasks = data.tasks;
+  allUsers = data.users;
+  renderList();
+}
+
+// ── Task list rendering ──
+function renderList() {
+  const container = document.getElementById('task-list');
+  OpsCommon.renderTaskList(container, allTasks, allUsers, meData && meData.user.id, loadTasks, {
+    onTaskClick: openDetail,
+    showComplete: false,
+    showStart: false
+  });
+}
+
+// ── Detail panel ──
+async function openDetail(taskId) {
+  const data = await OpsCommon.api('/api/operations/tasks/' + taskId);
+  if (!data || !data.success) { OpsCommon.showError(data && data.error); return; }
+  const task = data.task;
+  allUsers = { ...allUsers, ...(data.users || {}) };
+  const me = meData && meData.user;
+  const myId = me && me.id;
+  const myRole = me && me.role;
+
+  const isAssignee = task.assigneeId === myId;
+  const isDirector = myRole === 'DIRECTOR';
+  const isCreator = task.createdBy === myId;
+  // canEdit: Director or creator (server re-validates)
+  const canEdit = isDirector || isCreator;
+  const st = task.effectiveStatus || task.status;
+  const assignee = allUsers[task.assigneeId] || {};
+  const creator = allUsers[task.createdBy] || {};
+  const pct = task.completionPercent || 0;
+  const comments = Array.isArray(task.comments) ? task.comments : [];
+  const history = Array.isArray(task.history) ? [...task.history].reverse() : [];
+  const attachments = Array.isArray(task.attachments) ? task.attachments : [];
+
+  // ─ Action buttons ─
+  let actions = '';
+  if (isAssignee && task.status === 'OPEN')
+    actions += `<button class="btn btn-sm btn-neutral" onclick="doStart('${task.id}')">▶ Avvia</button>`;
+  if (isAssignee && task.status !== 'COMPLETED' && task.status !== 'CANCELLED')
+    actions += `<button class="btn btn-sm btn-ok" onclick="doComplete('${task.id}')">✓ Completa</button>`;
+  if (canEdit && task.status !== 'CANCELLED')
+    actions += `<button class="btn btn-sm btn-neutral" onclick="openEditMode('${task.id}')">✏️ Modifica</button>`;
+  if (canEdit && task.status !== 'CANCELLED')
+    actions += `<button class="btn btn-sm btn-neutral" onclick="openReassignMode('${task.id}')">👤 Riassegna</button>`;
+  if (isDirector && task.status !== 'CANCELLED')
+    actions += `<button class="btn btn-sm btn-danger" onclick="doCancel('${task.id}')">🗑 Cancella</button>`;
+
+  // ─ Progress control (assignee or editor, non-cancelled) ─
+  let progressHtml = '';
+  const canProgress = isAssignee || canEdit;
+  if (canProgress && task.status !== 'CANCELLED') {
+    progressHtml = `
+    <div class="panel-section">
+      <div class="panel-section-title">Progresso</div>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px">
+        <div class="task-progress" style="flex:1;height:8px"><div class="progress-fill" id="pbar-fill" style="width:${pct}%"></div></div>
+        <span id="pbar-val" style="font-weight:700;font-size:15px;min-width:38px;text-align:right">${pct}%</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <input type="range" id="pct-range" min="0" max="100" value="${pct}" style="flex:1"
+               oninput="document.getElementById('pct-num').value=this.value;document.getElementById('pbar-fill').style.width=this.value+'%';document.getElementById('pbar-val').textContent=this.value+'%'">
+        <input type="number" id="pct-num" min="0" max="100" value="${pct}" style="width:64px;padding:6px 8px;border:1.5px solid var(--border-l);border-radius:7px;font-size:14px"
+               oninput="if(this.value>=0&&this.value<=100){document.getElementById('pct-range').value=this.value;document.getElementById('pbar-fill').style.width=this.value+'%';document.getElementById('pbar-val').textContent=this.value+'%'}">
+        <button class="btn btn-sm btn-neutral" onclick="doProgress('${task.id}')">Salva</button>
+      </div>
+    </div>`;
+  } else {
+    progressHtml = pct > 0 ? `
+    <div class="panel-section">
+      <div class="panel-section-title">Progresso</div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <div class="task-progress" style="flex:1;height:8px"><div class="progress-fill" style="width:${pct}%"></div></div>
+        <span style="font-weight:700;font-size:15px">${pct}%</span>
+      </div>
+    </div>` : '';
+  }
+
+  // ─ History ─
+  const histHtml = history.length ? history.map(h => `
+    <div class="history-item">
+      <div class="history-dot"></div>
+      <div class="history-body">
+        <div>${OpsCommon.historyLine(h)}</div>
+        <div class="history-time">${OpsCommon.fmtDatetime(h.at)}${h.actorName ? ' · ' + esc(h.actorName) : ''}</div>
+      </div>
+    </div>`).join('') : '<div class="empty-state" style="padding:16px">Nessuna attività registrata.</div>';
+
+  // ─ Comments ─
+  const commentsHtml = comments.map(c => `
+    <div class="comment-item">
+      <span class="comment-author">${esc(c.authorName || '—')}</span>
+      <span class="comment-time">${OpsCommon.fmtDatetime(c.createdAt)}</span>
+      <div class="comment-text">${esc(c.text)}</div>
+    </div>`).join('');
+
+  // ─ Attachments ─
+  const attHtml = attachments.length ? attachments.map(a => `
+    <div class="comment-item">
+      <span class="comment-author">📎 ${esc(a.filename)}</span>
+      <span class="comment-time">${OpsCommon.fmtDatetime(a.uploadedAt)}${a.uploadedByName ? ' · ' + esc(a.uploadedByName) : ''}</span>
+    </div>`).join('') : '<p style="font-size:13px;color:var(--muted)">Nessun allegato. Upload tramite Firebase Storage (configurazione Sprint 3).</p>';
+
+  document.getElementById('panel-inner').innerHTML = `
+    <div class="panel-hdr">
+      <div class="panel-hdr-title">${esc(task.title)}</div>
+      <span class="badge badge-status-${st.toLowerCase()}" style="flex-shrink:0">${OpsCommon.STATUS_LABELS[st] || st}</span>
+      <span class="badge badge-${task.priority.toLowerCase()}" style="flex-shrink:0">${OpsCommon.PRIORITY_LABELS[task.priority] || task.priority}</span>
+      <button class="panel-close" onclick="closePanel()">✕ Chiudi</button>
+    </div>
+    <div class="panel-body">
+      <div id="panel-msg"></div>
+
+      ${actions ? `<div class="panel-section"><div class="action-row">${actions}</div></div>` : ''}
+
+      ${progressHtml}
+
+      <div class="panel-section">
+        <div class="panel-section-title">Dettagli</div>
+        <div class="info-grid">
+          <div class="info-cell"><div class="info-cell-label">Assegnatario</div><div class="info-cell-val">${esc(assignee.name || '—')} ${assignee.role ? '<small style="color:var(--muted)">('+OpsCommon.roleLabel(assignee.role)+')</small>' : ''}</div></div>
+          <div class="info-cell"><div class="info-cell-label">Creato da</div><div class="info-cell-val">${esc(creator.name || task.createdByName || '—')}</div></div>
+          <div class="info-cell"><div class="info-cell-label">Scadenza</div><div class="info-cell-val">${esc(OpsCommon.fmtDue(task.dueDate))}</div></div>
+          <div class="info-cell"><div class="info-cell-label">Creato il</div><div class="info-cell-val">${esc(OpsCommon.fmtDatetime(task.createdAt))}</div></div>
+          ${task.startedAt ? `<div class="info-cell"><div class="info-cell-label">Avviato il</div><div class="info-cell-val">${esc(OpsCommon.fmtDatetime(task.startedAt))}</div></div>` : ''}
+          ${task.completedAt ? `<div class="info-cell"><div class="info-cell-label">Completato il</div><div class="info-cell-val">${esc(OpsCommon.fmtDatetime(task.completedAt))}</div></div>` : ''}
+          ${task.department ? `<div class="info-cell"><div class="info-cell-label">Reparto</div><div class="info-cell-val">${esc(task.department)}</div></div>` : ''}
+        </div>
+        ${task.description ? `<div style="margin-top:10px;font-size:14px;line-height:1.55;color:var(--muted)">${esc(task.description)}</div>` : ''}
+        ${task.notes ? `<div style="margin-top:10px;padding:10px;background:var(--bg);border-radius:8px;font-size:14px;line-height:1.5;white-space:pre-wrap">${esc(task.notes)}</div>` : ''}
+      </div>
+
+      <div class="panel-section">
+        <div class="panel-section-title">Allegati (${attachments.length})</div>
+        ${attHtml}
+      </div>
+
+      <div class="panel-section">
+        <div class="panel-section-title">Commenti (${comments.length})</div>
+        ${commentsHtml}
+        <div style="margin-top:12px">
+          <textarea id="comment-text" class="form-textarea" maxlength="2000" placeholder="Aggiungi un commento…" style="min-height:60px"></textarea>
+          <button class="btn btn-sm btn-neutral" onclick="doComment('${task.id}')">Invia commento</button>
+        </div>
+      </div>
+
+      <details style="margin-bottom:16px">
+        <summary style="cursor:pointer;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);margin-bottom:10px">
+          Cronologia attività (${history.length})
+        </summary>
+        <div style="margin-top:12px">${histHtml}</div>
+      </details>
+    </div>`;
+
+  openPanel();
+  // Store current task id for refresh
+  document.getElementById('side-panel').dataset.taskId = task.id;
+}
+
+// ── Create panel ──
+function openCreatePanel() {
+  const assigneeOptions = assignableUsers.map(u =>
+    `<option value="${esc(u.id)}"${u.id === (meData && meData.user.id) ? ' selected' : ''}>${esc(u.name)} (${esc(OpsCommon.roleLabel(u.role))})</option>`
+  ).join('');
+
+  document.getElementById('panel-inner').innerHTML = `
+    <div class="panel-hdr">
+      <div class="panel-hdr-title">Nuovo compito</div>
+      <button class="panel-close" onclick="closePanel()">✕ Chiudi</button>
+    </div>
+    <div class="panel-body">
+      <div id="panel-msg"></div>
+      <label class="form-label">Titolo *</label>
+      <input id="c-title" class="form-input" maxlength="200" placeholder="Es. Preparare mise en place">
+      <label class="form-label">Descrizione</label>
+      <textarea id="c-desc" class="form-textarea" maxlength="2000" placeholder="Dettagli (facoltativo)"></textarea>
+      <label class="form-label">Assegna a</label>
+      <select id="c-assignee" class="form-select">${assigneeOptions}</select>
+      <label class="form-label">Priorità</label>
+      <select id="c-priority" class="form-select">
         <option value="LOW">Bassa</option>
         <option value="MEDIUM" selected>Media</option>
         <option value="HIGH">Alta</option>
         <option value="URGENT">Urgente</option>
       </select>
-      <label class="form-label" for="t-due">Scadenza</label>
-      <input id="t-due" class="form-input" type="datetime-local">
-      <label class="form-label" for="t-dept">Reparto (facoltativo)</label>
-      <input id="t-dept" class="form-input" maxlength="80" placeholder="es. Cucina">
-      <button id="create-btn" class="btn btn-primary" style="width:100%" onclick="createTask()">Crea compito</button>
-      <div id="form-msg" style="display:none" class="msg"></div>
-    </div>
+      <label class="form-label">Scadenza</label>
+      <input id="c-due" class="form-input" type="datetime-local">
+      <label class="form-label">Reparto (facoltativo)</label>
+      <input id="c-dept" class="form-input" maxlength="80" placeholder="es. Cucina">
+      <button class="btn btn-primary" style="width:100%;margin-top:6px" id="c-btn" onclick="doCreate()">Crea compito</button>
+    </div>`;
+  openPanel();
+}
 
-    <!-- Task list -->
-    <div>
-      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-        <button class="btn btn-sm btn-neutral flt" data-f="all">Tutti</button>
-        <button class="btn btn-sm btn-neutral flt" data-f="open">Aperti</button>
-        <button class="btn btn-sm btn-neutral flt" data-f="overdue">In ritardo</button>
-        <button class="btn btn-sm btn-neutral flt" data-f="completed">Completati</button>
+// ── Edit mode (inside panel) ──
+function openEditMode(taskId) {
+  const task = allTasks.find(t => t.id === taskId) || {};
+  document.getElementById('panel-inner').innerHTML = `
+    <div class="panel-hdr">
+      <div class="panel-hdr-title">Modifica compito</div>
+      <button class="panel-close" onclick="closePanel()">✕ Chiudi</button>
+    </div>
+    <div class="panel-body">
+      <div id="panel-msg"></div>
+      <label class="form-label">Titolo *</label>
+      <input id="e-title" class="form-input" maxlength="200" value="${esc(task.title || '')}">
+      <label class="form-label">Descrizione</label>
+      <textarea id="e-desc" class="form-textarea" maxlength="2000">${esc(task.description || '')}</textarea>
+      <label class="form-label">Priorità</label>
+      <select id="e-priority" class="form-select">
+        ${['LOW','MEDIUM','HIGH','URGENT'].map(p => `<option value="${p}"${task.priority===p?' selected':''}>${OpsCommon.PRIORITY_LABELS[p]}</option>`).join('')}
+      </select>
+      <label class="form-label">Scadenza</label>
+      <input id="e-due" class="form-input" type="datetime-local" value="${esc(task.dueDate ? task.dueDate.slice(0,16) : '')}">
+      <label class="form-label">Reparto</label>
+      <input id="e-dept" class="form-input" maxlength="80" value="${esc(task.department || '')}">
+      <label class="form-label">Note interne</label>
+      <textarea id="e-notes" class="form-textarea" maxlength="5000" placeholder="Note visibili a chi può modificare il compito">${esc(task.notes || '')}</textarea>
+      <div style="display:flex;gap:10px;margin-top:4px">
+        <button class="btn btn-primary" style="flex:1" id="e-btn" onclick="doEdit('${esc(taskId)}')">Salva modifiche</button>
+        <button class="btn btn-neutral" onclick="openDetail('${esc(taskId)}')">Annulla</button>
       </div>
-      <div id="task-list" class="task-list"><div class="empty-state">Caricamento…</div></div>
+    </div>`;
+}
+
+// ── Reassign mode ──
+function openReassignMode(taskId) {
+  const task = allTasks.find(t => t.id === taskId) || {};
+  const assigneeOptions = assignableUsers.map(u =>
+    `<option value="${esc(u.id)}"${u.id === task.assigneeId ? ' selected' : ''}>${esc(u.name)} (${esc(OpsCommon.roleLabel(u.role))})</option>`
+  ).join('');
+  document.getElementById('panel-inner').innerHTML = `
+    <div class="panel-hdr">
+      <div class="panel-hdr-title">Riassegna compito</div>
+      <button class="panel-close" onclick="closePanel()">✕ Chiudi</button>
     </div>
-  </div>
-</main>
-
-<script src="js/ws-auth.js"></script>
-<script src="js/operations-common.js"></script>
-<script>
-let allTasks = [], allUsers = {}, myId = null, filter = 'all';
-
-async function load() {
-  const me = await OpsCommon.loadMe();
-  if (!me) return;
-  document.getElementById('me-name').textContent = me.user.name || '';
-  document.getElementById('me-role').textContent = OpsCommon.roleLabel(me.user.role);
-  if (me.user.role === 'DIRECTOR') document.getElementById('team-btn').style.display = '';
-
-  // Hierarchy-filtered assignee dropdown (UX only — server re-checks)
-  const aData = await OpsCommon.api('/api/operations/assignees');
-  const sel = document.getElementById('t-assignee');
-  sel.innerHTML = '';
-  (aData && aData.assignees || []).forEach(u => {
-    const o = document.createElement('option');
-    o.value = u.id;
-    o.textContent = `${u.name} (${OpsCommon.roleLabel(u.role)})`;
-    if (u.id === (me.user && me.user.id)) o.textContent += ' — io';
-    sel.appendChild(o);
-  });
-
-  await loadTasks();
+    <div class="panel-body">
+      <div id="panel-msg"></div>
+      <p style="font-size:14px;margin-bottom:16px">Compito: <strong>${esc(task.title || '')}</strong></p>
+      <label class="form-label">Nuovo assegnatario</label>
+      <select id="ra-assignee" class="form-select">${assigneeOptions}</select>
+      <div style="display:flex;gap:10px;margin-top:4px">
+        <button class="btn btn-primary" style="flex:1" id="ra-btn" onclick="doReassign('${esc(taskId)}')">Conferma riassegnazione</button>
+        <button class="btn btn-neutral" onclick="openDetail('${esc(taskId)}')">Annulla</button>
+      </div>
+      <div id="panel-msg" style="margin-top:8px"></div>
+    </div>`;
 }
 
-async function loadTasks() {
-  const data = await OpsCommon.api('/api/operations/tasks');
-  if (!data || !data.success) return OpsCommon.showError(data && data.error);
-  allTasks = data.tasks; allUsers = data.users; myId = data.me.id;
-  render();
+// ── Panel open/close ──
+function openPanel() {
+  document.getElementById('side-panel').classList.add('open');
+  document.getElementById('panel-overlay').classList.add('active');
+}
+function closePanel() {
+  document.getElementById('side-panel').classList.remove('open');
+  document.getElementById('panel-overlay').classList.remove('active');
 }
 
-function render() {
-  let list = allTasks;
-  if (filter === 'open') list = list.filter(t => t.status !== 'COMPLETED');
-  if (filter === 'overdue') list = list.filter(t => t.effectiveStatus === 'OVERDUE');
-  if (filter === 'completed') list = list.filter(t => t.status === 'COMPLETED');
-  list = [...list].sort((a, b) => (a.dueDate || '9999') < (b.dueDate || '9999') ? -1 : 1);
-  OpsCommon.renderTaskList(document.getElementById('task-list'), list, allUsers, myId, loadTasks);
+// ── Panel message helper ──
+function panelMsg(msg, type = 'error') {
+  const el = document.getElementById('panel-msg');
+  if (!el) return;
+  el.textContent = msg;
+  el.className = 'msg msg-' + type;
+  el.style.display = 'block';
+  if (type !== 'error') setTimeout(() => { if (el) el.style.display = 'none'; }, 3000);
 }
 
-document.querySelectorAll('.flt').forEach(b => b.addEventListener('click', () => { filter = b.dataset.f; render(); }));
-
-async function createTask() {
-  const btn = document.getElementById('create-btn');
-  const msg = document.getElementById('form-msg');
-  msg.style.display = 'none';
-  const body = {
-    title: document.getElementById('t-title').value.trim(),
-    description: document.getElementById('t-desc').value.trim(),
-    assigneeId: document.getElementById('t-assignee').value,
-    priority: document.getElementById('t-priority').value,
-    dueDate: document.getElementById('t-due').value || null,
-    department: document.getElementById('t-dept').value.trim() || null
-  };
-  if (!body.title) { msg.textContent = 'Inserisci un titolo.'; msg.className = 'msg msg-error'; msg.style.display = 'block'; return; }
+// ── Action handlers ──
+async function doCreate() {
+  const btn = document.getElementById('c-btn');
   btn.disabled = true;
+  const body = {
+    title: document.getElementById('c-title').value.trim(),
+    description: document.getElementById('c-desc').value.trim(),
+    assigneeId: document.getElementById('c-assignee').value,
+    priority: document.getElementById('c-priority').value,
+    dueDate: document.getElementById('c-due').value || null,
+    department: document.getElementById('c-dept').value.trim() || null
+  };
+  if (!body.title) { panelMsg('Inserisci un titolo.'); btn.disabled = false; return; }
   const r = await OpsCommon.api('/api/operations/tasks', { method: 'POST', body: JSON.stringify(body) });
   btn.disabled = false;
   if (r && r.success) {
-    msg.textContent = 'Compito creato.'; msg.className = 'msg msg-success'; msg.style.display = 'block';
-    document.getElementById('t-title').value = '';
-    document.getElementById('t-desc').value = '';
-    document.getElementById('t-due').value = '';
-    document.getElementById('t-dept').value = '';
+    panelMsg('Compito creato.', 'success');
     await loadTasks();
+    setTimeout(() => openDetail(r.task.id), 500);
   } else {
-    msg.textContent = (r && r.error) || 'Errore.'; msg.className = 'msg msg-error'; msg.style.display = 'block';
+    panelMsg((r && r.error) || 'Errore.');
   }
+}
+
+async function doEdit(taskId) {
+  const btn = document.getElementById('e-btn');
+  btn.disabled = true;
+  const body = {
+    title: document.getElementById('e-title').value.trim(),
+    description: document.getElementById('e-desc').value.trim(),
+    priority: document.getElementById('e-priority').value,
+    dueDate: document.getElementById('e-due').value || null,
+    department: document.getElementById('e-dept').value.trim() || null,
+    notes: document.getElementById('e-notes').value.trim()
+  };
+  const r = await OpsCommon.api('/api/operations/tasks/' + taskId, { method: 'PATCH', body: JSON.stringify(body) });
+  btn.disabled = false;
+  if (r && r.success) {
+    await loadTasks();
+    openDetail(taskId);
+  } else {
+    panelMsg((r && r.error) || 'Errore.');
+  }
+}
+
+async function doReassign(taskId) {
+  const btn = document.getElementById('ra-btn');
+  btn.disabled = true;
+  const assigneeId = document.getElementById('ra-assignee').value;
+  const r = await OpsCommon.api('/api/operations/tasks/' + taskId + '/reassign', {
+    method: 'POST', body: JSON.stringify({ assigneeId })
+  });
+  btn.disabled = false;
+  if (r && r.success) {
+    await loadTasks();
+    openDetail(taskId);
+  } else {
+    panelMsg((r && r.error) || 'Errore nella riassegnazione.');
+  }
+}
+
+async function doStart(taskId) {
+  const r = await OpsCommon.api('/api/operations/tasks/' + taskId + '/start', { method: 'POST' });
+  if (r && r.success) { await loadTasks(); openDetail(taskId); }
+  else panelMsg((r && r.error) || 'Errore.');
+}
+
+async function doComplete(taskId) {
+  if (!confirm('Segnare il compito come completato?')) return;
+  const r = await OpsCommon.api('/api/operations/tasks/' + taskId + '/complete', { method: 'POST' });
+  if (r && r.success) { await loadTasks(); openDetail(taskId); }
+  else panelMsg((r && r.error) || 'Errore.');
+}
+
+async function doProgress(taskId) {
+  const pct = parseInt(document.getElementById('pct-num').value, 10);
+  if (isNaN(pct) || pct < 0 || pct > 100) { panelMsg('Valore non valido (0–100).'); return; }
+  const r = await OpsCommon.api('/api/operations/tasks/' + taskId + '/progress', {
+    method: 'POST', body: JSON.stringify({ completionPercent: pct })
+  });
+  if (r && r.success) { await loadTasks(); openDetail(taskId); }
+  else panelMsg((r && r.error) || 'Errore.');
+}
+
+async function doCancel(taskId) {
+  const reason = prompt('Motivo della cancellazione (facoltativo):') ?? '';
+  if (reason === null) return; // user cancelled prompt
+  const r = await OpsCommon.api('/api/operations/tasks/' + taskId + '/cancel', {
+    method: 'POST', body: JSON.stringify({ reason })
+  });
+  if (r && r.success) { await loadTasks(); openDetail(taskId); }
+  else panelMsg((r && r.error) || 'Errore.');
+}
+
+async function doComment(taskId) {
+  const text = (document.getElementById('comment-text').value || '').trim();
+  if (!text) { panelMsg('Il commento non può essere vuoto.'); return; }
+  const r = await OpsCommon.api('/api/operations/tasks/' + taskId + '/comments', {
+    method: 'POST', body: JSON.stringify({ text })
+  });
+  if (r && r.success) { await loadTasks(); openDetail(taskId); }
+  else panelMsg((r && r.error) || 'Errore.');
 }
 
 load();
