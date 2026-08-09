@@ -312,8 +312,22 @@ app.post('/api/auth/session', async (req, res) => {
             return res.status(401).json({ error: 'Invalid or expired Firebase token' });
         }
 
-        // [SECURITY] Step 2: Fetch company name from Firestore using the user's own token
-        // This is the authoritative source — the client cannot forge this value
+        // [SECURITY] Step 2a: If this uid has a server-side Operations membership,
+        // that record's company is AUTHORITATIVE for session issuance — it was set
+        // by the inviting Director (or bootstrap) and can never be chosen by the
+        // client. This prevents a user from gaining a session for another company
+        // by writing an arbitrary `company` value into their own Firestore profile.
+        // findOpsUserByUid is a hoisted function declaration defined later in the file.
+        const opsRecord = findOpsUserByUid(uid);
+        if (opsRecord && opsRecord.active !== false) {
+            const opsCompany = String(opsRecord.companyId).trim().toLowerCase();
+            const opsToken = signSessionToken(uid, opsCompany);
+            console.log(`✅ [SECURITY] Session token issued from Operations record: uid=${uid}, company="${opsCompany}"`);
+            return res.json({ success: true, token: opsToken, companyName: opsCompany });
+        }
+
+        // [SECURITY] Step 2b: Otherwise fetch company name from Firestore using the
+        // user's own token (legacy Service source — authoritative for non-Ops users)
         const companyName = await getCompanyFromFirestore(uid, idToken);
         if (!companyName || companyName.trim() === '') {
             console.log(`⛔ [SECURITY] /api/auth/session rejected: no company found for uid=${uid}`);
@@ -699,6 +713,8 @@ function getStoreNameForFile(filePath) {
     if (filePath === PLANS_FILE)          return 'plans';
     if (filePath === CALENDAR_EVENTS_FILE) return 'calendar_events';
     if (filePath === CALENDAR_NOTIF_FILE)  return 'calendar_notifs';
+    if (filePath === OPS_USERS_FILE) return 'ops_users';
+    if (filePath === OPS_TASKS_FILE) return 'ops_tasks';
     return null;
 }
 
@@ -1404,6 +1420,465 @@ app.patch('/api/calendar/notifications/read-all', (req, res) => {
 
 // =========================================================================
 // ===== END CALENDAR MODULE ===============================================
+// =========================================================================
+
+// =========================================================================
+// ===== PLATETIMER OPERATIONS MODULE (Sprint 1) ===========================
+// Task management for kitchen brigades. Shares auth + company identity with
+// the Service side, but has fully separate stores, logic and UI.
+// All hierarchy rules live in operations/ops-auth.js (centralized).
+// =========================================================================
+const opsAuth = require('./operations/ops-auth');
+const opsEmail = require('./operations/ops-email');
+
+const OPS_USERS_FILE = path.join(DATA_DIR, 'ops-users.json');
+const OPS_TASKS_FILE = path.join(DATA_DIR, 'ops-tasks.json');
+
+// Populated by initializeDataStores() at startup.
+// Shape: { [companyId]: [ user, ... ] } / { [companyId]: [ task, ... ] }
+let opsUsersStore = {};
+let opsTasksStore = {};
+
+const OPS_PRIORITIES = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'];
+const OPS_STATUSES = ['OPEN', 'IN_PROGRESS', 'COMPLETED']; // OVERDUE is computed, never stored
+
+function genOpsUserId() { return 'opsu_' + Date.now() + '_' + crypto.randomBytes(3).toString('hex'); }
+function genOpsTaskId() { return 'opst_' + Date.now() + '_' + crypto.randomBytes(3).toString('hex'); }
+function genInviteCode() { return crypto.randomBytes(16).toString('hex'); }
+
+function getOpsUsers(companyId) { return opsUsersStore[companyId] || []; }
+function getOpsTasks(companyId) { return opsTasksStore[companyId] || []; }
+function saveOpsUsers() { saveJSON(OPS_USERS_FILE, opsUsersStore); }
+function saveOpsTasks() { saveJSON(OPS_TASKS_FILE, opsTasksStore); }
+
+// Find the ops user record bound to a Firebase uid (across all companies —
+// invited users may belong to a company different from their session company).
+function findOpsUserByUid(uid) {
+    for (const companyId of Object.keys(opsUsersStore)) {
+        const u = (opsUsersStore[companyId] || []).find(x => x.uid === uid);
+        if (u) return u;
+    }
+    return null;
+}
+
+// [SECURITY] Operations auth guard. Verifies the HMAC session token (shared
+// mechanism with the Service side), then resolves the server-side ops user
+// record. companyId ALWAYS comes from the server-side record — never from the
+// client. Bootstrap rule: if the session's company has no Operations users yet,
+// the authenticated account owner becomes its first DIRECTOR.
+function requireOpsAuth(req, res) {
+    const session = requireAuth(req, res);
+    if (!session) return null;
+
+    let opsUser = findOpsUserByUid(session.uid);
+    if (!opsUser) {
+        const companyId = session.companyName; // verified server-side at token issue time
+        if (getOpsUsers(companyId).length === 0) {
+            // Bootstrap: existing account owner becomes the company's first Director
+            opsUser = {
+                id: genOpsUserId(),
+                companyId,
+                uid: session.uid,
+                name: 'Direttore',
+                email: null,
+                role: 'DIRECTOR',
+                active: true,
+                status: 'ACTIVE',
+                createdAt: Date.now()
+            };
+            if (!opsUsersStore[companyId]) opsUsersStore[companyId] = [];
+            opsUsersStore[companyId].push(opsUser);
+            saveOpsUsers();
+            console.log(`✅ [OPS] Bootstrapped first DIRECTOR for company "${companyId}" (uid=${session.uid})`);
+        } else {
+            res.status(403).json({ error: 'Non sei membro di PlateTimer Operations per questa azienda. Chiedi al Direttore un invito.' });
+            return null;
+        }
+    }
+    if (opsUser.active === false) {
+        res.status(403).json({ error: 'Account Operations disattivato. Contatta il Direttore.' });
+        return null;
+    }
+    return { session, opsUser };
+}
+
+function opsUsersById(companyId) {
+    const map = {};
+    getOpsUsers(companyId).forEach(u => { map[u.id] = u; });
+    return map;
+}
+
+function publicOpsUser(u) {
+    return { id: u.id, name: u.name, email: u.email, role: u.role, active: u.active !== false, status: u.status, createdAt: u.createdAt };
+}
+
+// Compute effective status: OVERDUE if not completed and dueDate passed.
+function opsTaskWithComputedStatus(t) {
+    let effectiveStatus = t.status;
+    if (t.status !== 'COMPLETED' && t.dueDate) {
+        const due = new Date(t.dueDate).getTime();
+        if (!isNaN(due) && Date.now() > due) effectiveStatus = 'OVERDUE';
+    }
+    return { ...t, effectiveStatus };
+}
+
+// ── GET /api/operations/me — current ops profile (bootstraps first Director) ──
+app.get('/api/operations/me', (req, res) => {
+    const ctx = requireOpsAuth(req, res);
+    if (!ctx) return;
+    // Allow the user to set their own display name once (harmless, self-only)
+    const name = (req.query.name || '').toString().trim();
+    if (name && (ctx.opsUser.name === 'Direttore' || !ctx.opsUser.name)) {
+        ctx.opsUser.name = name.substring(0, 80);
+        saveOpsUsers();
+    }
+    res.json({ success: true, user: publicOpsUser(ctx.opsUser), companyId: ctx.opsUser.companyId, emailTransport: opsEmail.TRANSPORT });
+});
+
+// ── GET /api/operations/users — Director only: full team list ──
+app.get('/api/operations/users', (req, res) => {
+    const ctx = requireOpsAuth(req, res);
+    if (!ctx) return;
+    if (!opsAuth.canManageUsers(ctx.opsUser)) {
+        return res.status(403).json({ error: 'Solo il Direttore può gestire gli utenti.' });
+    }
+    const users = getOpsUsers(ctx.opsUser.companyId).map(u => ({
+        ...publicOpsUser(u),
+        inviteCode: u.status === 'INVITED' ? u.inviteCode : undefined
+    }));
+    res.json({ success: true, users });
+});
+
+// ── GET /api/operations/assignees — users the actor may assign tasks to (UX) ──
+app.get('/api/operations/assignees', (req, res) => {
+    const ctx = requireOpsAuth(req, res);
+    if (!ctx) return;
+    const allowed = opsAuth.allowedAssignees(ctx.opsUser, getOpsUsers(ctx.opsUser.companyId));
+    res.json({ success: true, assignees: allowed.map(publicOpsUser) });
+});
+
+// ── POST /api/operations/users — Director only: invite a new team member ──
+// [SECURITY] companyId ALWAYS from the Director's server-side record. role
+// validated server-side. Client-supplied companyId/uid are ignored.
+app.post('/api/operations/users', (req, res) => {
+    const ctx = requireOpsAuth(req, res);
+    if (!ctx) return;
+    if (!opsAuth.canManageUsers(ctx.opsUser)) {
+        console.log(`⛔ [OPS-SECURITY] user-create rejected — actor role ${ctx.opsUser.role} (uid=${ctx.session.uid})`);
+        return res.status(403).json({ error: 'Solo il Direttore può creare utenti.' });
+    }
+    const companyId = ctx.opsUser.companyId; // never from client
+    const name = (req.body.name || '').trim();
+    const email = (req.body.email || '').trim().toLowerCase();
+    const role = (req.body.role || '').trim();
+
+    if (!name) return res.status(400).json({ error: 'Nome obbligatorio.' });
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Email non valida.' });
+    if (!opsAuth.isValidRole(role)) return res.status(400).json({ error: `Ruolo non valido. Ruoli ammessi: ${opsAuth.ROLES.join(', ')}` });
+    if (getOpsUsers(companyId).some(u => u.email === email)) {
+        return res.status(409).json({ error: 'Esiste già un utente con questa email in azienda.' });
+    }
+
+    const user = {
+        id: genOpsUserId(),
+        companyId,
+        uid: null,               // bound at activation — invitee can never choose company
+        name: name.substring(0, 80),
+        email,
+        role,
+        active: true,
+        status: 'INVITED',
+        inviteCode: genInviteCode(),
+        invitedBy: ctx.opsUser.id,
+        createdAt: Date.now()
+    };
+    if (!opsUsersStore[companyId]) opsUsersStore[companyId] = [];
+    opsUsersStore[companyId].push(user);
+    saveOpsUsers();
+    console.log(`✅ [OPS] User invited: ${email} (${role}) in company "${companyId}" by ${ctx.opsUser.id}`);
+
+    // Invitation notification via the email abstraction (logging transport —
+    // no provider configured). The Director shares the activation link manually.
+    // [SECURITY] Never include the invite code in logged notification content —
+    // the code is the activation secret and must only reach the Director's UI.
+    opsEmail.sendTaskAssignmentEmail({
+        to: email,
+        toName: name,
+        task: { title: 'Invito a PlateTimer Operations', description: `Sei stato invitato come ${role}. Il Direttore ti fornirà il link di attivazione.`, priority: '—', dueDate: null },
+        assignedByName: ctx.opsUser.name,
+        appUrl: '/operations-activate.html'
+    }).catch(e => console.error('📧 [OPS-EMAIL] invite notification failed (non-fatal):', e.message));
+
+    res.status(201).json({
+        success: true,
+        user: { ...publicOpsUser(user), inviteCode: user.inviteCode },
+        activationUrl: `/operations-activate.html?code=${user.inviteCode}`,
+        emailNote: opsEmail.TRANSPORT === 'logging'
+            ? 'Nessun provider email configurato (manca SMTP_HOST/SMTP_USER/SMTP_PASS o SENDGRID_API_KEY): condividi manualmente il link di attivazione.'
+            : undefined
+    });
+});
+
+// ── PUT /api/operations/users/:id — Director only: activate/deactivate ──
+app.put('/api/operations/users/:id', (req, res) => {
+    const ctx = requireOpsAuth(req, res);
+    if (!ctx) return;
+    if (!opsAuth.canManageUsers(ctx.opsUser)) {
+        return res.status(403).json({ error: 'Solo il Direttore può gestire gli utenti.' });
+    }
+    const users = getOpsUsers(ctx.opsUser.companyId); // company isolation: only own company searched
+    const user = users.find(u => u.id === req.params.id);
+    if (!user) return res.status(404).json({ error: 'Utente non trovato.' });
+    if (user.id === ctx.opsUser.id && req.body.active === false) {
+        return res.status(400).json({ error: 'Non puoi disattivare il tuo stesso account.' });
+    }
+    if (typeof req.body.active === 'boolean') user.active = req.body.active;
+    saveOpsUsers();
+    console.log(`✅ [OPS] User ${user.id} active=${user.active} (company "${ctx.opsUser.companyId}")`);
+    res.json({ success: true, user: publicOpsUser(user) });
+});
+
+// ── GET /api/operations/invitations/:code — public info for the activation page ──
+// The invite code itself is the secret; reveals only what the invitee needs.
+app.get('/api/operations/invitations/:code', (req, res) => {
+    const code = (req.params.code || '').trim();
+    for (const companyId of Object.keys(opsUsersStore)) {
+        const u = (opsUsersStore[companyId] || []).find(x => x.inviteCode === code && x.status === 'INVITED');
+        if (u) return res.json({ success: true, invitation: { name: u.name, email: u.email, role: u.role, companyId } });
+    }
+    res.status(404).json({ error: 'Invito non valido o già utilizzato.' });
+});
+
+// ── POST /api/operations/activate — invitee binds their Firebase account ──
+// [SECURITY] Requires a valid Firebase ID token; the token's email must match
+// the invitation email. companyId stays what the Director set — the invitee
+// can never choose or change it.
+app.post('/api/operations/activate', async (req, res) => {
+    try {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            return res.status(401).json({ error: 'Firebase ID token richiesto.' });
+        }
+        const idToken = authHeader.substring(7).trim();
+        const code = (req.body.code || '').trim();
+        if (!code) return res.status(400).json({ error: 'Codice invito mancante.' });
+
+        // Verify Firebase token and get uid + email
+        const lookupResp = await fetch(
+            `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${FIREBASE_API_KEY}`,
+            { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ idToken }) }
+        );
+        if (!lookupResp.ok) return res.status(401).json({ error: 'Token Firebase non valido.' });
+        const lookupData = await lookupResp.json();
+        const fbUser = lookupData.users && lookupData.users[0];
+        if (!fbUser) return res.status(401).json({ error: 'Token Firebase non valido.' });
+        const uid = fbUser.localId;
+
+        // Find invitation
+        let invited = null, invitedCompany = null;
+        for (const companyId of Object.keys(opsUsersStore)) {
+            const u = (opsUsersStore[companyId] || []).find(x => x.inviteCode === code && x.status === 'INVITED');
+            if (u) { invited = u; invitedCompany = companyId; break; }
+        }
+        // [SECURITY] Centralized activation validation: invitation must exist,
+        // token email must match AND be VERIFIED (prevents account takeover via
+        // unverified Firebase accounts created for someone else's address).
+        const validation = opsAuth.validateActivationAccount(fbUser, invited);
+        if (!validation.ok) {
+            console.log(`⛔ [OPS-SECURITY] activation rejected (${validation.code}) for uid=${uid}`);
+            return res.status(validation.code).json({ error: validation.error, needsEmailVerification: validation.code === 403 && fbUser.emailVerified !== true });
+        }
+        if (findOpsUserByUid(uid)) {
+            return res.status(409).json({ error: 'Questo account è già collegato a PlateTimer Operations.' });
+        }
+
+        invited.uid = uid;
+        invited.status = 'ACTIVE';
+        delete invited.inviteCode;
+        invited.activatedAt = Date.now();
+        saveOpsUsers();
+        console.log(`✅ [OPS] Invitation activated → company "${invitedCompany}" (uid=${uid})`);
+        res.json({ success: true, companyId: invitedCompany, role: invited.role });
+    } catch (e) {
+        console.error('❌ [OPS] activation error:', e);
+        res.status(500).json({ error: 'Errore interno durante l\'attivazione.' });
+    }
+});
+
+// ── Task input sanitizer ──
+function sanitizeOpsTaskInput(body) {
+    const title = (body.title || '').trim();
+    if (!title) throw 'Titolo obbligatorio.';
+    if (title.length > 200) throw 'Titolo troppo lungo (max 200).';
+    const description = (body.description || '').toString().trim().substring(0, 2000);
+    const priority = OPS_PRIORITIES.includes(body.priority) ? body.priority : 'MEDIUM';
+    let dueDate = null;
+    if (body.dueDate) {
+        const d = new Date(body.dueDate);
+        if (isNaN(d.getTime())) throw 'Data di scadenza non valida.';
+        dueDate = body.dueDate;
+    }
+    const department = body.department ? body.department.toString().trim().substring(0, 80) : null;
+    return { title, description, priority, dueDate, department };
+}
+
+// ── POST /api/operations/tasks — create (hierarchy-enforced assignment) ──
+// [SECURITY] companyId + createdBy from the server-side ops record; forged
+// companyId/createdBy/status/completedAt in the payload are ignored.
+app.post('/api/operations/tasks', (req, res) => {
+    const ctx = requireOpsAuth(req, res);
+    if (!ctx) return;
+    const actor = ctx.opsUser;
+    const companyId = actor.companyId;
+
+    let clean;
+    try { clean = sanitizeOpsTaskInput(req.body); }
+    catch (msg) { return res.status(400).json({ error: msg }); }
+
+    const assigneeId = (req.body.assigneeId || actor.id).toString();
+    const byId = opsUsersById(companyId); // only own-company users resolvable
+    const assignee = byId[assigneeId];
+    if (!assignee || assignee.active === false) {
+        console.log(`⛔ [OPS-SECURITY] task-create rejected — assignee "${assigneeId}" not found/active in company "${companyId}"`);
+        return res.status(400).json({ error: 'Assegnatario non valido.' });
+    }
+    if (!opsAuth.canAssignTaskTo(actor, assignee)) {
+        console.log(`⛔ [OPS-SECURITY] task-create rejected — ${actor.role} cannot assign to ${assignee.role} (company "${companyId}")`);
+        return res.status(403).json({ error: `Il tuo ruolo (${actor.role}) non può assegnare compiti a ${assignee.role}.` });
+    }
+
+    const now = Date.now();
+    const task = {
+        id: genOpsTaskId(),
+        companyId,
+        title: clean.title,
+        description: clean.description,
+        assigneeId: assignee.id,
+        createdBy: actor.id,           // always from session — never from payload
+        priority: clean.priority,
+        status: 'OPEN',
+        dueDate: clean.dueDate,
+        department: clean.department,
+        createdAt: now,
+        updatedAt: now,
+        completedAt: null
+    };
+    if (!opsTasksStore[companyId]) opsTasksStore[companyId] = [];
+    opsTasksStore[companyId].push(task);
+    saveOpsTasks(); // persist FIRST …
+    console.log(`✅ [OPS] Task created: "${task.title}" → ${assignee.name} (${assignee.role}) in "${companyId}"`);
+
+    // … THEN notify (failures logged, never affect the saved task)
+    if (assignee.id !== actor.id) {
+        opsEmail.sendTaskAssignmentEmail({
+            to: assignee.email,
+            toName: assignee.name,
+            task,
+            assignedByName: actor.name,
+            appUrl: '/operations.html'
+        }).catch(e => console.error('📧 [OPS-EMAIL] assignment notification failed (non-fatal):', e.message));
+    }
+
+    res.status(201).json({ success: true, task: opsTaskWithComputedStatus(task) });
+});
+
+// ── GET /api/operations/tasks — list, SERVER-FILTERED per hierarchy ──
+app.get('/api/operations/tasks', (req, res) => {
+    const ctx = requireOpsAuth(req, res);
+    if (!ctx) return;
+    const actor = ctx.opsUser;
+    const byId = opsUsersById(actor.companyId);
+    // Server-side filtering — never fetch-all-and-hide-in-browser
+    const visible = getOpsTasks(actor.companyId)
+        .filter(t => opsAuth.canViewTask(actor, t, byId))
+        .map(opsTaskWithComputedStatus);
+    const usersPublic = {};
+    Object.values(byId).forEach(u => { usersPublic[u.id] = { id: u.id, name: u.name, role: u.role }; });
+    res.json({ success: true, tasks: visible, users: usersPublic, me: publicOpsUser(actor) });
+});
+
+// ── PUT /api/operations/tasks/:id — edit / status change / complete ──
+app.put('/api/operations/tasks/:id', (req, res) => {
+    const ctx = requireOpsAuth(req, res);
+    if (!ctx) return;
+    const actor = ctx.opsUser;
+    const companyId = actor.companyId; // only own-company store searched
+    const tasks = getOpsTasks(companyId);
+    const task = tasks.find(t => t.id === req.params.id);
+    const byId = opsUsersById(companyId);
+    if (!task || !opsAuth.canViewTask(actor, task, byId)) {
+        // 404 for both not-found and not-visible — don't leak existence
+        return res.status(404).json({ error: 'Compito non trovato.' });
+    }
+
+    const wantsComplete = req.body.status === 'COMPLETED';
+    const wantsStatus = typeof req.body.status === 'string' && !wantsComplete;
+    const wantsEdit = ['title', 'description', 'priority', 'dueDate', 'assigneeId', 'department']
+        .some(k => req.body[k] !== undefined);
+
+    if (wantsComplete) {
+        if (!opsAuth.canCompleteTask(actor, task)) {
+            console.log(`⛔ [OPS-SECURITY] complete rejected — actor ${actor.id} is not assignee of ${task.id}`);
+            return res.status(403).json({ error: 'Solo l\'assegnatario può completare il compito.' });
+        }
+        if (task.status !== 'COMPLETED') {
+            task.status = 'COMPLETED';
+            task.completedAt = Date.now();
+        }
+    } else if (wantsStatus) {
+        if (!OPS_STATUSES.includes(req.body.status)) return res.status(400).json({ error: 'Stato non valido.' });
+        if (!opsAuth.canCompleteTask(actor, task) && !opsAuth.canEditTask(actor, task, byId)) {
+            return res.status(403).json({ error: 'Non autorizzato a modificare lo stato.' });
+        }
+        if (task.status === 'COMPLETED' && req.body.status !== 'COMPLETED') task.completedAt = null;
+        task.status = req.body.status;
+    }
+
+    if (wantsEdit) {
+        if (!opsAuth.canEditTask(actor, task, byId)) {
+            return res.status(403).json({ error: 'Non autorizzato a modificare questo compito.' });
+        }
+        try {
+            if (req.body.title !== undefined || req.body.description !== undefined ||
+                req.body.priority !== undefined || req.body.dueDate !== undefined ||
+                req.body.department !== undefined) {
+                const clean = sanitizeOpsTaskInput({ ...task, ...req.body });
+                task.title = clean.title;
+                task.description = clean.description;
+                task.priority = clean.priority;
+                task.dueDate = clean.dueDate;
+                task.department = clean.department;
+            }
+        } catch (msg) { return res.status(400).json({ error: msg }); }
+
+        if (req.body.assigneeId !== undefined) {
+            const newAssignee = byId[req.body.assigneeId];
+            if (!newAssignee || newAssignee.active === false) return res.status(400).json({ error: 'Assegnatario non valido.' });
+            if (!opsAuth.canAssignTaskTo(actor, newAssignee)) {
+                console.log(`⛔ [OPS-SECURITY] reassign rejected — ${actor.role} → ${newAssignee.role}`);
+                return res.status(403).json({ error: `Il tuo ruolo non può assegnare compiti a ${newAssignee.role}.` });
+            }
+            const oldAssigneeId = task.assigneeId;
+            task.assigneeId = newAssignee.id;
+            if (newAssignee.id !== actor.id && newAssignee.id !== oldAssigneeId) {
+                // persist first (below), then notify
+                setImmediate(() => {
+                    opsEmail.sendTaskAssignmentEmail({
+                        to: newAssignee.email, toName: newAssignee.name, task,
+                        assignedByName: actor.name, appUrl: '/operations.html'
+                    }).catch(e => console.error('📧 [OPS-EMAIL] reassignment notification failed (non-fatal):', e.message));
+                });
+            }
+        }
+    }
+
+    task.updatedAt = Date.now();
+    saveOpsTasks();
+    res.json({ success: true, task: opsTaskWithComputedStatus(task) });
+});
+
+// =========================================================================
+// ===== END PLATETIMER OPERATIONS MODULE ==================================
 // =========================================================================
 
 // Store per le room delle aziende
@@ -2516,6 +2991,8 @@ async function initializeDataStores() {
         { name: 'plans',           file: PLANS_FILE,           setter: v => { plansStore          = v; } },
         { name: 'calendar_events', file: CALENDAR_EVENTS_FILE, setter: v => { calendarEventsStore = v; } },
         { name: 'calendar_notifs', file: CALENDAR_NOTIF_FILE,  setter: v => { calendarNotifStore  = v; } },
+        { name: 'ops_users',       file: OPS_USERS_FILE,       setter: v => { opsUsersStore       = v; } },
+        { name: 'ops_tasks',       file: OPS_TASKS_FILE,       setter: v => { opsTasksStore       = v; } },
     ];
 
     if (!db) {

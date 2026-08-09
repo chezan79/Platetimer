@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Attiva account — PlateTimer Operations</title>
+<link rel="stylesheet" href="css/operations.css">
+<style>
+.center-box{max-width:440px;margin:80px auto;padding:0 16px;}
+</style>
+</head>
+<body>
+
+<div class="center-box">
+  <div class="card">
+    <p class="card-title">Attivazione PlateTimer Operations</p>
+    <div id="inv-info" class="msg" style="display:none;background:rgba(79,70,229,.06);border:1px solid rgba(79,70,229,.2);color:var(--text)"></div>
+    <div id="act-error" class="msg msg-error" style="display:none"></div>
+    <div id="act-success" class="msg msg-success" style="display:none"></div>
+
+    <div id="act-form" style="display:none">
+      <label class="form-label">Email (dall'invito)</label>
+      <input id="a-email" class="form-input" disabled>
+      <label class="form-label" for="a-pass">Scegli una password</label>
+      <input id="a-pass" class="form-input" type="password" placeholder="Minimo 6 caratteri">
+      <label class="form-label" for="a-pass2">Conferma password</label>
+      <input id="a-pass2" class="form-input" type="password">
+      <button id="act-btn" class="btn btn-primary" style="width:100%" onclick="activate()">Attiva account</button>
+      <p style="font-size:12px;color:var(--muted);margin-top:10px">
+        Hai già un account PlateTimer con questa email?
+        <a href="#" onclick="activateExisting();return false;">Accedi e collega l'invito</a>
+      </p>
+      <div id="login-extra" style="display:none;margin-top:8px">
+        <label class="form-label" for="a-loginpass">Password del tuo account esistente</label>
+        <input id="a-loginpass" class="form-input" type="password">
+        <button class="btn btn-neutral" style="width:100%" onclick="doLoginActivate()">Accedi e attiva</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile, sendEmailVerification } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+import { getFirestore, doc, setDoc, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+const firebaseConfig = {
+    apiKey: "AIzaSyDZ0FdjenO-ngblcuXKdwWwvRV5liiR18I",
+    authDomain: "app-dati-tavoli.firebaseapp.com",
+    projectId: "app-dati-tavoli",
+    storageBucket: "app-dati-tavoli.appspot.com",
+    messagingSenderId: "267339065819",
+    appId: "1:267339065819:web:1e74647f740bdf1d725ffe"
+};
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+const code = new URLSearchParams(location.search).get('code') || '';
+let invitation = null;
+
+function show(id, text) {
+  const el = document.getElementById(id);
+  el.textContent = text; el.style.display = 'block';
+}
+function hide(id) { document.getElementById(id).style.display = 'none'; }
+
+async function loadInvitation() {
+  if (!code) { show('act-error', 'Codice invito mancante nell\'URL.'); return; }
+  const res = await fetch(`/api/operations/invitations/${encodeURIComponent(code)}`);
+  const data = await res.json();
+  if (!data.success) { show('act-error', data.error || 'Invito non valido.'); return; }
+  invitation = data.invitation;
+  show('inv-info', `Invito per ${invitation.name} (${invitation.role}) — azienda "${invitation.companyId}"`);
+  document.getElementById('a-email').value = invitation.email;
+  document.getElementById('act-form').style.display = 'block';
+}
+
+// After Firebase auth: write users/{uid} profile (company FIXED by the server-side
+// invitation — the invitee never chooses it), then bind uid to the invitation.
+// [SECURITY] The server requires a VERIFIED email — if not verified yet, we send
+// the verification email and let the user retry after clicking the link.
+async function finishActivation(user) {
+  await user.reload();
+  if (!user.emailVerified) {
+    try { await sendEmailVerification(user); } catch (e) { /* rate-limited resend is fine */ }
+    showVerifyStep(user);
+    return;
+  }
+  const idToken = await user.getIdToken(true);
+
+  // STEP 1 — Bind the uid to the invitation (server verifies invite code +
+  // verified matching email). The company is fixed server-side by the Director.
+  const resp = await fetch('/api/operations/activate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
+    body: JSON.stringify({ code })
+  });
+  const data = await resp.json();
+  if (!data.success) {
+    if (data.needsEmailVerification) { showVerifyStep(user); return; }
+    throw new Error(data.error || 'Attivazione fallita.');
+  }
+  localStorage.setItem('userCompany', data.companyId);
+  localStorage.setItem('opsDisplayName', invitation.name);
+
+  // STEP 2 — Ensure a minimal Service-side users/{uid} profile exists (name/email
+  // only). [SECURITY] The `company` field is NEVER written here: session issuance
+  // derives the company from the server-side Operations record, so the client
+  // must not (and does not) decide any company association.
+  try {
+    const userDoc = await getDoc(doc(db, 'users', user.uid));
+    if (!userDoc.exists()) {
+      const parts = invitation.name.split(' ');
+      await setDoc(doc(db, 'users', user.uid), {
+        firstName: parts[0] || invitation.name,
+        lastName: parts.slice(1).join(' ') || '',
+        email: invitation.email,
+        createdAt: new Date()
+      });
+    }
+  } catch (e) { console.warn('Profile creation skipped:', e.message); }
+
+  // STEP 3 — Exchange for the server session token. A failed exchange means the
+  // user cannot use Operations: treat it as an activation error, do NOT redirect.
+  const sessResp = await fetch('/api/auth/session', { method: 'POST', headers: { 'Authorization': `Bearer ${idToken}` } });
+  if (!sessResp.ok) {
+    const errBody = await sessResp.json().catch(() => ({}));
+    throw new Error('Invito collegato, ma accesso non riuscito: ' + (errBody.error || `errore ${sessResp.status}`) + ' Riprova ad accedere dalla pagina di login.');
+  }
+  const sess = await sessResp.json();
+  sessionStorage.setItem('ws_session_token', sess.token);
+  show('act-success', 'Account attivato! Reindirizzamento a Operations…');
+  setTimeout(() => location.href = '/operations.html', 1200);
+}
+
+function showVerifyStep(user) {
+  hide('act-error');
+  show('act-success', 'Ti abbiamo inviato un\'email di verifica. Apri il link nella tua casella di posta, poi torna qui e clicca il pulsante sotto.');
+  let btn = document.getElementById('verify-done-btn');
+  if (!btn) {
+    btn = document.createElement('button');
+    btn.id = 'verify-done-btn';
+    btn.className = 'btn btn-primary';
+    btn.style.width = '100%';
+    btn.style.marginTop = '10px';
+    btn.textContent = 'Ho verificato la mia email — Attiva';
+    document.getElementById('act-form').appendChild(btn);
+  }
+  btn.onclick = async () => {
+    btn.disabled = true;
+    try { await finishActivation(user); }
+    catch (e) { show('act-error', e.message || 'Errore.'); }
+    btn.disabled = false;
+  };
+}
+
+window.activate = async () => {
+  hide('act-error');
+  const p1 = document.getElementById('a-pass').value;
+  const p2 = document.getElementById('a-pass2').value;
+  if (p1.length < 6) return show('act-error', 'La password deve avere almeno 6 caratteri.');
+  if (p1 !== p2) return show('act-error', 'Le password non coincidono.');
+  const btn = document.getElementById('act-btn'); btn.disabled = true;
+  try {
+    const cred = await createUserWithEmailAndPassword(auth, invitation.email, p1);
+    await updateProfile(cred.user, { displayName: invitation.name });
+    await finishActivation(cred.user);
+  } catch (e) {
+    btn.disabled = false;
+    if (e.code === 'auth/email-already-in-use') {
+      show('act-error', 'Esiste già un account con questa email. Usa "Accedi e collega l\'invito" qui sotto.');
+      document.getElementById('login-extra').style.display = 'block';
+    } else {
+      show('act-error', e.message || 'Errore durante l\'attivazione.');
+    }
+  }
+};
+
+window.activateExisting = () => { document.getElementById('login-extra').style.display = 'block'; };
+
+window.doLoginActivate = async () => {
+  hide('act-error');
+  const pass = document.getElementById('a-loginpass').value;
+  if (!pass) return show('act-error', 'Inserisci la password.');
+  try {
+    const cred = await signInWithEmailAndPassword(auth, invitation.email, pass);
+    await finishActivation(cred.user);
+  } catch (e) {
+    show('act-error', e.code === 'auth/invalid-credential' ? 'Password errata.' : (e.message || 'Errore.'));
+  }
+};
+
+loadInvitation();
+</script>
+</body>
+</html>

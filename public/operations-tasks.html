@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Operations — Compiti — PlateTimer</title>
+<link rel="stylesheet" href="css/operations.css">
+</head>
+<body>
+
+<header class="hdr">
+  <span id="hdr-company" class="hdr-brand"></span>
+  <span class="hdr-sep"></span>
+  <span class="hdr-page">Operations · Compiti</span>
+  <button class="hdr-btn" onclick="location.href='operations.html'">Dashboard</button>
+  <button id="team-btn" class="hdr-btn" style="display:none" onclick="location.href='operations-team.html'">Team</button>
+  <button class="hdr-btn" onclick="location.href='home.html'">Home</button>
+  <button class="hdr-btn danger" onclick="OpsCommon.logout()">Esci</button>
+</header>
+
+<main class="main">
+  <div class="pg-heading">
+    <h1 class="pg-title">Compiti</h1>
+    <p class="pg-sub"><span id="me-name"></span> · <span id="me-role" class="role-badge"></span></p>
+  </div>
+
+  <div id="ops-error" class="msg msg-error" style="display:none"></div>
+
+  <div class="two-col">
+    <!-- Create form -->
+    <div class="card">
+      <p class="card-title">Nuovo compito</p>
+      <label class="form-label" for="t-title">Titolo</label>
+      <input id="t-title" class="form-input" maxlength="200" placeholder="es. Preparare mise en place">
+      <label class="form-label" for="t-desc">Descrizione</label>
+      <textarea id="t-desc" class="form-textarea" maxlength="2000" placeholder="Dettagli (facoltativo)"></textarea>
+      <label class="form-label" for="t-assignee">Assegna a</label>
+      <select id="t-assignee" class="form-select"></select>
+      <label class="form-label" for="t-priority">Priorità</label>
+      <select id="t-priority" class="form-select">
+        <option value="LOW">Bassa</option>
+        <option value="MEDIUM" selected>Media</option>
+        <option value="HIGH">Alta</option>
+        <option value="URGENT">Urgente</option>
+      </select>
+      <label class="form-label" for="t-due">Scadenza</label>
+      <input id="t-due" class="form-input" type="datetime-local">
+      <label class="form-label" for="t-dept">Reparto (facoltativo)</label>
+      <input id="t-dept" class="form-input" maxlength="80" placeholder="es. Cucina">
+      <button id="create-btn" class="btn btn-primary" style="width:100%" onclick="createTask()">Crea compito</button>
+      <div id="form-msg" style="display:none" class="msg"></div>
+    </div>
+
+    <!-- Task list -->
+    <div>
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+        <button class="btn btn-sm btn-neutral flt" data-f="all">Tutti</button>
+        <button class="btn btn-sm btn-neutral flt" data-f="open">Aperti</button>
+        <button class="btn btn-sm btn-neutral flt" data-f="overdue">In ritardo</button>
+        <button class="btn btn-sm btn-neutral flt" data-f="completed">Completati</button>
+      </div>
+      <div id="task-list" class="task-list"><div class="empty-state">Caricamento…</div></div>
+    </div>
+  </div>
+</main>
+
+<script src="js/ws-auth.js"></script>
+<script src="js/operations-common.js"></script>
+<script>
+let allTasks = [], allUsers = {}, myId = null, filter = 'all';
+
+async function load() {
+  const me = await OpsCommon.loadMe();
+  if (!me) return;
+  document.getElementById('me-name').textContent = me.user.name || '';
+  document.getElementById('me-role').textContent = OpsCommon.roleLabel(me.user.role);
+  if (me.user.role === 'DIRECTOR') document.getElementById('team-btn').style.display = '';
+
+  // Hierarchy-filtered assignee dropdown (UX only — server re-checks)
+  const aData = await OpsCommon.api('/api/operations/assignees');
+  const sel = document.getElementById('t-assignee');
+  sel.innerHTML = '';
+  (aData && aData.assignees || []).forEach(u => {
+    const o = document.createElement('option');
+    o.value = u.id;
+    o.textContent = `${u.name} (${OpsCommon.roleLabel(u.role)})`;
+    if (u.id === (me.user && me.user.id)) o.textContent += ' — io';
+    sel.appendChild(o);
+  });
+
+  await loadTasks();
+}
+
+async function loadTasks() {
+  const data = await OpsCommon.api('/api/operations/tasks');
+  if (!data || !data.success) return OpsCommon.showError(data && data.error);
+  allTasks = data.tasks; allUsers = data.users; myId = data.me.id;
+  render();
+}
+
+function render() {
+  let list = allTasks;
+  if (filter === 'open') list = list.filter(t => t.status !== 'COMPLETED');
+  if (filter === 'overdue') list = list.filter(t => t.effectiveStatus === 'OVERDUE');
+  if (filter === 'completed') list = list.filter(t => t.status === 'COMPLETED');
+  list = [...list].sort((a, b) => (a.dueDate || '9999') < (b.dueDate || '9999') ? -1 : 1);
+  OpsCommon.renderTaskList(document.getElementById('task-list'), list, allUsers, myId, loadTasks);
+}
+
+document.querySelectorAll('.flt').forEach(b => b.addEventListener('click', () => { filter = b.dataset.f; render(); }));
+
+async function createTask() {
+  const btn = document.getElementById('create-btn');
+  const msg = document.getElementById('form-msg');
+  msg.style.display = 'none';
+  const body = {
+    title: document.getElementById('t-title').value.trim(),
+    description: document.getElementById('t-desc').value.trim(),
+    assigneeId: document.getElementById('t-assignee').value,
+    priority: document.getElementById('t-priority').value,
+    dueDate: document.getElementById('t-due').value || null,
+    department: document.getElementById('t-dept').value.trim() || null
+  };
+  if (!body.title) { msg.textContent = 'Inserisci un titolo.'; msg.className = 'msg msg-error'; msg.style.display = 'block'; return; }
+  btn.disabled = true;
+  const r = await OpsCommon.api('/api/operations/tasks', { method: 'POST', body: JSON.stringify(body) });
+  btn.disabled = false;
+  if (r && r.success) {
+    msg.textContent = 'Compito creato.'; msg.className = 'msg msg-success'; msg.style.display = 'block';
+    document.getElementById('t-title').value = '';
+    document.getElementById('t-desc').value = '';
+    document.getElementById('t-due').value = '';
+    document.getElementById('t-dept').value = '';
+    await loadTasks();
+  } else {
+    msg.textContent = (r && r.error) || 'Errore.'; msg.className = 'msg msg-error'; msg.style.display = 'block';
+  }
+}
+
+load();
+</script>
+</body>
+</html>

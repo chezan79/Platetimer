@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Operations — Dashboard — PlateTimer</title>
+<link rel="stylesheet" href="css/operations.css">
+</head>
+<body>
+
+<header class="hdr">
+  <span id="hdr-company" class="hdr-brand"></span>
+  <span class="hdr-sep"></span>
+  <span class="hdr-page">Operations · Dashboard</span>
+  <button class="hdr-btn" onclick="location.href='operations-tasks.html'">Compiti</button>
+  <button id="team-btn" class="hdr-btn" style="display:none" onclick="location.href='operations-team.html'">Team</button>
+  <button class="hdr-btn" onclick="location.href='home.html'">Home</button>
+  <button class="hdr-btn danger" onclick="OpsCommon.logout()">Esci</button>
+</header>
+
+<main class="main">
+  <div class="pg-heading">
+    <h1 class="pg-title">PlateTimer Operations</h1>
+    <p class="pg-sub"><span id="me-name"></span> · <span id="me-role" class="role-badge"></span></p>
+  </div>
+
+  <div id="ops-error" class="msg msg-error" style="display:none"></div>
+
+  <div class="stat-row">
+    <div class="stat-card"><div class="stat-num" id="stat-my">—</div><div class="stat-lbl">I miei compiti</div></div>
+    <div class="stat-card"><div class="stat-num" id="stat-today">—</div><div class="stat-lbl">In scadenza oggi</div></div>
+    <div class="stat-card danger"><div class="stat-num" id="stat-overdue">—</div><div class="stat-lbl">In ritardo</div></div>
+    <div class="stat-card ok"><div class="stat-num" id="stat-done">—</div><div class="stat-lbl">Completati</div></div>
+  </div>
+
+  <p class="section-title">I miei compiti aperti</p>
+  <div id="my-tasks" class="task-list"><div class="empty-state">Caricamento…</div></div>
+
+  <div id="team-section" style="display:none">
+    <p class="section-title">Compiti del team</p>
+    <div id="team-tasks" class="task-list"><div class="empty-state">Caricamento…</div></div>
+  </div>
+</main>
+
+<script src="js/ws-auth.js"></script>
+<script src="js/operations-common.js"></script>
+<script>
+(async () => {
+  const me = await OpsCommon.loadMe();
+  if (!me) return;
+  document.getElementById('me-name').textContent = me.user.name || '';
+  document.getElementById('me-role').textContent = OpsCommon.roleLabel(me.user.role);
+  if (me.user.role === 'DIRECTOR') document.getElementById('team-btn').style.display = '';
+
+  const data = await OpsCommon.api('/api/operations/tasks');
+  if (!data || !data.success) return OpsCommon.showError(data && data.error);
+  const tasks = data.tasks, users = data.users, myId = data.me.id;
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  const mine = tasks.filter(t => t.assigneeId === myId);
+  const myOpen = mine.filter(t => t.status !== 'COMPLETED');
+  document.getElementById('stat-my').textContent = myOpen.length;
+  document.getElementById('stat-today').textContent =
+    myOpen.filter(t => t.dueDate && t.dueDate.slice(0, 10) === todayStr).length;
+  document.getElementById('stat-overdue').textContent =
+    mine.filter(t => t.effectiveStatus === 'OVERDUE').length;
+  document.getElementById('stat-done').textContent =
+    mine.filter(t => t.status === 'COMPLETED').length;
+
+  OpsCommon.renderTaskList(document.getElementById('my-tasks'), myOpen, users, myId, refresh);
+
+  const teamTasks = tasks.filter(t => t.assigneeId !== myId && t.status !== 'COMPLETED');
+  if (me.user.role !== 'SOUS_CHEF' && me.user.role !== 'CHEF_DE_BRIGADE') {
+    document.getElementById('team-section').style.display = '';
+    OpsCommon.renderTaskList(document.getElementById('team-tasks'), teamTasks, users, myId, refresh);
+  }
+  function refresh() { location.reload(); }
+})();
+</script>
+</body>
+</html>
