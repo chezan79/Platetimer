@@ -1560,7 +1560,7 @@ app.get('/api/operations/assignees', (req, res) => {
 // ── POST /api/operations/users — Director only: invite a new team member ──
 // [SECURITY] companyId ALWAYS from the Director's server-side record. role
 // validated server-side. Client-supplied companyId/uid are ignored.
-app.post('/api/operations/users', (req, res) => {
+app.post('/api/operations/users', async (req, res) => {
     const ctx = requireOpsAuth(req, res);
     if (!ctx) return;
     if (!opsAuth.canManageUsers(ctx.opsUser)) {
@@ -1597,25 +1597,82 @@ app.post('/api/operations/users', (req, res) => {
     saveOpsUsers();
     console.log(`✅ [OPS] User invited: ${email} (${role}) in company "${companyId}" by ${ctx.opsUser.id}`);
 
-    // Invitation notification via the email abstraction (logging transport —
-    // no provider configured). The Director shares the activation link manually.
-    // [SECURITY] Never include the invite code in logged notification content —
-    // the code is the activation secret and must only reach the Director's UI.
-    opsEmail.sendTaskAssignmentEmail({
-        to: email,
-        toName: name,
-        task: { title: 'Invito a PlateTimer Operations', description: `Sei stato invitato come ${role}. Il Direttore ti fornirà il link di attivazione.`, priority: '—', dueDate: null },
-        assignedByName: ctx.opsUser.name,
-        appUrl: '/operations-activate.html'
-    }).catch(e => console.error('📧 [OPS-EMAIL] invite notification failed (non-fatal):', e.message));
+    // [SECURITY] Activation link is built from APP_BASE_URL (trusted server config),
+    // never from request headers or client-supplied host. Relative path used as
+    // fallback for development; production must set APP_BASE_URL.
+    const baseUrl = (process.env.APP_BASE_URL || '').replace(/\/$/, '');
+    const activationPath = `/operations-activate.html?code=${user.inviteCode}`;
+    const activationUrl = baseUrl ? `${baseUrl}${activationPath}` : activationPath;
+
+    // Attempt invitation email AFTER persist. Failure is non-fatal and logged.
+    let emailResult = { result: opsEmail.RESULT.FAILED, transport: opsEmail.TRANSPORT, reason: 'not attempted' };
+    try {
+        emailResult = await opsEmail.sendInvitationEmail({
+            to: email,
+            toName: name,
+            role,
+            invitedByName: ctx.opsUser.name,
+            activationUrl
+        });
+    } catch (e) {
+        console.error('📧 [OPS-EMAIL] invite email unexpected error (non-fatal):', e.message);
+    }
+    console.log(`📧 [OPS] Invitation email result: ${emailResult.result} (transport: ${emailResult.transport}) for ${email}`);
 
     res.status(201).json({
         success: true,
         user: { ...publicOpsUser(user), inviteCode: user.inviteCode },
-        activationUrl: `/operations-activate.html?code=${user.inviteCode}`,
-        emailNote: opsEmail.TRANSPORT === 'logging'
-            ? 'Nessun provider email configurato (manca SMTP_HOST/SMTP_USER/SMTP_PASS o SENDGRID_API_KEY): condividi manualmente il link di attivazione.'
-            : undefined
+        activationUrl: activationPath,       // relative path — always safe to return to Director
+        emailResult: emailResult.result,     // SENT | FAILED
+        emailNote: emailResult.result === opsEmail.RESULT.SENT
+            ? 'Email di invito inviata.'
+            : (opsEmail.TRANSPORT === 'logging'
+                ? 'Nessun provider email configurato: condividi manualmente il link di attivazione.'
+                : 'Invio email non riuscito: condividi manualmente il link di attivazione.')
+    });
+});
+
+// ── POST /api/operations/users/:id/resend-invite — Director only: resend invitation email ──
+// Rules: Director only, same company, invitation still INVITED status, no new user, no role/company change.
+app.post('/api/operations/users/:id/resend-invite', async (req, res) => {
+    const ctx = requireOpsAuth(req, res);
+    if (!ctx) return;
+    if (!opsAuth.canManageUsers(ctx.opsUser)) {
+        return res.status(403).json({ error: 'Solo il Direttore può reinviare gli inviti.' });
+    }
+    const companyId = ctx.opsUser.companyId;
+    const users = getOpsUsers(companyId);
+    const target = users.find(u => u.id === req.params.id);
+    if (!target) return res.status(404).json({ error: 'Utente non trovato.' });
+    if (target.status !== 'INVITED') {
+        return res.status(400).json({ error: 'L\'utente ha già attivato l\'account o non è in stato di invito.' });
+    }
+    // Build activation URL from trusted server config — never from request headers.
+    const baseUrl = (process.env.APP_BASE_URL || '').replace(/\/$/, '');
+    const activationPath = `/operations-activate.html?code=${target.inviteCode}`;
+    const activationUrl = baseUrl ? `${baseUrl}${activationPath}` : activationPath;
+
+    let emailResult = { result: opsEmail.RESULT.FAILED, transport: opsEmail.TRANSPORT };
+    try {
+        emailResult = await opsEmail.sendInvitationEmail({
+            to: target.email,
+            toName: target.name,
+            role: target.role,
+            invitedByName: ctx.opsUser.name,
+            activationUrl
+        });
+    } catch (e) {
+        console.error('📧 [OPS-EMAIL] resend invite unexpected error (non-fatal):', e.message);
+    }
+    console.log(`📧 [OPS] Resend invite result: ${emailResult.result} → ${target.email} by Director ${ctx.opsUser.id}`);
+
+    res.json({
+        success: true,
+        emailResult: emailResult.result,
+        emailNote: emailResult.result === opsEmail.RESULT.SENT
+            ? 'Email di invito reinviata.'
+            : 'Reinvio email non riuscito. Condividi il link manualmente.',
+        activationUrl: activationPath
     });
 });
 
@@ -1725,7 +1782,7 @@ function sanitizeOpsTaskInput(body) {
 // ── POST /api/operations/tasks — create (hierarchy-enforced assignment) ──
 // [SECURITY] companyId + createdBy from the server-side ops record; forged
 // companyId/createdBy/status/completedAt in the payload are ignored.
-app.post('/api/operations/tasks', (req, res) => {
+app.post('/api/operations/tasks', async (req, res) => {
     const ctx = requireOpsAuth(req, res);
     if (!ctx) return;
     const actor = ctx.opsUser;
@@ -1768,18 +1825,27 @@ app.post('/api/operations/tasks', (req, res) => {
     saveOpsTasks(); // persist FIRST …
     console.log(`✅ [OPS] Task created: "${task.title}" → ${assignee.name} (${assignee.role}) in "${companyId}"`);
 
-    // … THEN notify (failures logged, never affect the saved task)
+    // … THEN notify (failures logged, NEVER affect the saved task).
+    // RESULT enum: SENT | FAILED | SKIPPED (self-assigned)
+    let notificationResult = opsEmail.RESULT.SKIPPED;
     if (assignee.id !== actor.id) {
-        opsEmail.sendTaskAssignmentEmail({
-            to: assignee.email,
-            toName: assignee.name,
-            task,
-            assignedByName: actor.name,
-            appUrl: '/operations.html'
-        }).catch(e => console.error('📧 [OPS-EMAIL] assignment notification failed (non-fatal):', e.message));
+        try {
+            const emailRes = await opsEmail.sendTaskAssignmentEmail({
+                to: assignee.email,
+                toName: assignee.name,
+                task,
+                assignedByName: actor.name,
+                appUrl: '/operations-tasks.html'
+            });
+            notificationResult = emailRes.result;
+        } catch (e) {
+            console.error('📧 [OPS-EMAIL] task notification unexpected error (non-fatal):', e.message);
+            notificationResult = opsEmail.RESULT.FAILED;
+        }
+        console.log(`📧 [OPS] Task notification: ${notificationResult} → ${assignee.email} (task: ${task.id})`);
     }
 
-    res.status(201).json({ success: true, task: opsTaskWithComputedStatus(task) });
+    res.status(201).json({ success: true, task: opsTaskWithComputedStatus(task), notificationResult });
 });
 
 // ── GET /api/operations/tasks — list, SERVER-FILTERED per hierarchy ──

@@ -115,8 +115,12 @@ async function inviteUser() {
   const r = await OpsCommon.api('/api/operations/users', { method: 'POST', body: JSON.stringify(body) });
   btn.disabled = false;
   if (r && r.success) {
-    msg.textContent = 'Invito creato.' + (r.emailNote ? ' ' + r.emailNote : '');
-    msg.className = 'msg msg-success'; msg.style.display = 'block';
+    const emailSent = r.emailResult === 'SENT';
+    msg.innerHTML = '<strong>Account creato con successo.</strong><br>' +
+      (emailSent
+        ? '✅ Email di invito inviata.'
+        : '⚠️ ' + OpsCommon.escHtml(r.emailNote || 'Email non inviata: condividi manualmente il link.'));
+    msg.className = 'msg ' + (emailSent ? 'msg-success' : 'msg-warn'); msg.style.display = 'block';
     linkEl.innerHTML = 'Link di attivazione da condividere:<br><code>' + location.origin + OpsCommon.escHtml(r.activationUrl) + '</code>';
     linkEl.style.display = 'block';
     document.getElementById('u-name').value = '';
