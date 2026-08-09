@@ -14,6 +14,7 @@
   <span class="hdr-page">Operations · Dashboard</span>
   <button class="hdr-btn" onclick="location.href='operations-tasks.html'">Compiti</button>
   <button id="team-btn" class="hdr-btn" style="display:none" onclick="location.href='operations-team.html'">Team</button>
+  <button id="tpl-btn" class="hdr-btn" style="display:none" onclick="location.href='operations-templates.html'">🔁 Template</button>
   <button class="hdr-btn" onclick="location.href='home.html'">Home</button>
   <button class="hdr-btn danger" onclick="OpsCommon.logout()">Esci</button>
 </header>
@@ -55,6 +56,18 @@
     </div>
   </div>
 
+  <!-- Escalation dashboard (Director only) -->
+  <div id="escalation-section" style="display:none;margin-bottom:28px">
+    <p class="section-title">⚠️ Escalation e ritardi</p>
+    <div class="stat-row" style="grid-template-columns:repeat(3,1fr);margin-bottom:16px">
+      <div class="stat-card danger"><div class="stat-num" id="stat-escalated">—</div><div class="stat-lbl">In escalation</div></div>
+      <div class="stat-card"><div class="stat-num" id="stat-esc-pending">—</div><div class="stat-lbl">Richiedono escalation</div></div>
+      <div class="stat-card accent"><div class="stat-num" id="stat-esc-today">—</div><div class="stat-lbl">Escalate oggi</div></div>
+    </div>
+    <div id="escalated-list" style="margin-bottom:16px"></div>
+    <div id="overdue-depts"></div>
+  </div>
+
   <!-- My open tasks -->
   <p class="section-title">I miei compiti aperti</p>
   <div id="my-tasks" class="task-list"><div class="empty-state">Caricamento…</div></div>
@@ -86,7 +99,10 @@
   document.getElementById('me-name').textContent = me.user.name || '';
   document.getElementById('me-role').textContent = OpsCommon.roleLabel(me.user.role);
   const myRole = me.user.role;
-  if (myRole === 'DIRECTOR') document.getElementById('team-btn').style.display = '';
+  if (myRole === 'DIRECTOR') {
+    document.getElementById('team-btn').style.display = '';
+    document.getElementById('tpl-btn').style.display = '';
+  }
 
   // Load stats via dedicated endpoint (also includes workload for managers)
   const stats = await OpsCommon.api('/api/operations/stats');
@@ -120,6 +136,45 @@
             <div class="workload-bar"><div class="workload-fill" style="width:${Math.round(w.activeTasks/maxTasks*100)}%"></div></div>
           </td>
         </tr>`).join('');
+    }
+  }
+
+  // Escalation dashboard (Director only)
+  if (myRole === 'DIRECTOR') {
+    const escData = await OpsCommon.api('/api/operations/escalation-status');
+    if (escData && escData.success) {
+      document.getElementById('escalation-section').style.display = '';
+      document.getElementById('stat-escalated').textContent   = escData.escalated.length;
+      document.getElementById('stat-esc-pending').textContent = escData.requiresEscalation.length;
+      document.getElementById('stat-esc-today').textContent   = escData.escalatedToday;
+
+      if (escData.escalated.length) {
+        document.getElementById('escalated-list').innerHTML =
+          '<p style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px">COMPITI IN ESCALATION</p>' +
+          escData.escalated.map(t => `
+            <div class="task-card" style="margin-bottom:6px;border-left:3px solid #dc2626">
+              <div class="task-title">${OpsCommon.escHtml(t.title)}</div>
+              <div class="task-meta">
+                <span style="color:var(--muted);font-size:12px">Assegnatario: ${OpsCommon.escHtml(t.assigneeName||'—')}</span>
+                <span style="color:var(--muted);font-size:12px">Scadenza: ${OpsCommon.escHtml(t.dueDate||'—')}</span>
+                <span style="color:#dc2626;font-size:12px;font-weight:700">Livello ${t.escalationLevel}</span>
+              </div>
+            </div>`).join('');
+      }
+
+      const depts = escData.overdueByDepartment;
+      if (Object.keys(depts).length) {
+        const maxV = Math.max(...Object.values(depts), 1);
+        document.getElementById('overdue-depts').innerHTML =
+          '<p style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px">COMPITI IN RITARDO PER REPARTO</p>' +
+          '<div class="card" style="padding:12px">' +
+          Object.entries(depts).sort((a,b)=>b[1]-a[1]).map(([dept,cnt]) => `
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+              <span style="font-size:13px;min-width:120px;font-weight:600">${OpsCommon.escHtml(dept)}</span>
+              <div class="task-progress" style="flex:1;height:8px"><div class="progress-fill" style="width:${Math.round(cnt/maxV*100)}%;background:#dc2626"></div></div>
+              <span style="font-size:13px;font-weight:700;min-width:24px;text-align:right">${cnt}</span>
+            </div>`).join('') + '</div>';
+      }
     }
   }
 

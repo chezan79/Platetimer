@@ -14,6 +14,7 @@
   <span class="hdr-page">Operations · Compiti</span>
   <button class="hdr-btn" onclick="location.href='operations.html'">Dashboard</button>
   <button id="team-btn" class="hdr-btn" style="display:none" onclick="location.href='operations-team.html'">Team</button>
+  <button id="tpl-btn" class="hdr-btn" style="display:none" onclick="location.href='operations-templates.html'">🔁 Template</button>
   <button class="hdr-btn" onclick="location.href='home.html'">Home</button>
   <button class="hdr-btn danger" onclick="OpsCommon.logout()">Esci</button>
 </header>
@@ -83,7 +84,10 @@ async function load() {
   if (!meData) return;
   document.getElementById('me-name').textContent = meData.user.name || '';
   document.getElementById('me-role').textContent = OpsCommon.roleLabel(meData.user.role);
-  if (meData.user.role === 'DIRECTOR') document.getElementById('team-btn').style.display = '';
+  if (meData.user.role === 'DIRECTOR') {
+    document.getElementById('team-btn').style.display = '';
+    document.getElementById('tpl-btn').style.display = '';
+  }
 
   const aData = await OpsCommon.api('/api/operations/assignees');
   assignableUsers = (aData && aData.assignees) || [];
@@ -247,10 +251,53 @@ async function openDetail(taskId) {
           ${task.startedAt ? `<div class="info-cell"><div class="info-cell-label">Avviato il</div><div class="info-cell-val">${esc(OpsCommon.fmtDatetime(task.startedAt))}</div></div>` : ''}
           ${task.completedAt ? `<div class="info-cell"><div class="info-cell-label">Completato il</div><div class="info-cell-val">${esc(OpsCommon.fmtDatetime(task.completedAt))}</div></div>` : ''}
           ${task.department ? `<div class="info-cell"><div class="info-cell-label">Reparto</div><div class="info-cell-val">${esc(task.department)}</div></div>` : ''}
+          ${task.templateId ? `<div class="info-cell"><div class="info-cell-label">Compito ricorrente</div><div class="info-cell-val">🔁 <small style="color:var(--muted)">ID template: ${esc(task.templateId.slice(-8))}</small></div></div>` : ''}
         </div>
         ${task.description ? `<div style="margin-top:10px;font-size:14px;line-height:1.55;color:var(--muted)">${esc(task.description)}</div>` : ''}
         ${task.notes ? `<div style="margin-top:10px;padding:10px;background:var(--bg);border-radius:8px;font-size:14px;line-height:1.5;white-space:pre-wrap">${esc(task.notes)}</div>` : ''}
       </div>
+
+      ${canEdit && task.status !== 'CANCELLED' ? `
+      <div class="panel-section">
+        <div class="panel-section-title">⏰ Promemoria email</div>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <select id="reminder-sel" class="form-select" style="max-width:200px">
+            <option value="">Nessuno</option>
+            <option value="1"${task.reminderDays===1?' selected':''}>1 giorno prima</option>
+            <option value="2"${task.reminderDays===2?' selected':''}>2 giorni prima</option>
+            <option value="3"${task.reminderDays===3?' selected':''}>3 giorni prima</option>
+            <option value="7"${task.reminderDays===7?' selected':''}>1 settimana prima</option>
+            <option value="custom"${task.reminderDays&&![1,2,3,7].includes(task.reminderDays)?' selected':''}>Personalizzato</option>
+          </select>
+          <input type="number" id="reminder-custom" class="form-input" min="1" max="365" placeholder="giorni" value="${task.reminderDays&&![1,2,3,7].includes(task.reminderDays)?task.reminderDays:''}" style="max-width:90px;display:${task.reminderDays&&![1,2,3,7].includes(task.reminderDays)?'':'none'}">
+          <button class="btn btn-sm btn-neutral" onclick="doSetReminder('${esc(task.id)}')">Salva</button>
+        </div>
+        <p style="font-size:12px;color:var(--muted);margin:6px 0 0">${task.reminderSentAt ? '✓ Promemoria inviato' : (task.reminderDays ? 'Invio programmato' : 'Nessun promemoria attivo')}</p>
+      </div>
+
+      <div class="panel-section">
+        <div class="panel-section-title">🚨 Escalation automatica</div>
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:8px">
+          <label style="display:flex;align-items:center;gap:6px;font-size:14px">
+            <input type="checkbox" id="esc-enabled"${(task.escalation&&task.escalation.enabled)?' checked':''}>
+            Attiva escalation per questo compito
+          </label>
+        </div>
+        <div id="esc-config" style="display:${task.escalation&&task.escalation.enabled?'':'none'}">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px">
+            <label style="font-size:13px">Attendi</label>
+            <input type="number" id="esc-after" class="form-input" min="0" max="720" value="${task.escalation?task.escalation.waitHoursAfterDue||24:24}" style="max-width:80px">
+            <label style="font-size:13px">ore dopo scadenza · poi tra livelli</label>
+            <input type="number" id="esc-between" class="form-input" min="0" max="720" value="${task.escalation?task.escalation.waitHoursBetweenLevels||24:24}" style="max-width:80px">
+            <label style="font-size:13px">ore</label>
+          </div>
+          <p style="font-size:12px;color:var(--muted);margin:0">Catena: Assegnatario → Superiore → Direttore (solo notifiche, nessun cambio di permessi)</p>
+        </div>
+        <button class="btn btn-sm btn-neutral" onclick="doSetEscalation('${esc(task.id)}')" style="margin-top:8px">Salva escalation</button>
+        ${task.escalationLevel > 0 ? `<p style="font-size:12px;color:var(--accent);margin:6px 0 0">⚠️ Escalation attiva — livello ${task.escalationLevel}</p>` : ''}
+        <script>document.getElementById('esc-enabled').addEventListener('change',function(){document.getElementById('esc-config').style.display=this.checked?'':'none'});<\/script>
+      </div>
+      ` : ''}
 
       <div class="panel-section">
         <div class="panel-section-title">Allegati (${attachments.length})</div>
@@ -490,6 +537,36 @@ async function doComment(taskId) {
     method: 'POST', body: JSON.stringify({ text })
   });
   if (r && r.success) { await loadTasks(); openDetail(taskId); }
+  else panelMsg((r && r.error) || 'Errore.');
+}
+
+// ── Sprint 3: Reminder ──
+async function doSetReminder(taskId) {
+  const sel = document.getElementById('reminder-sel');
+  const customEl = document.getElementById('reminder-custom');
+  let days = null;
+  if (sel.value === 'custom') {
+    days = Number(customEl.value);
+    if (!days || days < 1) { panelMsg('Inserisci un numero di giorni valido.'); return; }
+  } else if (sel.value) {
+    days = Number(sel.value);
+  }
+  const r = await OpsCommon.api('/api/operations/tasks/' + taskId + '/reminder', {
+    method: 'PATCH', body: JSON.stringify({ reminderDays: days })
+  });
+  if (r && r.success) { panelMsg('Promemoria impostato.', 'success'); await loadTasks(); setTimeout(() => openDetail(taskId), 500); }
+  else panelMsg((r && r.error) || 'Errore.');
+}
+
+// ── Sprint 3: Escalation ──
+async function doSetEscalation(taskId) {
+  const enabled       = document.getElementById('esc-enabled').checked;
+  const waitAfter     = Number(document.getElementById('esc-after') && document.getElementById('esc-after').value) || 24;
+  const waitBetween   = Number(document.getElementById('esc-between') && document.getElementById('esc-between').value) || 24;
+  const r = await OpsCommon.api('/api/operations/tasks/' + taskId + '/escalation', {
+    method: 'PATCH', body: JSON.stringify({ enabled, waitHoursAfterDue: waitAfter, waitHoursBetweenLevels: waitBetween })
+  });
+  if (r && r.success) { panelMsg('Escalation configurata.', 'success'); await loadTasks(); setTimeout(() => openDetail(taskId), 500); }
   else panelMsg((r && r.error) || 'Errore.');
 }
 

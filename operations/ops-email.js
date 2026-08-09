@@ -205,4 +205,164 @@ ${btn(activationUrl, 'Attiva il mio account')}
     }
 }
 
-module.exports = { sendTaskAssignmentEmail, sendInvitationEmail, RESULT, TRANSPORT };
+/**
+ * Send a reminder email to a task's assignee.
+ * Fire-and-forget safe: never throws; always returns { result, transport }.
+ */
+async function sendReminderEmail({ to, toName, task, daysRemaining, baseUrl }) {
+    const taskUrl = (baseUrl || process.env.APP_BASE_URL || '') + '/operations-tasks.html';
+    const daysLabel = daysRemaining > 0
+        ? `tra ${daysRemaining} giorno${daysRemaining !== 1 ? 'i' : ''}`
+        : daysRemaining === 0 ? 'OGGI' : `SCADUTO ${Math.abs(daysRemaining)} giorno${Math.abs(daysRemaining) !== 1 ? 'i' : ''} fa`;
+    const subject = `[PlateTimer Operations] Promemoria: ${task.title}`;
+
+    const text = [
+        `Ciao ${toName || ''},`,
+        ``,
+        `Promemoria: il compito "${task.title}" scade ${daysLabel}.`,
+        ``,
+        `  Priorità: ${task.priority || '—'}`,
+        `  Scadenza: ${task.dueDate || '—'}`,
+        ``,
+        `Apri i miei compiti: ${taskUrl}`,
+        ``,
+        `PlateTimer Operations`
+    ].join('\n');
+
+    const html = htmlWrapper(`
+<p style="margin:0 0 16px;">Ciao <strong>${toName || ''}</strong>,</p>
+<p style="margin:0 0 16px;">⏰ Promemoria: il compito qui sotto scade <strong>${daysLabel}</strong>.</p>
+<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:0 0 20px;">
+  <tr><td style="padding:9px 12px;background:#f8fafc;border:1px solid #e2e8f0;font-weight:700;width:110px;font-size:13px;">Compito</td>
+      <td style="padding:9px 12px;border:1px solid #e2e8f0;font-size:14px;">${task.title}</td></tr>
+  <tr><td style="padding:9px 12px;background:#f8fafc;border:1px solid #e2e8f0;font-weight:700;font-size:13px;">Priorità</td>
+      <td style="padding:9px 12px;border:1px solid #e2e8f0;font-size:14px;">${task.priority || '—'}</td></tr>
+  <tr><td style="padding:9px 12px;background:#f8fafc;border:1px solid #e2e8f0;font-weight:700;font-size:13px;">Scadenza</td>
+      <td style="padding:9px 12px;border:1px solid #e2e8f0;font-size:14px;">${task.dueDate || '—'}</td></tr>
+</table>
+${btn(taskUrl, 'Apri i miei compiti')}`);
+
+    try {
+        return await _send({ to, subject, text, html });
+    } catch (e) {
+        console.error('📧 [OPS-EMAIL] sendReminderEmail unexpected error (non-fatal):', sanitizeError(e.message));
+        return { result: RESULT.FAILED, transport: TRANSPORT, reason: sanitizeError(e.message) };
+    }
+}
+
+/**
+ * Send an escalation notification to a superior when a task is overdue.
+ * Fire-and-forget safe: never throws; always returns { result, transport }.
+ */
+async function sendEscalationEmail({ to, toName, task, assigneeName, level, baseUrl }) {
+    const taskUrl  = (baseUrl || process.env.APP_BASE_URL || '') + '/operations-tasks.html';
+    const subject  = `[PlateTimer Operations] Escalation livello ${level}: ${task.title}`;
+    const levelLabel = level === 1 ? '1ª escalation' : `${level}ª escalation`;
+
+    const text = [
+        `Ciao ${toName || ''},`,
+        ``,
+        `${levelLabel}: il compito "${task.title}" assegnato a ${assigneeName} è scaduto e non è ancora completato.`,
+        ``,
+        `  Priorità: ${task.priority || '—'}`,
+        `  Scadenza: ${task.dueDate || '—'}`,
+        `  Assegnatario: ${assigneeName}`,
+        ``,
+        `Questa è una notifica di visibilità operativa. Le autorizzazioni non cambiano.`,
+        ``,
+        `Vai ai compiti: ${taskUrl}`,
+        ``,
+        `PlateTimer Operations`
+    ].join('\n');
+
+    const html = htmlWrapper(`
+<p style="margin:0 0 16px;">Ciao <strong>${toName || ''}</strong>,</p>
+<p style="margin:0 0 16px;">🚨 <strong>${levelLabel}</strong>: il compito qui sotto è scaduto e non risulta ancora completato.</p>
+<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:0 0 20px;">
+  <tr><td style="padding:9px 12px;background:#fff5f5;border:1px solid #e2e8f0;font-weight:700;width:130px;font-size:13px;">Compito</td>
+      <td style="padding:9px 12px;border:1px solid #e2e8f0;font-size:14px;">${task.title}</td></tr>
+  <tr><td style="padding:9px 12px;background:#fff5f5;border:1px solid #e2e8f0;font-weight:700;font-size:13px;">Assegnatario</td>
+      <td style="padding:9px 12px;border:1px solid #e2e8f0;font-size:14px;">${assigneeName}</td></tr>
+  <tr><td style="padding:9px 12px;background:#fff5f5;border:1px solid #e2e8f0;font-weight:700;font-size:13px;">Priorità</td>
+      <td style="padding:9px 12px;border:1px solid #e2e8f0;font-size:14px;">${task.priority || '—'}</td></tr>
+  <tr><td style="padding:9px 12px;background:#fff5f5;border:1px solid #e2e8f0;font-weight:700;font-size:13px;">Scadenza</td>
+      <td style="padding:9px 12px;border:1px solid #e2e8f0;font-size:14px;">${task.dueDate || '—'}</td></tr>
+  <tr><td style="padding:9px 12px;background:#fff5f5;border:1px solid #e2e8f0;font-weight:700;font-size:13px;">Livello escalation</td>
+      <td style="padding:9px 12px;border:1px solid #e2e8f0;font-size:14px;">${level}</td></tr>
+</table>
+<p style="font-size:13px;color:#64748b;margin:0 0 20px;">Questa è una notifica di visibilità operativa. Le autorizzazioni sul compito non cambiano.</p>
+${btn(taskUrl, 'Vai ai compiti')}`);
+
+    try {
+        return await _send({ to, subject, text, html });
+    } catch (e) {
+        console.error('📧 [OPS-EMAIL] sendEscalationEmail unexpected error (non-fatal):', sanitizeError(e.message));
+        return { result: RESULT.FAILED, transport: TRANSPORT, reason: sanitizeError(e.message) };
+    }
+}
+
+/**
+ * Send a daily digest email summarising the user's tasks for the day.
+ * Fire-and-forget safe: never throws; always returns { result, transport }.
+ */
+async function sendDailyDigestEmail({ to, toName, digest, baseUrl }) {
+    const taskUrl = (baseUrl || process.env.APP_BASE_URL || '') + '/operations-tasks.html';
+    const { today = [], late = [], urgent = [], recurring = [] } = digest;
+    const subject = `[PlateTimer Operations] Riepilogo giornaliero`;
+
+    function taskLines(list) {
+        return list.length ? list.map(t => `  • ${t.title} (scadenza: ${t.dueDate || '—'})`).join('\n') : '  Nessuno';
+    }
+
+    const text = [
+        `Ciao ${toName || ''},`,
+        ``,
+        `Ecco il tuo riepilogo giornaliero PlateTimer Operations:`,
+        ``,
+        `COMPITI DI OGGI (${today.length}):`,
+        taskLines(today),
+        ``,
+        `IN RITARDO (${late.length}):`,
+        taskLines(late),
+        ``,
+        `URGENTI (${urgent.length}):`,
+        taskLines(urgent),
+        ``,
+        `RICORRENTI OGGI (${recurring.length}):`,
+        taskLines(recurring),
+        ``,
+        `Apri i miei compiti: ${taskUrl}`,
+        ``,
+        `PlateTimer Operations`
+    ].join('\n');
+
+    function taskRows(list) {
+        if (!list.length) return '<p style="margin:8px 0;color:#64748b;font-size:13px;">Nessuno</p>';
+        return list.map(t => `
+          <div style="padding:8px 12px;border-left:3px solid #4f46e5;margin:6px 0;background:#f8fafc;border-radius:0 4px 4px 0;">
+            <span style="font-weight:600;font-size:14px;">${t.title}</span>
+            <span style="color:#64748b;font-size:12px;margin-left:10px;">scadenza: ${t.dueDate || '—'} · ${t.priority || '—'}</span>
+          </div>`).join('');
+    }
+
+    const html = htmlWrapper(`
+<p style="margin:0 0 20px;">Ciao <strong>${toName || ''}</strong>, ecco il tuo riepilogo giornaliero:</p>
+<h3 style="margin:16px 0 8px;font-size:14px;color:#1e293b;">📅 Compiti di oggi (${today.length})</h3>
+${taskRows(today)}
+<h3 style="margin:16px 0 8px;font-size:14px;color:#dc2626;">⚠️ In ritardo (${late.length})</h3>
+${taskRows(late)}
+<h3 style="margin:16px 0 8px;font-size:14px;color:#ea580c;">🔥 Urgenti (${urgent.length})</h3>
+${taskRows(urgent)}
+<h3 style="margin:16px 0 8px;font-size:14px;color:#7c3aed;">🔁 Ricorrenti oggi (${recurring.length})</h3>
+${taskRows(recurring)}
+${btn(taskUrl, 'Apri i miei compiti')}`);
+
+    try {
+        return await _send({ to, subject, text, html });
+    } catch (e) {
+        console.error('📧 [OPS-EMAIL] sendDailyDigestEmail unexpected error (non-fatal):', sanitizeError(e.message));
+        return { result: RESULT.FAILED, transport: TRANSPORT, reason: sanitizeError(e.message) };
+    }
+}
+
+module.exports = { sendTaskAssignmentEmail, sendInvitationEmail, sendReminderEmail, sendEscalationEmail, sendDailyDigestEmail, RESULT, TRANSPORT };

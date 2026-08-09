@@ -109,10 +109,26 @@ function canCancelTask(actor) {
     return !!actor && actor.role === 'DIRECTOR';
 }
 
+// ── Escalation chain ────────────────────────────────────────────────────────
+// Maps assignee role → ordered list of roles to notify on escalation.
+// Escalation never changes permissions — notification only.
+const ESCALATION_CHAIN = {
+    CHEF_DE_BRIGADE: ['ADJOINT', 'DIRECTOR'],
+    SOUS_CHEF:       ['CHEF_CUISINE', 'DIRECTOR'],
+    CHEF_CUISINE:    ['DIRECTOR'],
+    ADJOINT:         ['DIRECTOR'],
+    DIRECTOR:        [],
+};
+
+function getEscalationChain(role) {
+    return ESCALATION_CHAIN[role] || [];
+}
+
 module.exports = {
     validateActivationAccount,
     ROLES,
     ASSIGNABLE_ROLES,
+    ESCALATION_CHAIN,
     isValidRole,
     canAssignTaskTo,
     canViewTask,
@@ -121,5 +137,6 @@ module.exports = {
     canUpdateProgress,
     canCancelTask,
     canManageUsers,
-    allowedAssignees
+    allowedAssignees,
+    getEscalationChain,
 };

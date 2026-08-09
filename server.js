@@ -713,8 +713,10 @@ function getStoreNameForFile(filePath) {
     if (filePath === PLANS_FILE)          return 'plans';
     if (filePath === CALENDAR_EVENTS_FILE) return 'calendar_events';
     if (filePath === CALENDAR_NOTIF_FILE)  return 'calendar_notifs';
-    if (filePath === OPS_USERS_FILE) return 'ops_users';
-    if (filePath === OPS_TASKS_FILE) return 'ops_tasks';
+    if (filePath === OPS_USERS_FILE)      return 'ops_users';
+    if (filePath === OPS_TASKS_FILE)      return 'ops_tasks';
+    if (filePath === OPS_TEMPLATES_FILE)  return 'ops_templates';
+    if (filePath === OPS_PREFS_FILE)      return 'ops_prefs';
     return null;
 }
 
@@ -1428,8 +1430,10 @@ app.patch('/api/calendar/notifications/read-all', (req, res) => {
 // the Service side, but has fully separate stores, logic and UI.
 // All hierarchy rules live in operations/ops-auth.js (centralized).
 // =========================================================================
-const opsAuth = require('./operations/ops-auth');
-const opsEmail = require('./operations/ops-email');
+const opsAuth      = require('./operations/ops-auth');
+const opsEmail     = require('./operations/ops-email');
+const opsRecurring = require('./operations/ops-recurring');
+const opsScheduler = require('./operations/ops-scheduler');
 
 const OPS_USERS_FILE = path.join(DATA_DIR, 'ops-users.json');
 const OPS_TASKS_FILE = path.join(DATA_DIR, 'ops-tasks.json');
@@ -1452,10 +1456,24 @@ function genOpsCommentId()   { return 'opsc_' + Date.now() + '_' + crypto.random
 function genOpsAttachmentId(){ return 'opsa_' + Date.now() + '_' + crypto.randomBytes(3).toString('hex'); }
 function genInviteCode()     { return crypto.randomBytes(16).toString('hex'); }
 
-function getOpsUsers(companyId) { return opsUsersStore[companyId] || []; }
-function getOpsTasks(companyId) { return opsTasksStore[companyId] || []; }
-function saveOpsUsers() { saveJSON(OPS_USERS_FILE, opsUsersStore); }
-function saveOpsTasks() { saveJSON(OPS_TASKS_FILE, opsTasksStore); }
+// ── Sprint 3: recurring-template and preference stores ─────────────────────
+const OPS_TEMPLATES_FILE = path.join(DATA_DIR, 'ops-templates.json');
+const OPS_PREFS_FILE     = path.join(DATA_DIR, 'ops-prefs.json');
+
+// Shape: { [companyId]: [ template, ... ] }
+let opsTemplatesStore = {};
+// Shape: { [companyId]: { defaults: {...}, users: { [userId]: {...} } } }
+let opsPrefsStore = {};
+
+function genTemplateId()    { return opsRecurring.genTemplateId(); }
+
+function getOpsTemplates(companyId) { return opsTemplatesStore[companyId] || []; }
+function getOpsUsers(companyId)     { return opsUsersStore[companyId]     || []; }
+function getOpsTasks(companyId)     { return opsTasksStore[companyId]     || []; }
+function saveOpsUsers()     { saveJSON(OPS_USERS_FILE,     opsUsersStore);     }
+function saveOpsTasks()     { saveJSON(OPS_TASKS_FILE,     opsTasksStore);     }
+function saveOpsTemplates() { saveJSON(OPS_TEMPLATES_FILE, opsTemplatesStore); }
+function saveOpsPrefs()     { saveJSON(OPS_PREFS_FILE,     opsPrefsStore);     }
 
 // Find the ops user record bound to a Firebase uid (across all companies —
 // invited users may belong to a company different from their session company).
@@ -1872,7 +1890,22 @@ app.post('/api/operations/tasks', async (req, res) => {
         completedAt: null,
         attachments: [],               // metadata only — actual upload not yet wired
         comments: [],
-        history: []
+        history: [],
+        // Sprint 3: recurring template link (null for manually created tasks)
+        templateId:       null,
+        occurrenceKey:    null,
+        // Sprint 3: reminder — days before dueDate to send reminder email (null = none)
+        reminderDays:     req.body.reminderDays != null ? Number(req.body.reminderDays) : null,
+        reminderSentAt:   null,
+        // Sprint 3: escalation config
+        escalation: {
+            enabled:                req.body.escalation && req.body.escalation.enabled === true,
+            waitHoursAfterDue:      Number((req.body.escalation || {}).waitHoursAfterDue)    || 24,
+            waitHoursBetweenLevels: Number((req.body.escalation || {}).waitHoursBetweenLevels) || 24,
+        },
+        escalationLevel:    0,
+        escalationSentAt:   null,
+        escalationNotified: [],
     };
     addHistory(task, 'TASK_CREATED', actor.id, actor.name, {
         assigneeId: assignee.id, assigneeName: assignee.name,
@@ -2437,6 +2470,297 @@ app.get('/api/operations/stats', (req, res) => {
     }
 
     res.json({ success: true, stats, workload, me: publicOpsUser(actor) });
+});
+
+// =========================================================================
+// ===== PLATETIMER OPERATIONS — SPRINT 3: RECURRING / SCHEDULER ===========
+// =========================================================================
+
+// ── Template CRUD ──────────────────────────────────────────────────────────
+
+// GET /api/operations/templates — Director only: list company templates
+app.get('/api/operations/templates', (req, res) => {
+    const ctx = requireOpsAuth(req, res);
+    if (!ctx) return;
+    if (!opsAuth.canManageUsers(ctx.opsUser)) return res.status(403).json({ error: 'Solo il Direttore può gestire i template.' });
+    const templates = getOpsTemplates(ctx.opsUser.companyId);
+    res.json({ success: true, templates });
+});
+
+// POST /api/operations/templates — Director only: create recurring template
+app.post('/api/operations/templates', (req, res) => {
+    const ctx = requireOpsAuth(req, res);
+    if (!ctx) return;
+    if (!opsAuth.canManageUsers(ctx.opsUser)) return res.status(403).json({ error: 'Solo il Direttore può creare template.' });
+    const actor     = ctx.opsUser;
+    const companyId = actor.companyId;
+
+    const errors = opsRecurring.validateTemplateInput(req.body);
+    if (errors.length) return res.status(400).json({ error: errors.join('; ') });
+
+    // Validate defaultAssigneeId if provided
+    if (req.body.defaultAssigneeId) {
+        const byId  = opsUsersById(companyId);
+        const asgn  = byId[req.body.defaultAssigneeId];
+        if (!asgn || asgn.active === false) return res.status(400).json({ error: 'defaultAssigneeId non valido.' });
+        if (!opsAuth.canAssignTaskTo(actor, asgn)) return res.status(403).json({ error: `Non puoi assegnare compiti a ${asgn.role}.` });
+    }
+
+    const clean = opsRecurring.sanitizeTemplateInput(req.body);
+    const now   = Date.now();
+    const template = {
+        id:              genTemplateId(),
+        companyId,
+        ...clean,
+        defaultAssigneeName: (() => {
+            if (!clean.defaultAssigneeId) return null;
+            const u = opsUsersById(companyId)[clean.defaultAssigneeId];
+            return u ? u.name : null;
+        })(),
+        active:          true,
+        createdBy:       actor.id,
+        createdByName:   actor.name,
+        createdAt:       now,
+        updatedAt:       now,
+        generatedCount:  0,
+        lastGeneratedAt: null,
+    };
+    if (!opsTemplatesStore[companyId]) opsTemplatesStore[companyId] = [];
+    opsTemplatesStore[companyId].push(template);
+    saveOpsTemplates();
+    console.log(`✅ [OPS] Template created: "${template.title}" (${template.frequency}) by ${actor.id} in "${companyId}"`);
+    res.status(201).json({ success: true, template });
+});
+
+// GET /api/operations/templates/:id
+app.get('/api/operations/templates/:id', (req, res) => {
+    const ctx = requireOpsAuth(req, res);
+    if (!ctx) return;
+    if (!opsAuth.canManageUsers(ctx.opsUser)) return res.status(403).json({ error: 'Solo il Direttore può visualizzare i template.' });
+    const tpl = getOpsTemplates(ctx.opsUser.companyId).find(t => t.id === req.params.id);
+    if (!tpl) return res.status(404).json({ error: 'Template non trovato.' });
+    res.json({ success: true, template: tpl });
+});
+
+// PATCH /api/operations/templates/:id — affects future occurrences only; never modifies past tasks
+app.patch('/api/operations/templates/:id', (req, res) => {
+    const ctx = requireOpsAuth(req, res);
+    if (!ctx) return;
+    if (!opsAuth.canManageUsers(ctx.opsUser)) return res.status(403).json({ error: 'Solo il Direttore può modificare i template.' });
+    const companyId = ctx.opsUser.companyId;
+    const tpl = getOpsTemplates(companyId).find(t => t.id === req.params.id);
+    if (!tpl) return res.status(404).json({ error: 'Template non trovato.' });
+
+    let patch;
+    try { patch = opsRecurring.sanitizeTemplatePatch(req.body); }
+    catch (msg) { return res.status(400).json({ error: msg }); }
+
+    // Validate defaultAssigneeId if changing
+    if (patch.defaultAssigneeId) {
+        const byId = opsUsersById(companyId);
+        const asgn = byId[patch.defaultAssigneeId];
+        if (!asgn || asgn.active === false) return res.status(400).json({ error: 'defaultAssigneeId non valido.' });
+        if (!opsAuth.canAssignTaskTo(ctx.opsUser, asgn)) return res.status(403).json({ error: `Non puoi assegnare compiti a ${asgn.role}.` });
+        patch.defaultAssigneeName = asgn.name;
+    }
+
+    Object.assign(tpl, patch, { updatedAt: Date.now() });
+    saveOpsTemplates();
+    console.log(`✅ [OPS] Template patched: "${tpl.id}" by ${ctx.opsUser.id}`);
+    res.json({ success: true, template: tpl });
+});
+
+// DELETE /api/operations/templates/:id — soft-deactivate; keeps all generated tasks
+app.delete('/api/operations/templates/:id', (req, res) => {
+    const ctx = requireOpsAuth(req, res);
+    if (!ctx) return;
+    if (!opsAuth.canManageUsers(ctx.opsUser)) return res.status(403).json({ error: 'Solo il Direttore può eliminare i template.' });
+    const tpl = getOpsTemplates(ctx.opsUser.companyId).find(t => t.id === req.params.id);
+    if (!tpl) return res.status(404).json({ error: 'Template non trovato.' });
+    tpl.active    = false;
+    tpl.updatedAt = Date.now();
+    saveOpsTemplates();
+    console.log(`✅ [OPS] Template deactivated: "${tpl.id}" by ${ctx.opsUser.id}`);
+    res.json({ success: true, message: 'Template disattivato. I compiti già generati rimangono invariati.' });
+});
+
+// POST /api/operations/templates/:id/generate-now — force generation immediately (Director, for testing)
+app.post('/api/operations/templates/:id/generate-now', (req, res) => {
+    const ctx = requireOpsAuth(req, res);
+    if (!ctx) return;
+    if (!opsAuth.canManageUsers(ctx.opsUser)) return res.status(403).json({ error: 'Solo il Direttore può forzare la generazione.' });
+    const companyId = ctx.opsUser.companyId;
+    const tpl = getOpsTemplates(companyId).find(t => t.id === req.params.id);
+    if (!tpl) return res.status(404).json({ error: 'Template non trovato.' });
+
+    const existingKeys = new Set(
+        getOpsTasks(companyId).filter(t => t.templateId === tpl.id && t.occurrenceKey).map(t => t.occurrenceKey)
+    );
+    const usersById = opsUsersById(companyId);
+    const newTasks  = opsRecurring.generateTasksForTemplate(tpl, companyId, existingKeys, usersById, addHistory);
+    if (newTasks.length > 0) {
+        if (!opsTasksStore[companyId]) opsTasksStore[companyId] = [];
+        for (const t of newTasks) opsTasksStore[companyId].push(t);
+        saveOpsTasks();
+        tpl.generatedCount  = (tpl.generatedCount || 0) + newTasks.length;
+        tpl.lastGeneratedAt = Date.now();
+        saveOpsTemplates();
+    }
+    res.json({ success: true, generated: newTasks.length, tasks: newTasks.map(t => ({ id: t.id, dueDate: t.dueDate, occurrenceKey: t.occurrenceKey })) });
+});
+
+// ── Task reminder / escalation settings ────────────────────────────────────
+
+// PATCH /api/operations/tasks/:id/reminder — set/clear task reminder
+app.patch('/api/operations/tasks/:id/reminder', (req, res) => {
+    const ctx = requireOpsAuth(req, res);
+    if (!ctx) return;
+    const actor = ctx.opsUser;
+    const task  = findOpsTask(actor.companyId, req.params.id);
+    if (!task) return res.status(404).json({ error: 'Compito non trovato.' });
+    if (!opsAuth.canEditTask(actor, task, opsUsersById(actor.companyId))) {
+        return res.status(403).json({ error: 'Non autorizzato a modificare questo compito.' });
+    }
+    const days = req.body.reminderDays;
+    if (days !== null && days !== undefined) {
+        const d = Number(days);
+        if (!Number.isInteger(d) || d < 0 || d > 365) return res.status(400).json({ error: 'reminderDays deve essere 0-365.' });
+        task.reminderDays   = d || null;
+    } else {
+        task.reminderDays = null;
+    }
+    task.reminderSentAt = null; // reset so a new reminder can fire
+    task.updatedAt      = Date.now();
+    saveOpsTasks();
+    res.json({ success: true, task: opsTaskWithComputedStatus(task) });
+});
+
+// PATCH /api/operations/tasks/:id/escalation — configure task escalation
+app.patch('/api/operations/tasks/:id/escalation', (req, res) => {
+    const ctx = requireOpsAuth(req, res);
+    if (!ctx) return;
+    const actor = ctx.opsUser;
+    const task  = findOpsTask(actor.companyId, req.params.id);
+    if (!task) return res.status(404).json({ error: 'Compito non trovato.' });
+    if (!opsAuth.canEditTask(actor, task, opsUsersById(actor.companyId))) {
+        return res.status(403).json({ error: 'Non autorizzato a modificare questo compito.' });
+    }
+    const { enabled, waitHoursAfterDue, waitHoursBetweenLevels } = req.body;
+    if (!task.escalation) task.escalation = { enabled: false, waitHoursAfterDue: 24, waitHoursBetweenLevels: 24 };
+    if (enabled !== undefined) task.escalation.enabled = enabled === true;
+    if (waitHoursAfterDue !== undefined) {
+        const h = Number(waitHoursAfterDue);
+        if (isNaN(h) || h < 0 || h > 720) return res.status(400).json({ error: 'waitHoursAfterDue deve essere 0-720.' });
+        task.escalation.waitHoursAfterDue = h;
+    }
+    if (waitHoursBetweenLevels !== undefined) {
+        const h = Number(waitHoursBetweenLevels);
+        if (isNaN(h) || h < 0 || h > 720) return res.status(400).json({ error: 'waitHoursBetweenLevels deve essere 0-720.' });
+        task.escalation.waitHoursBetweenLevels = h;
+    }
+    // Reset escalation state when re-configuring
+    task.escalationLevel    = 0;
+    task.escalationSentAt   = null;
+    task.escalationNotified = [];
+    task.updatedAt = Date.now();
+    saveOpsTasks();
+    res.json({ success: true, task: opsTaskWithComputedStatus(task) });
+});
+
+// ── Notification preferences ────────────────────────────────────────────────
+
+// GET /api/operations/preferences — current user's preferences
+app.get('/api/operations/preferences', (req, res) => {
+    const ctx = requireOpsAuth(req, res);
+    if (!ctx) return;
+    const prefs = opsScheduler.getUserPrefs(opsPrefsStore, ctx.opsUser.companyId, ctx.opsUser.id);
+    res.json({ success: true, preferences: prefs });
+});
+
+// PATCH /api/operations/preferences — update current user's preferences
+app.patch('/api/operations/preferences', (req, res) => {
+    const ctx       = requireOpsAuth(req, res);
+    if (!ctx) return;
+    const companyId = ctx.opsUser.companyId;
+    const userId    = ctx.opsUser.id;
+    const VALID_BOOL_KEYS = ['emailReminders', 'taskAssignment', 'escalationEmails', 'dailyDigest'];
+    const updates = {};
+    for (const key of VALID_BOOL_KEYS) {
+        if (req.body[key] !== undefined) updates[key] = req.body[key] === true;
+    }
+    if (!opsPrefsStore[companyId]) opsPrefsStore[companyId] = { defaults: opsScheduler.DEFAULT_PREFS(), users: {} };
+    if (!opsPrefsStore[companyId].users) opsPrefsStore[companyId].users = {};
+    if (!opsPrefsStore[companyId].users[userId]) opsPrefsStore[companyId].users[userId] = {};
+    Object.assign(opsPrefsStore[companyId].users[userId], updates);
+    saveOpsPrefs();
+    res.json({ success: true, preferences: opsScheduler.getUserPrefs(opsPrefsStore, companyId, userId) });
+});
+
+// GET /api/operations/company-preferences — Director: get company defaults
+app.get('/api/operations/company-preferences', (req, res) => {
+    const ctx = requireOpsAuth(req, res);
+    if (!ctx) return;
+    if (!opsAuth.canManageUsers(ctx.opsUser)) return res.status(403).json({ error: 'Solo il Direttore può gestire le preferenze aziendali.' });
+    const prefs = opsScheduler.getCompanyPrefs(opsPrefsStore, ctx.opsUser.companyId);
+    res.json({ success: true, preferences: prefs });
+});
+
+// PATCH /api/operations/company-preferences — Director: set company-wide defaults
+app.patch('/api/operations/company-preferences', (req, res) => {
+    const ctx = requireOpsAuth(req, res);
+    if (!ctx) return;
+    if (!opsAuth.canManageUsers(ctx.opsUser)) return res.status(403).json({ error: 'Solo il Direttore può modificare le preferenze aziendali.' });
+    const companyId   = ctx.opsUser.companyId;
+    const VALID_BOOL_KEYS = ['emailReminders', 'taskAssignment', 'escalationEmails', 'dailyDigest'];
+    const updates = {};
+    for (const key of VALID_BOOL_KEYS) {
+        if (req.body[key] !== undefined) updates[key] = req.body[key] === true;
+    }
+    if (!opsPrefsStore[companyId]) opsPrefsStore[companyId] = { defaults: opsScheduler.DEFAULT_PREFS(), users: {} };
+    if (!opsPrefsStore[companyId].defaults) opsPrefsStore[companyId].defaults = opsScheduler.DEFAULT_PREFS();
+    Object.assign(opsPrefsStore[companyId].defaults, updates);
+    saveOpsPrefs();
+    res.json({ success: true, preferences: opsScheduler.getCompanyPrefs(opsPrefsStore, companyId) });
+});
+
+// ── Escalation dashboard (Director only) ────────────────────────────────────
+
+// GET /api/operations/escalation-status
+app.get('/api/operations/escalation-status', (req, res) => {
+    const ctx = requireOpsAuth(req, res);
+    if (!ctx) return;
+    if (!opsAuth.canManageUsers(ctx.opsUser)) return res.status(403).json({ error: 'Solo il Direttore può vedere il pannello escalation.' });
+    const companyId  = ctx.opsUser.companyId;
+    const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+    const todayEnd   = new Date(); todayEnd.setHours(23, 59, 59, 999);
+
+    const tasks = getOpsTasks(companyId).map(opsTaskWithComputedStatus);
+
+    const escalated = tasks.filter(t => t.escalationLevel > 0 && t.status !== 'COMPLETED' && t.status !== 'CANCELLED');
+    const requiresEscalation = tasks.filter(t =>
+        t.effectiveStatus === 'OVERDUE' &&
+        t.escalation && t.escalation.enabled &&
+        t.escalationLevel === 0 &&
+        t.status !== 'COMPLETED' && t.status !== 'CANCELLED'
+    );
+    const escalatedToday = escalated.filter(t =>
+        t.escalationSentAt && t.escalationSentAt >= todayStart.getTime() && t.escalationSentAt <= todayEnd.getTime()
+    ).length;
+
+    // Overdue by department
+    const overdueByDepartment = {};
+    for (const t of tasks.filter(t => t.effectiveStatus === 'OVERDUE' && t.status !== 'CANCELLED')) {
+        const dept = t.department || '(nessun reparto)';
+        overdueByDepartment[dept] = (overdueByDepartment[dept] || 0) + 1;
+    }
+
+    res.json({
+        success: true,
+        escalated:         escalated.map(t => ({ id: t.id, title: t.title, assigneeName: t.assigneeName, dueDate: t.dueDate, escalationLevel: t.escalationLevel, priority: t.priority, department: t.department })),
+        requiresEscalation: requiresEscalation.map(t => ({ id: t.id, title: t.title, assigneeName: t.assigneeName, dueDate: t.dueDate, priority: t.priority, department: t.department })),
+        escalatedToday,
+        overdueByDepartment,
+    });
 });
 
 // =========================================================================
@@ -3555,6 +3879,8 @@ async function initializeDataStores() {
         { name: 'calendar_notifs', file: CALENDAR_NOTIF_FILE,  setter: v => { calendarNotifStore  = v; } },
         { name: 'ops_users',       file: OPS_USERS_FILE,       setter: v => { opsUsersStore       = v; } },
         { name: 'ops_tasks',       file: OPS_TASKS_FILE,       setter: v => { opsTasksStore       = v; } },
+        { name: 'ops_templates',   file: OPS_TEMPLATES_FILE,   setter: v => { opsTemplatesStore   = v; } },
+        { name: 'ops_prefs',       file: OPS_PREFS_FILE,       setter: v => { opsPrefsStore       = v; } },
     ];
 
     if (!db) {
@@ -3618,13 +3944,31 @@ async function initializeDataStores() {
 // Avvia il server (unica versione corretta per Railway)
 const PORT = process.env.PORT || 3000;
 
+// ── Sprint 3 scheduler ───────────────────────────────────────────────────────
+// Idempotent — safe to call repeatedly; each phase guards against duplicates.
+const opsSchedulerInstance = opsScheduler.createScheduler(
+    () => ({ opsTasksStore, opsUsersStore, opsTemplatesStore, opsPrefsStore }),
+    () => ({ saveOpsTasks, saveOpsTemplates, saveOpsPrefs }),
+    opsEmail,
+    addHistory
+);
+
 initializeDataStores().then(() => {
+    // Kick off the first scheduler run shortly after startup, then every 5 minutes.
+    setTimeout(() => {
+        opsSchedulerInstance.run().catch(e => console.error('[SCHEDULER] Initial run error:', e.message));
+    }, 2000);
+    setInterval(() => {
+        opsSchedulerInstance.run().catch(e => console.error('[SCHEDULER] Periodic run error:', e.message));
+    }, 5 * 60 * 1000);
+
     server
         .listen(PORT, '0.0.0.0', () => {
             console.log(`🛡️ Server avviato su http://0.0.0.0:${PORT}`);
             console.log('✅ Autenticazione WebSocket attiva');
             console.log('✅ Validazione dati attiva');
             console.log('✅ Rate limiting ottimizzato');
+            console.log('✅ Scheduler ricorrente attivo (ogni 5 min)');
         })
         .on('error', (error) => {
             console.error('❌ Errore avvio server:', error);

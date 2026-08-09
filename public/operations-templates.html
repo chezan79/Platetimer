@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Operations — Template Ricorrenti — PlateTimer</title>
+<link rel="stylesheet" href="css/operations.css">
+</head>
+<body>
+
+<header class="hdr">
+  <span id="hdr-company" class="hdr-brand"></span>
+  <span class="hdr-sep"></span>
+  <span class="hdr-page">Operations · Template Ricorrenti</span>
+  <button class="hdr-btn" onclick="location.href='operations.html'">Dashboard</button>
+  <button class="hdr-btn" onclick="location.href='operations-tasks.html'">Compiti</button>
+  <button class="hdr-btn" onclick="location.href='operations-team.html'">Team</button>
+  <button class="hdr-btn" onclick="location.href='home.html'">Home</button>
+  <button class="hdr-btn danger" onclick="OpsCommon.logout()">Esci</button>
+</header>
+
+<main class="main">
+  <div class="pg-heading" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+    <div>
+      <h1 class="pg-title">Template Ricorrenti</h1>
+      <p class="pg-sub"><span id="me-name"></span> · <span id="me-role" class="role-badge"></span></p>
+    </div>
+    <button class="btn btn-primary" id="new-tpl-btn" onclick="openCreatePanel()">+ Nuovo template</button>
+  </div>
+
+  <div id="ops-error" class="msg msg-error" style="display:none"></div>
+  <div id="tpl-list"><div class="empty-state">Caricamento…</div></div>
+</main>
+
+<!-- Panel overlay -->
+<div id="panel-overlay" class="panel-overlay" onclick="closePanel()"></div>
+<div id="side-panel" class="detail-panel">
+  <div id="panel-inner"></div>
+</div>
+
+<script src="js/ws-auth.js"></script>
+<script src="js/operations-common.js"></script>
+<script>
+const esc = OpsCommon.escHtml;
+let meData = null, assignableUsers = [], allTemplates = [];
+
+const FREQ_LABELS = {
+  DAILY:          'Giornaliero',
+  WEEKLY:         'Settimanale',
+  MONTHLY:        'Mensile',
+  EVERY_X_DAYS:   'Ogni X giorni',
+  EVERY_X_WEEKS:  'Ogni X settimane',
+  EVERY_X_MONTHS: 'Ogni X mesi',
+};
+const DAY_NAMES = ['Dom','Lun','Mar','Mer','Gio','Ven','Sab'];
+
+async function load() {
+  meData = await OpsCommon.loadMe();
+  if (!meData) return;
+  if (meData.user.role !== 'DIRECTOR') {
+    document.getElementById('ops-error').textContent = 'Solo il Direttore può gestire i template.';
+    document.getElementById('ops-error').style.display = '';
+    document.getElementById('new-tpl-btn').style.display = 'none';
+    return;
+  }
+  document.getElementById('me-name').textContent = meData.user.name || '';
+  document.getElementById('me-role').textContent = OpsCommon.roleLabel(meData.user.role);
+
+  const aData = await OpsCommon.api('/api/operations/assignees');
+  assignableUsers = (aData && aData.assignees) || [];
+
+  await loadTemplates();
+}
+
+async function loadTemplates() {
+  const data = await OpsCommon.api('/api/operations/templates');
+  if (!data || !data.success) { OpsCommon.showError(data && data.error); return; }
+  allTemplates = data.templates || [];
+  renderList();
+}
+
+function freqSummary(t) {
+  let s = FREQ_LABELS[t.frequency] || t.frequency;
+  if (t.interval && t.interval > 1) s += ` (×${t.interval})`;
+  if (t.frequency === 'WEEKLY' && Array.isArray(t.daysOfWeek) && t.daysOfWeek.length) {
+    s += ' · ' + t.daysOfWeek.map(d => DAY_NAMES[d]).join(', ');
+  }
+  if (t.frequency === 'MONTHLY' && t.dayOfMonth) s += ` · giorno ${t.dayOfMonth}`;
+  return s;
+}
+
+function renderList() {
+  const container = document.getElementById('tpl-list');
+  if (!allTemplates.length) {
+    container.innerHTML = '<div class="empty-state">Nessun template ricorrente. Creane uno per automatizzare i compiti ripetitivi.</div>';
+    return;
+  }
+  container.innerHTML = allTemplates.map(t => `
+    <div class="task-card${t.active === false ? ' task-card-cancelled' : ''}" style="cursor:pointer" onclick="openDetail('${esc(t.id)}')">
+      <div class="task-card-header">
+        <div style="flex:1;min-width:0">
+          <div class="task-title">${esc(t.title)}</div>
+          <div class="task-meta">
+            <span class="badge badge-${(t.priority||'medium').toLowerCase()}">${OpsCommon.PRIORITY_LABELS[t.priority]||t.priority}</span>
+            <span style="color:var(--muted);font-size:12px">🔁 ${esc(freqSummary(t))}</span>
+            ${t.department ? `<span style="color:var(--muted);font-size:12px">· ${esc(t.department)}</span>` : ''}
+            ${t.active === false ? '<span class="badge badge-status-cancelled">Disattivato</span>' : '<span class="badge badge-status-open">Attivo</span>'}
+          </div>
+        </div>
+        <div style="text-align:right;min-width:90px;flex-shrink:0">
+          <div style="font-size:11px;color:var(--muted)">Da: ${esc(t.startDate)}</div>
+          ${t.endDate ? `<div style="font-size:11px;color:var(--muted)">A: ${esc(t.endDate)}</div>` : ''}
+          <div style="font-size:11px;color:var(--muted)">Generati: ${t.generatedCount||0}</div>
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+function openDetail(tplId) {
+  const t = allTemplates.find(x => x.id === tplId);
+  if (!t) return;
+  const assigneeName = t.defaultAssigneeName || (assignableUsers.find(u => u.id === t.defaultAssigneeId) || {}).name || '—';
+  document.getElementById('panel-inner').innerHTML = `
+    <div class="panel-hdr">
+      <div class="panel-hdr-title">${esc(t.title)}</div>
+      <span class="badge badge-${(t.priority||'medium').toLowerCase()}">${OpsCommon.PRIORITY_LABELS[t.priority]||t.priority}</span>
+      <button class="panel-close" onclick="closePanel()">✕ Chiudi</button>
+    </div>
+    <div class="panel-body">
+      <div id="panel-msg"></div>
+      <div class="panel-section">
+        <div class="action-row">
+          ${t.active !== false ? `<button class="btn btn-sm btn-neutral" onclick="openEditMode('${esc(t.id)}')">✏️ Modifica</button>` : ''}
+          <button class="btn btn-sm btn-neutral" onclick="forceGenerate('${esc(t.id)}')">▶ Genera ora</button>
+          ${t.active !== false ? `<button class="btn btn-sm btn-danger" onclick="deactivate('${esc(t.id)}')">🗑 Disattiva</button>` : ''}
+        </div>
+      </div>
+      <div class="panel-section">
+        <div class="panel-section-title">Configurazione</div>
+        <div class="info-grid">
+          <div class="info-cell"><div class="info-cell-label">Frequenza</div><div class="info-cell-val">${esc(freqSummary(t))}</div></div>
+          <div class="info-cell"><div class="info-cell-label">Assegnatario predefinito</div><div class="info-cell-val">${esc(assigneeName)}</div></div>
+          <div class="info-cell"><div class="info-cell-label">Priorità</div><div class="info-cell-val">${esc(t.priority)}</div></div>
+          <div class="info-cell"><div class="info-cell-label">Reparto</div><div class="info-cell-val">${esc(t.department||'—')}</div></div>
+          <div class="info-cell"><div class="info-cell-label">Inizio</div><div class="info-cell-val">${esc(t.startDate)}</div></div>
+          <div class="info-cell"><div class="info-cell-label">Fine</div><div class="info-cell-val">${esc(t.endDate||'—')}</div></div>
+          ${t.maxOccurrences ? `<div class="info-cell"><div class="info-cell-label">Max occorrenze</div><div class="info-cell-val">${t.maxOccurrences}</div></div>` : ''}
+          <div class="info-cell"><div class="info-cell-label">Compiti generati</div><div class="info-cell-val">${t.generatedCount||0}</div></div>
+          <div class="info-cell"><div class="info-cell-label">Promemoria predefinito</div><div class="info-cell-val">${t.defaultReminderDays ? t.defaultReminderDays+' giorni prima' : '—'}</div></div>
+          <div class="info-cell"><div class="info-cell-label">Escalation predefinita</div><div class="info-cell-val">${t.defaultEscalation ? 'Sì' : 'No'}</div></div>
+          <div class="info-cell"><div class="info-cell-label">Giorni lavorativi</div><div class="info-cell-val">${(t.workSchedule||[0,1,2,3,4,5,6]).map(d=>DAY_NAMES[d]).join(', ')}</div></div>
+        </div>
+        ${t.description ? `<div style="margin-top:10px;font-size:14px;line-height:1.55;color:var(--muted)">${esc(t.description)}</div>` : ''}
+      </div>
+    </div>`;
+  openPanel();
+}
+
+function openCreatePanel() {
+  const assigneeOpts = [
+    `<option value="">Nessun assegnatario predefinito</option>`,
+    ...assignableUsers.map(u => `<option value="${esc(u.id)}">${esc(u.name)} (${esc(OpsCommon.roleLabel(u.role))})</option>`)
+  ].join('');
+  document.getElementById('panel-inner').innerHTML = `
+    <div class="panel-hdr">
+      <div class="panel-hdr-title">Nuovo template ricorrente</div>
+      <button class="panel-close" onclick="closePanel()">✕ Chiudi</button>
+    </div>
+    <div class="panel-body">
+      <div id="panel-msg"></div>
+      ${tplForm()}
+      <button class="btn btn-primary" style="width:100%;margin-top:6px" id="tpl-save-btn" onclick="doCreate()">Crea template</button>
+    </div>`;
+  openPanel();
+  toggleFreqFields();
+}
+
+function openEditMode(tplId) {
+  const t = allTemplates.find(x => x.id === tplId);
+  if (!t) return;
+  const assigneeOpts = [
+    `<option value="">Nessun assegnatario predefinito</option>`,
+    ...assignableUsers.map(u => `<option value="${esc(u.id)}"${u.id===t.defaultAssigneeId?' selected':''}>${esc(u.name)} (${esc(OpsCommon.roleLabel(u.role))})</option>`)
+  ].join('');
+  document.getElementById('panel-inner').innerHTML = `
+    <div class="panel-hdr">
+      <div class="panel-hdr-title">Modifica template</div>
+      <button class="panel-close" onclick="closePanel()">✕ Chiudi</button>
+    </div>
+    <div class="panel-body">
+      <div id="panel-msg"></div>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Le modifiche influenzano solo le <strong>future</strong> occorrenze. I compiti già generati rimangono invariati.</p>
+      ${tplForm(t)}
+      <div style="display:flex;gap:10px;margin-top:6px">
+        <button class="btn btn-primary" style="flex:1" id="tpl-save-btn" onclick="doEdit('${esc(tplId)}')">Salva modifiche</button>
+        <button class="btn btn-neutral" onclick="openDetail('${esc(tplId)}')">Annulla</button>
+      </div>
+    </div>`;
+  openPanel();
+  toggleFreqFields();
+}
+
+function tplForm(t) {
+  const days = t && Array.isArray(t.daysOfWeek) ? t.daysOfWeek : [];
+  const ws   = t && Array.isArray(t.workSchedule) ? t.workSchedule : [0,1,2,3,4,5,6];
+  const assigneeOpts = [
+    `<option value="">Nessun assegnatario predefinito</option>`,
+    ...assignableUsers.map(u => `<option value="${esc(u.id)}"${t&&u.id===t.defaultAssigneeId?' selected':''}>${esc(u.name)} (${esc(OpsCommon.roleLabel(u.role))})</option>`)
+  ].join('');
+  return `
+    <label class="form-label">Titolo *</label>
+    <input id="tpl-title" class="form-input" maxlength="200" value="${esc(t?t.title:'')}">
+    <label class="form-label">Descrizione</label>
+    <textarea id="tpl-desc" class="form-textarea">${esc(t?t.description:'')}</textarea>
+    <label class="form-label">Frequenza *</label>
+    <select id="tpl-freq" class="form-select" onchange="toggleFreqFields()">
+      ${Object.entries(FREQ_LABELS).map(([v,l]) => `<option value="${v}"${t&&t.frequency===v?' selected':''}>${l}</option>`).join('')}
+    </select>
+    <div id="interval-row" style="display:none">
+      <label class="form-label">Intervallo</label>
+      <input id="tpl-interval" class="form-input" type="number" min="1" max="365" value="${t?t.interval||1:1}" style="max-width:100px">
+    </div>
+    <div id="daysofweek-row" style="display:none">
+      <label class="form-label">Giorni della settimana</label>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px">
+        ${DAY_NAMES.map((d,i) => `<label style="display:flex;align-items:center;gap:4px;font-size:13px"><input type="checkbox" class="dow-check" value="${i}"${days.includes(i)?' checked':''}> ${d}</label>`).join('')}
+      </div>
+    </div>
+    <div id="dayofmonth-row" style="display:none">
+      <label class="form-label">Giorno del mese</label>
+      <input id="tpl-dom" class="form-input" type="number" min="1" max="31" value="${t&&t.dayOfMonth||1}" style="max-width:80px">
+    </div>
+    <label class="form-label">Assegnatario predefinito</label>
+    <select id="tpl-assignee" class="form-select">${assigneeOpts}</select>
+    <label class="form-label">Priorità</label>
+    <select id="tpl-priority" class="form-select">
+      ${['LOW','MEDIUM','HIGH','URGENT'].map(p => `<option value="${p}"${t&&t.priority===p?' selected':''}>${OpsCommon.PRIORITY_LABELS[p]}</option>`).join('')}
+    </select>
+    <label class="form-label">Reparto</label>
+    <input id="tpl-dept" class="form-input" maxlength="100" value="${esc(t?t.department:'')}">
+    <label class="form-label">Data inizio *</label>
+    <input id="tpl-start" class="form-input" type="date" value="${esc(t?t.startDate:'')}">
+    <label class="form-label">Data fine (facoltativa)</label>
+    <input id="tpl-end" class="form-input" type="date" value="${esc(t&&t.endDate?t.endDate:'')}">
+    <label class="form-label">Massimo occorrenze (facoltativo)</label>
+    <input id="tpl-maxocc" class="form-input" type="number" min="1" value="${t&&t.maxOccurrences||''}" placeholder="Illimitato">
+    <label class="form-label">Giorni lavorativi (deseleziona i giorni di chiusura)</label>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px">
+      ${DAY_NAMES.map((d,i) => `<label style="display:flex;align-items:center;gap:4px;font-size:13px"><input type="checkbox" class="ws-check" value="${i}"${ws.includes(i)?' checked':''}> ${d}</label>`).join('')}
+    </div>
+    <label class="form-label">Promemoria predefinito (giorni prima della scadenza)</label>
+    <input id="tpl-reminder" class="form-input" type="number" min="0" max="365" value="${t&&t.defaultReminderDays||''}" placeholder="Nessuno">
+    <label class="form-label">Escalation automatica predefinita</label>
+    <select id="tpl-escalation" class="form-select">
+      <option value="false"${t&&!t.defaultEscalation?' selected':''}>No</option>
+      <option value="true"${t&&t.defaultEscalation?' selected':''}>Sì</option>
+    </select>`;
+}
+
+function toggleFreqFields() {
+  const freq = document.getElementById('tpl-freq').value;
+  document.getElementById('interval-row').style.display   = ['EVERY_X_DAYS','EVERY_X_WEEKS','EVERY_X_MONTHS'].includes(freq) ? '' : 'none';
+  document.getElementById('daysofweek-row').style.display  = ['WEEKLY','EVERY_X_WEEKS'].includes(freq) ? '' : 'none';
+  document.getElementById('dayofmonth-row').style.display  = ['MONTHLY','EVERY_X_MONTHS'].includes(freq) ? '' : 'none';
+}
+
+function collectForm() {
+  const freq = document.getElementById('tpl-freq').value;
+  const daysOfWeek = [...document.querySelectorAll('.dow-check:checked')].map(c => Number(c.value));
+  const workSchedule = [...document.querySelectorAll('.ws-check:checked')].map(c => Number(c.value));
+  return {
+    title:              document.getElementById('tpl-title').value.trim(),
+    description:        document.getElementById('tpl-desc').value.trim(),
+    frequency:          freq,
+    interval:           Number(document.getElementById('tpl-interval') && document.getElementById('tpl-interval').value) || 1,
+    daysOfWeek,
+    dayOfMonth:         document.getElementById('tpl-dom') ? Number(document.getElementById('tpl-dom').value) || null : null,
+    defaultAssigneeId:  document.getElementById('tpl-assignee').value || null,
+    priority:           document.getElementById('tpl-priority').value,
+    department:         document.getElementById('tpl-dept').value.trim(),
+    startDate:          document.getElementById('tpl-start').value,
+    endDate:            document.getElementById('tpl-end').value || null,
+    maxOccurrences:     document.getElementById('tpl-maxocc').value ? Number(document.getElementById('tpl-maxocc').value) : null,
+    workSchedule:       workSchedule.length ? workSchedule : [0,1,2,3,4,5,6],
+    defaultReminderDays: document.getElementById('tpl-reminder').value ? Number(document.getElementById('tpl-reminder').value) : null,
+    defaultEscalation:  document.getElementById('tpl-escalation').value === 'true',
+  };
+}
+
+async function doCreate() {
+  const btn = document.getElementById('tpl-save-btn');
+  btn.disabled = true;
+  const data = await OpsCommon.api('/api/operations/templates', 'POST', collectForm());
+  btn.disabled = false;
+  if (!data || !data.success) { OpsCommon.showPanelMsg(data && data.error, true); return; }
+  closePanel();
+  await loadTemplates();
+}
+
+async function doEdit(tplId) {
+  const btn = document.getElementById('tpl-save-btn');
+  btn.disabled = true;
+  const data = await OpsCommon.api('/api/operations/templates/' + tplId, 'PATCH', collectForm());
+  btn.disabled = false;
+  if (!data || !data.success) { OpsCommon.showPanelMsg(data && data.error, true); return; }
+  closePanel();
+  await loadTemplates();
+}
+
+async function forceGenerate(tplId) {
+  const data = await OpsCommon.api('/api/operations/templates/' + tplId + '/generate-now', 'POST', {});
+  if (!data || !data.success) { alert(data && data.error); return; }
+  alert(`Generati ${data.generated} compiti.`);
+  await loadTemplates();
+}
+
+async function deactivate(tplId) {
+  if (!confirm('Disattivare questo template? I compiti già generati rimarranno invariati.')) return;
+  const data = await OpsCommon.api('/api/operations/templates/' + tplId, 'DELETE', {});
+  if (!data || !data.success) { alert(data && data.error); return; }
+  closePanel();
+  await loadTemplates();
+}
+
+function openPanel() {
+  document.getElementById('side-panel').classList.add('open');
+  document.getElementById('panel-overlay').style.display = 'block';
+}
+function closePanel() {
+  document.getElementById('side-panel').classList.remove('open');
+  document.getElementById('panel-overlay').style.display = 'none';
+}
+
+load();
+</script>
+</body>
+</html>
