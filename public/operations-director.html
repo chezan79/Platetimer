@@ -35,6 +35,12 @@
     <div class="exec-brief-text" id="brief-text">Caricamento…</div>
   </div>
 
+  <!-- New Since Last Visit (Sprint 6.3.1) -->
+  <div id="nsv-section" style="display:none;margin-bottom:24px">
+    <p class="section-title">🔔 Nuovo dalla tua ultima visita</p>
+    <div class="card" id="nsv-content"></div>
+  </div>
+
   <!-- Priority Queue (Sprint 6.3) -->
   <div id="pq-section" style="display:none;margin-bottom:24px">
     <p class="section-title">🎯 Coda priorità</p>
@@ -167,7 +173,7 @@ async function load() {
   document.getElementById('me-name').textContent = me.user.name || '';
   document.getElementById('me-role').textContent = OpsCommon.roleLabel(me.user.role);
 
-  // Parallel API calls
+  // Parallel API calls  (isRealtime=0 on intentional load)
   const [taskRes, statsRes, escRes, intelRes] = await Promise.all([
     OpsCommon.api('/api/operations/tasks'),
     OpsCommon.api('/api/operations/stats'),
@@ -281,6 +287,9 @@ function renderIntelligence(r) {
   const briefEl = document.getElementById('brief-text');
   if (r.executiveBrief) briefEl.textContent = r.executiveBrief;
   else if (r.briefing)  briefEl.textContent = r.briefing;
+
+  // — New Since Last Visit (Sprint 6.3.1) —
+  renderNewSinceLastVisit(r.newSinceLastVisit, 'nsv-section', 'nsv-content');
 
   // — Priority Queue (Sprint 6.3) —
   if (r.priorityQueue && r.priorityQueue.length) {
@@ -483,6 +492,13 @@ load();
 // Sprint 5: real-time live updates ──────────────────────────────────────────
 OpsRealtime.init();
 let _rtTimer = null;
+// Pass isRealtime=1 so the server does NOT update lastVisitAt on WS-triggered refreshes
+async function loadRealtime() {
+  const me = OpsCommon._lastMe || await OpsCommon.loadMe();
+  if (!me) return;
+  const intelRes = await OpsCommon.api('/api/operations/intelligence?isRealtime=1');
+  renderIntelligence(intelRes);
+}
 function rtReload(d) { clearTimeout(_rtTimer); _rtTimer = setTimeout(load, d || 700); }
 OpsRealtime.on('OPS_TASK_CREATED',        () => { rtReload(400); OpsRealtime.toast('📌 Nuovo compito creato', 'info'); });
 OpsRealtime.on('OPS_TASK_UPDATED',        () => { rtReload(500); });

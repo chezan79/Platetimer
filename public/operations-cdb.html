@@ -136,7 +136,7 @@ async function load() {
   OpsCommon.renderSection(container, '📅 Oggi', today.filter(t=>!overdue.find(o=>o.id===t.id)), users, 'Nessun compito in scadenza oggi.');
   OpsCommon.renderSection(container, '✅ Completati oggi', done, users, 'Nessun compito completato oggi.');
 
-  // Sprint 6.2: personal intelligence
+  // Sprint 6.2+: personal intelligence (intentional load — updates lastVisitAt)
   const intelRes = await OpsCommon.api('/api/operations/intelligence');
   renderRoleIntel(intelRes);
 }
@@ -145,6 +145,13 @@ function renderRoleIntel(r) {
   const area = document.getElementById('role-intel');
   if (!r || !r.success || !area) return;
   const parts = [];
+  // New Since Last Visit (Sprint 6.3.1)
+  if (r.newSinceLastVisit) {
+    const nsv = r.newSinceLastVisit;
+    if (nsv.newCount > 0 || nsv.previousVisitAt) {
+      parts.push(`<div id="cdb-nsv-content" class="card" style="margin-bottom:14px"></div>`);
+    }
+  }
   if (r.executiveBrief) parts.push(`<div class="role-intel-briefing">${esc(r.executiveBrief)}</div>`);
   else if (r.briefing)  parts.push(`<div class="role-intel-briefing">${esc(r.briefing)}</div>`);
   if (r.myTasks) {
@@ -166,6 +173,7 @@ function renderRoleIntel(r) {
     parts.push(`</div>`);
   }
   area.innerHTML = parts.join('');
+  if (r.newSinceLastVisit) OpsCommon.renderNewSinceLastVisit(r.newSinceLastVisit, null, 'cdb-nsv-content');
 }
 
 load();

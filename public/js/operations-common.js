@@ -303,11 +303,70 @@ const OpsCommon = (() => {
         }
     }
 
+    // Sprint 6.3.1: render "Nuovo dalla tua ultima visita" compact section.
+    // sectionId — element to show/hide;  contentId — element to fill.
+    // Called from every role dashboard that has an intelligence block.
+    function renderNewSinceLastVisit(nsv, sectionId, contentId) {
+        const section = sectionId ? document.getElementById(sectionId) : null;
+        const content = document.getElementById(contentId);
+        if (!content) return;
+        // Only manage section visibility when sectionId is provided
+        if (section && !nsv) { section.style.display = 'none'; return; }
+
+        if (!nsv) { section.style.display = 'none'; return; }
+
+        // Format previous visit timestamp
+        function fmtVisit(ts) {
+            if (!ts) return 'Prima visita';
+            const d = new Date(ts);
+            const now = new Date();
+            const isToday = d.toDateString() === now.toDateString();
+            const hhmm = d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+            if (isToday) return `oggi alle ${hhmm}`;
+            const yesterday = new Date(now); yesterday.setDate(yesterday.getDate() - 1);
+            if (d.toDateString() === yesterday.toDateString()) return `ieri alle ${hhmm}`;
+            return d.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' }) + ` alle ${hhmm}`;
+        }
+
+        const visitLabel = nsv.previousVisitAt
+            ? `Ultimo controllo: ${fmtVisit(nsv.previousVisitAt)}`
+            : 'Prima visita';
+
+        if (section) section.style.display = '';
+
+        if (nsv.newCount === 0) {
+            content.innerHTML = `
+              <div class="nsv-empty">
+                <span class="nsv-visit-label">${escHtml(visitLabel)}</span>
+                <span class="nsv-no-new">Nessuna nuova criticità dalla tua ultima visita.</span>
+              </div>`;
+            return;
+        }
+
+        const SEV_CLS = { CRITICAL: 'nsv-badge-critical', HIGH: 'nsv-badge-high' };
+        const itemsHtml = (nsv.items || []).slice(0, 6).map(it => `
+          <div class="nsv-item">
+            <span class="nsv-badge ${SEV_CLS[it.severity] || ''}">${escHtml(it.severity)}</span>
+            <span class="nsv-item-title">${escHtml(it.title)}</span>
+          </div>`).join('');
+
+        content.innerHTML = `
+          <div class="nsv-header">
+            <span class="nsv-visit-label">${escHtml(visitLabel)}</span>
+            <span class="nsv-counts">
+              ${nsv.newCritical > 0 ? `<span class="nsv-count-critical">${nsv.newCritical} CRITICAL</span>` : ''}
+              ${nsv.newHigh > 0 ? `<span class="nsv-count-high">${nsv.newHigh} HIGH</span>` : ''}
+            </span>
+          </div>
+          <div class="nsv-items">${itemsHtml}</div>`;
+    }
+
     return {
         api, loadMe, showError, escHtml,
         fmtDue, fmtDatetime, fmtDateShort,
         roleLabel, buildAssigneeSelect, renderTaskList, historyLine,
         logout, ROLE_LABELS, PRIORITY_LABELS, STATUS_LABELS, HISTORY_LABELS,
-        nextTask, isToday, isCompletedToday, greeting, taskCard, renderSection
+        nextTask, isToday, isCompletedToday, greeting, taskCard, renderSection,
+        renderNewSinceLastVisit,
     };
 })();

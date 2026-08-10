@@ -297,10 +297,200 @@ function detectRisks(rawTasks, users, workload) {
     });
 
     // Sort: CRITICAL → HIGH → MEDIUM → LOW, then by title for determinism
-    return risks.sort((a, b) => {
+    const sorted = risks.sort((a, b) => {
         const r = RISK_ORDER[a.level] - RISK_ORDER[b.level];
         return r !== 0 ? r : a.title.localeCompare(b.title);
     });
+
+    return deduplicateRisks(sorted);
+}
+
+// ── Risk Watch deduplication ───────────────────────────────────────────────────
+/**
+ * Collapse multiple risk items that concern the same underlying entity
+ * into a single card:
+ *   task:<taskId>               — same task → highest severity, merged reasons
+ *   user:<userId>:overload      — same user overload / busy
+ *   department:<dept>:overdue   — same dept overdue cluster
+ *   department:<dept>:urgent    — same dept urgent cluster
+ *   misc:<title>                — everything else — dedupe by exact title
+ *
+ * Rules:
+ *  1. Group by stable dedup key.
+ *  2. Winner = highest severity (CRITICAL > HIGH > MEDIUM > LOW).
+ *  3. Merge reasons from all members into `reasons[]` (deduplicated).
+ *  4. The winner's description becomes the primary description; extras appended.
+ *
+ * @param {object[]} risks — already sorted CRITICAL→LOW
+ * @returns {object[]}
+ */
+function deduplicateRisks(risks) {
+    /**
+     * Derive the stable deduplication key for a risk item.
+     * Task-linked items always key on the task so a task never appears twice.
+     * User-linked items key on the user for overload/busy scenarios.
+     * Department items key on dept + problem type.
+     */
+    function dedupKey(risk) {
+        if (risk.linkedTask) return `task:${risk.linkedTask}`;
+        if (risk.linkedUser && !risk.linkedDept) return `user:${risk.linkedUser}:overload`;
+        if (risk.linkedDept) {
+            // Distinguish overdue cluster from urgent cluster by description keyword
+            const isOverdue = risk.description && risk.description.includes('ritardo');
+            return `department:${risk.linkedDept}:${isOverdue ? 'overdue' : 'urgent'}`;
+        }
+        return `misc:${risk.title}`;
+    }
+
+    // Ordered map to preserve CRITICAL→LOW order of first occurrence of each key
+    const map = new Map();
+
+    for (const risk of risks) {
+        const key = dedupKey(risk);
+        if (!map.has(key)) {
+            // First (highest-severity) occurrence → clone and add reasons array
+            map.set(key, { ...risk, dedupKey: key, reasons: [risk.description] });
+        } else {
+            // Merge: keep winner's level, append reason if it adds new info
+            const winner = map.get(key);
+            if (!winner.reasons.includes(risk.description)) {
+                winner.reasons.push(risk.description);
+            }
+            // Elevate severity if a later item is somehow higher (shouldn't happen
+            // with a pre-sorted list, but guard defensively)
+            if (RISK_ORDER[risk.level] < RISK_ORDER[winner.level]) {
+                winner.level       = risk.level;
+                winner.title       = risk.title;
+                winner.description = risk.description;
+            }
+        }
+    }
+
+    return Array.from(map.values());
+}
+
+// ── 5. New Since Last Visit ───────────────────────────────────────────────────
+/**
+ * Compute which high-signal items are "new" since the user's previous visit.
+ *
+ * An item is new when its meaningful event time > previousVisitAt.
+ *
+ * Includes:
+ *   • HIGH / CRITICAL Risk Watch items
+ *   • HIGH / CRITICAL Decision Cards
+ *   • New overdue tasks (became overdue after previousVisitAt)
+ *   • New urgent tasks created after previousVisitAt
+ *   • New escalations triggered after previousVisitAt
+ *
+ * Excludes:
+ *   • LOW / MEDIUM items
+ *   • Completed or cancelled tasks
+ *   • Items created before previousVisitAt
+ *
+ * First-visit rule: if previousVisitAt is null, return empty (no backlog dump).
+ *
+ * @param {{riskWatch, decisions, tasks, previousVisitAt, now}} opts
+ * @returns {{ previousVisitAt, newCount, newCritical, newHigh, items[] }}
+ */
+function buildNewSinceLastVisit({ riskWatch, decisions, tasks, previousVisitAt, now }) {
+    now = now || Date.now();
+
+    // First visit — establish baseline, show nothing as new
+    if (!previousVisitAt) {
+        return { previousVisitAt: null, newCount: 0, newCritical: 0, newHigh: 0, items: [] };
+    }
+
+    const prev      = previousVisitAt;
+    const taskMap   = new Map((tasks || []).map(t => [t.id, t]));
+    const newItems  = [];
+    const seenIds   = new Set();   // avoid double-counting across source arrays
+
+    function addItem(id, type, severity, title, description, linkedTask, linkedUser, linkedDept, eventTime) {
+        if (!['CRITICAL', 'HIGH'].includes(severity)) return;  // ignore MEDIUM/LOW noise
+        if (eventTime <= prev) return;                          // not new
+        if (seenIds.has(id)) return;                           // already counted
+        seenIds.add(id);
+        newItems.push({ id, type, severity, title, description, linkedTask, linkedUser, linkedDept, createdAt: eventTime });
+    }
+
+    // ── Source 1: HIGH/CRITICAL Risk Watch items ───────────────────────────
+    for (const rk of (riskWatch || [])) {
+        if (!['CRITICAL', 'HIGH'].includes(rk.level)) continue;
+        const task = rk.linkedTask ? taskMap.get(rk.linkedTask) : null;
+        // Event time = when the task was last meaningfully changed.
+        // Do NOT use dueDate: a task overdue before the last visit would otherwise
+        // be counted as "new" every visit.  updatedAt is the correct signal.
+        const eventTime = task
+            ? (task.updatedAt || task.createdAt || now)
+            : now;
+        const itemId = `rw:${rk.dedupKey || rk.riskId}`;
+        addItem(itemId, 'RISK', rk.level, rk.title, rk.description,
+                rk.linkedTask || null, rk.linkedUser || null, rk.linkedDept || null, eventTime);
+    }
+
+    // ── Source 2: HIGH/CRITICAL Decision Cards ─────────────────────────────
+    for (const d of (decisions || [])) {
+        if (!['HIGH'].includes(d.severity)) continue;  // decisions are HIGH at most
+        const task = d.linkedTask ? taskMap.get(d.linkedTask) : null;
+        const eventTime = task ? (task.updatedAt || task.createdAt || now) : now;
+        const itemId = `dec:${d.type || d.title}:${d.linkedTask || d.linkedUser || ''}`;
+        addItem(itemId, 'DECISION', d.severity, d.title, d.reason,
+                d.linkedTask || null, d.linkedUser || null, d.department || null, eventTime);
+    }
+
+    // ── Source 3: Urgent tasks created after last visit ────────────────────
+    for (const t of (tasks || [])) {
+        if (t.priority !== 'URGENT') continue;
+        if (['COMPLETED', 'CANCELLED'].includes(t.status)) continue;
+        const eventTime = t.createdAt || now;
+        if (eventTime <= prev) continue;
+        const itemId = `urgent:${t.id}`;
+        if (seenIds.has(itemId)) continue;
+        seenIds.add(itemId);
+        newItems.push({
+            id: itemId, type: 'URGENT_TASK', severity: 'HIGH',
+            title:       `Nuovo compito urgente: "${t.title}"`,
+            description: `Compito urgente "${t.title}" creato dopo la tua ultima visita.`,
+            linkedTask: t.id, linkedUser: t.assigneeId || null, linkedDept: t.department || null,
+            createdAt: eventTime,
+        });
+    }
+
+    // ── Source 4: New escalations triggered after last visit ───────────────
+    for (const t of (tasks || [])) {
+        if (!t.escalationSentAt) continue;
+        if (['COMPLETED', 'CANCELLED'].includes(t.status)) continue;
+        const eventTime = typeof t.escalationSentAt === 'number'
+            ? t.escalationSentAt : new Date(t.escalationSentAt).getTime();
+        if (isNaN(eventTime) || eventTime <= prev) continue;
+        const itemId = `esc:${t.id}`;
+        if (seenIds.has(itemId)) continue;
+        seenIds.add(itemId);
+        newItems.push({
+            id: itemId, type: 'ESCALATION', severity: 'HIGH',
+            title:       `Escalation: "${t.title}"`,
+            description: `Il compito "${t.title}" ha attivato un'escalation dopo la tua ultima visita.`,
+            linkedTask: t.id, linkedUser: t.assigneeId || null, linkedDept: t.department || null,
+            createdAt: eventTime,
+        });
+    }
+
+    // Sort: CRITICAL first, then HIGH; within same severity by createdAt desc
+    newItems.sort((a, b) => {
+        const sv = RISK_ORDER[a.severity] - RISK_ORDER[b.severity];
+        return sv !== 0 ? sv : b.createdAt - a.createdAt;
+    });
+
+    const newCritical = newItems.filter(i => i.severity === 'CRITICAL').length;
+    const newHigh     = newItems.filter(i => i.severity === 'HIGH').length;
+
+    return {
+        previousVisitAt: prev,
+        newCount:    newItems.length,
+        newCritical,
+        newHigh,
+        items: newItems,
+    };
 }
 
 // ── 3. Changes Since Yesterday ────────────────────────────────────────────────
@@ -507,8 +697,10 @@ function buildExecutiveBrief(role, summary, priorityQueue, riskWatch, changesSin
 module.exports = {
     generatePriorityQueue,
     detectRisks,
+    deduplicateRisks,
     buildChangesSince,
     buildExecutiveBrief,
+    buildNewSinceLastVisit,
     // Exposed for tests
     _RISK_ORDER: RISK_ORDER,
 };

@@ -470,6 +470,22 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 .action-menu-btn{background:none;border:1px solid var(--border);border-radius:7px;padding:5px 10px;cursor:pointer;font-size:18px;color:var(--muted);line-height:1;transition:background .12s;}
 .action-menu-btn:hover{background:var(--bg);}
 .action-dropdown{position:absolute;right:0;top:calc(100% + 4px);background:var(--panel);border:1px solid var(--border);border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.12);min-width:180px;z-index:200;display:none;overflow:hidden;}
+/* ── Sprint 6.3.1 — New Since Last Visit ──────────────────────────────────── */
+.nsv-header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;padding:14px 16px 10px;border-bottom:1px solid var(--border);}
+.nsv-visit-label{font-size:12px;color:var(--muted);font-weight:600;}
+.nsv-counts{display:flex;gap:8px;flex-wrap:wrap;}
+.nsv-count-critical{font-size:12px;font-weight:800;color:#7f1d1d;background:rgba(127,29,29,.1);border-radius:6px;padding:2px 8px;}
+.nsv-count-high{font-size:12px;font-weight:800;color:#dc2626;background:rgba(220,38,38,.08);border-radius:6px;padding:2px 8px;}
+.nsv-items{padding:10px 16px 14px;}
+.nsv-item{display:flex;align-items:flex-start;gap:10px;padding:6px 0;border-bottom:1px solid rgba(0,0,0,.04);}
+.nsv-item:last-child{border-bottom:none;}
+.nsv-badge{font-size:10px;font-weight:800;letter-spacing:.5px;border-radius:5px;padding:2px 6px;white-space:nowrap;margin-top:2px;}
+.nsv-badge-critical{background:rgba(127,29,29,.12);color:#7f1d1d;}
+.nsv-badge-high{background:rgba(220,38,38,.1);color:#dc2626;}
+.nsv-item-title{font-size:12px;font-weight:600;color:var(--txt);line-height:1.4;}
+.nsv-empty{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;padding:14px 16px;}
+.nsv-no-new{font-size:12px;color:var(--ok);font-weight:600;}
+/* Sprint 6.3.1 end */
 .action-dropdown.open{display:block;}
 .action-dropdown button{display:block;width:100%;text-align:left;padding:10px 16px;background:none;border:none;cursor:pointer;font-size:13px;font-weight:600;color:var(--txt);transition:background .1s;}
 .action-dropdown button:hover{background:var(--bg);}

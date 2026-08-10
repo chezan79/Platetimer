@@ -1440,6 +1440,7 @@ const opsTrends       = require('./operations/ops-trends');
 const opsAssistant    = require('./operations/ops-assistant');
 const opsPerformance  = require('./operations/ops-performance');
 const opsExceptions   = require('./operations/ops-exceptions');
+const opsVisits       = require('./operations/ops-visits');
 
 const OPS_USERS_FILE = path.join(DATA_DIR, 'ops-users.json');
 const OPS_TASKS_FILE = path.join(DATA_DIR, 'ops-tasks.json');
@@ -2780,6 +2781,10 @@ app.get('/api/operations/intelligence', (req, res) => {
     }
 
     // ── Sprint 6.3: Executive Assistant ──────────────────────────────────────
+    // ── Sprint 6.3.1: read previous visit BEFORE computing response ──────────
+    const prevVisitRecord = opsVisits.getLastVisit(companyId, actor.id);
+    const previousVisitAt = prevVisitRecord ? prevVisitRecord.lastVisitAt : null;
+
     const priorityQueue  = opsAssistant.generatePriorityQueue(result.decisions);
     const riskWatch      = opsAssistant.detectRisks(scopedTasks, scopedUsers, result.workload);
     const changesSince   = opsAssistant.buildChangesSince(trends, yesterdaySnap, result.summary);
@@ -2787,6 +2792,15 @@ app.get('/api/operations/intelligence', (req, res) => {
         actor.role, result.summary, priorityQueue, riskWatch, changesSince,
         result.decisions, trends, myMetrics, nextTask
     );
+
+    // ── Sprint 6.3.1: new-since-last-visit (computed before updating lastVisitAt) ─
+    const newSinceLastVisit = opsAssistant.buildNewSinceLastVisit({
+        riskWatch,
+        decisions: result.decisions,
+        tasks:     scopedTasks,
+        previousVisitAt,
+        now:       Date.now(),
+    });
 
     // ── Briefing (Sprint 6.2 — kept for backward compat) ─────────────────────
     const briefing = opsIntelligence.generateBriefing(actor.role, {
@@ -2800,8 +2814,18 @@ app.get('/api/operations/intelligence', (req, res) => {
     // ── Build role-appropriate response ──────────────────────────────────────
     const base = { success: true, briefing, executiveBrief, role: actor.role };
 
+    // ── Sprint 6.3.1: update lastVisitAt AFTER computing response (never before) ─
+    // This ensures "new since last visit" reflects the *previous* session, not the
+    // current one.  Only update on intentional dashboard load, not on realtime
+    // re-fetches.  The "isRealtime" query param is set by the client's WS refresh
+    // callbacks to suppress the visit update.
+    const isRealtime = req.query.isRealtime === '1';
+    if (!isRealtime) {
+        opsVisits.updateLastVisit(companyId, actor.id);
+    }
+
     if (['SOUS_CHEF','CHEF_DE_BRIGADE'].includes(actor.role)) {
-        return res.json({ ...base, myTasks: myMetrics, nextTask, priorityQueue, riskWatch });
+        return res.json({ ...base, myTasks: myMetrics, nextTask, priorityQueue, riskWatch, newSinceLastVisit });
     }
 
     const response = {
@@ -2815,6 +2839,7 @@ app.get('/api/operations/intelligence', (req, res) => {
         priorityQueue,
         riskWatch,
         changesSince,
+        newSinceLastVisit,
     };
     if (trends) response.trends = trends;
 

@@ -121,7 +121,7 @@ async function load() {
     OpsCommon.renderSection(container, '🚨 Escalation che ti riguardano', escalatedForMe.slice(0,5), users, '');
   }
 
-  // Sprint 6.2: role-scoped intelligence
+  // Sprint 6.2+: role-scoped intelligence (intentional load — updates lastVisitAt)
   const intelRes = await OpsCommon.api('/api/operations/intelligence');
   renderRoleIntel(intelRes);
 }
@@ -131,6 +131,13 @@ function renderRoleIntel(r) {
   if (!r || !r.success || !area) return;
   const RANK_CLS = { HIGH:'pq-rank-high', MEDIUM:'pq-rank-medium', LOW:'pq-rank-low' };
   const parts = [];
+  // New Since Last Visit (Sprint 6.3.1)
+  if (r.newSinceLastVisit) {
+    const nsv = r.newSinceLastVisit;
+    if (nsv.newCount > 0 || nsv.previousVisitAt) {
+      parts.push(`<div id="adj-nsv-content" class="card" style="margin-bottom:14px"></div>`);
+    }
+  }
   if (r.executiveBrief) parts.push(`<div class="role-intel-briefing">${esc(r.executiveBrief)}</div>`);
   else if (r.briefing)  parts.push(`<div class="role-intel-briefing">${esc(r.briefing)}</div>`);
   if (r.priorityQueue && r.priorityQueue.length) {
@@ -163,6 +170,7 @@ function renderRoleIntel(r) {
       </div>`).join(''));
   }
   area.innerHTML = parts.join('');
+  if (r.newSinceLastVisit) OpsCommon.renderNewSinceLastVisit(r.newSinceLastVisit, null, 'adj-nsv-content');
 }
 
 load();
