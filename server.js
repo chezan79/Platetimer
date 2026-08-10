@@ -91,6 +91,7 @@ const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 const DEPARTMENTS_FILE = path.join(DATA_DIR, 'departments.json');
 const PLANS_FILE = path.join(DATA_DIR, 'plans.json');
+const DEPARTMENT_ACCOUNTS_FILE = path.join(DATA_DIR, 'department-accounts.json');
 const PLAN_LIMITS = { base: 3, medium: 5, premium: 10 };
 
 function loadJSON(filePath) {
@@ -510,7 +511,16 @@ app.put('/api/departments/:id', (req, res) => {
     }
 
     if (typeof name === 'string' && name.trim()) depts[idx].name = name.trim();
-    if (typeof active === 'boolean') depts[idx].active = active;
+    if (typeof active === 'boolean') {
+        // [S1.1] Referential integrity: deactivating a department auto-suspends
+        // its ACTIVE Department Account — no active identity may point at an
+        // inactive department.
+        if (active === false && depts[idx].active) {
+            const suspended = departmentAccounts.suspendAccountsForDepartment(companyId, depts[idx].id);
+            if (suspended) console.log(`⚠️ [DEPT-ACCOUNT] Auto-suspended account "${suspended.displayName}" (department deactivated)`);
+        }
+        depts[idx].active = active;
+    }
 
     saveJSON(DEPARTMENTS_FILE, departmentsStore);
     res.json({ success: true, department: depts[idx] });
@@ -524,6 +534,12 @@ app.delete('/api/departments/:id', (req, res) => {
     const depts = departmentsStore[companyId] || [];
     const idx = depts.findIndex(d => d.id === req.params.id);
     if (idx === -1) return res.status(404).json({ error: 'Department not found.' });
+
+    // [S1.1] Referential integrity: a department referenced by any Department
+    // Account (any status) cannot be deleted — accounts must never dangle.
+    if (departmentAccounts.hasDepartmentAccounts(companyId, req.params.id)) {
+        return res.status(409).json({ error: 'This department has department accounts bound to it and cannot be deleted. Remove or reassign its accounts first.' });
+    }
 
     if (depts[idx].usedInCountdowns) {
         return res.status(409).json({ error: 'This department has been used in countdowns and cannot be deleted. Deactivate it instead.' });
@@ -540,6 +556,60 @@ app.delete('/api/departments/:id', (req, res) => {
     departmentsStore[companyId].splice(idx, 1);
     saveJSON(DEPARTMENTS_FILE, departmentsStore);
     res.json({ success: true });
+});
+
+// ===== Department Account REST API (S1.1 — TRANSITIONAL) =====
+// [TRANSITIONAL] These management endpoints are company-scoped under the
+// existing requireAuth session only. A real Service Admin role/permission
+// model lands in a later sprint; until then ANY authenticated user of the
+// company can manage its Department Accounts. companyId ALWAYS comes from
+// the HMAC session — never from client body/query.
+
+// GET /api/department-accounts — list the company's Department Accounts
+app.get('/api/department-accounts', (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const companyId = session.companyName; // never from client input
+    res.json({ success: true, accounts: departmentAccounts.getDepartmentAccounts(companyId) });
+});
+
+// POST /api/department-accounts — create (one ACTIVE per department)
+app.post('/api/department-accounts', (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const companyId = session.companyName; // forged companyId in body is ignored
+    const { departmentId, displayName, loginIdentifier } = req.body || {};
+    const result = departmentAccounts.createDepartmentAccount(
+        { companyId, departmentId, displayName, loginIdentifier, createdBy: session.uid },
+        getCompanyDepts(companyId)
+    );
+    if (!result.ok) return res.status(result.code).json({ error: result.error });
+    console.log(`✅ [DEPT-ACCOUNT] Created "${result.account.displayName}" for company "${companyId}"`);
+    res.status(201).json({ success: true, account: result.account });
+});
+
+// PUT /api/department-accounts/:id/status — ACTIVE | SUSPENDED
+app.put('/api/department-accounts/:id/status', (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const companyId = session.companyName;
+    const result = departmentAccounts.setDepartmentAccountStatus(companyId, req.params.id, (req.body || {}).status, getCompanyDepts(companyId));
+    if (!result.ok) return res.status(result.code).json({ error: result.error });
+    res.json({ success: true, account: result.account });
+});
+
+// PUT /api/departments/:id/type — set departmentType (STANDARD | CENTRAL)
+// [TRANSITIONAL] Representation only in this sprint: no permission is derived
+// from CENTRAL yet. Max one CENTRAL per company (reject-until-reverted).
+app.put('/api/departments/:id/type', (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const companyId = session.companyName;
+    const depts = departmentsStore[companyId] || [];
+    const result = departmentAccounts.setDepartmentType(depts, req.params.id, (req.body || {}).departmentType);
+    if (!result.ok) return res.status(result.code).json({ error: result.error });
+    saveJSON(DEPARTMENTS_FILE, departmentsStore);
+    res.json({ success: true, department: result.department });
 });
 
 // GET /api/subscription — return company's current plan and limit
@@ -713,6 +783,7 @@ function getStoreNameForFile(filePath) {
     if (filePath === PLANS_FILE)          return 'plans';
     if (filePath === CALENDAR_EVENTS_FILE) return 'calendar_events';
     if (filePath === CALENDAR_NOTIF_FILE)  return 'calendar_notifs';
+    if (filePath === DEPARTMENT_ACCOUNTS_FILE) return 'department_accounts';
     if (filePath === OPS_USERS_FILE)      return 'ops_users';
     if (filePath === OPS_TASKS_FILE)      return 'ops_tasks';
     if (filePath === OPS_TEMPLATES_FILE)  return 'ops_templates';
@@ -1430,6 +1501,10 @@ app.patch('/api/calendar/notifications/read-all', (req, res) => {
 // the Service side, but has fully separate stores, logic and UI.
 // All hierarchy rules live in operations/ops-auth.js (centralized).
 // =========================================================================
+// Department Account module (Service side) — S1.1 foundation.
+const departmentAccounts = require('./service/department-accounts');
+departmentAccounts.setPersist(() => saveJSON(DEPARTMENT_ACCOUNTS_FILE, departmentAccounts.getStore()));
+
 const opsAuth         = require('./operations/ops-auth');
 const opsEmail        = require('./operations/ops-email');
 const opsRecurring    = require('./operations/ops-recurring');
@@ -4420,6 +4495,7 @@ async function initializeDataStores() {
     const stores = [
         { name: 'departments',     file: DEPARTMENTS_FILE,     setter: v => { departmentsStore    = v; } },
         { name: 'plans',           file: PLANS_FILE,           setter: v => { plansStore          = v; } },
+        { name: 'department_accounts', file: DEPARTMENT_ACCOUNTS_FILE, setter: v => { departmentAccounts.setStore(v); } },
         { name: 'calendar_events', file: CALENDAR_EVENTS_FILE, setter: v => { calendarEventsStore = v; } },
         { name: 'calendar_notifs', file: CALENDAR_NOTIF_FILE,  setter: v => { calendarNotifStore  = v; } },
         { name: 'ops_users',       file: OPS_USERS_FILE,       setter: v => { opsUsersStore       = v; } },
