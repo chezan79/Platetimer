@@ -155,3 +155,4 @@ attached_assets/*
 
 !package.json
 !package-lock.json
+!public/i18n/*.json
