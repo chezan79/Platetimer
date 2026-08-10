@@ -333,6 +333,17 @@ function departmentAccessError(boundAcct) {
     return { status: 403, body: { error: 'Account reparto non autorizzato a gestire i reparti.', code: 'ACCOUNT_NOT_AUTHORIZED' } };
 }
 
+// [S1.5] WebSocket delivery filter for Department Account locking.
+// Returns true if the given socket should receive a message with the given destinations array.
+// Bound sockets (Department Accounts) only receive messages that include their department.
+// Unbound/legacy sockets receive everything (backward-compatible).
+// Pass an empty/null destinations to deliver unconditionally (company-wide signals).
+function wsSocketMatchesDest(socket, destinations) {
+    if (!socket.boundDepartmentId) return true;          // unbound legacy: always deliver
+    if (!destinations || destinations.length === 0) return true; // no dept filter: deliver
+    return destinations.includes(socket.boundDepartmentId);
+}
+
 // ===== SECURITY: Session Token Exchange Endpoint =====
 // The frontend calls this after Firebase login to get a server-signed session token.
 // The server verifies the Firebase ID token, fetches the company from Firestore
@@ -3780,6 +3791,38 @@ wss.on('connection', (ws, req) => {
                 ws.authenticatedUid = session.uid;
                 console.log(`🔑 [SECURITY] joinRoom authenticated: uid=${session.uid}, company="${companyName}" (IP: ${ws.clientIp})`);
 
+                // [S1.5] Resolve Department Account binding server-side.
+                // Never trust client-supplied department values — always derive from the
+                // verified session uid.  Initialise to null so unbound legacy sockets
+                // remain unchanged (wsSocketMatchesDest returns true for null).
+                ws.boundDepartmentId       = null;
+                ws.departmentAccountId     = null;
+                ws.departmentAccountStatus = null;
+                ws.boundDepartmentName     = null;
+
+                const wsBoundAcct = getBoundDepartmentContext(session);
+                if (wsBoundAcct) {
+                    if (wsBoundAcct.status === 'SUSPENDED') {
+                        console.log(`⛔ [S1.5] WS joinRoom rejected — SUSPENDED account: uid=${session.uid}, company="${companyName}"`);
+                        ws.send(JSON.stringify({
+                            action: 'error',
+                            code:   'ACCOUNT_SUSPENDED',
+                            message: 'Your department account is suspended. Contact your administrator.'
+                        }));
+                        ws.close();
+                        return;
+                    }
+                    // ACTIVE bound account — lock socket to server-verified department
+                    ws.boundDepartmentId       = wsBoundAcct.departmentId;
+                    ws.departmentAccountId     = wsBoundAcct.id;
+                    ws.departmentAccountStatus = wsBoundAcct.status;
+                    const wsBoundDept = getCompanyDepts(companyName).find(d => d.id === wsBoundAcct.departmentId);
+                    ws.boundDepartmentName = wsBoundDept ? wsBoundDept.name : null;
+                    // Pre-lock pageType so joinPage cannot override it
+                    ws.pageType = wsBoundAcct.departmentId;
+                    console.log(`🔒 [S1.5] WS socket locked to dept "${ws.boundDepartmentId}" (${ws.boundDepartmentName}), company="${companyName}"`);
+                }
+
                 // Rimuovi il client dalla room precedente se esistente
                 if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
                     const oldRoom = companyRooms.get(ws.companyRoom);
@@ -3818,8 +3861,11 @@ wss.on('connection', (ws, req) => {
                                 initialDuration: countdown.initialDuration,
                                 destinations:    countdown.destinations
                             };
-                            ws.send(JSON.stringify(syncMessage));
-                            console.log(`📡 Sync joinRoom: Tavolo ${tableNumber} → [${countdown.destinations.join(', ')}], rem=${remaining}s`);
+                            // [S1.5] Bound sockets only receive countdowns targeting their dept
+                            if (wsSocketMatchesDest(ws, countdown.destinations)) {
+                                ws.send(JSON.stringify(syncMessage));
+                                console.log(`📡 Sync joinRoom: Tavolo ${tableNumber} → [${countdown.destinations.join(', ')}], rem=${remaining}s`);
+                            }
                         } else {
                             countdownsToDelete.push(tableNumber);
                         }
@@ -3837,15 +3883,22 @@ wss.on('connection', (ws, req) => {
                     console.log('⚠️ Tipo pagina non valido');
                     return;
                 }
-                // Any non-empty string is accepted — department IDs are dynamic per company.
-                // Security is already enforced: connection is authenticated and company-scoped.
-                ws.pageType = data.pageType;
+                // [S1.5] Bound accounts: pageType is always the server-verified boundDepartmentId.
+                // Client-supplied values are ignored to prevent department impersonation.
+                // Unbound/legacy accounts keep the existing behaviour.
+                if (ws.boundDepartmentId) {
+                    ws.pageType = ws.boundDepartmentId; // already set in joinRoom; re-assert here
+                } else {
+                    ws.pageType = data.pageType;
+                }
+                // Use the effective pageType (server-derived for bound, client for unbound)
+                const effectivePageType = ws.pageType;
 
                 // Conta quanti utenti sono attualmente sulla stessa pagina
                 if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
                     const roomClients = companyRooms.get(ws.companyRoom);
                     const samePageClients = Array.from(roomClients).filter(client => 
-                        client.pageType === data.pageType && client !== ws
+                        client.pageType === effectivePageType && client !== ws
                     );
 
                     console.log(`📄 Client entrato in pagina ${data.pageType}: ${samePageClients.length} altri utenti già presenti`);
@@ -3871,9 +3924,12 @@ wss.on('connection', (ws, req) => {
                                     initialDuration: countdown.initialDuration,
                                     destinations:    countdown.destinations
                                 };
-                                ws.send(JSON.stringify(syncMessage));
-                                syncedCount++;
-                                console.log(`📡 Sync joinPage (${data.pageType}): Tavolo ${tableNumber} → [${countdown.destinations.join(', ')}], rem=${remaining}s`);
+                                // [S1.5] Bound sockets only receive countdowns targeting their dept
+                                if (wsSocketMatchesDest(ws, countdown.destinations)) {
+                                    ws.send(JSON.stringify(syncMessage));
+                                    syncedCount++;
+                                    console.log(`📡 Sync joinPage (${effectivePageType}): Tavolo ${tableNumber} → [${countdown.destinations.join(', ')}], rem=${remaining}s`);
+                                }
                             } else {
                                 countdownsToDelete.push(tableNumber);
                             }
@@ -3884,16 +3940,16 @@ wss.on('connection', (ws, req) => {
                             console.log(`🗑️ Countdown rimosso in joinPage (lifecycle scaduto): Tavolo ${tableNumber}`);
                         });
 
-                        console.log(`📊 Sincronizzazione joinPage (${data.pageType}): ${syncedCount} countdown inviati, ${countdownsToDelete.length} rimossi`);
+                        console.log(`📊 Sincronizzazione joinPage (${effectivePageType}): ${syncedCount} countdown inviati, ${countdownsToDelete.length} rimossi`);
                     }
 
                     // Se ci sono altri utenti sulla stessa pagina, invia un avviso
                     if (samePageClients.length > 0) {
                         const warningMessage = {
                             action: 'pageOccupied',
-                            pageType: data.pageType,
+                            pageType: effectivePageType,
                             otherUsersCount: samePageClients.length,
-                            message: `⚠️ Attenzione: ${samePageClients.length} altro/i utente/i sta/stanno già utilizzando la pagina ${data.pageType.toUpperCase()}`
+                            message: `⚠️ Attenzione: ${samePageClients.length} altro/i utente/i sta/stanno già utilizzando la pagina ${effectivePageType.toUpperCase()}`
                         };
 
                         ws.send(JSON.stringify(warningMessage));
@@ -3901,9 +3957,9 @@ wss.on('connection', (ws, req) => {
                         // Informa anche gli altri utenti che qualcuno si è collegato
                         const newUserMessage = {
                             action: 'newUserJoined',
-                            pageType: data.pageType,
+                            pageType: effectivePageType,
                             totalUsers: samePageClients.length + 1,
-                            message: `👥 Un nuovo utente si è collegato alla pagina ${data.pageType.toUpperCase()} (${samePageClients.length + 1} utenti totali)`
+                            message: `👥 Un nuovo utente si è collegato alla pagina ${effectivePageType.toUpperCase()} (${samePageClients.length + 1} utenti totali)`
                         };
 
                         samePageClients.forEach(client => {
@@ -3951,6 +4007,15 @@ wss.on('connection', (ws, req) => {
                         ws.send(JSON.stringify({ action: 'error', message: 'Destination department not found.' }));
                         return;
                     }
+                }
+
+                // [S1.5] Bound accounts must include their own department in destinations.
+                // Prevents a bound dept from starting countdowns that bypass their dept.
+                // Cross-department coordination (CENTRAL role) is a future sprint.
+                if (ws.boundDepartmentId && !destinations.includes(ws.boundDepartmentId)) {
+                    console.log(`⛔ [S1.5] startCountdown rejected — bound dept "${ws.boundDepartmentId}" not in destinations [${destinations.join(',')}]`);
+                    ws.send(JSON.stringify({ action: 'error', code: 'DEPT_NOT_IN_DESTINATIONS', message: 'Your department must be included in countdown destinations.' }));
+                    return;
                 }
 
                 if (!ws.companyRoom) {
@@ -4035,7 +4100,8 @@ wss.on('connection', (ws, req) => {
                     });
                     let sentCount = 0;
                     roomClients.forEach(client => {
-                        if (client.readyState === WebSocket.OPEN) {
+                        if (client.readyState === WebSocket.OPEN &&
+                            wsSocketMatchesDest(client, destinations)) { // [S1.5] dept filter
                             client.send(msg);
                             sentCount++;
                         }
@@ -4053,16 +4119,20 @@ wss.on('connection', (ws, req) => {
                 }
 
                 // Rimuovi countdown dalla memoria del server (Soluzione 1 - chiave unificata)
+                // [S1.5] Capture destinations before deletion so the broadcast can be filtered.
+                let deletedDestinations = null;
                 if (ws.companyRoom && activeCountdowns.has(ws.companyRoom)) {
                     const companyCountdowns = activeCountdowns.get(ws.companyRoom);
-                    const tableKey = data.tableNumber.toString();
+                    // [S1.5] Use same normalization as startCountdown so the key matches
+                    const tableKey = normalizeTableNumber(data.tableNumber);
                     
                     if (companyCountdowns.has(tableKey)) {
                         const removedCountdown = companyCountdowns.get(tableKey);
+                        deletedDestinations = removedCountdown.destinations || null;
                         companyCountdowns.delete(tableKey);
                         
                         console.log(`🗑️ Countdown tavolo ${data.tableNumber} rimosso dalla memoria server`);
-                        console.log(`📋 Destinazioni eliminate: [${removedCountdown.destinations.join(', ')}]`);
+                        console.log(`📋 Destinazioni eliminate: [${(deletedDestinations || []).join(', ')}]`);
                         console.log(`📊 Countdown rimanenti per azienda "${ws.companyRoom}": ${companyCountdowns.size}`);
                     } else {
                         console.log(`⚠️ Nessun countdown trovato per tavolo ${data.tableNumber} nella memoria server`);
@@ -4076,7 +4146,8 @@ wss.on('connection', (ws, req) => {
 
                     let sentCount = 0;
                     roomClients.forEach((client) => {
-                        if (client.readyState === WebSocket.OPEN) {
+                        if (client.readyState === WebSocket.OPEN &&
+                            wsSocketMatchesDest(client, deletedDestinations)) { // [S1.5] dept filter
                             client.send(deleteMessage);
                             sentCount++;
                         }
@@ -4119,10 +4190,13 @@ wss.on('connection', (ws, req) => {
                     }
                 }
 
-                // sourceDepartmentId comes from the authenticated ws.pageType — never trust client's from field for routing
-                const vmSourceDeptId = ws.pageType || data.from || '';
+                // [S1.5] Source department is server-derived for bound accounts.
+                // Never trust client's `from` field — a bound account cannot impersonate
+                // another department as the voice message sender.
+                const vmSourceDeptId = ws.boundDepartmentId || ws.pageType || data.from || '';
 
-                // Invia messaggio vocale a tutti i client della room (filtro lato client per destinazione)
+                // Invia messaggio vocale ai client della room
+                // [S1.5] Bound sockets receive only if their dept is a destination or the source.
                 if (ws.companyRoom && companyRooms.has(ws.companyRoom)) {
                     const roomClients = companyRooms.get(ws.companyRoom);
                     const voiceMessage = JSON.stringify({
@@ -4141,8 +4215,13 @@ wss.on('connection', (ws, req) => {
                     let sentCount = 0;
                     roomClients.forEach((client) => {
                         if (client.readyState === WebSocket.OPEN) {
-                            client.send(voiceMessage);
-                            sentCount++;
+                            // Bound clients: deliver if their dept is a destination or they are the source
+                            if (!client.boundDepartmentId ||
+                                vmDestList.includes(client.boundDepartmentId) ||
+                                client.boundDepartmentId === vmSourceDeptId) {
+                                client.send(voiceMessage);
+                                sentCount++;
+                            }
                         }
                     });
 
@@ -4327,11 +4406,15 @@ wss.on('connection', (ws, req) => {
                     return;
                 }
 
-                // Normalizza anche la voice room per case-insensitive matching
-                ws.voiceRoom = data.room.toLowerCase();
+                // [S1.5] Bound accounts: voice room is locked to their server-verified dept.
+                // This prevents joining another department's WebRTC voice channel by
+                // supplying a forged room name.  Unbound legacy clients keep existing behaviour.
+                ws.voiceRoom = ws.boundDepartmentId
+                    ? ws.boundDepartmentId
+                    : data.room.toLowerCase();
                 ws.voicePeerId = data.peerId;
 
-                console.log(`🎙️ [VOICE] Peer ${data.peerId} entrato nella room vocale: ${data.room} (normalizzato: ${ws.voiceRoom})`);
+                console.log(`🎙️ [VOICE] Peer ${data.peerId} entrato nella room vocale: ${ws.voiceRoom} (bound: ${!!ws.boundDepartmentId})`);
 
                 // Invia la lista dei peer esistenti al nuovo peer
                 if (companyRooms.has(ws.companyRoom)) {
@@ -4456,6 +4539,9 @@ wss.on('connection', (ws, req) => {
                     console.log('⚠️ talkingStart: peerId o deptName mancante');
                     return;
                 }
+                // [S1.5] deptName in the outgoing broadcast is server-derived for bound accounts.
+                // A bound client cannot claim to be another department in PTT metadata.
+                const pttDeptName = ws.boundDepartmentName || data.deptName;
                 if (companyRooms.has(ws.companyRoom)) {
                     const roomClients = companyRooms.get(ws.companyRoom);
                     roomClients.forEach((client) => {
@@ -4463,12 +4549,12 @@ wss.on('connection', (ws, req) => {
                             client.send(JSON.stringify({
                                 action: 'talkingStart',
                                 peerId: data.peerId,
-                                deptName: data.deptName
+                                deptName: pttDeptName   // [S1.5] server-derived for bound accounts
                             }));
                         }
                     });
                 }
-                console.log(`🎙️ [PTT] talkingStart da peer ${data.peerId} (${data.deptName})`);
+                console.log(`🎙️ [PTT] talkingStart da peer ${data.peerId} (${pttDeptName})`);
 
             } else if (data.action === 'talkingStop') {
                 // PTT: broadcast "this peer stopped talking" to all same-room same-company peers
