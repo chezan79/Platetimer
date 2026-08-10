@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PlateTimer Service — Accesso Reparto</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      background: #f5f7fa;
+      margin: 0;
+    }
+    .sl-card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 4px 24px rgba(0,0,0,.10);
+      padding: 2.5rem 2rem;
+      width: 100%;
+      max-width: 380px;
+      box-sizing: border-box;
+    }
+    .sl-brand {
+      text-align: center;
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: #1a1a2e;
+      letter-spacing: .04em;
+      margin-bottom: .25rem;
+    }
+    .sl-sub {
+      text-align: center;
+      font-size: .9rem;
+      color: #6b7280;
+      margin-bottom: 2rem;
+    }
+    .sl-label {
+      display: block;
+      font-size: .82rem;
+      font-weight: 600;
+      color: #374151;
+      margin-bottom: .35rem;
+    }
+    .sl-input {
+      width: 100%;
+      box-sizing: border-box;
+      border: 1px solid #d1d5db;
+      border-radius: 7px;
+      padding: .65rem .85rem;
+      font-size: .95rem;
+      outline: none;
+      margin-bottom: 1.1rem;
+      transition: border .18s, box-shadow .18s;
+    }
+    .sl-input:focus {
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 3px rgba(59,130,246,.15);
+    }
+    .sl-btn {
+      width: 100%;
+      padding: .75rem;
+      font-size: 1rem;
+      font-weight: 700;
+      background: #2563eb;
+      color: #fff;
+      border: none;
+      border-radius: 7px;
+      cursor: pointer;
+      transition: background .18s;
+      letter-spacing: .04em;
+    }
+    .sl-btn:hover:not(:disabled) { background: #1d4ed8; }
+    .sl-btn:disabled { opacity: .6; cursor: not-allowed; }
+    .sl-err {
+      color: #dc2626;
+      font-size: .87rem;
+      text-align: center;
+      margin-bottom: 1rem;
+      min-height: 1.2em;
+    }
+  </style>
+</head>
+<body>
+  <div class="sl-card">
+    <div class="sl-brand">PlateTimer Service</div>
+    <div class="sl-sub">Accesso reparto</div>
+    <div class="sl-err" id="sl-err"></div>
+    <label class="sl-label" for="sl-login">Login</label>
+    <input class="sl-input" id="sl-login" type="text"
+           autocomplete="username" autocapitalize="none" spellcheck="false"
+           placeholder="">
+    <label class="sl-label" for="sl-pass">Password</label>
+    <input class="sl-input" id="sl-pass" type="password"
+           autocomplete="current-password" placeholder="">
+    <button class="sl-btn" id="sl-submit">ENTRA</button>
+  </div>
+
+  <script src="js/ws-auth.js"></script>
+  <script>
+  'use strict';
+
+  const errEl   = document.getElementById('sl-err');
+  const loginEl = document.getElementById('sl-login');
+  const passEl  = document.getElementById('sl-pass');
+  const btnEl   = document.getElementById('sl-submit');
+
+  async function doLogin() {
+    errEl.textContent = '';
+    const loginIdentifier = loginEl.value.trim();
+    const password        = passEl.value;
+    if (!loginIdentifier || !password) {
+      errEl.textContent = 'Login e password sono obbligatori.';
+      return;
+    }
+    btnEl.disabled    = true;
+    btnEl.textContent = 'Accesso…';
+    try {
+      const res  = await fetch('/api/service/login', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ loginIdentifier, password })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        errEl.textContent = data.error || 'Errore di accesso.';
+        return;
+      }
+      // [S2.1] Store only the signed session token — departmentId is server-derived.
+      WsAuth.storeToken(data.token);
+      window.location.href = 'department.html?id=' + encodeURIComponent(data.departmentId);
+    } catch {
+      errEl.textContent = 'Errore di rete. Riprova.';
+    } finally {
+      btnEl.disabled    = false;
+      btnEl.textContent = 'ENTRA';
+    }
+  }
+
+  btnEl.addEventListener('click', doLogin);
+  [loginEl, passEl].forEach(el =>
+    el.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); })
+  );
+
+  // If a valid Service session is already stored, redirect straight to the dept page.
+  // Decodes the token payload client-side (no secret needed — only for routing, not auth).
+  (function checkExistingSession() {
+    const t = WsAuth.getStoredToken();
+    if (!t) return;
+    try {
+      const payload = JSON.parse(atob(t.split('.')[0]));
+      if (payload.uid && payload.uid.startsWith('depacct_') && payload.exp > Date.now()) {
+        fetch('/api/service/department', {
+          headers: { 'Authorization': 'Bearer ' + t }
+        }).then(r => r.json()).then(d => {
+          if (d.success && d.departmentId) {
+            window.location.href = 'department.html?id=' + encodeURIComponent(d.departmentId);
+          }
+        }).catch(() => {});
+      }
+    } catch {}
+  })();
+  </script>
+</body>
+</html>

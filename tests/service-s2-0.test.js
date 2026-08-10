@@ -205,11 +205,12 @@ async function main() {
         });
         check('S20-7c. Dup login on PATCH rejected',   !r7patch.data.success && r7patch.status === 409, r7patch.data.error);
 
-        // Same login in a different company IS allowed (company-scoped uniqueness)
+        // Same login in a different company is now REJECTED (S2.1 tightened to global uniqueness
+        // so POST /api/service/login can resolve accounts unambiguously without a company hint).
         const r7b = await api(tokB, 'POST', '/api/department-accounts', {
             departmentId: dBId, loginIdentifier: 'cucina1-updated', password: '1234'
         });
-        check('S20-7d. Same login different company ok', r7b.data.success,                            r7b.data.error);
+        check('S20-7d. Same login different company rejected (global uniqueness, S2.1)', r7b.status === 409, r7b.data);
 
         // ── 8. One account per department ─────────────────────────────────
         console.log('\n  — 8. One account per department —\n');

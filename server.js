@@ -316,11 +316,22 @@ function resolveDeptAccountContext(uid, companyId) {
 // [S1.4] Return the Department Account bound to this session's uid (same company),
 // or null if the user is unbound. Callers use this to enforce department locking.
 // Never trusts any client-supplied department/company value.
+//
+// [S2.1] Service login sessions use account.id ('depacct_…') as the token uid.
+// Legacy Firebase sessions use the Firebase UID (stored in account.firebaseUid).
+// Distinguish by the well-known 'depacct_' prefix so both paths coexist safely.
 function getBoundDepartmentContext(session) {
-    const account = departmentAccounts.findDepartmentAccountByUid(session.uid);
+    let account;
+    if (session.uid && session.uid.startsWith('depacct_')) {
+        // Service login session: uid IS the department account ID
+        account = departmentAccounts.findDepartmentAccountById(session.uid);
+    } else {
+        // Legacy Firebase session: uid is the Firebase UID bound to an account
+        account = departmentAccounts.findDepartmentAccountByUid(session.uid);
+    }
     if (!account) return null;
     if (account.companyId !== session.companyName) return null; // company isolation
-    return account; // { id, companyId, departmentId, status, firebaseUid, … }
+    return account; // { id, companyId, departmentId, status, … }
 }
 
 // [S1.4.1] Centralized structured error response for department access checks.
@@ -820,6 +831,60 @@ app.get('/api/service/department', (req, res) => {
         departmentType,                    // STANDARD | CENTRAL — from dept record
         status:             boundAcct.status,
         departmentAccountId: boundAcct.id
+    });
+});
+
+// POST /api/service/login — authenticate a Department Account by loginIdentifier + password.
+// [S2.1] Pure Service login: no Firebase involvement.
+//
+// Security contract:
+//   • loginIdentifier is globally unique (S2.1+) — no company ambiguity at login.
+//   • Password is PBKDF2-verified against the stored hash; plaintext is never stored or logged.
+//   • companyId and departmentId are resolved server-side from the account record only.
+//   • Generic 401 for bad credentials — no oracle (does not reveal whether login exists).
+//   • Specific 403 for SUSPENDED account or inactive department (spec-mandated messages).
+//   • passwordHash intentionally excluded from every response.
+//   • The issued token cannot create an Operations session (separate uid namespace).
+app.post('/api/service/login', (req, res) => {
+    const { loginIdentifier, password } = req.body || {};
+    if (!loginIdentifier || !password) {
+        return res.status(400).json({ error: 'Login e password sono obbligatori.' });
+    }
+
+    const account = departmentAccounts.findDepartmentAccountByLoginIdentifier(loginIdentifier);
+
+    // Generic credential error — same response whether login unknown or password wrong.
+    // verifyPassword returns false for missing/empty passwordHash too.
+    if (!account || !departmentAccounts.verifyPassword(password, account.passwordHash || '')) {
+        return res.status(401).json({ error: 'Login o password non corretti.' });
+    }
+
+    if (account.status === 'SUSPENDED') {
+        return res.status(403).json({ error: 'Account reparto sospeso. Contatta l\'amministratore.' });
+    }
+    if (account.status !== 'ACTIVE') {
+        // Any other non-ACTIVE status is treated as bad credentials (no oracle).
+        return res.status(401).json({ error: 'Login o password non corretti.' });
+    }
+
+    // Verify the linked department is still active.
+    const dept = getCompanyDepts(account.companyId).find(d => d.id === account.departmentId);
+    if (!dept || !dept.active) {
+        return res.status(403).json({ error: 'Reparto non disponibile. Contatta l\'amministratore.' });
+    }
+
+    // Issue a Service session token.
+    // uid = account.id ('depacct_…') — distinct from Firebase UIDs; getBoundDepartmentContext
+    // detects the prefix and routes to findDepartmentAccountById instead of findDepartmentAccountByUid.
+    const token = signSessionToken(account.id, account.companyId);
+    console.log(`✅ [SECURITY] Service login: account=${account.id}, dept=${account.departmentId}, company="${account.companyId}"`);
+
+    res.json({
+        success:      true,
+        token,
+        departmentId: dept.id,          // server-derived — client must not supply this
+        companyId:    account.companyId // server-derived
+        // passwordHash intentionally absent
     });
 });
 

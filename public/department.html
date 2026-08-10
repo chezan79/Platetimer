@@ -536,7 +536,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
   <span class="hdr-dept" id="hdr-dept">Caricamento...</span>
   <span class="conn-badge" id="conn-badge">Disconnesso</span>
   <button class="hdr-btn" onclick="window.location.href='home.html'">Home</button>
-  <button class="hdr-btn danger" onclick="window.location.href='index.html'">Esci</button>
+  <button class="hdr-btn danger" onclick="doLogout()">Esci</button>
 </header>
 
 <!-- Left panel: countdown + voice tabs -->
@@ -749,13 +749,44 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 <script>
 'use strict';
 
+// ── Session helpers ──────────────────────────────────────────────────────────
+
+// [S2.1] Decode the stored token payload (no secret needed — for routing only).
+// Returns the parsed payload or null on any error.
+function _decodeTokenPayload(t) {
+    try { return JSON.parse(atob(t.split('.')[0])); } catch { return null; }
+}
+
+// [S2.1] Returns true when the current session was issued by POST /api/service/login
+// (uid starts with 'depacct_'), false for legacy Firebase sessions.
+function isServiceSession() {
+    const t = WsAuth.getStoredToken();
+    if (!t) return false;
+    const p = _decodeTokenPayload(t);
+    return !!(p && p.uid && p.uid.startsWith('depacct_'));
+}
+
+// [S2.1] Logout: Service sessions return to service-login.html; legacy sessions
+// return to index.html. Always clears the stored token first.
+function doLogout() {
+    const service = isServiceSession();
+    WsAuth.clearToken();
+    window.location.href = service ? 'service-login.html' : 'index.html';
+}
+
 // ── Bootstrap ───────────────────────────────────────────────────────────────
 const params   = new URLSearchParams(location.search);
 const myDeptId = params.get('id');
 if (!myDeptId) { location.href = 'home.html'; }
 
 const token = WsAuth.getStoredToken();
-if (!token) { alert('Sessione scaduta. Effettua il login.'); location.href = 'index.html'; }
+if (!token) {
+    alert('Sessione scaduta. Effettua il login.');
+    // Redirect to the appropriate login page based on how the session was established.
+    // Without a token we cannot determine session type, so check the referrer.
+    const fromService = document.referrer.includes('service-login');
+    window.location.href = fromService ? 'service-login.html' : 'index.html';
+}
 
 // ── State ────────────────────────────────────────────────────────────────────
 let myDeptName    = '';

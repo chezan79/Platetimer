@@ -1,5 +1,5 @@
 // service/department-accounts.js — Department Account model (Service side).
-// Sprints S1.1–S2.0.
+// Sprints S1.1–S2.1.
 //
 // A Department Account binds ONE Service identity to exactly ONE company and
 // ONE department. The account carries NO type/role/central data of its own:
@@ -17,7 +17,8 @@
 //   companyId       string  (normalized company name from session)
 //   departmentId    string  (must reference a department of the SAME company)
 //   displayName     string
-//   loginIdentifier string  unique within the company (S2.0+)
+//   loginIdentifier string  GLOBALLY unique (S2.1: tightened from company-scoped S2.0
+//                           to global, required for unambiguous Service login)
 //   passwordHash    string  '<salt>:<hex>' — PBKDF2-SHA256, admin-set (S2.0+)
 //   firebaseUid     null    (stays null until a later sprint binds Firebase Auth)
 //   status          'ACTIVE' | 'SUSPENDED'
@@ -75,6 +76,17 @@ function findDepartmentAccountByUid(uid) {
     if (!uid) return null;
     for (const companyId of Object.keys(store)) {
         const hit = (store[companyId] || []).find(a => a.firebaseUid === uid);
+        if (hit) return hit;
+    }
+    return null;
+}
+
+// Looks up a Department Account by its own record ID (used for Service login
+// sessions where token.uid = account.id, not a Firebase UID).
+function findDepartmentAccountById(accountId) {
+    if (!accountId) return null;
+    for (const companyId of Object.keys(store)) {
+        const hit = (store[companyId] || []).find(a => a.id === accountId);
         if (hit) return hit;
     }
     return null;
@@ -194,11 +206,13 @@ function createDepartmentAccount({ companyId, departmentId, displayName, loginId
     if (existingForDept) {
         return { ok: false, code: 409, error: 'This department already has a Department Account.' };
     }
-    // Login unique within the company — S2.0 rule
-    const loginTaken = (store[companyId] || []).some(
-        a => (a.loginIdentifier || '').toLowerCase() === login
+    // loginIdentifier must be globally unique — S2.1 tightens S2.0 company-scoped rule.
+    // Required so POST /api/service/login can resolve the account unambiguously
+    // from loginIdentifier alone (no company context available at login time).
+    const loginTakenGlobally = Object.keys(store).some(cId =>
+        (store[cId] || []).some(a => (a.loginIdentifier || '').toLowerCase() === login)
     );
-    if (loginTaken) {
+    if (loginTakenGlobally) {
         return { ok: false, code: 409, error: 'loginIdentifier already in use.' };
     }
 
@@ -233,8 +247,11 @@ function updateDepartmentAccount(companyId, accountId, { loginIdentifier, passwo
         const login = String(loginIdentifier).trim().toLowerCase();
         if (!login) return { ok: false, code: 400, error: 'loginIdentifier is required.' };
         if (login.length > 120) return { ok: false, code: 400, error: 'loginIdentifier too long (max 120).' };
-        const loginTaken = (store[companyId] || []).some(
-            a => a.id !== accountId && (a.loginIdentifier || '').toLowerCase() === login
+        // Global uniqueness (excluding self) — S2.1
+        const loginTaken = Object.keys(store).some(cId =>
+            (store[cId] || []).some(
+                a => a.id !== accountId && (a.loginIdentifier || '').toLowerCase() === login
+            )
         );
         if (loginTaken) return { ok: false, code: 409, error: 'loginIdentifier already in use.' };
         account.loginIdentifier = login;
@@ -348,6 +365,7 @@ module.exports = {
     getStore,
     setPersist,
     getDepartmentAccounts,
+    findDepartmentAccountById,
     findDepartmentAccountByUid,
     findDepartmentAccountByDepartment,
     findDepartmentAccountByLoginIdentifier,
