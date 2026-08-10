@@ -834,6 +834,44 @@ app.get('/api/service/department', (req, res) => {
     });
 });
 
+// ── [S2.2] In-memory rate limiter for POST /api/service/login ────────────────
+// Keyed by `${normalizedLogin}:${clientIP}`. Max 5 failures per 5-minute window.
+// Successful login clears the entry. No persistence — restarts reset counters (acceptable).
+// Does NOT affect /api/auth/session (Firebase/Operations login) or any other endpoint.
+const _loginFailures      = new Map();
+const _LOGIN_MAX_FAILURES = 5;
+const _LOGIN_WINDOW_MS    = 5 * 60 * 1000; // 5 minutes
+
+function _getLoginRateKey(loginIdentifier, req) {
+    const ip = ((req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown')
+        .split(',')[0].trim());
+    return `${(loginIdentifier || '').trim().toLowerCase()}:${ip}`;
+}
+
+function _isLoginRateLimited(key) {
+    const entry = _loginFailures.get(key);
+    if (!entry) return false;
+    if (Date.now() - entry.windowStart > _LOGIN_WINDOW_MS) {
+        _loginFailures.delete(key);
+        return false;
+    }
+    return entry.count >= _LOGIN_MAX_FAILURES;
+}
+
+function _recordLoginFailure(key) {
+    const entry = _loginFailures.get(key);
+    const now   = Date.now();
+    if (!entry || now - entry.windowStart > _LOGIN_WINDOW_MS) {
+        _loginFailures.set(key, { count: 1, windowStart: now });
+    } else {
+        entry.count++;
+    }
+}
+
+function _clearLoginFailures(key) {
+    _loginFailures.delete(key);
+}
+
 // POST /api/service/login — authenticate a Department Account by loginIdentifier + password.
 // [S2.1] Pure Service login: no Firebase involvement.
 //
@@ -851,27 +889,41 @@ app.post('/api/service/login', (req, res) => {
         return res.status(400).json({ error: 'Login e password sono obbligatori.' });
     }
 
+    // [S2.2] Rate limit check — runs before credential lookup (no oracle).
+    const rateKey = _getLoginRateKey(loginIdentifier, req);
+    if (_isLoginRateLimited(rateKey)) {
+        return res.status(429).json({ error: 'Troppi tentativi. Riprova tra qualche minuto.' });
+    }
+
     const account = departmentAccounts.findDepartmentAccountByLoginIdentifier(loginIdentifier);
 
     // Generic credential error — same response whether login unknown or password wrong.
     // verifyPassword returns false for missing/empty passwordHash too.
+    // [S2.2] Both cases count as a failure — unknown login and wrong password are identical.
     if (!account || !departmentAccounts.verifyPassword(password, account.passwordHash || '')) {
+        _recordLoginFailure(rateKey);
         return res.status(401).json({ error: 'Login o password non corretti.' });
     }
 
     if (account.status === 'SUSPENDED') {
+        // Suspended: correct credentials but blocked. Do not increment failure counter —
+        // this is not a brute-force scenario; the admin needs to unsuspend the account.
         return res.status(403).json({ error: 'Account reparto sospeso. Contatta l\'amministratore.' });
     }
     if (account.status !== 'ACTIVE') {
-        // Any other non-ACTIVE status is treated as bad credentials (no oracle).
+        _recordLoginFailure(rateKey);
         return res.status(401).json({ error: 'Login o password non corretti.' });
     }
 
     // Verify the linked department is still active.
     const dept = getCompanyDepts(account.companyId).find(d => d.id === account.departmentId);
     if (!dept || !dept.active) {
+        // Correct credentials, blocked by infrastructure. Do not increment failure counter.
         return res.status(403).json({ error: 'Reparto non disponibile. Contatta l\'amministratore.' });
     }
+
+    // Success — clear failure counter for this key.
+    _clearLoginFailures(rateKey);
 
     // Issue a Service session token.
     // uid = account.id ('depacct_…') — distinct from Firebase UIDs; getBoundDepartmentContext

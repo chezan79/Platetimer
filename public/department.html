@@ -535,7 +535,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
   <div class="hdr-sep"></div>
   <span class="hdr-dept" id="hdr-dept">Caricamento...</span>
   <span class="conn-badge" id="conn-badge">Disconnesso</span>
-  <button class="hdr-btn" onclick="window.location.href='home.html'">Home</button>
+  <button class="hdr-btn" id="btn-home" onclick="window.location.href='home.html'">Home</button>
   <button class="hdr-btn danger" onclick="doLogout()">Esci</button>
 </header>
 
@@ -750,29 +750,25 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 'use strict';
 
 // ── Session helpers ──────────────────────────────────────────────────────────
+// isServiceSession() and getLoginDestination() live in ws-auth.js (WsAuth.*).
+// Thin wrappers kept here for call-site readability.
 
-// [S2.1] Decode the stored token payload (no secret needed — for routing only).
-// Returns the parsed payload or null on any error.
-function _decodeTokenPayload(t) {
-    try { return JSON.parse(atob(t.split('.')[0])); } catch { return null; }
-}
-
-// [S2.1] Returns true when the current session was issued by POST /api/service/login
-// (uid starts with 'depacct_'), false for legacy Firebase sessions.
-function isServiceSession() {
-    const t = WsAuth.getStoredToken();
-    if (!t) return false;
-    const p = _decodeTokenPayload(t);
-    return !!(p && p.uid && p.uid.startsWith('depacct_'));
-}
-
-// [S2.1] Logout: Service sessions return to service-login.html; legacy sessions
-// return to index.html. Always clears the stored token first.
+// [S2.1/S2.2] Logout: Service sessions return to service-login.html; legacy
+// sessions return to index.html. Reads destination before clearing token.
 function doLogout() {
-    const service = isServiceSession();
+    const dest = WsAuth.getLoginDestination(); // read while token still present
     WsAuth.clearToken();
-    window.location.href = service ? 'service-login.html' : 'index.html';
+    window.location.href = dest;
 }
+
+// [S2.2] Hide the Home / department-selector button for Department Account sessions.
+// Runs synchronously so the button is hidden before any async work begins.
+(function applySessionUI() {
+    if (WsAuth.isServiceSession()) {
+        const btn = document.getElementById('btn-home');
+        if (btn) btn.style.display = 'none';
+    }
+})();
 
 // ── Bootstrap ───────────────────────────────────────────────────────────────
 const params   = new URLSearchParams(location.search);
@@ -782,10 +778,9 @@ if (!myDeptId) { location.href = 'home.html'; }
 const token = WsAuth.getStoredToken();
 if (!token) {
     alert('Sessione scaduta. Effettua il login.');
-    // Redirect to the appropriate login page based on how the session was established.
-    // Without a token we cannot determine session type, so check the referrer.
-    const fromService = document.referrer.includes('service-login');
-    window.location.href = fromService ? 'service-login.html' : 'index.html';
+    // [S2.2] Routing hint set by WsAuth.storeToken() — no document.referrer dependency.
+    // Falls back to 'index.html' when hint is absent (first visit, cleared browser).
+    window.location.href = WsAuth.getLoginDestination();
 }
 
 // ── State ────────────────────────────────────────────────────────────────────
