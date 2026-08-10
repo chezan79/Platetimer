@@ -1,6 +1,6 @@
 'use strict';
 /**
- * PlateTimer Operations — Intelligence Engine (Sprint 6.0)
+ * PlateTimer Operations — Intelligence Engine (Sprint 6.0 + 6.1)
  *
  * Pure rule-based analysis of operations data.
  * No AI, no ML, no external APIs, no database writes, no background jobs.
@@ -386,14 +386,311 @@ function analyzeIntelligence(companyId, { tasks: rawTasks, users: rawUsers }) {
         generatedAt:             ts,
     };
 
-    return { attention, workload, suggestions, summary };
+    // ── DECISIONS (Sprint 6.1) ────────────────────────────────────────────────
+    const decisions = generateDecisions(companyId, { tasks, users, workload, now, generatedAt: ts });
+
+    return { attention, workload, suggestions, summary, decisions };
+}
+
+// ── Decision Support Engine (Sprint 6.1) ──────────────────────────────────────
+// Transforms intelligence data into Decision Cards with reason, supportingFacts,
+// confidence scores, and quick actions. Fully deterministic — no AI, no random.
+//
+// Confidence tiers:
+//   95   strongest evidence (suspended user with active tasks)
+//   90   strong (overloaded + overdue + urgent + no recent completion; urgent task past due)
+//   85   high   (overdue recurring task)
+//   80   good   (dept concentration, dept overdue)
+//   75   likely (reassign suggestion; urgent task due within 2 h)
+//   70   possible (workload only; underused user)
+//   60   weak   (single overdue < threshold; urgent task, due far out)
+//  <50   suppressed — never shown
+//
+// Sort order: severity (HIGH→LOW), confidence (desc), generatedAt (asc).
+
+const MIN_CONFIDENCE = 50;
+const OVERDUE_DEPT_THRESHOLD = 2; // ≥N overdue in one dept → CHECK_DEPARTMENT
+
+function generateDecisions(companyId, { tasks, users, workload, now, generatedAt }) {
+    const decisions = [];
+    let decId = 0;
+    const nid = () => `dec_${++decId}`;
+
+    // Helper: minutes since a ms timestamp
+    const minsSince   = ms  => Math.round((now - ms) / 60000);
+    const minsUntil   = ms  => Math.round((ms - now) / 60000);
+    const fmtSince    = ms  => ms ? `${minsSince(ms)} min fa` : 'mai';
+    const fmtAvg      = ms  => ms ? `${Math.round(ms / 60000)} min` : 'n/d';
+
+    function push(card) {
+        if (card.confidence >= MIN_CONFIDENCE) decisions.push(card);
+    }
+
+    // ── 1. OVERLOADED_USER ────────────────────────────────────────────────────
+    workload.filter(w => w.status === 'OVERLOADED').forEach(w => {
+        const userTasks  = tasks.filter(t => t.assigneeId === w.userId);
+        const lastComp   = userTasks
+            .filter(t => t.status === 'COMPLETED' && t.completedAt)
+            .sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt))[0];
+        const lastCompMs = lastComp ? new Date(lastComp.completedAt).getTime() : null;
+        const hasRecentComp = lastCompMs && (now - lastCompMs) < 30 * 60_000;
+
+        let confidence = 70; // workload only
+        if (w.overdue >= 1 && w.urgent >= 1 && !hasRecentComp) confidence = 90;
+        else if (w.overdue >= 1 || w.urgent >= 1)              confidence = 80;
+
+        const reasonParts = [
+            `${w.userName} ha ${w.assigned} compiti attivi.`,
+            w.urgent  > 0 ? `${w.urgent} ${w.urgent  === 1 ? 'è urgente'    : 'sono urgenti'}.`    : null,
+            w.overdue > 0 ? `${w.overdue} ${w.overdue === 1 ? 'è in ritardo' : 'sono in ritardo'}.` : null,
+            lastCompMs
+                ? `Nessun completamento negli ultimi ${minsSince(lastCompMs)} minuti.`
+                : 'Nessun completamento oggi.',
+            `Score di carico = ${w.currentLoadScore}.`,
+        ].filter(Boolean).join(' ');
+
+        push({
+            id: nid(), type: 'OVERLOADED_USER', severity: 'HIGH',
+            title:             `${w.userName} è sovraccarico`,
+            reason:            reasonParts,
+            recommendedAction: 'Ridistribuire alcuni compiti a membri con carico minore.',
+            confidence,
+            supportingFacts: [
+                `Compiti attivi: ${w.assigned}`,
+                `Urgenti: ${w.urgent}`,
+                `In ritardo: ${w.overdue}`,
+                `Completamento medio: ${fmtAvg(w.averageCompletionTime)}`,
+                `Ultimo completamento: ${fmtSince(lastCompMs)}`,
+                `Score: ${w.currentLoadScore}`,
+            ],
+            linkedTask: null, linkedUser: w.userId, department: null,
+            quickAction: { label: 'Apri Team', url: '/operations-team.html' },
+            generatedAt,
+        });
+    });
+
+    // ── 2. SUSPENDED_USER_WITH_TASKS ──────────────────────────────────────────
+    users.filter(u => u.status === 'SUSPENDED').forEach(u => {
+        const activeTasks = tasks.filter(
+            t => t.assigneeId === u.id && t.status !== 'COMPLETED' && t.status !== 'CANCELLED'
+        );
+        if (!activeTasks.length) return;
+        const urgentCnt = activeTasks.filter(t => t.priority === 'URGENT').length;
+
+        push({
+            id: nid(), type: 'SUSPENDED_USER_WITH_TASKS', severity: 'HIGH',
+            title:             `${u.name} è sospeso con compiti assegnati`,
+            reason:            `${u.name} è stato sospeso ma ha ancora ${activeTasks.length} ` +
+                               `${activeTasks.length === 1 ? 'compito attivo' : 'compiti attivi'}` +
+                               (urgentCnt > 0 ? `, di cui ${urgentCnt} urgenti` : '') + '.',
+            recommendedAction: 'Riassegnare immediatamente i compiti a un membro attivo del team.',
+            confidence:        95,
+            supportingFacts: [
+                `Compiti assegnati: ${activeTasks.length}`,
+                `Urgenti: ${urgentCnt}`,
+                `Stato utente: SOSPESO`,
+            ],
+            linkedTask: null, linkedUser: u.id, department: null,
+            quickAction: { label: 'Apri Team', url: '/operations-team.html' },
+            generatedAt,
+        });
+    });
+
+    // ── 3. OPENING_NOT_STARTED (URGENT + OPEN) ────────────────────────────────
+    tasks.filter(t => t.priority === 'URGENT' && t.status === 'OPEN').forEach(t => {
+        const isOverdue  = t.effectiveStatus === 'OVERDUE';
+        const dueMs      = t.dueDate ? new Date(t.dueDate).getTime() : null;
+        const minsLeft   = dueMs ? minsUntil(dueMs) : null;
+        const overdueMin = isOverdue && dueMs ? minsSince(dueMs) : 0;
+
+        let confidence = 60;
+        if (isOverdue)                              confidence = 90;
+        else if (minsLeft !== null && minsLeft < 120) confidence = 75;
+
+        const timeDesc = isOverdue
+            ? `è già in ritardo di ${overdueMin} minuti`
+            : minsLeft !== null
+                ? `scade tra ${minsLeft} minuti`
+                : 'non ha scadenza impostata';
+
+        push({
+            id: nid(), type: 'OPENING_NOT_STARTED', severity: 'HIGH',
+            title:             `Compito urgente non avviato: "${t.title}"`,
+            reason:            `Basato sui compiti urgenti: "${t.title}" è urgente, non è stato avviato e ${timeDesc}.`,
+            recommendedAction: 'Avviare immediatamente o riassegnare a chi può iniziare ora.',
+            confidence,
+            supportingFacts: [
+                `Stato: OPEN (non avviato)`,
+                `Priorità: URGENTE`,
+                `Assegnato a: ${t.assigneeName || 'N/D'}`,
+                `Scadenza: ${t.dueDate ? new Date(t.dueDate).toLocaleString('it-IT') : 'N/D'}`,
+            ],
+            linkedTask: t.id, linkedUser: t.assigneeId || null, department: t.department || null,
+            quickAction: { label: 'Apri Task', url: `/operations-tasks.html#${t.id}` },
+            generatedAt,
+        });
+    });
+
+    // ── 4. URGENT_DEPARTMENT ──────────────────────────────────────────────────
+    const deptUrgentLists = {};
+    tasks.filter(t =>
+        t.priority === 'URGENT' && t.status !== 'COMPLETED' && t.status !== 'CANCELLED' && t.department
+    ).forEach(t => {
+        if (!deptUrgentLists[t.department]) deptUrgentLists[t.department] = [];
+        deptUrgentLists[t.department].push(t);
+    });
+
+    Object.entries(deptUrgentLists)
+        .filter(([, list]) => list.length >= URGENT_DEPT_THRESHOLD)
+        .forEach(([dept, list]) => {
+            const overdueInDept = list.filter(t => t.effectiveStatus === 'OVERDUE').length;
+            push({
+                id: nid(), type: 'URGENT_DEPARTMENT', severity: 'MEDIUM',
+                title:             `Reparto "${dept}" sotto pressione`,
+                reason:            `Il reparto "${dept}" ha ${list.length} compiti urgenti aperti` +
+                                   (overdueInDept > 0 ? `, di cui ${overdueInDept} in ritardo` : '') + '.',
+                recommendedAction: `Verificare e prioritizzare il reparto "${dept}".`,
+                confidence:        80,
+                supportingFacts: [
+                    `Urgenti nel reparto: ${list.length}`,
+                    `In ritardo nel reparto: ${overdueInDept}`,
+                ],
+                linkedTask: null, linkedUser: null, department: dept,
+                quickAction: { label: 'Apri Operazioni', url: '/operations-tasks.html' },
+                generatedAt,
+            });
+        });
+
+    // ── 5. CHECK_DEPARTMENT (≥ OVERDUE_DEPT_THRESHOLD overdue in one dept) ────
+    const deptOverdueLists = {};
+    tasks.filter(t => t.effectiveStatus === 'OVERDUE' && t.department)
+        .forEach(t => {
+            if (!deptOverdueLists[t.department]) deptOverdueLists[t.department] = [];
+            deptOverdueLists[t.department].push(t);
+        });
+
+    Object.entries(deptOverdueLists)
+        .filter(([, list]) => list.length >= OVERDUE_DEPT_THRESHOLD)
+        .forEach(([dept, list]) => {
+            const urgentInDept = list.filter(t => t.priority === 'URGENT').length;
+            const maxMin = Math.max(...list.map(t =>
+                Math.round((now - new Date(t.dueDate).getTime()) / 60_000)
+            ));
+            push({
+                id: nid(), type: 'CHECK_DEPARTMENT', severity: 'MEDIUM',
+                title:             `Verificare reparto "${dept}"`,
+                reason:            `Basato sui compiti in ritardo: il reparto "${dept}" ha ${list.length} compiti in ritardo. ` +
+                                   `Il più in ritardo è da ${maxMin} minuti.`,
+                recommendedAction: `Rivedere le priorità del reparto "${dept}" e intervenire sui compiti in ritardo.`,
+                confidence:        80,
+                supportingFacts: [
+                    `In ritardo nel reparto: ${list.length}`,
+                    `Urgenti in ritardo: ${urgentInDept}`,
+                    `Ritardo massimo: ${maxMin} min`,
+                ],
+                linkedTask: null, linkedUser: null, department: dept,
+                quickAction: { label: 'Apri Operazioni', url: '/operations-tasks.html' },
+                generatedAt,
+            });
+        });
+
+    // ── 6. REASSIGN_TASK ──────────────────────────────────────────────────────
+    const normalWl = workload
+        .filter(w => w.status === 'NORMAL')
+        .sort((a, b) => a.currentLoadScore - b.currentLoadScore);
+
+    workload.filter(w => w.status === 'OVERLOADED').forEach(w => {
+        const candidate = normalWl[0];
+        if (!candidate) return;
+        const movable = tasks.filter(
+            t => t.assigneeId === w.userId && t.status === 'OPEN' && t.priority !== 'URGENT'
+        );
+        if (!movable.length) return;
+        const t = movable[0];
+
+        push({
+            id: nid(), type: 'REASSIGN_TASK', severity: 'MEDIUM',
+            title:             `Sposta "${t.title}" da ${w.userName} a ${candidate.userName}`,
+            reason:            `Basato sul carico attuale: ${w.userName} ha score ${w.currentLoadScore} (OVERLOADED), ` +
+                               `${candidate.userName} ha score ${candidate.currentLoadScore} (${candidate.status}).`,
+            recommendedAction: `Spostare "${t.title}" a ${candidate.userName} per bilanciare il carico.`,
+            confidence:        75,
+            supportingFacts: [
+                `Da: ${w.userName} (score ${w.currentLoadScore})`,
+                `A: ${candidate.userName} (score ${candidate.currentLoadScore})`,
+                `Compito: "${t.title}"`,
+                `Priorità: ${t.priority}`,
+            ],
+            linkedTask: t.id, linkedUser: w.userId, department: t.department || null,
+            quickAction: { label: 'Apri Task', url: `/operations-tasks.html#${t.id}` },
+            generatedAt,
+        });
+    });
+
+    // ── 7. REVIEW_RECURRING ───────────────────────────────────────────────────
+    tasks.filter(t => t.effectiveStatus === 'OVERDUE' && t.templateId).forEach(t => {
+        const overdueMin = Math.round((now - new Date(t.dueDate).getTime()) / 60_000);
+        push({
+            id: nid(), type: 'REVIEW_RECURRING', severity: 'MEDIUM',
+            title:             `Compito ricorrente in ritardo: "${t.title}"`,
+            reason:            `Il compito ricorrente "${t.title}" è in ritardo di ${overdueMin} minuti. ` +
+                               'I compiti ricorrenti non completati in tempo interrompono il ciclo operativo.',
+            recommendedAction: 'Completare questo compito ricorrente il prima possibile.',
+            confidence:        85,
+            supportingFacts: [
+                `Tipo: ricorrente`,
+                `In ritardo di: ${overdueMin} min`,
+                `Assegnato a: ${t.assigneeName || 'N/D'}`,
+            ],
+            linkedTask: t.id, linkedUser: t.assigneeId || null, department: t.department || null,
+            quickAction: { label: 'Apri Task', url: `/operations-tasks.html#${t.id}` },
+            generatedAt,
+        });
+    });
+
+    // ── 8. UNDERUSED_USER ─────────────────────────────────────────────────────
+    const teamOverdueCount = tasks.filter(t => t.effectiveStatus === 'OVERDUE').length;
+    if (teamOverdueCount > 0) {
+        workload.filter(w => w.assigned === 0 && w.completedToday === 0).forEach(w => {
+            push({
+                id: nid(), type: 'UNDERUSED_USER', severity: 'LOW',
+                title:             `${w.userName} non ha compiti assegnati`,
+                reason:            `Basato sul carico attuale: ${w.userName} non ha compiti attivi mentre il team ` +
+                                   `ha ${teamOverdueCount} ${teamOverdueCount === 1 ? 'compito in ritardo' : 'compiti in ritardo'}.`,
+                recommendedAction: 'Considerare di assegnare compiti a questo membro disponibile.',
+                confidence:        70,
+                supportingFacts: [
+                    `Compiti assegnati: 0`,
+                    `Completati oggi: 0`,
+                    `Compiti in ritardo nel team: ${teamOverdueCount}`,
+                ],
+                linkedTask: null, linkedUser: w.userId, department: null,
+                quickAction: { label: 'Apri Task', url: '/operations-tasks.html' },
+                generatedAt,
+            });
+        });
+    }
+
+    // ── Sort: severity → confidence desc → generatedAt asc ───────────────────
+    decisions.sort((a, b) => {
+        const s = SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity];
+        if (s !== 0) return s;
+        const c = b.confidence - a.confidence;
+        if (c !== 0) return c;
+        return a.generatedAt.localeCompare(b.generatedAt);
+    });
+
+    return decisions;
 }
 
 module.exports = {
     analyzeIntelligence,
+    generateDecisions,
     // Exported for unit tests
-    _computeLoadScore: computeLoadScore,
-    _loadStatus:       loadStatus,
-    _LOAD_BUSY:        LOAD_BUSY,
-    _LOAD_OVERLOADED:  LOAD_OVERLOADED,
+    _computeLoadScore:      computeLoadScore,
+    _loadStatus:            loadStatus,
+    _LOAD_BUSY:             LOAD_BUSY,
+    _LOAD_OVERLOADED:       LOAD_OVERLOADED,
+    _MIN_CONFIDENCE:        MIN_CONFIDENCE,
+    _OVERDUE_DEPT_THRESHOLD: OVERDUE_DEPT_THRESHOLD,
 };

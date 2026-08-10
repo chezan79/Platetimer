@@ -112,10 +112,10 @@
         <div id="intel-workload" class="intel-body"></div>
       </div>
 
-      <!-- Suggestions -->
+      <!-- Decision Cards (Sprint 6.1 — replaces Suggestions) -->
       <div class="intel-section">
-        <div class="intel-section-hdr">💡 Suggerimenti</div>
-        <div id="intel-suggestions" class="intel-body"></div>
+        <div class="intel-section-hdr">🎯 Decisioni consigliate</div>
+        <div id="intel-decisions" class="intel-body"></div>
       </div>
 
     </div>
@@ -307,16 +307,29 @@ function renderIntelligence(r) {
     wlDiv.innerHTML = '<div class="intel-empty">Nessun membro attivo nel team.</div>';
   }
 
-  // — Suggestions —
-  const sugDiv = document.getElementById('intel-suggestions');
-  if (r.suggestions && r.suggestions.length) {
-    sugDiv.innerHTML = r.suggestions.slice(0, 8).map(s => `
-      <div class="intel-sug">
-        <div class="intel-sug-title">${esc(s.title)}</div>
-        <div class="intel-sug-desc">${esc(s.description)}</div>
+  // — Decision Cards (Sprint 6.1) —
+  const decDiv = document.getElementById('intel-decisions');
+  const SEV_COLOR2  = { HIGH: '#dc2626', MEDIUM: '#d97706', LOW: '#64748b' };
+  const SEV_LABEL2  = { HIGH: 'ALTA',   MEDIUM: 'MEDIA',   LOW: 'BASSA'  };
+  const CONF_COLOR  = c => c >= 90 ? '#16a34a' : c >= 75 ? '#d97706' : '#64748b';
+  if (r.decisions && r.decisions.length) {
+    decDiv.innerHTML = r.decisions.slice(0, 10).map(d => `
+      <div class="dec-card" style="border-left-color:${SEV_COLOR2[d.severity]}">
+        <div class="dec-card-top">
+          <span class="dec-sev-badge" style="background:${SEV_COLOR2[d.severity]}">${SEV_LABEL2[d.severity]}</span>
+          <span class="dec-conf-badge" style="background:${CONF_COLOR(d.confidence)}20;color:${CONF_COLOR(d.confidence)};border:1px solid ${CONF_COLOR(d.confidence)}40">${d.confidence}% fiducia</span>
+          <span class="dec-type">${esc(d.type.replace(/_/g,' '))}</span>
+        </div>
+        <div class="dec-title">${esc(d.title)}</div>
+        <div class="dec-reason">${esc(d.reason)}</div>
+        <div class="dec-facts">
+          ${(d.supportingFacts||[]).map(f=>`<span class="dec-fact">• ${esc(f)}</span>`).join('')}
+        </div>
+        <div class="dec-action">→ ${esc(d.recommendedAction)}</div>
+        ${d.quickAction ? `<a class="dec-qa-btn" href="${esc(d.quickAction.url)}">${esc(d.quickAction.label)}</a>` : ''}
       </div>`).join('');
   } else {
-    sugDiv.innerHTML = '<div class="intel-empty">Nessun suggerimento al momento.</div>';
+    decDiv.innerHTML = '<div class="intel-empty">✅ Nessuna decisione richiesta al momento.</div>';
   }
 }
 
