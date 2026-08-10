@@ -86,21 +86,24 @@
 <body>
   <div class="sl-card">
     <div class="sl-brand">PlateTimer Service</div>
-    <div class="sl-sub">Accesso reparto</div>
+    <div class="sl-sub" data-i18n="service.subtitle">Accesso reparto</div>
     <div class="sl-err" id="sl-err"></div>
-    <label class="sl-label" for="sl-login">Login</label>
+    <label class="sl-label" for="sl-login" data-i18n="service.loginLabel">Login</label>
     <input class="sl-input" id="sl-login" type="text"
            autocomplete="username" autocapitalize="none" spellcheck="false"
            placeholder="">
-    <label class="sl-label" for="sl-pass">Password</label>
+    <label class="sl-label" for="sl-pass" data-i18n="service.passwordLabel">Password</label>
     <input class="sl-input" id="sl-pass" type="password"
            autocomplete="current-password" placeholder="">
-    <button class="sl-btn" id="sl-submit">ENTRA</button>
+    <button class="sl-btn" id="sl-submit" data-i18n="service.enterBtn">ENTRA</button>
   </div>
 
   <script src="js/ws-auth.js"></script>
+  <script src="js/i18n.js"></script>
   <script>
   'use strict';
+
+  I18n.init();
 
   const errEl   = document.getElementById('sl-err');
   const loginEl = document.getElementById('sl-login');
@@ -112,11 +115,11 @@
     const loginIdentifier = loginEl.value.trim();
     const password        = passEl.value;
     if (!loginIdentifier || !password) {
-      errEl.textContent = 'Login e password sono obbligatori.';
+      errEl.textContent = I18n.t('service.missingFields');
       return;
     }
     btnEl.disabled    = true;
-    btnEl.textContent = 'Accesso…';
+    btnEl.textContent = I18n.t('service.loggingIn');
     try {
       const res  = await fetch('/api/service/login', {
         method:  'POST',
@@ -125,17 +128,17 @@
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) {
-        errEl.textContent = data.error || 'Errore di accesso.';
+        errEl.textContent = data.error || I18n.t('service.loginError');
         return;
       }
       // [S2.1] Store only the signed session token — departmentId is server-derived.
       WsAuth.storeToken(data.token);
       window.location.href = 'department.html?id=' + encodeURIComponent(data.departmentId);
     } catch {
-      errEl.textContent = 'Errore di rete. Riprova.';
+      errEl.textContent = I18n.t('service.networkError');
     } finally {
       btnEl.disabled    = false;
-      btnEl.textContent = 'ENTRA';
+      btnEl.textContent = I18n.t('service.enterBtn');
     }
   }
 

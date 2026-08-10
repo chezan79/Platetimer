@@ -16,11 +16,13 @@
 <body>
 <div class="loading-screen">
   <div class="spinner"></div>
-  <span>Caricamento dashboard…</span>
+  <span data-i18n="operations.loading">Caricamento dashboard…</span>
 </div>
 <script src="js/ws-auth.js"></script>
+<script src="js/i18n.js"></script>
 <script src="js/operations-common.js"></script>
 <script>
+const i18nReady = I18n.init();
 const ROLE_ROUTES = {
   DIRECTOR:       'operations-director.html',
   CHEF_CUISINE:   'operations-cc.html',
@@ -35,8 +37,9 @@ const ROLE_ROUTES = {
   if (route) {
     location.replace(route);
   } else {
+    await i18nReady.catch(() => {});
     document.querySelector('.loading-screen').innerHTML =
-      '<span style="color:var(--danger)">Ruolo non riconosciuto: ' + OpsCommon.escHtml(me.user.role) + '</span>';
+      '<span style="color:var(--danger)">' + I18n.t('operations.unknownRole') + ' ' + OpsCommon.escHtml(me.user.role) + '</span>';
   }
 })();
 </script>

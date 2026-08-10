@@ -26,66 +26,66 @@
             <a href="https://imgbox.com/hHJFkXH0" target="_blank"><img src="https://thumbs2.imgbox.com/8b/b9/hHJFkXH0_t.png" alt="image host"/></a>
             <!-- Modulo di registrazione -->
             <div id="register-form">
-                <h2>Registrati</h2>
+                <h2 data-i18n="login.registerTitle">Registrati</h2>
                 <div id="register-message" class="message"></div>
                 <form id="form-register">
-                    <input type="text" id="register-firstname" placeholder="Nome" required>
-                    <input type="text" id="register-lastname" placeholder="Cognome" required>
-                    <input type="text" id="register-company" placeholder="Azienda (facoltativo)">
-                    <input type="email" id="register-email" placeholder="Email" required>
-                    <input type="password" id="register-password" placeholder="Password" required>
-                    <input type="password" id="register-confirm-password" placeholder="Conferma Password" required>
-                    <button type="submit">Registrati</button>
+                    <input type="text" id="register-firstname" placeholder="Nome" data-i18n-placeholder="login.firstName" required>
+                    <input type="text" id="register-lastname" placeholder="Cognome" data-i18n-placeholder="login.lastName" required>
+                    <input type="text" id="register-company" placeholder="Azienda (facoltativo)" data-i18n-placeholder="login.company">
+                    <input type="email" id="register-email" placeholder="Email" data-i18n-placeholder="login.email" required>
+                    <input type="password" id="register-password" placeholder="Password" data-i18n-placeholder="login.password" required>
+                    <input type="password" id="register-confirm-password" placeholder="Conferma Password" data-i18n-placeholder="login.confirmPassword" required>
+                    <button type="submit" data-i18n="login.registerBtn">Registrati</button>
                 </form>
                 <div class="toggle-link">
-                    <span>Hai già un account? <a href="#" id="go-to-login">Accedi</a></span>
+                    <span><span data-i18n="login.haveAccount">Hai già un account?</span> <a href="#" id="go-to-login" data-i18n="login.loginLink">Accedi</a></span>
                 </div>
             </div>
 
             <!-- Modulo di login -->
             <div id="login-form" style="display: none;">
-                <h2>Accedi</h2>
+                <h2 data-i18n="login.loginTitle">Accedi</h2>
                 <div id="login-message" class="message"></div>
                 <form id="form-login">
-                    <input type="email" id="login-email" placeholder="Email" required>
-                    <input type="password" id="login-password" placeholder="Password" required>
-                    <button type="submit">Accedi</button>
+                    <input type="email" id="login-email" placeholder="Email" data-i18n-placeholder="login.email" required>
+                    <input type="password" id="login-password" placeholder="Password" data-i18n-placeholder="login.password" required>
+                    <button type="submit" data-i18n="login.loginBtn">Accedi</button>
                 </form>
                 <div class="toggle-link">
-                    <span>Non hai un account? <a href="#" id="go-to-register">Registrati</a></span>
+                    <span><span data-i18n="login.noAccount">Non hai un account?</span> <a href="#" id="go-to-register" data-i18n="login.registerLink">Registrati</a></span>
                     <br>
-                    <span><a href="#" id="forgot-password">Password dimenticata?</a></span>
+                    <span><a href="#" id="forgot-password" data-i18n="login.forgotLink">Password dimenticata?</a></span>
                     <br>
-                    <span><a href="#" id="change-password">Cambia Password</a></span>
+                    <span><a href="#" id="change-password" data-i18n="login.changeLink">Cambia Password</a></span>
                 </div>
             </div>
 
             <!-- Modulo per password dimenticata -->
             <div id="forgot-password-form" style="display: none;">
-                <h2>Password Dimenticata</h2>
+                <h2 data-i18n="login.forgotTitle">Password Dimenticata</h2>
                 <div id="forgot-password-message" class="message"></div>
                 <form id="form-forgot-password">
-                    <input type="email" id="forgot-email" placeholder="Inserisci la tua email" required>
-                    <button type="submit">Invia Link Reset</button>
+                    <input type="email" id="forgot-email" placeholder="Inserisci la tua email" data-i18n-placeholder="login.forgotEmail" required>
+                    <button type="submit" data-i18n="login.sendResetBtn">Invia Link Reset</button>
                 </form>
                 <div class="toggle-link">
-                    <span><a href="#" id="back-to-login-from-forgot">Torna al Login</a></span>
+                    <span><a href="#" id="back-to-login-from-forgot" data-i18n="login.backToLogin">Torna al Login</a></span>
                 </div>
             </div>
 
             <!-- Modulo per cambio password -->
             <div id="change-password-form" style="display: none;">
-                <h2>Cambia Password</h2>
+                <h2 data-i18n="login.changeTitle">Cambia Password</h2>
                 <div id="change-password-message" class="message"></div>
                 <form id="form-change-password">
-                    <input type="email" id="change-email" placeholder="Email" required>
-                    <input type="password" id="current-password" placeholder="Password Attuale" required>
-                    <input type="password" id="new-password" placeholder="Nuova Password" required>
-                    <input type="password" id="confirm-new-password" placeholder="Conferma Nuova Password" required>
-                    <button type="submit">Cambia Password</button>
+                    <input type="email" id="change-email" placeholder="Email" data-i18n-placeholder="login.email" required>
+                    <input type="password" id="current-password" placeholder="Password Attuale" data-i18n-placeholder="login.currentPassword" required>
+                    <input type="password" id="new-password" placeholder="Nuova Password" data-i18n-placeholder="login.newPassword" required>
+                    <input type="password" id="confirm-new-password" placeholder="Conferma Nuova Password" data-i18n-placeholder="login.confirmNewPassword" required>
+                    <button type="submit" data-i18n="login.changeBtn">Cambia Password</button>
                 </form>
                 <div class="toggle-link">
-                    <span><a href="#" id="back-to-login-from-change">Torna al Login</a></span>
+                    <span><a href="#" id="back-to-login-from-change" data-i18n="login.backToLogin">Torna al Login</a></span>
                 </div>
             </div>
 
@@ -104,13 +104,13 @@
                     color: var(--text-light);
                     text-transform: uppercase;
                     margin-bottom: 0.6rem;
-                ">Accesso Reparto</p>
+                " data-i18n="login.deptAccessTitle">Accesso Reparto</p>
                 <p style="
                     font-size: 0.9rem;
                     color: var(--text-light);
                     margin-bottom: 1.1rem;
                     line-height: 1.4;
-                ">Accedi alla postazione del tuo reparto</p>
+                " data-i18n="login.deptAccessDesc">Accedi alla postazione del tuo reparto</p>
                 <button
                     type="button"
                     onclick="window.location.href='service-login.html'"
@@ -129,12 +129,17 @@
                     "
                     onmouseover="this.style.background='var(--primary)';this.style.color='#fff'"
                     onmouseout="this.style.background='transparent';this.style.color='var(--primary)'"
+                    data-i18n="login.deptAccessBtn"
                 >ENTRA NEL REPARTO</button>
             </div>
             <!-- ── end Accesso Reparto ── -->
 
         </div>
     </div>
+
+    <!-- Shared i18n helper (plain script, before the Firebase module script) -->
+    <script src="js/i18n.js"></script>
+    <script>I18n.init();</script>
 
     <!-- Importa Firebase SDK -->
     <script type="module">

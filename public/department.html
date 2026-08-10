@@ -527,16 +527,16 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 <body>
 
 <!-- Disconnected banner -->
-<div class="dc-bar" id="dc-bar">⚠️ WebSocket disconnesso — le modifiche non verranno sincronizzate</div>
+<div class="dc-bar" id="dc-bar" data-i18n="dept.disconnectedBanner">⚠️ WebSocket disconnesso — le modifiche non verranno sincronizzate</div>
 
 <!-- Header -->
 <header class="hdr">
   <span class="hdr-brand" id="hdr-brand">PlateTimer</span>
   <div class="hdr-sep"></div>
-  <span class="hdr-dept" id="hdr-dept">Caricamento...</span>
+  <span class="hdr-dept" id="hdr-dept" data-i18n="dept.loadingDept">Caricamento...</span>
   <span class="conn-badge" id="conn-badge">Disconnesso</span>
-  <button class="hdr-btn" id="btn-home" onclick="window.location.href='home.html'">Home</button>
-  <button class="hdr-btn danger" onclick="doLogout()">Esci</button>
+  <button class="hdr-btn" id="btn-home" onclick="window.location.href='home.html'" data-i18n="dept.home">Home</button>
+  <button class="hdr-btn danger" onclick="doLogout()" data-i18n="dept.logout">Esci</button>
 </header>
 
 <!-- Left panel: countdown + voice tabs -->
@@ -544,9 +544,9 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 
   <!-- Tab switcher -->
   <div class="lp-tabs">
-    <button class="lp-tab active" id="tab-cd" onclick="showTab('cd')">Countdown</button>
-    <button class="lp-tab" id="tab-vm" onclick="showTab('vm')">🎙️ Vocali</button>
-    <button class="lp-tab" id="tab-ptt" onclick="showTab('ptt')">📞 Interfono</button>
+    <button class="lp-tab active" id="tab-cd" onclick="showTab('cd')" data-i18n="dept.tabCountdown">Countdown</button>
+    <button class="lp-tab" id="tab-vm" onclick="showTab('vm')" data-i18n="dept.tabVoice">🎙️ Vocali</button>
+    <button class="lp-tab" id="tab-ptt" onclick="showTab('ptt')" data-i18n="dept.tabIntercom">📞 Interfono</button>
   </div>
 
   <!-- ── COUNTDOWN SECTION ──────────────────────── -->
@@ -557,19 +557,19 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
       <button class="si-btn si-active" id="si-1" onclick="tryGoStep(1)"
               aria-current="step" aria-label="Step 1: Tavolo">
         <span class="si-num" aria-hidden="true">1</span>
-        <span class="si-lbl">Tavolo</span>
+        <span class="si-lbl" data-i18n="dept.stepTable">Tavolo</span>
       </button>
       <div class="si-line" id="si-line-1" aria-hidden="true"></div>
       <button class="si-btn" id="si-2" onclick="tryGoStep(2)" disabled
               aria-label="Step 2: Minuti">
         <span class="si-num" aria-hidden="true">2</span>
-        <span class="si-lbl">Minuti</span>
+        <span class="si-lbl" data-i18n="dept.stepMinutes">Minuti</span>
       </button>
       <div class="si-line" id="si-line-2" aria-hidden="true"></div>
       <button class="si-btn" id="si-3" onclick="tryGoStep(3)" disabled
               aria-label="Step 3: Invia a">
         <span class="si-num" aria-hidden="true">3</span>
-        <span class="si-lbl">Invia a</span>
+        <span class="si-lbl" data-i18n="dept.stepSendTo">Invia a</span>
       </button>
     </nav>
 
@@ -577,7 +577,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
     <div class="step-panel" id="step-panel-1">
       <div class="step-body">
         <div>
-          <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">NUMERO TAVOLO</div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:6px;" data-i18n="dept.tableNumber">NUMERO TAVOLO</div>
           <div id="tbl-disp" class="tbl-disp empty" aria-live="polite" aria-label="Numero tavolo selezionato">—</div>
         </div>
         <div class="numpad" role="group" aria-label="Tastierino numerico">
@@ -596,7 +596,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
         </div>
       </div>
       <div class="step-footer">
-        <button class="step1-cont" id="step1-cont" onclick="goToStep(2)" disabled>
+        <button class="step1-cont" id="step1-cont" onclick="goToStep(2)" disabled data-i18n="dept.continue">
           Continua →
         </button>
       </div>
@@ -607,12 +607,12 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
       <div class="step-body">
         <div class="step-summ">
           <div class="step-summ-item">
-            <span class="step-summ-lbl">Tavolo</span>
+            <span class="step-summ-lbl" data-i18n="dept.summTable">Tavolo</span>
             <span class="step-summ-val" id="summ-table-2">—</span>
           </div>
         </div>
         <div>
-          <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">DURATA</div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:6px;" data-i18n="dept.duration">DURATA</div>
           <div class="dur-wrap" id="dur-wrap" role="group" aria-label="Seleziona durata">
             <div class="db" onclick="selectDur(this,4)" role="button" tabindex="0" aria-label="4 minuti">4'</div>
             <div class="db" onclick="selectDur(this,5)" role="button" tabindex="0" aria-label="5 minuti">5'</div>
@@ -627,7 +627,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
         </div>
       </div>
       <div class="step-footer">
-        <button class="back-btn" onclick="goToStep(1)" aria-label="Torna allo step 1">← Indietro</button>
+        <button class="back-btn" onclick="goToStep(1)" aria-label="Torna allo step 1" data-i18n="common.back">← Indietro</button>
       </div>
     </div>
 
@@ -636,26 +636,26 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
       <div class="step-body">
         <div class="step-summ">
           <div class="step-summ-item">
-            <span class="step-summ-lbl">Tavolo</span>
+            <span class="step-summ-lbl" data-i18n="dept.summTable">Tavolo</span>
             <span class="step-summ-val" id="summ-table-3">—</span>
           </div>
           <div class="step-summ-sep" aria-hidden="true">•</div>
           <div class="step-summ-item">
-            <span class="step-summ-lbl">Durata</span>
+            <span class="step-summ-lbl" data-i18n="dept.summDuration">Durata</span>
             <span class="step-summ-val" id="summ-dur-3">—</span>
           </div>
         </div>
         <div>
-          <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">INVIA A</div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:6px;" data-i18n="dept.sendTo">INVIA A</div>
           <div class="dest-list" id="dest-list">
-            <div class="no-dests">Caricamento reparti...</div>
+            <div class="no-dests" data-i18n="dept.loadingDepts">Caricamento reparti...</div>
           </div>
         </div>
         <div id="send-err" role="alert"></div>
       </div>
       <div class="step-footer">
-        <button class="back-btn" onclick="goToStep(2)" aria-label="Torna allo step 2">← Indietro</button>
-        <button id="send-btn" class="send-btn" onclick="sendCountdown()" disabled>
+        <button class="back-btn" onclick="goToStep(2)" aria-label="Torna allo step 2" data-i18n="common.back">← Indietro</button>
+        <button id="send-btn" class="send-btn" onclick="sendCountdown()" disabled data-i18n="dept.startCountdown">
           Avvia Countdown
         </button>
       </div>
@@ -663,9 +663,9 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 
     <!-- Voice command section (inside countdown tab) -->
     <div class="vc-sep"></div>
-    <div class="lp-title">Comando Vocale</div>
+    <div class="lp-title" data-i18n="dept.voiceCommand">Comando Vocale</div>
     <div>
-      <button id="vc-btn" class="vc-btn" onclick="toggleVoiceCmd()">
+      <button id="vc-btn" class="vc-btn" onclick="toggleVoiceCmd()" data-i18n="dept.startVoiceCmd">
         🎤 Avvia comando vocale
       </button>
       <div id="vc-hint" class="vc-hint">"Tavolo 12 otto minuti Pasta"</div>
@@ -676,19 +676,19 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 
   <!-- ── PTT / INTERFONO SECTION ──────────────── -->
   <div id="section-ptt" class="lp-section" style="display:none;">
-    <div class="lp-title">Interfono Live</div>
+    <div class="lp-title" data-i18n="dept.intercom">Interfono Live</div>
 
-    <div id="ptt-status" class="ptt-status">Non connesso</div>
+    <div id="ptt-status" class="ptt-status" data-i18n="dept.notConnected">Non connesso</div>
 
     <div id="ptt-talking-ind" class="ptt-talking-ind"></div>
 
-    <button id="ptt-join-btn" class="ptt-join-btn" onclick="pttToggleCall()">
+    <button id="ptt-join-btn" class="ptt-join-btn" onclick="pttToggleCall()" data-i18n="dept.joinCall">
       📞 Entra nella chiamata
     </button>
 
     <button id="ptt-btn" class="ptt-btn" disabled
       onmousedown="pttPress()" onmouseup="pttRelease()" onmouseleave="pttRelease()"
-      ontouchstart="pttPress(event)" ontouchend="pttRelease(event)">
+      ontouchstart="pttPress(event)" ontouchend="pttRelease(event)" data-i18n="dept.holdToTalk">
       🎙️ Tieni premuto per parlare
     </button>
 
@@ -700,22 +700,22 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 
   <!-- ── VOICE SECTION ──────────────────────────── -->
   <div id="section-vm" class="lp-section" style="display:none;">
-    <div class="lp-title">Messaggio Vocale</div>
+    <div class="lp-title" data-i18n="dept.voiceMessage">Messaggio Vocale</div>
 
     <!-- Destinations (voice) -->
     <div>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">INVIA A</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:6px;" data-i18n="dept.sendTo">INVIA A</div>
       <div class="dest-list" id="voice-dest-list">
-        <div class="no-dests">Caricamento reparti...</div>
+        <div class="no-dests" data-i18n="dept.loadingDepts">Caricamento reparti...</div>
       </div>
     </div>
 
     <!-- Record controls -->
     <div>
-      <button id="voice-btn" class="voice-btn" onclick="toggleRec()" disabled>
+      <button id="voice-btn" class="voice-btn" onclick="toggleRec()" disabled data-i18n="dept.startRecording">
         🎙️ Avvia registrazione
       </button>
-      <div id="voice-status-txt" class="voice-status-txt">Seleziona destinatario</div>
+      <div id="voice-status-txt" class="voice-status-txt" data-i18n="dept.selectRecipient">Seleziona destinatario</div>
     </div>
   </div>
 
@@ -724,17 +724,17 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 <!-- Right area: active countdowns -->
 <main class="ra">
   <div class="ra-hdr">
-    <span class="ra-title" id="ra-title">Countdown attivi</span>
+    <span class="ra-title" id="ra-title" data-i18n="dept.activeCountdowns">Countdown attivi</span>
     <span class="ra-count" id="ra-count">0</span>
   </div>
   <div class="cd-list" id="cd-list">
-    <div class="empty-state">Nessun countdown attivo.</div>
+    <div class="empty-state" data-i18n="dept.noActiveCountdowns">Nessun countdown attivo.</div>
   </div>
 
   <!-- Incoming voice messages (hidden until a message arrives) -->
   <div id="voice-msgs-section" class="vm-section" style="display:none;">
     <div class="ra-hdr">
-      <span class="ra-title">Messaggi vocali ricevuti</span>
+      <span class="ra-title" data-i18n="dept.receivedVoiceMsgs">Messaggi vocali ricevuti</span>
       <span class="ra-count" id="voice-msg-count">0</span>
     </div>
     <div class="cd-list" id="voice-msg-list"></div>
@@ -745,6 +745,8 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 <audio id="snd-expiry" src="costa-rica-eas-alarm-346194.mp3" preload="auto"></audio>
 
 <script src="js/ws-auth.js"></script>
+<script src="js/i18n.js"></script>
+<script>I18n.init({ selector: false });</script>
 <script src="js/ptt-voice.js"></script>
 <script>
 'use strict';
