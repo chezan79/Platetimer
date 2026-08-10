@@ -289,6 +289,30 @@ try {
     console.error('❌ Errore configurazione Google Cloud Speech:', error.message);
 }
 
+// [S1.2] Resolve Department Account context for a verified uid+company pair.
+// Called server-side only — uid must already be verified (Firebase REST or HMAC session).
+// departmentType is read from the department record, NEVER from the account record.
+// Returns a plain object with dept account fields (spread into session response),
+// or an empty object {} when no Department Account is bound to this uid.
+function resolveDeptAccountContext(uid, companyId) {
+    // departmentAccounts is required later in the file but is always initialized
+    // before any HTTP request reaches this function.
+    const account = departmentAccounts.findDepartmentAccountByUid(uid);
+    if (!account) return {};
+    // Company isolation: account must belong to the verified company.
+    // findDepartmentAccountByUid is global; discard if company mismatch.
+    if (account.companyId !== companyId) return {};
+    // Resolve departmentType from the department record (never from the account).
+    const dept = getCompanyDepts(companyId).find(d => d.id === account.departmentId);
+    const departmentType = departmentAccounts.getDepartmentType(dept || null);
+    return {
+        departmentAccountId:     account.id,
+        departmentId:            account.departmentId,
+        departmentType,          // STANDARD | CENTRAL — from department, not account
+        departmentAccountStatus: account.status  // ACTIVE | SUSPENDED
+    };
+}
+
 // ===== SECURITY: Session Token Exchange Endpoint =====
 // The frontend calls this after Firebase login to get a server-signed session token.
 // The server verifies the Firebase ID token, fetches the company from Firestore
@@ -342,10 +366,15 @@ app.post('/api/auth/session', async (req, res) => {
 
         console.log(`✅ [SECURITY] Session token issued: uid=${uid}, company="${normalizedCompany}"`);
 
+        // [S1.2] Step 4: Resolve Department Account context (if any).
+        // departmentType always comes from the department record — never from the account.
+        const deptAccountCtx = resolveDeptAccountContext(uid, normalizedCompany);
+
         res.json({
             success: true,
             token: sessionToken,
-            companyName: normalizedCompany
+            companyName: normalizedCompany,
+            ...deptAccountCtx   // spreads departmentAccountId/departmentId/departmentType/departmentAccountStatus (or nothing)
         });
 
     } catch (error) {
@@ -596,6 +625,59 @@ app.put('/api/department-accounts/:id/status', (req, res) => {
     const result = departmentAccounts.setDepartmentAccountStatus(companyId, req.params.id, (req.body || {}).status, getCompanyDepts(companyId));
     if (!result.ok) return res.status(result.code).json({ error: result.error });
     res.json({ success: true, account: result.account });
+});
+
+// POST /api/department-accounts/bind — bind the caller's verified Firebase UID
+// to an existing Department Account identified by loginIdentifier.
+//
+// [S1.2] Security model:
+//   • Requires a valid HMAC session (requireAuth). The session.uid is the
+//     Firebase-verified UID issued at POST /api/auth/session — it cannot be
+//     forged by the client. We NEVER accept a uid from the request body.
+//   • company isolation: the account's companyId must match session.companyName.
+//   • Cross-company binding is rejected inside bindFirebaseUid (structural).
+//   • Duplicate UID / already-bound account / SUSPENDED targets are all rejected.
+app.post('/api/department-accounts/bind', (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const companyId = session.companyName;
+    const uid = session.uid; // [SECURITY] server-verified — never from client payload
+
+    const { loginIdentifier } = req.body || {};
+    if (!loginIdentifier || typeof loginIdentifier !== 'string') {
+        return res.status(400).json({ error: 'loginIdentifier is required.' });
+    }
+
+    // Look up the target account by loginIdentifier (global, case-insensitive).
+    const account = departmentAccounts.findDepartmentAccountByLoginIdentifier(loginIdentifier.trim());
+    if (!account) {
+        return res.status(404).json({ error: 'Department account not found.' });
+    }
+
+    // [SECURITY] company isolation — account must belong to the session company.
+    if (account.companyId !== companyId) {
+        return res.status(403).json({ error: 'Department account does not belong to your company.' });
+    }
+
+    const result = departmentAccounts.bindFirebaseUid(companyId, account.id, uid);
+    if (!result.ok) return res.status(result.code).json({ error: result.error });
+
+    console.log(`✅ [DEPT-ACCOUNT] UID bound to account "${result.account.id}" (company "${companyId}")`);
+    res.json({ success: true, account: result.account });
+});
+
+// GET /api/service/identity — returns the Department Account context for the
+// currently authenticated session (if any). Used by dashboard clients to
+// discover their departmentId / departmentType after login.
+//
+// Returns { success, departmentAccountId?, departmentId?, departmentType?,
+//           departmentAccountStatus? }. Fields are absent when the session user
+// has no Department Account binding.
+app.get('/api/service/identity', (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const ctx = resolveDeptAccountContext(session.uid, session.companyName);
+    res.json({ success: true, ...ctx });
 });
 
 // PUT /api/departments/:id/type — set departmentType (STANDARD | CENTRAL)

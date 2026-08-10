@@ -107,6 +107,45 @@ function validateDepartmentAccountDepartment(companyId, departmentId, companyDep
     return { ok: true, department: dept };
 }
 
+// ── UID Binding ──────────────────────────────────────────────────────────
+
+// Binds a verified Firebase UID to a Department Account.
+//
+// Security guarantees:
+//   • uid must come from a server-verified source (session token or Firebase
+//     REST verification); callers must NEVER accept uid from a client payload.
+//   • One UID may only be bound to one account (any status) across all companies.
+//   • One account may only have one uid (enforced by the null guard below).
+//   • company isolation: the caller must pass the companyId from the verified
+//     session; the account lookup is company-scoped so cross-company binding
+//     is structurally impossible.
+//   • ACTIVE-only binding: SUSPENDED accounts cannot receive a new UID.
+//
+// Returns { ok, account } or { ok:false, code, error }.
+function bindFirebaseUid(companyId, accountId, uid) {
+    if (!uid || typeof uid !== 'string') {
+        return { ok: false, code: 400, error: 'uid is required.' };
+    }
+    // Global uniqueness: UID already bound somewhere?
+    const existing = findDepartmentAccountByUid(uid);
+    if (existing) {
+        if (existing.id === accountId) return { ok: true, account: existing }; // idempotent re-bind
+        return { ok: false, code: 409, error: 'This Firebase UID is already bound to another Department Account.' };
+    }
+    // Company-scoped account lookup (cross-company isolation is structural)
+    const account = (store[companyId] || []).find(a => a.id === accountId);
+    if (!account) return { ok: false, code: 404, error: 'Department account not found.' };
+    if (account.firebaseUid !== null) {
+        return { ok: false, code: 409, error: 'This Department Account already has a Firebase UID bound.' };
+    }
+    if (account.status !== 'ACTIVE') {
+        return { ok: false, code: 409, error: 'Only ACTIVE Department Accounts can be bound to a Firebase UID.' };
+    }
+    account.firebaseUid = uid;
+    persist();
+    return { ok: true, account };
+}
+
 // ── Mutations ────────────────────────────────────────────────────────────
 
 // Creates a Department Account. Enforces:
@@ -253,6 +292,7 @@ module.exports = {
     findDepartmentAccountByDepartment,
     findDepartmentAccountByLoginIdentifier,
     validateDepartmentAccountDepartment,
+    bindFirebaseUid,
     createDepartmentAccount,
     setDepartmentAccountStatus,
     hasDepartmentAccounts,
