@@ -335,6 +335,8 @@ async function openDetail(taskId) {
   openPanel();
   // Store current task id for refresh
   document.getElementById('side-panel').dataset.taskId = task.id;
+  // [S6.4.1 rev2] Load image attachments after innerHTML has settled.
+  setTimeout(_loadDetailImages, 50);
 }
 
 // ── Create panel ──
@@ -447,17 +449,62 @@ function closePanel() {
   _pendingAttachments = []; // clear staged files when panel closes
 }
 
-// ── [S6.4.1] Attachment helpers ────────────────────────────────────────────
+// ── [S6.4.1 rev2] Attachment helpers ─────────────────────────────────────────
+// [SECURITY] Session token is NEVER placed in URLs.
+// All downloads go through authenticated fetch() + Blob URLs so the token
+// stays out of server access logs, browser history, and shared/copied URLs.
 
-// Build an authenticated download URL. Token is sent as a query param so that
-// <img src="..."> and <a href="..."> work without custom fetch headers.
-// The token is already in sessionStorage — no extra exposure beyond the HTTP
-// access log of an internal workstation app.
-function _attDownloadUrl(taskId, attId) {
-  const t = WsAuth.getStoredToken();
+// Build the bare download endpoint path (no auth query param — header only).
+function _attEndpointPath(taskId, attId) {
   return '/api/operations/tasks/' + encodeURIComponent(taskId)
-       + '/attachments/' + encodeURIComponent(attId) + '/download'
-       + (t ? '?token=' + encodeURIComponent(t) : '');
+       + '/attachments/' + encodeURIComponent(attId) + '/download';
+}
+
+// Fetch an attachment with Authorization header and return a Blob URL.
+// Caller is responsible for revoking the URL when done.
+async function _fetchBlobUrl(taskId, attId) {
+  const tok = WsAuth.getStoredToken();
+  const res = await fetch(_attEndpointPath(taskId, attId), {
+    headers: tok ? { 'Authorization': 'Bearer ' + tok } : {}
+  });
+  if (!res.ok) return null;
+  const blob = await res.blob();
+  return URL.createObjectURL(blob);
+}
+
+// Trigger a browser file download via authenticated fetch + Blob.
+async function _downloadAttachment(taskId, attId, fileName) {
+  const tok = WsAuth.getStoredToken();
+  try {
+    const res = await fetch(_attEndpointPath(taskId, attId),
+      { headers: tok ? { 'Authorization': 'Bearer ' + tok } : {} });
+    if (!res.ok) { panelMsg('Errore download.'); return; }
+    const blob = await res.blob();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = fileName || 'allegato';
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
+  } catch (e) { panelMsg('Errore download: ' + e.message); }
+}
+
+// After the detail panel renders, find all placeholder <img> elements and
+// load them via authenticated fetch → Blob URL. Called with a small delay so
+// innerHTML assignment has completed.
+async function _loadDetailImages() {
+  const imgs = document.querySelectorAll('img.att-img-placeholder[data-src]');
+  const tok  = WsAuth.getStoredToken();
+  for (const img of imgs) {
+    try {
+      const res = await fetch(img.dataset.src,
+        { headers: tok ? { 'Authorization': 'Bearer ' + tok } : {} });
+      if (!res.ok) { img.alt = '⚠ Errore'; img.classList.remove('att-img-placeholder'); continue; }
+      const blob = await res.blob();
+      if (img.src && img.src.startsWith('blob:')) URL.revokeObjectURL(img.src);
+      img.src = URL.createObjectURL(blob);
+      img.classList.remove('att-img-placeholder');
+    } catch { img.classList.remove('att-img-placeholder'); }
+  }
 }
 
 // Human-readable file size.
@@ -534,11 +581,15 @@ async function _uploadFile(taskId, file) {
 // ── Detail-panel attachment helpers ─
 
 // Render one attachment row for the detail view.
+// [S6.4.1 rev2] Images use data-src + class att-img-placeholder; _loadDetailImages()
+// fetches them after render. Download links use _downloadAttachment() (fetch → Blob).
+// No token ever appears in any URL attribute.
 function _renderAttachment(a, taskId, canEdit) {
-  const url     = _attDownloadUrl(taskId, a.id);
+  const endpointPath = _attEndpointPath(taskId, a.id);
   const isImage = a.contentType && a.contentType.startsWith('image/');
   const isPdf   = a.contentType === 'application/pdf';
-  const name    = esc(a.fileName || a.filename || 'file');
+  const rawName = a.fileName || a.filename || 'file';
+  const name    = esc(rawName);
   const sizeStr = _fmtSize(a.size);
   const meta    = [
     OpsCommon.fmtDatetime(a.uploadedAt),
@@ -546,9 +597,11 @@ function _renderAttachment(a, taskId, canEdit) {
     sizeStr || null
   ].filter(Boolean).join(' · ');
 
+  // Image: placeholder fetched by _loadDetailImages(); clicking opens blob URL.
   const preview = isImage
-    ? `<a href="${url}" target="_blank"><img src="${url}" alt="${name}" loading="lazy"
-          style="max-width:100%;max-height:160px;object-fit:contain;border-radius:6px;display:block;margin-bottom:6px;cursor:pointer"></a>`
+    ? `<img data-src="${endpointPath}" class="att-img-placeholder" alt="${name}"
+          onclick="if(this.src&&this.src.startsWith('blob:'))window.open(this.src,'_blank')"
+          style="max-width:100%;max-height:160px;object-fit:contain;border-radius:6px;display:block;margin-bottom:6px;cursor:pointer;background:#f0f0f0">`
     : isPdf
     ? `<span style="font-size:24px;margin-right:4px">📄</span>`
     : `<span style="font-size:24px;margin-right:4px">📎</span>`;
@@ -557,12 +610,16 @@ function _renderAttachment(a, taskId, canEdit) {
     ? `<button class="btn btn-sm btn-danger" style="flex-shrink:0"
           onclick="doDeleteAttachment('${esc(taskId)}','${esc(a.id)}')">🗑</button>` : '';
 
+  // Download link triggers authenticated fetch → Blob → browser save dialog.
+  const dlLink = `<a href="#" onclick="event.preventDefault();_downloadAttachment('${esc(taskId)}','${esc(a.id)}',${JSON.stringify(rawName)})"
+      style="font-weight:600;font-size:13px;color:var(--accent);text-decoration:none;word-break:break-all">${name}</a>`;
+
   return `<div style="padding:8px 0;border-bottom:1px solid var(--border-l)">
     ${isImage ? preview : ''}
     <div style="display:flex;align-items:center;gap:8px">
       ${isImage ? '' : preview}
       <div style="flex:1;min-width:0">
-        <a href="${url}" target="_blank" rel="noopener" style="font-weight:600;font-size:13px;color:var(--accent);text-decoration:none;word-break:break-all">${name}</a>
+        ${dlLink}
         <div style="font-size:11px;color:var(--muted);margin-top:2px">${meta}</div>
       </div>
       ${deleteBtn}

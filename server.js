@@ -3132,11 +3132,8 @@ app.post('/api/operations/tasks/:id/attachments',
         next();
     }),
     async (req, res) => {
-        // [S6.4.1] Accept token from Authorization header OR ?token= query param
-        // (needed for authenticated img src tags in the browser).
-        if (!req.headers['authorization'] && req.query.token)
-            req.headers['authorization'] = 'Bearer ' + req.query.token;
-
+        // [S6.4.1 rev2] Authorization header only — no query-param token.
+        // Uploads always go through authenticated fetch(); ?token= is never needed here.
         const ctx = requireOpsAuth(req, res);
         if (!ctx) return;
         const actor = ctx.opsUser;
@@ -3193,14 +3190,13 @@ app.post('/api/operations/tasks/:id/attachments',
 );
 
 // ── GET /api/operations/tasks/:id/attachments/:attId/download — stream from Storage ──
-// [S6.4.1] Requires task visibility. Accepts token from Authorization header OR ?token=
-// query param so browser <img> and <a> tags can load files without custom fetch.
+// [S6.4.1 rev2] Requires Authorization header only — no ?token= query-param support.
+// Callers must use authenticated fetch() and convert the response to a Blob URL
+// on the client side. This keeps the HMAC session token out of server access logs,
+// browser history, and any URL that could be copied/shared.
 // [SECURITY] storagePath validated to start with operations/{companyId}/tasks/{taskId}/
 // to prevent path-traversal across companies or tasks.
 app.get('/api/operations/tasks/:id/attachments/:attId/download', async (req, res) => {
-    if (!req.headers['authorization'] && req.query.token)
-        req.headers['authorization'] = 'Bearer ' + req.query.token;
-
     const ctx = requireOpsAuth(req, res);
     if (!ctx) return;
     const actor = ctx.opsUser;

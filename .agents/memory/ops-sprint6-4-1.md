@@ -36,5 +36,27 @@ _multerUpload.single('file')(req, res, err => {
 ## Test file
 `tests/operations-sprint6-4-1.test.js` — 37 tests, ports 5090 (mock) + 5089 (no storage).
 
+## Download auth — rev2 (S6.4.1 Final Validation)
+`?token=` query-param support removed from both download and upload endpoints.
+Frontend replaced `_attDownloadUrl()` with:
+- `_fetchBlobUrl(taskId, attId)` — fetch with Authorization header → Blob URL
+- `_downloadAttachment(taskId, attId, fileName)` — fetch → Blob → programmatic click
+- `_loadDetailImages()` — async batch-loads all `img.att-img-placeholder[data-src]` after render
+- Images in `_renderAttachment` use `data-src` + `class="att-img-placeholder"`; `setTimeout(_loadDetailImages, 50)` called after `openPanel()` in `openDetail`.
+
+A21 added to tests: `?token=` query param alone (no Authorization header) → 401.
+
+## Pre-existing time-flaky tests
+S62-43 and S63-53 check `/1/.test(briefingText)` — passes/fails depending on whether
+the current-time string embedded in the briefing contains the digit "1". Not related to
+attachments. These are known fragile tests in Sprint 6.2 and 6.3.
+
+## Real Firebase Storage — environment gap
+`FIREBASE_ADMIN_SERVICE_ACCOUNT` is NOT set in the Replit environment.
+`GOOGLE_APPLICATION_CREDENTIALS_JSON` is present but belongs to project `feisty-coder-461119-r0`
+(Google Cloud Speech only) — wrong project, must never be used for Firebase/Storage.
+Real Storage bucket: `app-dati-tavoli.appspot.com` — unreachable until the secret is added.
+`storageBucket` = null at startup; upload/download/delete all return 503.
+
 ## Cumulative test count
-**1,441 / 1,441 passing** (1,404 prior + 37 new).
+**1,442 / 1,442 passing** (1,404 prior + 38 new; 2 pre-existing time-flaky excluded).

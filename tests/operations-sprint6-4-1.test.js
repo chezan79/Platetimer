@@ -82,11 +82,12 @@ function uploadFile(port, token, taskId, { buffer, filename, mimetype }) {
 }
 
 // Download an attachment — returns { status, buffer, headers }
+// [S6.4.1 rev2] Authorization header only; no ?token= query param.
 function downloadFile(port, token, taskId, attId) {
     return new Promise((resolve, reject) => {
         const req = http.request({
             hostname: '127.0.0.1', port,
-            path: `/api/operations/tasks/${taskId}/attachments/${attId}/download?token=${encodeURIComponent(token)}`,
+            path: `/api/operations/tasks/${taskId}/attachments/${attId}/download`,
             method: 'GET',
             headers: { 'Authorization': `Bearer ${token}` }
         }, res => {
@@ -292,15 +293,32 @@ async function run() {
         const rNoAuth = await uploadFile(PORT_MOCK, '', taskId, { buffer: Buffer.alloc(8), filename: 'x.jpg', mimetype: 'image/jpeg' });
         check('A19. Upload without auth → 401', rNoAuth.status === 401, rNoAuth.status);
 
-        // ── A20: download endpoint requires auth ─
-        // Use raw HTTP without token
-        const rDlNoAuth = await new Promise((res) => {
-            const req = http.request({ hostname: '127.0.0.1', port: PORT_MOCK, path: `/api/operations/tasks/${taskId}/attachments/nonexistent/download`, method: 'GET' },
-                r => { let b = ''; r.on('data', d => b += d); r.on('end', () => res({ status: r.statusCode })); });
-            req.on('error', () => res({ status: 0 }));
+        // ── A20: download endpoint requires Authorization header ─
+        const rDlNoAuth = await new Promise((resolve) => {
+            const req = http.request({
+                hostname: '127.0.0.1', port: PORT_MOCK,
+                path: `/api/operations/tasks/${taskId}/attachments/nonexistent/download`,
+                method: 'GET'
+            }, r => { let b = ''; r.on('data', d => b += d); r.on('end', () => resolve({ status: r.statusCode })); });
+            req.on('error', () => resolve({ status: 0 }));
             req.end();
         });
-        check('A20. Download without auth → 401', rDlNoAuth.status === 401, rDlNoAuth.status);
+        check('A20. Download without any auth → 401', rDlNoAuth.status === 401, rDlNoAuth.status);
+
+        // ── A21: ?token= query param alone (no Authorization header) must be rejected ─
+        // [S6.4.1 rev2 security] The server no longer accepts the session token as a URL
+        // query param. Sending ?token= without an Authorization header must return 401.
+        const rDlQueryToken = await new Promise((resolve) => {
+            const req = http.request({
+                hostname: '127.0.0.1', port: PORT_MOCK,
+                path: `/api/operations/tasks/${taskId}/attachments/nonexistent/download?token=${encodeURIComponent(dirTok)}`,
+                method: 'GET'
+                // intentionally NO Authorization header
+            }, r => { let b = ''; r.on('data', d => b += d); r.on('end', () => resolve({ status: r.statusCode })); });
+            req.on('error', () => resolve({ status: 0 }));
+            req.end();
+        });
+        check('A21. ?token= query param alone (no header) → 401', rDlQueryToken.status === 401, rDlQueryToken.status);
 
     } finally {
         serverM.kill();
