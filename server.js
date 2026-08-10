@@ -1430,10 +1430,11 @@ app.patch('/api/calendar/notifications/read-all', (req, res) => {
 // the Service side, but has fully separate stores, logic and UI.
 // All hierarchy rules live in operations/ops-auth.js (centralized).
 // =========================================================================
-const opsAuth      = require('./operations/ops-auth');
-const opsEmail     = require('./operations/ops-email');
-const opsRecurring = require('./operations/ops-recurring');
-const opsScheduler = require('./operations/ops-scheduler');
+const opsAuth         = require('./operations/ops-auth');
+const opsEmail        = require('./operations/ops-email');
+const opsRecurring    = require('./operations/ops-recurring');
+const opsScheduler    = require('./operations/ops-scheduler');
+const opsIntelligence = require('./operations/ops-intelligence');
 
 const OPS_USERS_FILE = path.join(DATA_DIR, 'ops-users.json');
 const OPS_TASKS_FILE = path.join(DATA_DIR, 'ops-tasks.json');
@@ -2679,6 +2680,24 @@ app.get('/api/operations/stats', (req, res) => {
     }
 
     res.json({ success: true, stats, workload, me: publicOpsUser(actor) });
+});
+
+// ── Intelligence Engine ────────────────────────────────────────────────────
+// GET /api/operations/intelligence — Director only
+// Returns rule-based analysis: attention alerts, workload, suggestions, summary.
+app.get('/api/operations/intelligence', (req, res) => {
+    const ctx = requireOpsAuth(req, res);
+    if (!ctx) return;
+    const actor = ctx.opsUser;
+    if (!opsAuth.canManageUsers(actor)) {
+        return res.status(403).json({ error: 'Accesso riservato al Direttore.' });
+    }
+
+    const tasks = getOpsTasks(actor.companyId);    // raw records
+    const users = getOpsUsers(actor.companyId);    // raw records
+
+    const result = opsIntelligence.analyzeIntelligence(actor.companyId, { tasks, users });
+    res.json({ success: true, ...result });
 });
 
 // =========================================================================

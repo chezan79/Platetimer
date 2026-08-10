@@ -88,6 +88,38 @@
     <p class="section-title">In ritardo per reparto</p>
     <div class="card" id="dept-bars"></div>
   </div>
+
+  <!-- Intelligence Engine Card (Sprint 6) -->
+  <div id="intel-section" style="display:none;margin-bottom:24px">
+    <p class="section-title">🧠 Operations Intelligence</p>
+    <div class="card" style="padding:0;overflow:hidden">
+
+      <!-- Attention -->
+      <div class="intel-section">
+        <div class="intel-section-hdr">🔴 Allerta</div>
+        <div id="intel-attention" class="intel-body"></div>
+      </div>
+
+      <!-- Today's Summary -->
+      <div class="intel-section">
+        <div class="intel-section-hdr">📊 Riepilogo di oggi</div>
+        <div id="intel-summary" class="intel-body"></div>
+      </div>
+
+      <!-- Workload Analysis -->
+      <div class="intel-section">
+        <div class="intel-section-hdr">⚖️ Analisi carico di lavoro</div>
+        <div id="intel-workload" class="intel-body"></div>
+      </div>
+
+      <!-- Suggestions -->
+      <div class="intel-section">
+        <div class="intel-section-hdr">💡 Suggerimenti</div>
+        <div id="intel-suggestions" class="intel-body"></div>
+      </div>
+
+    </div>
+  </div>
 </main>
 
 <script src="js/ws-auth.js"></script>
@@ -105,10 +137,11 @@ async function load() {
   document.getElementById('me-role').textContent = OpsCommon.roleLabel(me.user.role);
 
   // Parallel API calls
-  const [taskRes, statsRes, escRes] = await Promise.all([
+  const [taskRes, statsRes, escRes, intelRes] = await Promise.all([
     OpsCommon.api('/api/operations/tasks'),
     OpsCommon.api('/api/operations/stats'),
     OpsCommon.api('/api/operations/escalation-status'),
+    OpsCommon.api('/api/operations/intelligence'),
   ]);
 
   if (!taskRes || !taskRes.success) { OpsCommon.showError(taskRes && taskRes.error); return; }
@@ -189,6 +222,9 @@ async function load() {
     document.getElementById('workload-card').innerHTML = '<div class="empty-state" style="padding:12px 0">Nessun membro del team da mostrare.</div>';
   }
 
+  // Intelligence Engine
+  renderIntelligence(intelRes);
+
   // Overdue by department
   if (escRes && escRes.success) {
     const depts = escRes.overdueByDepartment;
@@ -202,6 +238,85 @@ async function load() {
           <span style="font-size:14px;font-weight:800;min-width:28px;text-align:right;color:var(--danger)">${cnt}</span>
         </div>`).join('');
     }
+  }
+}
+
+// ── Intelligence rendering (Sprint 6) ────────────────────────────────────────
+function renderIntelligence(r) {
+  if (!r || !r.success) return;
+  document.getElementById('intel-section').style.display = '';
+
+  const SEV_COLOR = { HIGH: '#dc2626', MEDIUM: '#d97706', LOW: '#64748b' };
+  const SEV_BG    = { HIGH: 'rgba(220,38,38,.07)', MEDIUM: 'rgba(217,119,6,.07)', LOW: 'rgba(100,116,139,.05)' };
+  const SEV_LABEL = { HIGH: 'ALTA', MEDIUM: 'MEDIA', LOW: 'BASSA' };
+  const STATUS_COLOR = { OVERLOADED: '#dc2626', BUSY: '#d97706', NORMAL: '#16a34a' };
+  const STATUS_LABEL = { OVERLOADED: 'Sovraccarico', BUSY: 'Occupato', NORMAL: 'Normale' };
+
+  // — Attention —
+  const attDiv = document.getElementById('intel-attention');
+  if (r.attention && r.attention.length) {
+    attDiv.innerHTML = r.attention.slice(0, 12).map(a => `
+      <div class="intel-alert" style="border-left-color:${SEV_COLOR[a.severity]};background:${SEV_BG[a.severity]}">
+        <div class="intel-alert-top">
+          <span class="intel-sev-badge" style="background:${SEV_COLOR[a.severity]}">${SEV_LABEL[a.severity]}</span>
+          <span class="intel-alert-title">${esc(a.title)}</span>
+        </div>
+        <div class="intel-alert-desc">${esc(a.description)}</div>
+        <div class="intel-alert-action">→ ${esc(a.recommendedAction)}</div>
+      </div>`).join('');
+  } else {
+    attDiv.innerHTML = '<div class="intel-empty">✅ Nessuna allerta attiva. Tutto regolare.</div>';
+  }
+
+  // — Summary —
+  const sumDiv = document.getElementById('intel-summary');
+  if (r.summary) {
+    const s = r.summary;
+    sumDiv.innerHTML = `
+      <div class="intel-sum-grid">
+        <div class="intel-sum-cell"><div class="intel-sum-num ok">${s.completedToday}</div><div class="intel-sum-lbl">Completati oggi</div></div>
+        <div class="intel-sum-cell"><div class="intel-sum-num danger">${s.overdueToday}</div><div class="intel-sum-lbl">In ritardo</div></div>
+        <div class="intel-sum-cell"><div class="intel-sum-num warn">${s.urgentOpen}</div><div class="intel-sum-lbl">Urgenti aperti</div></div>
+        <div class="intel-sum-cell"><div class="intel-sum-num accent">${s.completionRate}%</div><div class="intel-sum-lbl">Tasso completamento</div></div>
+      </div>
+      ${s.mostActiveDepartment ? `<div class="intel-sum-tag">🏆 Reparto più attivo: <strong>${esc(s.mostActiveDepartment)}</strong></div>` : ''}
+      ${s.mostOverloadedDepartment ? `<div class="intel-sum-tag warn">⚠️ Reparto sotto pressione: <strong>${esc(s.mostOverloadedDepartment)}</strong></div>` : ''}
+      ${s.usersNeedingAttention && s.usersNeedingAttention.length ? `<div class="intel-sum-tag danger">👤 Attenzione: ${esc(s.usersNeedingAttention.map(u=>u.userName).join(', '))}</div>` : ''}`;
+  }
+
+  // — Workload —
+  const wlDiv = document.getElementById('intel-workload');
+  if (r.workload && r.workload.length) {
+    wlDiv.innerHTML = r.workload.map(w => `
+      <div class="intel-wl-row">
+        <div class="intel-wl-info">
+          <div class="intel-wl-name">${esc(w.userName)}</div>
+          <div class="intel-wl-role">${esc(OpsCommon.roleLabel(w.role))}</div>
+        </div>
+        <div class="intel-wl-stats">
+          <span title="Aperti">${w.assigned} aperti</span>
+          ${w.overdue  ? `<span class="danger" title="In ritardo">· ${w.overdue} ritardo</span>` : ''}
+          ${w.urgent   ? `<span class="warn"   title="Urgenti">· ${w.urgent} urgenti</span>` : ''}
+        </div>
+        <div class="intel-wl-score">
+          <span class="intel-status-badge" style="background:${STATUS_COLOR[w.status]}20;color:${STATUS_COLOR[w.status]};border:1px solid ${STATUS_COLOR[w.status]}40">${STATUS_LABEL[w.status]}</span>
+          <span class="intel-wl-score-num" style="color:${STATUS_COLOR[w.status]}">${w.currentLoadScore}</span>
+        </div>
+      </div>`).join('');
+  } else {
+    wlDiv.innerHTML = '<div class="intel-empty">Nessun membro attivo nel team.</div>';
+  }
+
+  // — Suggestions —
+  const sugDiv = document.getElementById('intel-suggestions');
+  if (r.suggestions && r.suggestions.length) {
+    sugDiv.innerHTML = r.suggestions.slice(0, 8).map(s => `
+      <div class="intel-sug">
+        <div class="intel-sug-title">${esc(s.title)}</div>
+        <div class="intel-sug-desc">${esc(s.description)}</div>
+      </div>`).join('');
+  } else {
+    sugDiv.innerHTML = '<div class="intel-empty">Nessun suggerimento al momento.</div>';
   }
 }
 
