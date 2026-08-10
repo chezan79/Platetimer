@@ -100,13 +100,13 @@ async function load() {
   document.getElementById('stat-overdue').textContent = overdue.length;
   document.getElementById('stat-urgent').textContent  = urgent.length;
 
-  // Briefing — generated narrative text, kept in Italian
-  document.getElementById('brief-text').innerHTML = `
-    La cucina ha <span class="brief-num">${today.length}</span> compiti pianificati oggi.
-    <span class="brief-num ok">${done.length}</span> sono già stati completati.
-    ${overdue.length > 0 ? `<span class="brief-num red">${overdue.length}</span> ${overdue.length===1?'compito è in ritardo':'compiti sono in ritardo'}.` : ''}
-    ${overdue.length===0 ? '<span style="color:var(--ok)">✅ Nessun ritardo.</span>' : ''}
-  `;
+  // Briefing — translated narrative
+  document.getElementById('brief-text').innerHTML = [
+    OpsCommon.briefFmt('ops.brief.cc.tasks', today.length, ''),
+    OpsCommon.briefFmt('ops.brief.cc.done', done.length, 'ok'),
+    overdue.length > 0 ? OpsCommon.briefFmt(overdue.length===1?'ops.brief.overdue1':'ops.brief.overdueN', overdue.length, 'red') : '',
+    overdue.length===0 ? `<span style="color:var(--ok)">${t('ops.brief.cc.noDelay')}</span>` : '',
+  ].filter(Boolean).join(' ');
 
   const container = document.getElementById('main-content');
   container.innerHTML = '';
@@ -170,7 +170,14 @@ function renderRoleIntel(r) {
   if (r.newSinceLastVisit) OpsCommon.renderNewSinceLastVisit(r.newSinceLastVisit, null, 'cc-nsv-content');
 }
 
-I18n.init({ selector: '#i18n-sel' }).then(() => load());
+I18n.init({ selector: '#i18n-sel' }).then(() => {
+  load();
+  document.addEventListener('click', function(e) {
+    if (e.target && e.target.classList.contains('i18n-lang-btn')) {
+      setTimeout(load, 30);
+    }
+  });
+});
 
 // Sprint 5: real-time live updates
 OpsRealtime.init();

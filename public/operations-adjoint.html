@@ -92,13 +92,13 @@ async function load() {
   document.getElementById('stat-urgent').textContent  = urgent.length;
   document.getElementById('stat-today').textContent   = today.length;
 
-  // Briefing — generated narrative
-  document.getElementById('brief-text').innerHTML = `
-    ${esc(OpsCommon.greeting())}. Hai <span class="brief-num">${mine.length}</span> compiti attivi.
-    ${overdue.length > 0 ? `<span class="brief-num red">${overdue.length}</span> ${overdue.length===1?'compito richiede':'compiti richiedono'} coordinamento (in ritardo).` : ''}
-    ${urgent.length > 0 ? `<span class="brief-num warn">${urgent.length}</span> urgenti da gestire.` : ''}
-    ${overdue.length===0 && urgent.length===0 ? '<span style="color:var(--ok)">✅ Nessuna criticità.</span>' : ''}
-  `;
+  // Briefing — translated narrative
+  document.getElementById('brief-text').innerHTML = [
+    esc(OpsCommon.greeting()) + '. ' + OpsCommon.briefFmt('ops.brief.adj.mine', mine.length, ''),
+    overdue.length > 0 ? OpsCommon.briefFmt(overdue.length===1?'ops.brief.adj.overdue1':'ops.brief.adj.overdueN', overdue.length, 'red') : '',
+    urgent.length > 0 ? OpsCommon.briefFmt('ops.brief.adj.urgent', urgent.length, 'warn') : '',
+    overdue.length===0 && urgent.length===0 ? `<span style="color:var(--ok)">${t('ops.brief.adj.noCrit')}</span>` : '',
+  ].filter(Boolean).join(' ');
 
   const container = document.getElementById('main-content');
   container.innerHTML = '';
@@ -164,7 +164,14 @@ function renderRoleIntel(r) {
   if (r.newSinceLastVisit) OpsCommon.renderNewSinceLastVisit(r.newSinceLastVisit, null, 'adj-nsv-content');
 }
 
-I18n.init({ selector: '#i18n-sel' }).then(() => load());
+I18n.init({ selector: '#i18n-sel' }).then(() => {
+  load();
+  document.addEventListener('click', function(e) {
+    if (e.target && e.target.classList.contains('i18n-lang-btn')) {
+      setTimeout(load, 30);
+    }
+  });
+});
 
 // Sprint 5: real-time live updates
 OpsRealtime.init();

@@ -418,6 +418,13 @@ const OpsCommon = (() => {
           <div class="nsv-items">${itemsHtml}</div>`;
     }
 
+    // briefFmt(key, n, cls) — translate a brief sentence, replacing {n} with a styled span.
+    // Used by dashboard pages to render translated narrative briefings.
+    function briefFmt(key, n, cls) {
+        const span = `<span class="brief-num${cls ? ' ' + cls : ''}">${n}</span>`;
+        return _t(key).replace('{n}', span);
+    }
+
     return {
         api, loadMe, showError, escHtml,
         fmtDue, fmtDatetime, fmtDateShort,
@@ -425,6 +432,6 @@ const OpsCommon = (() => {
         buildAssigneeSelect, renderTaskList, historyLine,
         logout, ROLE_LABELS, PRIORITY_LABELS, STATUS_LABELS, HISTORY_LABELS,
         nextTask, isToday, isCompletedToday, greeting, taskCard, renderSection,
-        renderNewSinceLastVisit,
+        renderNewSinceLastVisit, briefFmt,
     };
 })();

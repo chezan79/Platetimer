@@ -214,7 +214,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
     </a>
     <a href="operations.html" class="nav-card calendar">
       <span class="card-icon" aria-hidden="true">📋</span>
-      <span class="card-name">Operations</span>
+      <span class="card-name" data-i18n="home.operations">Operations</span>
       <span class="card-sub" data-i18n="home.operationsSub">Gestione compiti brigata</span>
     </a>
     <a href="admin-departments.html" class="nav-card admin">
@@ -497,6 +497,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 
                 const sub = document.createElement('span');
                 sub.className = 'card-sub';
+                sub.setAttribute('data-i18n', 'home.openStation');
                 sub.textContent = _t('home.openStation');
 
                 a.appendChild(icon);
@@ -504,6 +505,9 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
                 a.appendChild(sub);
                 grid.appendChild(a);
             });
+            // Re-apply translations so dynamically created data-i18n elements
+            // are updated immediately and again on future language switches.
+            if (window.I18n) window.I18n.apply(grid);
         } catch (e) {
             console.error('Error loading departments:', e);
             grid.innerHTML = '<div class="grid-msg">' + _t('home.networkError') + ' <a href="javascript:void(0)" onclick="location.reload()">' + _t('home.retry') + '</a>.</div>';

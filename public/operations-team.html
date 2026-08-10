@@ -310,7 +310,7 @@ async function openEdit(id) {
     emailWrap.innerHTML = `<input id="edit-email" class="form-input" type="email" value="${OpsCommon.escHtml(u.email || '')}">`;
   } else {
     emailWrap.innerHTML = `<div class="field-readonly">${OpsCommon.escHtml(u.email || '—')}</div>
-      <p style="font-size:11px;color:var(--muted);margin:4px 0 10px;">Email non modificabile: account Firebase già collegato.</p>`;
+      <p style="font-size:11px;color:var(--muted);margin:4px 0 10px;">${t('ops.team.emailReadonly')}</p>`;
   }
 
   document.getElementById('edit-msg').style.display = 'none';

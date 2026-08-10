@@ -227,16 +227,16 @@ async function load() {
     document.getElementById('stat-done-all').textContent  = s.completed;
   }
 
-  // Today's Brief — brief text is a generated narrative; do NOT translate
+  // Today's Brief — translated narrative using i18n keys
   const escCount = escalated.length;
   const overdueCount = overdue.length;
-  document.getElementById('brief-text').innerHTML = `
-    ${esc(OpsCommon.greeting())}. Oggi ci sono <span class="brief-num">${allActive.length}</span> compiti operativi.
-    <span class="brief-num ok">${doneToday.length}</span> sono già completati.
-    ${overdueCount > 0 ? `<span class="brief-num red">${overdueCount}</span> ${overdueCount===1?'compito è in ritardo':'compiti sono in ritardo'}.` : ''}
-    ${escCount > 0 ? `<span class="brief-num red">${escCount}</span> ${escCount===1?'escalation richiede':'escalation richiedono'} la tua attenzione.` : ''}
-    ${overdueCount===0 && escCount===0 ? '<span style="color:var(--ok)">✅ Tutto sotto controllo.</span>' : ''}
-  `;
+  document.getElementById('brief-text').innerHTML = [
+    esc(OpsCommon.greeting()) + '. ' + OpsCommon.briefFmt('ops.brief.dir.tasks', allActive.length, ''),
+    OpsCommon.briefFmt('ops.brief.dir.done', doneToday.length, 'ok'),
+    overdueCount > 0 ? OpsCommon.briefFmt(overdueCount===1?'ops.brief.overdue1':'ops.brief.overdueN', overdueCount, 'red') : '',
+    escCount > 0 ? OpsCommon.briefFmt(escCount===1?'ops.brief.esc1':'ops.brief.escN', escCount, 'red') : '',
+    overdueCount===0 && escCount===0 ? `<span style="color:var(--ok)">${t('ops.brief.allOk')}</span>` : '',
+  ].filter(Boolean).join(' ');
 
   // Quick action escalation badge
   if (escCount > 0) {
@@ -247,7 +247,7 @@ async function load() {
   const attentionDiv = document.getElementById('attention-content');
   const attItems = [
     ...overdue.slice(0,5).map(tk => renderAttentionCard(tk, users, '🕐 ' + t('ops.sec.overdue'))),
-    ...escalated.slice(0,5).map(tk => renderAttentionCard(tk, users, '🚨 In escalation', '#dc2626')),
+    ...escalated.slice(0,5).map(tk => renderAttentionCard(tk, users, '🚨 ' + t('ops.sec.inEscalation'), '#dc2626')),
     ...urgent.filter(tk => !overdue.find(o=>o.id===tk.id)).slice(0,3).map(tk => renderAttentionCard(tk, users, '⚡ ' + t('ops.priority.urgent'), '#d97706')),
   ];
   if (attItems.length) {
@@ -299,10 +299,9 @@ function renderIntelligence(r) {
   if (!r || !r.success) return;
   document.getElementById('intel-section').style.display = '';
 
-  // — Executive Brief (Sprint 6.3) — generated narrative, kept as-is
-  const briefEl = document.getElementById('brief-text');
-  if (r.executiveBrief) briefEl.textContent = r.executiveBrief;
-  else if (r.briefing)  briefEl.textContent = r.briefing;
+  // — Executive Brief (Sprint 6.3) — server text is Italian until I18N-3;
+  // do NOT overwrite the translated client brief in #brief-text.
+  // Server brief is suppressed here; it will be localised in the next i18n sprint.
 
   // — New Since Last Visit (Sprint 6.3.1) —
   OpsCommon.renderNewSinceLastVisit(r.newSinceLastVisit, 'nsv-section', 'nsv-content');
@@ -496,7 +495,15 @@ function renderAttentionCard(tk, users, label, color='#dc2626') {
   </div>`;
 }
 
-I18n.init({ selector: '#i18n-sel' }).then(() => load());
+I18n.init({ selector: '#i18n-sel' }).then(() => {
+  load();
+  // Re-render translated narrative when user switches language
+  document.addEventListener('click', function(e) {
+    if (e.target && e.target.classList.contains('i18n-lang-btn')) {
+      setTimeout(load, 30);
+    }
+  });
+});
 
 // Sprint 5: real-time live updates ──────────────────────────────────────────
 OpsRealtime.init();
