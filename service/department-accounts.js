@@ -1,5 +1,5 @@
 // service/department-accounts.js — Department Account model (Service side).
-// Sprint S1.1 — FOUNDATION ONLY.
+// Sprints S1.1–S2.0.
 //
 // A Department Account binds ONE Service identity to exactly ONE company and
 // ONE department. The account carries NO type/role/central data of its own:
@@ -17,16 +17,31 @@
 //   companyId       string  (normalized company name from session)
 //   departmentId    string  (must reference a department of the SAME company)
 //   displayName     string
-//   loginIdentifier string  unique across all companies — METADATA ONLY in
-//                           this sprint (no login flow, no password, no hash)
+//   loginIdentifier string  unique within the company (S2.0+)
+//   passwordHash    string  '<salt>:<hex>' — PBKDF2-SHA256, admin-set (S2.0+)
 //   firebaseUid     null    (stays null until a later sprint binds Firebase Auth)
 //   status          'ACTIVE' | 'SUSPENDED'
 //   createdAt       number (ms)
 //   createdBy       string (uid of the creating session)
-//
-// NO passwords or password hashes are ever stored on these records.
 
 const crypto = require('crypto');
+
+// ── Password Hashing ─────────────────────────────────────────────────────
+// Simple PBKDF2-SHA256. Not a user-facing security boundary — these are
+// workstation PINs set by an admin. Using a proper hash anyway.
+
+function _hashPassword(password, salt) {
+    return crypto.pbkdf2Sync(String(password), salt, 10000, 32, 'sha256').toString('hex');
+}
+function createPasswordHash(password) {
+    const salt = crypto.randomBytes(16).toString('hex');
+    return `${salt}:${_hashPassword(password, salt)}`;
+}
+function verifyPassword(password, stored) {
+    if (!stored || !stored.includes(':')) return false;
+    const [salt, hash] = stored.split(':');
+    return _hashPassword(password, salt) === hash;
+}
 
 const ACCOUNT_STATUSES = ['ACTIVE', 'SUSPENDED'];
 const DEPARTMENT_TYPES = ['STANDARD', 'CENTRAL'];
@@ -150,10 +165,12 @@ function bindFirebaseUid(companyId, accountId, uid) {
 
 // Creates a Department Account. Enforces:
 //  • department exists, belongs to the actor company, and is active
-//  • max ONE ACTIVE account per department
-//  • loginIdentifier unique across all companies
+//  • max ONE account per department (any status) — S2.0 tightened from ACTIVE-only
+//  • loginIdentifier unique within the company — S2.0 (was global; bind endpoint
+//    still uses global findDepartmentAccountByLoginIdentifier for its lookup)
+//  • password is hashed with PBKDF2; absence leaves passwordHash undefined
 // Returns { ok, account } or { ok:false, code, error }.
-function createDepartmentAccount({ companyId, departmentId, displayName, loginIdentifier, createdBy }, companyDepts) {
+function createDepartmentAccount({ companyId, departmentId, displayName, loginIdentifier, password, createdBy }, companyDepts) {
     const v = validateDepartmentAccountDepartment(companyId, departmentId, companyDepts);
     if (!v.ok) return v;
 
@@ -165,10 +182,16 @@ function createDepartmentAccount({ companyId, departmentId, displayName, loginId
     if (!login) return { ok: false, code: 400, error: 'loginIdentifier is required.' };
     if (login.length > 120) return { ok: false, code: 400, error: 'loginIdentifier too long (max 120).' };
 
-    if (findDepartmentAccountByDepartment(companyId, departmentId)) {
-        return { ok: false, code: 409, error: 'This department already has an ACTIVE account. Suspend it first.' };
+    // One account per department (any status) — S2.0 rule
+    const existingForDept = (store[companyId] || []).find(a => a.departmentId === departmentId);
+    if (existingForDept) {
+        return { ok: false, code: 409, error: 'This department already has a Department Account.' };
     }
-    if (findDepartmentAccountByLoginIdentifier(login)) {
+    // Login unique within the company — S2.0 rule
+    const loginTaken = (store[companyId] || []).some(
+        a => (a.loginIdentifier || '').toLowerCase() === login
+    );
+    if (loginTaken) {
         return { ok: false, code: 409, error: 'loginIdentifier already in use.' };
     }
 
@@ -178,6 +201,7 @@ function createDepartmentAccount({ companyId, departmentId, displayName, loginId
         departmentId,
         displayName: name,
         loginIdentifier: login,
+        ...(password ? { passwordHash: createPasswordHash(String(password)) } : {}),
         firebaseUid: null, // bound in a later sprint — never set here
         status: 'ACTIVE',
         createdAt: Date.now(),
@@ -186,6 +210,35 @@ function createDepartmentAccount({ companyId, departmentId, displayName, loginId
     };
     if (!store[companyId]) store[companyId] = [];
     store[companyId].push(account);
+    persist();
+    return { ok: true, account };
+}
+
+// Updates a Department Account's loginIdentifier and/or password.
+// Login uniqueness is enforced within the company (excluding self).
+// An empty/absent field is skipped — callers only send what they want changed.
+// Returns { ok, account } or { ok:false, code, error }.
+function updateDepartmentAccount(companyId, accountId, { loginIdentifier, password }) {
+    const account = (store[companyId] || []).find(a => a.id === accountId);
+    if (!account) return { ok: false, code: 404, error: 'Department account not found.' };
+
+    if (loginIdentifier !== undefined) {
+        const login = String(loginIdentifier).trim().toLowerCase();
+        if (!login) return { ok: false, code: 400, error: 'loginIdentifier is required.' };
+        if (login.length > 120) return { ok: false, code: 400, error: 'loginIdentifier too long (max 120).' };
+        const loginTaken = (store[companyId] || []).some(
+            a => a.id !== accountId && (a.loginIdentifier || '').toLowerCase() === login
+        );
+        if (loginTaken) return { ok: false, code: 409, error: 'loginIdentifier already in use.' };
+        account.loginIdentifier = login;
+    }
+
+    if (password !== undefined) {
+        const pass = String(password).trim();
+        if (!pass) return { ok: false, code: 400, error: 'password is required.' };
+        account.passwordHash = createPasswordHash(pass);
+    }
+
     persist();
     return { ok: true, account };
 }
@@ -294,10 +347,13 @@ module.exports = {
     validateDepartmentAccountDepartment,
     bindFirebaseUid,
     createDepartmentAccount,
+    updateDepartmentAccount,
     setDepartmentAccountStatus,
     hasDepartmentAccounts,
     suspendAccountsForDepartment,
     isValidDepartmentType,
     getDepartmentType,
     setDepartmentType,
+    createPasswordHash,
+    verifyPassword,
 };

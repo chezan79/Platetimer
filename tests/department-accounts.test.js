@@ -102,11 +102,14 @@ async function main() {
         });
         check('7. Second ACTIVE account for same department rejected (409)', r.status === 409);
 
-        // ── Duplicate loginIdentifier rejected (cross-company too) ──
-        r = await api(userB, 'POST', '/api/department-accounts', {
-            departmentId: deptB1.id, displayName: 'Pasticceria', loginIdentifier: 'CUCINA@company-a'
+        // ── Duplicate loginIdentifier rejected within the same company (S2.0: company-scoped) ──
+        // acct1 already holds 'cucina@company-a' in company-a; trying to claim the same login
+        // for a different dept within company-a must fail. Cross-company duplicates are now
+        // allowed (each company has its own namespace) — tested separately in S2.0 suite.
+        r = await api(userA, 'POST', '/api/department-accounts', {
+            departmentId: deptA2.id, displayName: 'Cucina Dup', loginIdentifier: 'CUCINA@company-a'
         });
-        check('8. Duplicate loginIdentifier rejected across companies (409)', r.status === 409);
+        check('8. Duplicate loginIdentifier rejected within company (409)', r.status === 409);
 
         // ── Forged companyId in body ignored ──
         r = await api(userA, 'POST', '/api/department-accounts', {
@@ -131,13 +134,15 @@ async function main() {
         r = await api(userB, 'PUT', `/api/department-accounts/${acct1.id}/status`, { status: 'ACTIVE' });
         check('14. Company B cannot touch company A account (404)', r.status === 404);
 
-        // Suspended dept can get a new ACTIVE account; then reactivation of the old one is blocked
+        // S2.0: one account per department (any status). A suspended account still occupies
+        // the slot — creating a second one is rejected. To update the account, use PATCH.
         r = await api(userA, 'POST', '/api/department-accounts', {
             departmentId: deptA1.id, displayName: 'Cucina Nuovo', loginIdentifier: 'cucina-new@company-a'
         });
-        check('15. New ACTIVE account allowed after suspension', r.status === 201);
+        check('15. Second account for same dept rejected even after suspension (409)', r.status === 409);
+        // With no second account, reactivating the suspended one succeeds (no conflict).
         r = await api(userA, 'PUT', `/api/department-accounts/${acct1.id}/status`, { status: 'ACTIVE' });
-        check('16. Reactivation blocked while another ACTIVE exists (409)', r.status === 409);
+        check('16. Reactivation succeeds when no other ACTIVE account exists (200)', r.status === 200);
 
         // ── departmentType ──
         r = await api(userA, 'GET', '/api/departments');
@@ -202,9 +207,13 @@ async function main() {
         server = await startServer();
 
         r = await api(userA, 'GET', '/api/department-accounts');
-        check('28. Department accounts survive restart', r.data.success === true && r.data.accounts.length === 4);
+        // S2.0: one account per dept (any status), so test-15 no longer creates a second acct
+        // for deptA1. Active accounts: acct1 (deptA1, reactivated in test-16), deptA2 acct
+        // (from test-9), grillAcct (reactivated in test-36). Total = 3.
+        check('28. Department accounts survive restart', r.data.success === true && r.data.accounts.length === 3);
         const restored = r.data.accounts.find(a => a.id === acct1.id);
-        check('29. SUSPENDED status persists across restart', restored && restored.status === 'SUSPENDED');
+        // acct1 was reactivated in test-16 (no blocking account existed after S2.0 change)
+        check('29. Reactivated status persists across restart', restored && restored.status === 'ACTIVE');
         r = await api(userA, 'GET', '/api/departments');
         const a2 = r.data.departments.find(d => d.id === deptA2.id);
         check('30. departmentType persists across restart', a2 && a2.departmentType === 'CENTRAL');

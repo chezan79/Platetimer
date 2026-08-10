@@ -21,6 +21,8 @@ const SECRET = 'test-secret-for-s12-suite';
 const PORT   = 5098;
 const BASE   = `http://127.0.0.1:${PORT}`;
 const DATA_DIR = fs.mkdtempSync(path.join(require('os').tmpdir(), 's12test-'));
+// Pre-seed medium plan so company-a can create 5 active departments (needed by S12-32 fix)
+fs.writeFileSync(path.join(DATA_DIR, 'plans.json'), JSON.stringify({ 'company-a': 'medium', 'company-b': 'medium' }));
 
 // ── Token helpers ────────────────────────────────────────────────────────────
 function sign(uid, companyName) {
@@ -228,9 +230,12 @@ async function main() {
         check('S12-30. departmentId still present',        !!r.data.departmentId,        r.data);
         check('S12-31. departmentType still present',      !!r.data.departmentType,       r.data);
 
-        // Binding to a SUSPENDED account must be rejected
-        const acctSusp2Id = (await createAccount(tokAdminA, deptStdId, 'KD2', 'kitchen.display2'))?.id;
-        // First suspend it
+        // Binding to a SUSPENDED account must be rejected.
+        // S2.0: one account per dept (any status) — cannot create a second account for deptStdId
+        // (which already has acctStd, now suspended). Use a fresh dept for this test instead.
+        const deptForSusp = await createDept(tokAdminA, 'Pantry');
+        const acctSusp2Id = (await createAccount(tokAdminA, deptForSusp, 'KD2', 'kitchen.display2'))?.id;
+        // Suspend immediately so we can test bind-to-suspended rejection
         await api(tokAdminA, 'PUT', `/api/department-accounts/${acctSusp2Id}/status`, { status: 'SUSPENDED' });
         const tokFresh = sign('uid-fresh', 'company-a');
         r = await api(tokFresh, 'POST', '/api/department-accounts/bind', {

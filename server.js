@@ -658,27 +658,61 @@ app.delete('/api/departments/:id', (req, res) => {
 // company can manage its Department Accounts. companyId ALWAYS comes from
 // the HMAC session — never from client body/query.
 
+// [S2.0] safeAccount — strips passwordHash before sending to client.
+// Adds hasPassword:bool so the UI knows whether a password has been set
+// without ever sending the hash. Apply to every account in every response.
+function safeAccount(a) {
+    if (!a) return a;
+    const { passwordHash, ...rest } = a;
+    rest.hasPassword = !!passwordHash;
+    return rest;
+}
+
 // GET /api/department-accounts — list the company's Department Accounts
 app.get('/api/department-accounts', (req, res) => {
     const session = requireAuth(req, res);
     if (!session) return;
     const companyId = session.companyName; // never from client input
-    res.json({ success: true, accounts: departmentAccounts.getDepartmentAccounts(companyId) });
+    const accounts = departmentAccounts.getDepartmentAccounts(companyId).map(safeAccount);
+    res.json({ success: true, accounts });
 });
 
-// POST /api/department-accounts — create (one ACTIVE per department)
+// POST /api/department-accounts — create (one account per department)
+// [S2.0] Accepts optional `password`. displayName auto-derived from dept name
+// when not supplied (admin UI does not expose a displayName field).
 app.post('/api/department-accounts', (req, res) => {
     const session = requireAuth(req, res);
     if (!session) return;
     const companyId = session.companyName; // forged companyId in body is ignored
-    const { departmentId, displayName, loginIdentifier } = req.body || {};
+    const { departmentId, loginIdentifier, password } = req.body || {};
+    // Auto-derive displayName from the department record when not supplied
+    let { displayName } = req.body || {};
+    if (!(displayName || '').trim()) {
+        const dept = getCompanyDepts(companyId).find(d => d.id === departmentId);
+        displayName = dept ? dept.name : loginIdentifier;
+    }
     const result = departmentAccounts.createDepartmentAccount(
-        { companyId, departmentId, displayName, loginIdentifier, createdBy: session.uid },
+        { companyId, departmentId, displayName, loginIdentifier, password, createdBy: session.uid },
         getCompanyDepts(companyId)
     );
     if (!result.ok) return res.status(result.code).json({ error: result.error });
     console.log(`✅ [DEPT-ACCOUNT] Created "${result.account.displayName}" for company "${companyId}"`);
-    res.status(201).json({ success: true, account: result.account });
+    res.status(201).json({ success: true, account: safeAccount(result.account) });
+});
+
+// PATCH /api/department-accounts/:id — [S2.0] update loginIdentifier and/or password.
+// Status changes use PUT /:id/status (existing endpoint). Company isolation is
+// structural: account lookup is scoped to session company.
+app.patch('/api/department-accounts/:id', (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const companyId = session.companyName;
+    const { loginIdentifier, password } = req.body || {};
+    const result = departmentAccounts.updateDepartmentAccount(
+        companyId, req.params.id, { loginIdentifier, password }
+    );
+    if (!result.ok) return res.status(result.code).json({ error: result.error });
+    res.json({ success: true, account: safeAccount(result.account) });
 });
 
 // PUT /api/department-accounts/:id/status — ACTIVE | SUSPENDED
@@ -688,7 +722,7 @@ app.put('/api/department-accounts/:id/status', (req, res) => {
     const companyId = session.companyName;
     const result = departmentAccounts.setDepartmentAccountStatus(companyId, req.params.id, (req.body || {}).status, getCompanyDepts(companyId));
     if (!result.ok) return res.status(result.code).json({ error: result.error });
-    res.json({ success: true, account: result.account });
+    res.json({ success: true, account: safeAccount(result.account) });
 });
 
 // POST /api/department-accounts/bind — bind the caller's verified Firebase UID
