@@ -51,12 +51,15 @@ S62-43 and S63-53 check `/1/.test(briefingText)` — passes/fails depending on w
 the current-time string embedded in the briefing contains the digit "1". Not related to
 attachments. These are known fragile tests in Sprint 6.2 and 6.3.
 
-## Real Firebase Storage — environment gap
-`FIREBASE_ADMIN_SERVICE_ACCOUNT` is NOT set in the Replit environment.
-`GOOGLE_APPLICATION_CREDENTIALS_JSON` is present but belongs to project `feisty-coder-461119-r0`
-(Google Cloud Speech only) — wrong project, must never be used for Firebase/Storage.
-Real Storage bucket: `app-dati-tavoli.appspot.com` — unreachable until the secret is added.
-`storageBucket` = null at startup; upload/download/delete all return 503.
+## Real Firebase Storage — bucket name
+`FIREBASE_ADMIN_SERVICE_ACCOUNT` is set and initialises correctly (project: `app-dati-tavoli`).
+`GOOGLE_APPLICATION_CREDENTIALS_JSON` belongs to `feisty-coder-461119-r0` (Speech API only — never mix).
+
+**CORRECT bucket name: `app-dati-tavoli.firebasestorage.app`**
+`app-dati-tavoli.appspot.com` does NOT exist — Firebase uses the new `.firebasestorage.app` format for this project.
+The default in server.js (`${FIREBASE_PROJECT_ID}.appspot.com`) is therefore wrong and must be changed.
+Set `FIREBASE_STORAGE_BUCKET=app-dati-tavoli.firebasestorage.app` in Secrets, OR update the fallback default in server.js.
+Full cycle confirmed: upload → exists:true → delete → exists:false all PASS with the correct bucket name.
 
 ## Cumulative test count
 **1,442 / 1,442 passing** (1,404 prior + 38 new; 2 pre-existing time-flaky excluded).
