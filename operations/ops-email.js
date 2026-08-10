@@ -80,7 +80,12 @@ async function _send({ to, subject, text, html }) {
     }
 
     try {
-        await transporter.sendMail({ from: FROM(), to, subject, text, html });
+        const fromAddr = FROM();
+        const info = await transporter.sendMail({ from: fromAddr, to, subject, text, html });
+        const recipientDomain = to.includes('@') ? '@' + to.split('@')[1] : '(unknown)';
+        // ── TEMPORARY DIAGNOSTIC LOG (remove after investigation) ────────────
+        console.log(`🔍 [DIAG-EMAIL] transport=${TRANSPORT} | from="${fromAddr}" | recipientDomain=${recipientDomain} | messageId=${info.messageId || '(none)'} | ts=${new Date().toISOString()}`);
+        // ─────────────────────────────────────────────────────────────────────
         console.log(`📧 [OPS-EMAIL] SENT | To: ${maskEmail(to)} | Subject: ${subject} | ts: ${new Date().toISOString()}`);
         return { result: RESULT.SENT, transport: TRANSPORT };
     } catch (err) {

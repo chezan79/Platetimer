@@ -1666,6 +1666,12 @@ app.post('/api/operations/users', async (req, res) => {
     const activationPath = `/operations-activate.html?code=${user.inviteCode}`;
     const activationUrl = baseUrl ? `${baseUrl}${activationPath}` : activationPath;
 
+    // ── TEMPORARY DIAGNOSTIC LOG (remove after investigation) ────────────────
+    console.log(`🔍 [DIAG-INVITE] pid=${process.pid}`);
+    console.log(`🔍 [DIAG-INVITE] APP_BASE_URL raw="${process.env.APP_BASE_URL || '(not set)'}"`);
+    console.log(`🔍 [DIAG-INVITE] activationUrl prefix="${baseUrl ? baseUrl + '/operations-activate.html' : '(relative — no APP_BASE_URL)'}"`);
+    // ─────────────────────────────────────────────────────────────────────────
+
     // Attempt invitation email AFTER persist. Failure is non-fatal and logged.
     let emailResult = { result: opsEmail.RESULT.FAILED, transport: opsEmail.TRANSPORT, reason: 'not attempted' };
     try {
