@@ -174,8 +174,15 @@ function createDepartmentAccount({ companyId, departmentId, displayName, loginId
     const v = validateDepartmentAccountDepartment(companyId, departmentId, companyDepts);
     if (!v.ok) return v;
 
-    const name = (displayName || '').trim();
-    if (!name) return { ok: false, code: 400, error: 'displayName is required.' };
+    // Auto-derive displayName from the linked department when the caller omits it.
+    // validateDepartmentAccountDepartment already confirmed the dept exists in companyDepts,
+    // so the find() below is always expected to succeed.
+    let name = (displayName || '').trim();
+    if (!name) {
+        const dept = (companyDepts || []).find(d => d.id === departmentId);
+        name = (dept && dept.name) ? String(dept.name).trim() : '';
+    }
+    if (!name) return { ok: false, code: 500, error: 'Cannot derive displayName: department has no name.' };
     if (name.length > 80) return { ok: false, code: 400, error: 'displayName too long (max 80).' };
 
     const login = (loginIdentifier || '').trim().toLowerCase();

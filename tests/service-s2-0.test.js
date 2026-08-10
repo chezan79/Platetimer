@@ -89,10 +89,10 @@ function stopServer(child) {
 }
 
 async function main() {
-    // premium plan so we can create many depts
+    // premium plan so we can create many depts (value must be a plain string, not an object)
     fs.writeFileSync(
         path.join(DATA_DIR, 'plans.json'),
-        JSON.stringify({ tratt: { plan: 'premium', limit: 10 }, brasserie: { plan: 'premium', limit: 10 } })
+        JSON.stringify({ tratt: 'premium', brasserie: 'premium' })
     );
 
     console.log('Starting server…');
@@ -258,6 +258,24 @@ async function main() {
         console.log('\n  — 13. Operations unchanged —\n');
         const rOps = await api(tok, 'GET', '/api/operations/me');
         check('S20-13. Operations /me reachable',      rOps.status === 200 || rOps.status === 403,     rOps.status);
+
+        // ── 14. Regression: create without displayName → auto-derived from dept ──
+        // D3 ("Sala S20") has no account yet — use it to verify the auto-derive path.
+        // S20-9 already confirmed D3 has no account, so this is the first write to D3.
+        console.log('\n  — 14. displayName auto-derive regression —\n');
+        const r14 = await api(tok, 'POST', '/api/department-accounts', {
+            departmentId: d3Id,
+            loginIdentifier: 'sala-login',
+            password: 'secret'
+            // no displayName field — server must derive it from the dept ("Sala S20")
+        });
+        check('S20-14.  Create without displayName → 201',          r14.status === 201,                         r14.status);
+        check('S20-14b. displayName auto-derived from dept name',    r14.data.account?.displayName === 'Sala S20', r14.data.account?.displayName);
+        // Verify via GET that the derived displayName is persisted
+        const rGet14 = await api(tok, 'GET', '/api/department-accounts');
+        const a14    = (rGet14.data.accounts || []).find(a => a.departmentId === d3Id);
+        check('S20-14c. GET also returns derived displayName',       a14?.displayName === 'Sala S20',            a14?.displayName);
+        check('S20-14d. passwordHash absent in response',            !r14.data.account?.passwordHash,            r14.data.account?.passwordHash);
 
     } finally {
         await stopServer(server);

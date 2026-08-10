@@ -685,11 +685,13 @@ app.post('/api/department-accounts', (req, res) => {
     if (!session) return;
     const companyId = session.companyName; // forged companyId in body is ignored
     const { departmentId, loginIdentifier, password } = req.body || {};
-    // Auto-derive displayName from the department record when not supplied
+    // Pass displayName through from body if supplied; createDepartmentAccount auto-derives
+    // it from the dept name when absent (defense-in-depth kept here as a secondary hint).
     let { displayName } = req.body || {};
     if (!(displayName || '').trim()) {
         const dept = getCompanyDepts(companyId).find(d => d.id === departmentId);
-        displayName = dept ? dept.name : loginIdentifier;
+        if (dept && dept.name) displayName = dept.name;
+        // If dept not found here, createDepartmentAccount will re-derive from companyDepts.
     }
     const result = departmentAccounts.createDepartmentAccount(
         { companyId, departmentId, displayName, loginIdentifier, password, createdBy: session.uid },
