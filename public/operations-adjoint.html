@@ -52,6 +52,7 @@
     <div class="stat-card"><div class="stat-num" id="stat-today">—</div><div class="stat-lbl">In scadenza oggi</div></div>
   </div>
 
+  <div id="role-intel" class="role-intel-area"></div>
   <div id="main-content"></div>
 </main>
 
@@ -118,6 +119,28 @@ async function load() {
   if (escalatedForMe.length) {
     OpsCommon.renderSection(container, '🚨 Escalation che ti riguardano', escalatedForMe.slice(0,5), users, '');
   }
+
+  // Sprint 6.2: role-scoped intelligence
+  const intelRes = await OpsCommon.api('/api/operations/intelligence');
+  renderRoleIntel(intelRes);
+}
+
+function renderRoleIntel(r) {
+  const area = document.getElementById('role-intel');
+  if (!r || !r.success || !area) return;
+  const SEV_C = { HIGH:'#dc2626', MEDIUM:'#d97706', LOW:'#64748b' };
+  const parts = [];
+  if (r.briefing) parts.push(`<div class="role-intel-briefing">${esc(r.briefing)}</div>`);
+  if (r.decisions && r.decisions.length) {
+    parts.push(r.decisions.slice(0,3).map(d => `
+      <div class="role-dec-card" style="border-left-color:${SEV_C[d.severity]}">
+        <div class="role-dec-top"><span class="role-dec-sev" style="color:${SEV_C[d.severity]}">${d.severity}</span><span class="role-dec-conf">${d.confidence}% fiducia</span></div>
+        <div class="role-dec-title">${esc(d.title)}</div>
+        <div class="role-dec-reason">${esc(d.reason)}</div>
+        ${d.quickAction?`<a class="dec-qa-btn" href="${esc(d.quickAction.url)}">${esc(d.quickAction.label)}</a>`:''}
+      </div>`).join(''));
+  }
+  area.innerHTML = parts.join('');
 }
 
 load();

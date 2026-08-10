@@ -1435,6 +1435,8 @@ const opsEmail        = require('./operations/ops-email');
 const opsRecurring    = require('./operations/ops-recurring');
 const opsScheduler    = require('./operations/ops-scheduler');
 const opsIntelligence = require('./operations/ops-intelligence');
+const opsSnapshots    = require('./operations/ops-snapshots');
+const opsTrends       = require('./operations/ops-trends');
 
 const OPS_USERS_FILE = path.join(DATA_DIR, 'ops-users.json');
 const OPS_TASKS_FILE = path.join(DATA_DIR, 'ops-tasks.json');
@@ -2683,21 +2685,125 @@ app.get('/api/operations/stats', (req, res) => {
 });
 
 // ── Intelligence Engine ────────────────────────────────────────────────────
-// GET /api/operations/intelligence — Director only
-// Returns rule-based analysis: attention alerts, workload, suggestions, summary.
+// ── Role-scope helpers (Sprint 6.2) ─────────────────────────────────────────
+// Tasks visible to an actor in intelligence context.
+// Uses the same ASSIGNABLE_ROLES matrix that governs task assignment.
+function getScopedTasks(actor, allTasks, allUsers) {
+    if (actor.role === 'DIRECTOR') return allTasks;
+    const userRoleMap = {};
+    allUsers.forEach(u => { userRoleMap[u.id] = u.role; });
+    const assignable = opsAuth.ASSIGNABLE_ROLES[actor.role] || [];
+    // Actor sees their own tasks plus tasks whose assignee role falls in their matrix.
+    return allTasks.filter(t =>
+        t.assigneeId === actor.id ||
+        assignable.includes(userRoleMap[t.assigneeId])
+    );
+}
+
+// Users visible to an actor in intelligence context.
+function getScopedUsers(actor, allUsers) {
+    if (actor.role === 'DIRECTOR') return allUsers;
+    const assignable = opsAuth.ASSIGNABLE_ROLES[actor.role] || [];
+    return allUsers.filter(u => u.id === actor.id || assignable.includes(u.role));
+}
+
+// GET /api/operations/intelligence — all active operations roles (server-scoped)
+// Role, companyId, and scope are NEVER taken from the request body or query string.
 app.get('/api/operations/intelligence', (req, res) => {
     const ctx = requireOpsAuth(req, res);
     if (!ctx) return;
-    const actor = ctx.opsUser;
-    if (!opsAuth.canManageUsers(actor)) {
-        return res.status(403).json({ error: 'Accesso riservato al Direttore.' });
+    const actor     = ctx.opsUser;
+    const companyId = actor.companyId;
+
+    const allTasks = getOpsTasks(companyId);
+    const allUsers = getOpsUsers(companyId);
+
+    // ── Scope tasks and users by role ────────────────────────────────────────
+    const scopedTasks = getScopedTasks(actor, allTasks, allUsers);
+    const scopedUsers = getScopedUsers(actor, allUsers);
+
+    // ── Run scoped intelligence analysis ─────────────────────────────────────
+    const result = opsIntelligence.analyzeIntelligence(companyId, {
+        tasks: scopedTasks,
+        users: scopedUsers,
+    });
+
+    // ── Snapshot (idempotent — company-wide, Director triggers generation) ───
+    if (actor.role === 'DIRECTOR') {
+        opsSnapshots.generateSnapshot(companyId, {
+            tasks: allTasks,
+            users: allUsers,
+            workload: result.workload,
+        });
     }
 
-    const tasks = getOpsTasks(actor.companyId);    // raw records
-    const users = getOpsUsers(actor.companyId);    // raw records
+    // ── Trends (Director only — requires company-wide history) ───────────────
+    const yesterdaySnap = opsSnapshots.getYesterdaySnapshot(companyId);
+    const recentSnaps   = opsSnapshots.getRecentSnapshots(companyId, 7);
+    const trends = actor.role === 'DIRECTOR'
+        ? opsTrends.analyzeTrends(result.summary, yesterdaySnap, recentSnaps)
+        : null;
 
-    const result = opsIntelligence.analyzeIntelligence(actor.companyId, { tasks, users });
-    res.json({ success: true, ...result });
+    // ── Department health (Director + CC + Adjoint) ──────────────────────────
+    const departmentHealth = ['DIRECTOR','CHEF_CUISINE','ADJOINT'].includes(actor.role)
+        ? opsIntelligence.getDepartmentHealth(scopedTasks, yesterdaySnap)
+        : null;
+
+    // ── Personal metrics (Sous Chef / Chef de Brigade) ───────────────────────
+    let myMetrics = null;
+    let nextTask  = null;
+    if (['SOUS_CHEF','CHEF_DE_BRIGADE'].includes(actor.role)) {
+        const wl = result.workload.find(w => w.userId === actor.id) || {};
+        myMetrics = {
+            assigned:       wl.assigned       || 0,
+            overdue:        wl.overdue         || 0,
+            urgent:         wl.urgent          || 0,
+            completedToday: wl.completedToday  || 0,
+        };
+        // next task: first open non-cancelled, ordered by urgency then due date
+        const now = Date.now();
+        const openTasks = scopedTasks
+            .filter(t => !['COMPLETED','CANCELLED'].includes(t.status))
+            .sort((a, b) => {
+                const aUrgent = a.priority === 'URGENT' ? 0 : 1;
+                const bUrgent = b.priority === 'URGENT' ? 0 : 1;
+                if (aUrgent !== bUrgent) return aUrgent - bUrgent;
+                if (!a.dueDate) return 1;
+                if (!b.dueDate) return -1;
+                return new Date(a.dueDate) - new Date(b.dueDate);
+            });
+        const nt = openTasks[0] || null;
+        nextTask = nt ? { id: nt.id, title: nt.title, dueDate: nt.dueDate, priority: nt.priority } : null;
+    }
+
+    // ── Briefing ─────────────────────────────────────────────────────────────
+    const briefing = opsIntelligence.generateBriefing(actor.role, {
+        summary:       result.summary,
+        decisionsCount: result.decisions.length,
+        trends,
+        myMetrics,
+        nextTask,
+    });
+
+    // ── Build role-appropriate response ──────────────────────────────────────
+    const base = { success: true, briefing, role: actor.role };
+
+    if (['SOUS_CHEF','CHEF_DE_BRIGADE'].includes(actor.role)) {
+        return res.json({ ...base, myTasks: myMetrics, nextTask });
+    }
+
+    const response = {
+        ...base,
+        attention:   result.attention,
+        workload:    result.workload,
+        suggestions: result.suggestions,
+        summary:     result.summary,
+        decisions:   result.decisions,
+        departmentHealth,
+    };
+    if (trends) response.trends = trends;
+
+    return res.json(response);
 });
 
 // =========================================================================

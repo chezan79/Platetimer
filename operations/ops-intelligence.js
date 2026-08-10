@@ -683,14 +683,144 @@ function generateDecisions(companyId, { tasks, users, workload, now, generatedAt
     return decisions;
 }
 
+// ── Briefing Generator (Sprint 6.2) ──────────────────────────────────────────
+// Produces a deterministic role-specific Italian briefing string from structured facts.
+
+function generateBriefing(role, data) {
+    const h = new Date().getHours();
+    const greeting = h < 12 ? 'Buongiorno' : h < 18 ? 'Buon pomeriggio' : 'Buonasera';
+
+    switch (role) {
+        case 'DIRECTOR': {
+            const { summary, decisionsCount, trends } = data;
+            const totalOps = (summary.completedToday || 0) + (summary.overdueToday || 0) + (summary.urgentOpen || 0);
+            const trendNote = (() => {
+                if (!trends || !trends.overdue) return null;
+                if (trends.overdue.direction === 'IMPROVING')  return 'Il numero di attività scadute è migliorato rispetto a ieri.';
+                if (trends.overdue.direction === 'WORSENING')  return 'Il numero di attività scadute è aumentato rispetto a ieri.';
+                if (trends.overdue.direction === 'STABLE')     return 'Il carico operativo è stabile rispetto a ieri.';
+                return null;
+            })();
+            return [
+                `${greeting}.`,
+                `Oggi ci sono ${totalOps} attività operative.`,
+                summary.overdueToday > 0
+                    ? `${summary.overdueToday} ${summary.overdueToday === 1 ? 'è in ritardo' : 'sono in ritardo'}.`
+                    : 'Nessuna attività in ritardo.',
+                decisionsCount > 0
+                    ? `${decisionsCount} ${decisionsCount === 1 ? 'decisione richiede' : 'decisioni richiedono'} la tua attenzione.`
+                    : null,
+                trendNote,
+            ].filter(Boolean).join(' ');
+        }
+        case 'CHEF_CUISINE': {
+            const { summary, decisionsCount } = data;
+            const totalKitchen = (summary.completedToday || 0) + (summary.overdueToday || 0);
+            return [
+                `La cucina ha ${totalKitchen} attività.`,
+                (summary.urgentOpen || 0) > 0 ? `${summary.urgentOpen} ${summary.urgentOpen === 1 ? 'è urgente' : 'sono urgenti'}.` : null,
+                (summary.overdueToday || 0) > 0
+                    ? `${summary.overdueToday === 1 ? 'Una attività è in ritardo' : `${summary.overdueToday} attività sono in ritardo`}.`
+                    : 'Nessun ritardo.',
+                decisionsCount > 0 ? `${decisionsCount} ${decisionsCount === 1 ? 'decisione richiede' : 'decisioni richiedono'} attenzione.` : null,
+            ].filter(Boolean).join(' ');
+        }
+        case 'ADJOINT': {
+            const { summary, decisionsCount } = data;
+            return [
+                `${greeting}.`,
+                (summary.overdueToday || 0) > 0
+                    ? `${summary.overdueToday} ${summary.overdueToday === 1 ? 'compito richiede' : 'compiti richiedono'} coordinamento (in ritardo).`
+                    : 'Nessun ritardo nel tuo scope.',
+                (summary.urgentOpen || 0) > 0 ? `${summary.urgentOpen} urgenti da gestire.` : null,
+                decisionsCount > 0 ? `${decisionsCount} ${decisionsCount === 1 ? 'decisione richiede' : 'decisioni richiedono'} attenzione.` : null,
+            ].filter(Boolean).join(' ');
+        }
+        case 'SOUS_CHEF': {
+            const { myMetrics, nextTask } = data;
+            return [
+                `Hai ${myMetrics.assigned} ${myMetrics.assigned === 1 ? 'attività' : 'attività'} oggi.`,
+                myMetrics.urgent > 0 ? `${myMetrics.urgent === 1 ? 'Una è urgente' : `${myMetrics.urgent} sono urgenti`}.` : null,
+                nextTask && nextTask.dueDate
+                    ? `La prossima scade alle ${new Date(nextTask.dueDate).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}.`
+                    : nextTask ? 'Hai un compito da completare.' : null,
+            ].filter(Boolean).join(' ');
+        }
+        case 'CHEF_DE_BRIGADE': {
+            const { myMetrics, nextTask } = data;
+            return [
+                myMetrics.overdue > 0
+                    ? `${myMetrics.overdue === 1 ? 'Un compito è in ritardo' : `${myMetrics.overdue} compiti sono in ritardo`}. Intervieni subito.`
+                    : 'Nessun ritardo.',
+                nextTask ? `Prossimo compito: "${nextTask.title}".` : 'Nessun compito imminente.',
+                myMetrics.completedToday > 0 ? `Hai già completato ${myMetrics.completedToday} compiti oggi.` : null,
+            ].filter(Boolean).join(' ');
+        }
+        default:
+            return `${greeting}. Controlla le tue attività.`;
+    }
+}
+
+// ── Department Health (Sprint 6.2) ────────────────────────────────────────────
+// Returns per-department metrics from scoped tasks, with a trend direction
+// computed by comparing current overdue count against yesterday's snapshot.
+
+function getDepartmentHealth(scopedTasks, yesterdaySnapshot) {
+    const now   = Date.now();
+    const today = new Date().toISOString().slice(0, 10);
+
+    const enriched = (scopedTasks || []).map(t => {
+        let effectiveStatus = t.status;
+        if (!['COMPLETED','CANCELLED'].includes(t.status) && t.dueDate) {
+            const due = new Date(t.dueDate).getTime();
+            if (!isNaN(due) && now > due) effectiveStatus = 'OVERDUE';
+        }
+        return { ...t, effectiveStatus };
+    });
+
+    const depts = {};
+    enriched.forEach(t => {
+        if (!t.department) return;
+        if (!depts[t.department]) {
+            depts[t.department] = { dept: t.department, open: 0, overdue: 0, urgent: 0, completedToday: 0 };
+        }
+        const d = depts[t.department];
+        if (!['COMPLETED','CANCELLED'].includes(t.status)) d.open++;
+        if (t.effectiveStatus === 'OVERDUE')               d.overdue++;
+        if (t.priority === 'URGENT' && !['COMPLETED','CANCELLED'].includes(t.status)) d.urgent++;
+        if (t.status === 'COMPLETED') {
+            try { if (new Date(t.completedAt).toISOString().slice(0, 10) === today) d.completedToday++; }
+            catch { /* skip */ }
+        }
+    });
+
+    const yestDepts = (yesterdaySnapshot && yesterdaySnapshot.departmentMetrics) || {};
+
+    return Object.values(depts)
+        .map(d => {
+            const yest = yestDepts[d.dept];
+            let trend = 'INSUFFICIENT_DATA';
+            if (yest !== undefined) {
+                if (d.overdue < yest.overdue)       trend = 'IMPROVING';
+                else if (d.overdue > yest.overdue)  trend = 'WORSENING';
+                else                                trend = 'STABLE';
+            }
+            return { ...d, trend };
+        })
+        .sort((a, b) => b.overdue - a.overdue || b.urgent - a.urgent);
+}
+
 module.exports = {
     analyzeIntelligence,
     generateDecisions,
+    generateBriefing,
+    getDepartmentHealth,
     // Exported for unit tests
-    _computeLoadScore:      computeLoadScore,
-    _loadStatus:            loadStatus,
-    _LOAD_BUSY:             LOAD_BUSY,
-    _LOAD_OVERLOADED:       LOAD_OVERLOADED,
-    _MIN_CONFIDENCE:        MIN_CONFIDENCE,
+    _computeLoadScore:       computeLoadScore,
+    _loadStatus:             loadStatus,
+    _LOAD_BUSY:              LOAD_BUSY,
+    _LOAD_OVERLOADED:        LOAD_OVERLOADED,
+    _MIN_CONFIDENCE:         MIN_CONFIDENCE,
     _OVERDUE_DEPT_THRESHOLD: OVERDUE_DEPT_THRESHOLD,
+    _isToday:                isToday,
 };

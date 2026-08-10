@@ -52,6 +52,7 @@
     <div class="stat-card ok"><div class="stat-num" id="stat-done">—</div><div class="stat-lbl">Completati oggi</div></div>
   </div>
 
+  <div id="role-intel" class="role-intel-area"></div>
   <div id="main-content"></div>
 </main>
 
@@ -128,6 +129,27 @@ async function load() {
   OpsCommon.renderSection(container, '📅 Scadono oggi', today, users, 'Nessun compito in scadenza oggi.');
   OpsCommon.renderSection(container, '🕐 In scadenza a breve (48h)', dueSoon.filter(t=>!today.find(x=>x.id===t.id)), users, 'Nessun compito a breve scadenza.');
   OpsCommon.renderSection(container, '✅ Completati oggi', done, users, 'Nessun compito completato oggi.');
+
+  // Sprint 6.2: personal intelligence
+  const intelRes = await OpsCommon.api('/api/operations/intelligence');
+  renderRoleIntel(intelRes);
+}
+
+function renderRoleIntel(r) {
+  const area = document.getElementById('role-intel');
+  if (!r || !r.success || !area) return;
+  const parts = [];
+  if (r.briefing) parts.push(`<div class="role-intel-briefing">${esc(r.briefing)}</div>`);
+  if (r.myTasks) {
+    const m = r.myTasks;
+    parts.push(`<div class="role-intel-metrics">
+      <span>${m.assigned} attivi</span>
+      ${m.overdue?`<span style="color:#dc2626"> · ${m.overdue} ritardo</span>`:''}
+      ${m.urgent?`<span style="color:#d97706"> · ${m.urgent} urgenti</span>`:''}
+      ${m.completedToday?`<span style="color:#16a34a"> · ${m.completedToday} completati</span>`:''}
+    </div>`);
+  }
+  area.innerHTML = parts.join('');
 }
 
 load();

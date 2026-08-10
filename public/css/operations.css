@@ -61,6 +61,35 @@
   font-size:12px;font-weight:700;text-decoration:none;transition:background .15s;}
 .dec-qa-btn:hover{background:rgba(79,70,229,.16);}
 /* Sprint 6.1 end */
+
+/* Sprint 6.2 — Trends, Dept Health, Role Intelligence */
+/* Trend grid */
+.trend-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px;}
+.trend-cell{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 12px;text-align:center;}
+.trend-arrow{font-size:24px;font-weight:900;line-height:1;margin-bottom:2px;}
+.trend-val{font-size:20px;font-weight:800;margin-bottom:2px;}
+.trend-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;}
+.trend-vs{font-size:10px;color:var(--muted);margin-top:3px;}
+.trend-interp{font-size:12px;color:var(--text);line-height:1.5;padding:6px 0;}
+.trend-7d{font-size:11px;color:var(--muted);font-style:italic;padding:3px 0;}
+/* Dept Health */
+.dept-health-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);}
+.dept-health-row:last-child{border-bottom:none;}
+.dept-health-name{font-size:13px;font-weight:800;min-width:120px;}
+.dept-health-stats{display:flex;flex-wrap:wrap;gap:8px;flex:1;font-size:12px;font-weight:600;}
+.dept-health-trend{font-size:11px;font-weight:700;white-space:nowrap;}
+/* Role Intelligence Area */
+.role-intel-area{margin-bottom:16px;}
+.role-intel-briefing{background:rgba(79,70,229,.06);border:1px solid rgba(79,70,229,.18);border-radius:10px;padding:12px 16px;font-size:13px;line-height:1.6;color:var(--text);margin-bottom:8px;}
+.role-intel-metrics{font-size:12px;font-weight:700;color:var(--muted);padding:4px 0 8px;}
+.role-dec-card{border-left:3px solid var(--border);background:var(--card);border:1.5px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:8px;border-left-width:3px;}
+.role-dec-top{display:flex;align-items:center;gap:8px;margin-bottom:4px;}
+.role-dec-sev{font-size:10px;font-weight:800;letter-spacing:.5px;}
+.role-dec-conf{font-size:10px;color:var(--muted);}
+.role-dec-title{font-size:13px;font-weight:800;margin-bottom:3px;}
+.role-dec-reason{font-size:12px;color:var(--text);line-height:1.4;}
+@media(max-width:600px){.trend-grid{grid-template-columns:repeat(2,1fr);}}
+/* Sprint 6.2 end */
 /* Sprint 6 end */
 
 /* Sprint 4 additions */
