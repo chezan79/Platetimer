@@ -27,7 +27,8 @@ const OpsCommon = (() => {
         PRIORITY_CHANGED:'⚡ Priorità cambiata',
         DUE_DATE_CHANGED:'📅 Scadenza cambiata',
         COMMENT_ADDED:   '💬 Commento aggiunto',
-        ATTACHMENT_ADDED:'📎 Allegato aggiunto'
+        ATTACHMENT_ADDED:  '📎 Allegato aggiunto',
+        ATTACHMENT_DELETED:'🗑 Allegato eliminato'
     };
 
     function token() {

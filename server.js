@@ -5,8 +5,10 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const speech = require('@google-cloud/speech');
+const multer = require('multer');
 const { initializeApp: adminInitializeApp, getApps: adminGetApps, cert: adminCert } = require('firebase-admin/app');
 const { getFirestore } = require('firebase-admin/firestore');
+const { getStorage: adminGetStorage } = require('firebase-admin/storage');
 
 const app = express();
 const server = http.createServer(app);
@@ -80,6 +82,47 @@ const STORE_COLLECTION = 'platetimer_stores';
     } catch (e) {
         console.error('❌ [STORE] Firebase Admin init error:', e.message);
         db = null;
+    }
+})();
+
+// ===== Firebase Storage (S6.4.1 — Task Attachments) =====
+// storageBucket is initialised after Firestore Admin (same Firebase app).
+// When MOCK_FIREBASE_STORAGE=1 the server uses a local filesystem mock so
+// tests can exercise the full upload/download/delete flow without Firebase.
+let storageBucket = null;
+const FIREBASE_STORAGE_BUCKET =
+    process.env.FIREBASE_STORAGE_BUCKET || `${FIREBASE_PROJECT_ID}.appspot.com`;
+
+(function initStorageBucket() {
+    if (process.env.MOCK_FIREBASE_STORAGE === '1') {
+        // Test-mode mock: store files under DATA_DIR/mock-storage/.
+        // Provides the same interface as a real firebase-admin bucket object.
+        const mockBase = () => path.join(DATA_DIR, 'mock-storage');
+        storageBucket = {
+            name: 'mock-storage',
+            file: (filePath) => {
+                const abs = () => path.join(mockBase(), filePath.replace(/\//g, path.sep));
+                return {
+                    save:             async (buf, _opts) => { fs.mkdirSync(path.dirname(abs()), { recursive: true }); fs.writeFileSync(abs(), buf); },
+                    createReadStream: ()          => fs.createReadStream(abs()),
+                    delete:           async ()    => { try { fs.unlinkSync(abs()); } catch {} },
+                    exists:           async ()    => [fs.existsSync(abs())]
+                };
+            }
+        };
+        console.log('🧪 [STORAGE] Mock Firebase Storage active (MOCK_FIREBASE_STORAGE=1)');
+        return;
+    }
+    if (!adminGetApps().length) {
+        // Firebase Admin not initialised — Storage unavailable.
+        console.warn('⚠️ [STORAGE] Firebase Admin not initialised — Storage unavailable.');
+        return;
+    }
+    try {
+        storageBucket = adminGetStorage().bucket(FIREBASE_STORAGE_BUCKET);
+        console.log(`✅ [STORAGE] Firebase Storage bucket: ${FIREBASE_STORAGE_BUCKET}`);
+    } catch (e) {
+        console.warn(`⚠️ [STORAGE] Firebase Storage init error: ${e.message}`);
     }
 })();
 
@@ -1883,6 +1926,61 @@ function genOpsCommentId()   { return 'opsc_' + Date.now() + '_' + crypto.random
 function genOpsAttachmentId(){ return 'opsa_' + Date.now() + '_' + crypto.randomBytes(3).toString('hex'); }
 function genInviteCode()     { return crypto.randomBytes(16).toString('hex'); }
 
+// ── [S6.4.1] Attachment constants ────────────────────────────────────────────
+const ATT_MAX_SIZE_MB    = 10;
+const ATT_MAX_SIZE_BYTES = ATT_MAX_SIZE_MB * 1024 * 1024;
+const ATT_MAX_COUNT      = 5;
+const ATT_ALLOWED_TYPES  = new Set([
+    'image/jpeg', 'image/png', 'image/webp', 'application/pdf'
+]);
+
+// multer instance — parses multipart/form-data into req.file (memory buffer).
+// LIMIT_FILE_SIZE is caught inline in the attachment endpoint.
+const _multerUpload = multer({
+    storage: multer.memoryStorage(),
+    limits:  { fileSize: ATT_MAX_SIZE_BYTES }
+});
+
+// Sanitise a client-supplied filename: strip path separators, null bytes, and
+// any character that could cause shell or filesystem issues. Result is safe to
+// embed in a Firebase Storage path.
+function sanitiseAttachmentFilename(raw) {
+    return ((raw || 'file').toString()
+        .replace(/[/\\]/g, '')
+        .replace(/\0/g, '')
+        .replace(/[^a-zA-Z0-9._\-()\s]/g, '_')
+        .replace(/\s+/g, '_')
+        .trim()
+        .substring(0, 120)) || 'file';
+}
+
+// Upload a Buffer to Firebase Storage. Throws on failure.
+async function uploadAttachmentBuffer(buffer, storagePath, contentType) {
+    if (!storageBucket) throw new Error('Firebase Storage non configurato.');
+    await storageBucket.file(storagePath).save(buffer, {
+        metadata:  { contentType },
+        resumable: false
+    });
+}
+
+// Stream a file from Firebase Storage into an Express response.
+// Returns a Promise that resolves when streaming is complete.
+function streamAttachmentToResponse(storagePath, res) {
+    return new Promise((resolve, reject) => {
+        const readStream = storageBucket.file(storagePath).createReadStream();
+        readStream.on('error', reject);
+        readStream.on('end',   resolve);
+        readStream.pipe(res);
+    });
+}
+
+// Delete a file from Firebase Storage. Logs a warning on failure (non-fatal).
+async function deleteAttachmentFromStorage(storagePath) {
+    if (!storageBucket) return;
+    try { await storageBucket.file(storagePath).delete(); }
+    catch (e) { console.warn(`⚠️ [STORAGE] Delete failed for "${storagePath}": ${e.message}`); }
+}
+
 // ── Sprint 3: recurring-template and preference stores ─────────────────────
 const OPS_TEMPLATES_FILE = path.join(DATA_DIR, 'ops-templates.json');
 const OPS_PREFS_FILE     = path.join(DATA_DIR, 'ops-prefs.json');
@@ -3022,45 +3120,154 @@ app.post('/api/operations/tasks/:id/comments', (req, res) => {
     res.json({ success: true, comment, task: opsTaskWithComputedStatus(task) });
 });
 
-// ── POST /api/operations/tasks/:id/attachments — register attachment metadata ──
-// Actual file upload requires Firebase Storage (not yet configured).
-// This endpoint stores metadata only; the client must supply a pre-obtained storagePath
-// from the upload provider. Sprint 3 will wire the full upload flow.
-app.post('/api/operations/tasks/:id/attachments', (req, res) => {
+// ── POST /api/operations/tasks/:id/attachments — upload file to Firebase Storage ──
+// [S6.4.1] Accepts multipart/form-data with a single field named "file".
+// Server controls companyId, taskId, attachmentId, storagePath — never trusted from client.
+// Security: file type validated (JPEG/PNG/WEBP/PDF only), size ≤ 10 MB, max 5 per task.
+app.post('/api/operations/tasks/:id/attachments',
+    (req, res, next) => _multerUpload.single('file')(req, res, err => {
+        if (err && err.code === 'LIMIT_FILE_SIZE')
+            return res.status(413).json({ error: `File troppo grande. Massimo ${ATT_MAX_SIZE_MB} MB per file.` });
+        if (err) return res.status(400).json({ error: err.message });
+        next();
+    }),
+    async (req, res) => {
+        // [S6.4.1] Accept token from Authorization header OR ?token= query param
+        // (needed for authenticated img src tags in the browser).
+        if (!req.headers['authorization'] && req.query.token)
+            req.headers['authorization'] = 'Bearer ' + req.query.token;
+
+        const ctx = requireOpsAuth(req, res);
+        if (!ctx) return;
+        const actor = ctx.opsUser;
+        const r = requireOpsTask(req, res, ctx);
+        if (!r) return;
+        const { task, byId } = r;
+
+        if (!opsAuth.canEditTask(actor, task, byId))
+            return res.status(403).json({ error: 'Non autorizzato ad aggiungere allegati.' });
+
+        if (!Array.isArray(task.attachments)) task.attachments = [];
+        if (task.attachments.length >= ATT_MAX_COUNT)
+            return res.status(422).json({ error: `Limite di ${ATT_MAX_COUNT} allegati per compito raggiunto.` });
+
+        if (!req.file)
+            return res.status(400).json({ error: 'Nessun file caricato. Inviare multipart/form-data con campo "file".' });
+
+        const { mimetype, originalname, size, buffer } = req.file;
+
+        if (!ATT_ALLOWED_TYPES.has(mimetype))
+            return res.status(415).json({ error: 'Tipo file non supportato. Supportati: JPEG, PNG, WEBP, PDF.' });
+
+        if (!storageBucket)
+            return res.status(503).json({ error: 'Firebase Storage non configurato.' });
+
+        const attachmentId = genOpsAttachmentId();
+        const safeFilename = sanitiseAttachmentFilename(originalname);
+        // [SECURITY] storagePath is fully server-generated — client cannot influence it.
+        const storagePath  = `operations/${actor.companyId}/tasks/${task.id}/${attachmentId}-${safeFilename}`;
+
+        try {
+            await uploadAttachmentBuffer(buffer, storagePath, mimetype);
+        } catch (e) {
+            console.error('[STORAGE] Upload error:', e.message);
+            return res.status(502).json({ error: `Errore durante l'upload: ${e.message}` });
+        }
+
+        const attachment = {
+            id:             attachmentId,
+            fileName:       safeFilename,
+            contentType:    mimetype,
+            size,
+            storagePath,
+            uploadedBy:     actor.id,
+            uploadedByName: actor.name,
+            uploadedAt:     Date.now()
+        };
+        task.attachments.push(attachment);
+        addHistory(task, 'ATTACHMENT_ADDED', actor.id, actor.name, { fileName: attachment.fileName, id: attachment.id });
+        task.updatedAt = Date.now();
+        saveOpsTasks();
+        res.json({ success: true, attachment, task: opsTaskWithComputedStatus(task) });
+    }
+);
+
+// ── GET /api/operations/tasks/:id/attachments/:attId/download — stream from Storage ──
+// [S6.4.1] Requires task visibility. Accepts token from Authorization header OR ?token=
+// query param so browser <img> and <a> tags can load files without custom fetch.
+// [SECURITY] storagePath validated to start with operations/{companyId}/tasks/{taskId}/
+// to prevent path-traversal across companies or tasks.
+app.get('/api/operations/tasks/:id/attachments/:attId/download', async (req, res) => {
+    if (!req.headers['authorization'] && req.query.token)
+        req.headers['authorization'] = 'Bearer ' + req.query.token;
+
     const ctx = requireOpsAuth(req, res);
     if (!ctx) return;
     const actor = ctx.opsUser;
-    if (!opsAuth.canEditTask(actor, null, {})) { // Director or creator — use canManageUsers as proxy
-        // Actually check: actor must be editor (Director or task creator)
+    const r = requireOpsTask(req, res, ctx);
+    if (!r) return;
+    const { task, byId } = r;
+
+    if (!opsAuth.canViewTask(actor, task, byId))
+        return res.status(403).json({ error: 'Accesso non autorizzato.' });
+
+    const attachment = (task.attachments || []).find(a => a.id === req.params.attId);
+    if (!attachment) return res.status(404).json({ error: 'Allegato non trovato.' });
+
+    // Path-traversal guard: path MUST belong to this company's task.
+    const expectedPrefix = `operations/${actor.companyId}/tasks/${task.id}/`;
+    if (!attachment.storagePath || !attachment.storagePath.startsWith(expectedPrefix))
+        return res.status(403).json({ error: 'Accesso non autorizzato.' });
+
+    if (!storageBucket)
+        return res.status(503).json({ error: 'Firebase Storage non configurato.' });
+
+    const filename = attachment.fileName || attachment.filename || 'file';
+    res.setHeader('Content-Type', attachment.contentType || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(filename)}"`);
+    if (attachment.size) res.setHeader('Content-Length', attachment.size);
+
+    try {
+        await streamAttachmentToResponse(attachment.storagePath, res);
+    } catch (e) {
+        console.error('[STORAGE] Download error:', e.message);
+        if (!res.headersSent) res.status(500).json({ error: 'Errore download allegato.' });
     }
+});
+
+// ── DELETE /api/operations/tasks/:id/attachments/:attId — remove from Storage + task ──
+// [S6.4.1] Requires canEditTask. Deletes from Storage, removes metadata, appends history.
+// [SECURITY] storagePath prefix validated — cannot target another company/task.
+app.delete('/api/operations/tasks/:id/attachments/:attId', async (req, res) => {
+    const ctx = requireOpsAuth(req, res);
+    if (!ctx) return;
+    const actor = ctx.opsUser;
     const r = requireOpsTask(req, res, ctx);
     if (!r) return;
     const { task, byId } = r;
 
     if (!opsAuth.canEditTask(actor, task, byId))
-        return res.status(403).json({ error: 'Non autorizzato ad aggiungere allegati.' });
-
-    const { filename, mimeType, size, storagePath } = req.body;
-    if (!filename || !filename.toString().trim()) return res.status(400).json({ error: 'filename obbligatorio.' });
-    if (!storagePath || !storagePath.toString().trim())
-        return res.status(501).json({ error: 'Upload file non ancora configurato. Fornire storagePath da Firebase Storage.' });
+        return res.status(403).json({ error: 'Non autorizzato a eliminare allegati.' });
 
     if (!Array.isArray(task.attachments)) task.attachments = [];
-    const attachment = {
-        id: genOpsAttachmentId(),
-        filename: filename.toString().trim().substring(0, 255),
-        mimeType: (mimeType || 'application/octet-stream').toString().substring(0, 100),
-        size: typeof size === 'number' ? size : null,
-        storagePath: storagePath.toString().substring(0, 1000),
-        uploadedBy: actor.id,
-        uploadedByName: actor.name,
-        uploadedAt: Date.now()
-    };
-    task.attachments.push(attachment);
-    addHistory(task, 'ATTACHMENT_ADDED', actor.id, actor.name, { filename: attachment.filename, id: attachment.id });
+    const idx = task.attachments.findIndex(a => a.id === req.params.attId);
+    if (idx === -1) return res.status(404).json({ error: 'Allegato non trovato.' });
+
+    const attachment = task.attachments[idx];
+
+    // Path-traversal guard.
+    const expectedPrefix = `operations/${actor.companyId}/tasks/${task.id}/`;
+    if (!attachment.storagePath || !attachment.storagePath.startsWith(expectedPrefix))
+        return res.status(403).json({ error: 'Accesso non autorizzato.' });
+
+    // Remove from Storage first (non-fatal on error — metadata is still removed).
+    await deleteAttachmentFromStorage(attachment.storagePath);
+
+    task.attachments.splice(idx, 1);
+    addHistory(task, 'ATTACHMENT_DELETED', actor.id, actor.name, { fileName: attachment.fileName || attachment.filename, id: attachment.id });
     task.updatedAt = Date.now();
     saveOpsTasks();
-    res.json({ success: true, attachment, task: opsTaskWithComputedStatus(task) });
+    res.json({ success: true, task: opsTaskWithComputedStatus(task) });
 });
 
 // ── GET /api/operations/stats — dashboard summary per actor ──

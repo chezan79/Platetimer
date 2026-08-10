@@ -79,6 +79,9 @@ let assignableUsers = [];
 let filterTimer = null;
 const esc = OpsCommon.escHtml;
 
+// [S6.4.1] Files staged for upload during task creation.
+let _pendingAttachments = [];
+
 // ── Boot ──
 async function load() {
   meData = await OpsCommon.loadMe();
@@ -222,11 +225,18 @@ async function openDetail(taskId) {
     </div>`).join('');
 
   // ─ Attachments ─
-  const attHtml = attachments.length ? attachments.map(a => `
-    <div class="comment-item">
-      <span class="comment-author">📎 ${esc(a.filename)}</span>
-      <span class="comment-time">${OpsCommon.fmtDatetime(a.uploadedAt)}${a.uploadedByName ? ' · ' + esc(a.uploadedByName) : ''}</span>
-    </div>`).join('') : '<p style="font-size:13px;color:var(--muted)">Nessun allegato. Upload tramite Firebase Storage (configurazione Sprint 3).</p>';
+  // [S6.4.1] Thumbnails for images; PDF icon + link; authenticated download URLs.
+  const attUploadBar = canEdit && task.status !== 'CANCELLED' ? `
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <button type="button" class="btn btn-sm btn-neutral" onclick="detailPickFile('${esc(task.id)}','image/jpeg,image/png,image/webp')">📷 Aggiungi foto</button>
+      <button type="button" class="btn btn-sm btn-neutral" onclick="detailPickFile('${esc(task.id)}','application/pdf')">📎 Allega PDF</button>
+    </div>
+    <input type="file" id="detail-file-input" style="display:none" onchange="detailOnFileSelected(this)">` : '';
+
+  const attHtml = attUploadBar
+    + (attachments.length
+        ? attachments.map(a => _renderAttachment(a, task.id, canEdit)).join('')
+        : '<p style="font-size:13px;color:var(--muted)">Nessun allegato.</p>');
 
   document.getElementById('panel-inner').innerHTML = `
     <div class="panel-hdr">
@@ -357,6 +367,15 @@ function openCreatePanel() {
       <input id="c-due" class="form-input" type="datetime-local">
       <label class="form-label">Reparto (facoltativo)</label>
       <input id="c-dept" class="form-input" maxlength="80" placeholder="es. Cucina">
+
+      <label class="form-label" style="margin-top:8px">Allegati (facoltativo)</label>
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <button type="button" class="btn btn-sm btn-neutral" onclick="c_pickFile('image/jpeg,image/png,image/webp')">📷 Foto</button>
+        <button type="button" class="btn btn-sm btn-neutral" onclick="c_pickFile('application/pdf')">📎 PDF</button>
+      </div>
+      <div id="c-file-list"></div>
+      <input type="file" id="c-file-input" style="display:none" onchange="c_onFileSelected(this)">
+
       <button class="btn btn-primary" style="width:100%;margin-top:6px" id="c-btn" onclick="doCreate()">Crea compito</button>
     </div>`;
   openPanel();
@@ -425,6 +444,169 @@ function openPanel() {
 function closePanel() {
   document.getElementById('side-panel').classList.remove('open');
   document.getElementById('panel-overlay').classList.remove('active');
+  _pendingAttachments = []; // clear staged files when panel closes
+}
+
+// ── [S6.4.1] Attachment helpers ────────────────────────────────────────────
+
+// Build an authenticated download URL. Token is sent as a query param so that
+// <img src="..."> and <a href="..."> work without custom fetch headers.
+// The token is already in sessionStorage — no extra exposure beyond the HTTP
+// access log of an internal workstation app.
+function _attDownloadUrl(taskId, attId) {
+  const t = WsAuth.getStoredToken();
+  return '/api/operations/tasks/' + encodeURIComponent(taskId)
+       + '/attachments/' + encodeURIComponent(attId) + '/download'
+       + (t ? '?token=' + encodeURIComponent(t) : '');
+}
+
+// Human-readable file size.
+function _fmtSize(bytes) {
+  if (!bytes) return '';
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / 1048576).toFixed(1) + ' MB';
+}
+
+// ── Create-panel attachment helpers ─
+
+// Opens the hidden file input with the given accept filter.
+function c_pickFile(accept) {
+  const inp = document.getElementById('c-file-input');
+  if (!inp) return;
+  inp.accept = accept;
+  inp.value = '';
+  inp.click();
+}
+
+// Called when the user selects a file in the hidden input.
+function c_onFileSelected(inp) {
+  const file = inp.files && inp.files[0];
+  if (!file) return;
+  if (_pendingAttachments.length >= 5) {
+    panelMsg('Massimo 5 allegati per compito.'); return;
+  }
+  _pendingAttachments.push({ file, tempId: 'tmp_' + Date.now() + '_' + Math.random().toString(36).slice(2) });
+  c_renderFileList();
+}
+
+// Remove a staged file by tempId.
+function c_removeFile(tempId) {
+  _pendingAttachments = _pendingAttachments.filter(a => a.tempId !== tempId);
+  c_renderFileList();
+}
+
+// Re-render the staged-files list inside the create panel.
+function c_renderFileList() {
+  const el = document.getElementById('c-file-list');
+  if (!el) return;
+  el.innerHTML = _pendingAttachments.map(a => `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:5px 8px;background:var(--bg);border-radius:6px;margin-bottom:4px;font-size:13px">
+      <span>${esc(a.file.name)} <span style="color:var(--muted)">${_fmtSize(a.file.size)}</span></span>
+      <button type="button" style="background:none;border:none;cursor:pointer;color:var(--danger);font-size:18px;line-height:1;padding:0 4px" onclick="c_removeFile('${esc(a.tempId)}')">×</button>
+    </div>`).join('');
+}
+
+// Upload a single File to the attachment endpoint using multipart/form-data.
+// Returns the parsed JSON response (may have success:false).
+async function _uploadFile(taskId, file) {
+  const t = WsAuth.getStoredToken();
+  const fd = new FormData();
+  fd.append('file', file);
+  try {
+    const res = await fetch('/api/operations/tasks/' + encodeURIComponent(taskId) + '/attachments', {
+      method: 'POST',
+      headers: t ? { 'Authorization': 'Bearer ' + t } : {},
+      body: fd
+    });
+    if (res.status === 401) {
+      WsAuth.clearToken();
+      alert('Sessione scaduta. Effettua nuovamente il login.');
+      window.location.href = 'index.html';
+      return { success: false, error: 'Sessione scaduta.' };
+    }
+    return await res.json();
+  } catch (e) {
+    return { success: false, error: 'Errore di rete: ' + e.message };
+  }
+}
+
+// ── Detail-panel attachment helpers ─
+
+// Render one attachment row for the detail view.
+function _renderAttachment(a, taskId, canEdit) {
+  const url     = _attDownloadUrl(taskId, a.id);
+  const isImage = a.contentType && a.contentType.startsWith('image/');
+  const isPdf   = a.contentType === 'application/pdf';
+  const name    = esc(a.fileName || a.filename || 'file');
+  const sizeStr = _fmtSize(a.size);
+  const meta    = [
+    OpsCommon.fmtDatetime(a.uploadedAt),
+    a.uploadedByName ? esc(a.uploadedByName) : null,
+    sizeStr || null
+  ].filter(Boolean).join(' · ');
+
+  const preview = isImage
+    ? `<a href="${url}" target="_blank"><img src="${url}" alt="${name}" loading="lazy"
+          style="max-width:100%;max-height:160px;object-fit:contain;border-radius:6px;display:block;margin-bottom:6px;cursor:pointer"></a>`
+    : isPdf
+    ? `<span style="font-size:24px;margin-right:4px">📄</span>`
+    : `<span style="font-size:24px;margin-right:4px">📎</span>`;
+
+  const deleteBtn = canEdit
+    ? `<button class="btn btn-sm btn-danger" style="flex-shrink:0"
+          onclick="doDeleteAttachment('${esc(taskId)}','${esc(a.id)}')">🗑</button>` : '';
+
+  return `<div style="padding:8px 0;border-bottom:1px solid var(--border-l)">
+    ${isImage ? preview : ''}
+    <div style="display:flex;align-items:center;gap:8px">
+      ${isImage ? '' : preview}
+      <div style="flex:1;min-width:0">
+        <a href="${url}" target="_blank" rel="noopener" style="font-weight:600;font-size:13px;color:var(--accent);text-decoration:none;word-break:break-all">${name}</a>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">${meta}</div>
+      </div>
+      ${deleteBtn}
+    </div>
+  </div>`;
+}
+
+// Open file picker for adding an attachment from the detail view.
+function detailPickFile(taskId, accept) {
+  const inp = document.getElementById('detail-file-input');
+  if (!inp) return;
+  inp.dataset.taskId = taskId;
+  inp.accept = accept;
+  inp.value = '';
+  inp.click();
+}
+
+// Upload handler triggered when user picks a file from the detail view.
+async function detailOnFileSelected(inp) {
+  const file   = inp.files && inp.files[0];
+  const taskId = inp.dataset.taskId;
+  if (!file || !taskId) return;
+  const msgEl = document.getElementById('panel-msg');
+  if (msgEl) { msgEl.textContent = 'Upload in corso…'; msgEl.className = 'msg msg-info'; msgEl.style.display = 'block'; }
+  const r = await _uploadFile(taskId, file);
+  if (r && r.success) {
+    panelMsg('Allegato aggiunto.', 'success');
+    await loadTasks();
+    openDetail(taskId);
+  } else {
+    panelMsg((r && r.error) || 'Errore upload.');
+  }
+}
+
+// Delete an attachment from the detail view.
+async function doDeleteAttachment(taskId, attId) {
+  if (!confirm('Eliminare questo allegato?')) return;
+  const r = await OpsCommon.api('/api/operations/tasks/' + taskId + '/attachments/' + attId, { method: 'DELETE' });
+  if (r && r.success) {
+    await loadTasks();
+    openDetail(taskId);
+  } else {
+    panelMsg((r && r.error) || 'Errore eliminazione.');
+  }
 }
 
 // ── Panel message helper ──
@@ -442,22 +624,36 @@ async function doCreate() {
   const btn = document.getElementById('c-btn');
   btn.disabled = true;
   const body = {
-    title: document.getElementById('c-title').value.trim(),
+    title:       document.getElementById('c-title').value.trim(),
     description: document.getElementById('c-desc').value.trim(),
-    assigneeId: document.getElementById('c-assignee').value,
-    priority: document.getElementById('c-priority').value,
-    dueDate: document.getElementById('c-due').value || null,
-    department: document.getElementById('c-dept').value.trim() || null
+    assigneeId:  document.getElementById('c-assignee').value,
+    priority:    document.getElementById('c-priority').value,
+    dueDate:     document.getElementById('c-due').value || null,
+    department:  document.getElementById('c-dept').value.trim() || null
   };
   if (!body.title) { panelMsg('Inserisci un titolo.'); btn.disabled = false; return; }
+
   const r = await OpsCommon.api('/api/operations/tasks', { method: 'POST', body: JSON.stringify(body) });
   btn.disabled = false;
-  if (r && r.success) {
-    panelMsg('Compito creato.', 'success');
-    await loadTasks();
-    setTimeout(() => openDetail(r.task.id), 500);
+  if (!r || !r.success) { panelMsg((r && r.error) || 'Errore.'); return; }
+
+  // [S6.4.1] Task is created — upload staged attachments.
+  // Even if uploads fail the task remains created (non-atomic by design).
+  const taskId  = r.task.id;
+  const pending = _pendingAttachments.splice(0); // drain the array
+  const errors  = [];
+  for (const att of pending) {
+    const ur = await _uploadFile(taskId, att.file);
+    if (!ur || !ur.success) errors.push(esc(att.file.name) + ': ' + ((ur && ur.error) || 'Errore upload'));
+  }
+
+  await loadTasks();
+  if (errors.length) {
+    panelMsg('Compito creato. Errori allegati: ' + errors.join('; '), 'error');
+    setTimeout(() => openDetail(taskId), 1200);
   } else {
-    panelMsg((r && r.error) || 'Errore.');
+    panelMsg('Compito creato.', 'success');
+    setTimeout(() => openDetail(taskId), 500);
   }
 }
 
