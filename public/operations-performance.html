@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PlateTimer Operations · Prestazioni</title>
+<link rel="stylesheet" href="css/operations.css">
+</head>
+<body>
+<header class="hdr">
+  <span id="hdr-company" class="hdr-brand"></span>
+  <span class="hdr-sep"></span>
+  <span class="hdr-page">Operations · Prestazioni</span>
+  <button class="hdr-btn" id="btn-tasks" onclick="location.href='operations-tasks.html'" style="display:none">Compiti</button>
+  <button class="hdr-btn" id="btn-team"  onclick="location.href='operations-team.html'"  style="display:none">Team</button>
+  <button class="hdr-btn" onclick="location.href='javascript:history.back()'">← Indietro</button>
+  <button class="hdr-btn danger" onclick="OpsCommon.logout()">Esci</button>
+</header>
+
+<div class="ops-container">
+
+  <!-- ── Profile Header ───────────────────────────────────────────────────── -->
+  <section class="perf-profile-card" id="profile-card">
+    <div class="perf-profile-main">
+      <div class="perf-avatar" id="perf-avatar">?</div>
+      <div class="perf-profile-info">
+        <h1 class="perf-name"   id="perf-name">—</h1>
+        <div class="perf-meta">
+          <span class="perf-role"   id="perf-role-badge">—</span>
+          <span class="perf-dept"   id="perf-dept">—</span>
+          <span class="perf-status" id="perf-status-badge">—</span>
+        </div>
+        <div class="perf-profile-details">
+          <span>👤 <span id="perf-joined">—</span></span>
+          <span>⚡ Carico: <span id="perf-workload-status">—</span></span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Period Selector ─────────────────────────────────────────────────── -->
+  <section class="perf-period-bar">
+    <button class="perf-period-btn" data-period="today">Oggi</button>
+    <button class="perf-period-btn active" data-period="30d">30 giorni</button>
+    <button class="perf-period-btn" data-period="7d">7 giorni</button>
+    <button class="perf-period-btn" data-period="90d">90 giorni</button>
+    <button class="perf-period-btn" data-period="year">Anno</button>
+    <button class="perf-period-btn" data-period="custom" id="btn-custom-period">Personalizzato</button>
+    <div class="perf-custom-range" id="custom-range" style="display:none">
+      <input type="date" id="custom-from" class="perf-date-input">
+      <span>→</span>
+      <input type="date" id="custom-to" class="perf-date-input">
+      <button class="perf-period-btn" onclick="applyCustomPeriod()">Applica</button>
+    </div>
+    <span class="perf-period-label" id="period-label">Ultimi 30 giorni</span>
+  </section>
+
+  <!-- ── Today Stats ─────────────────────────────────────────────────────── -->
+  <section class="card" id="today-section">
+    <h2 class="section-title">📅 Oggi</h2>
+    <div class="perf-grid-today">
+      <div class="perf-today-item"><span class="perf-today-num" id="t-completed">—</span><span class="perf-today-lbl">Completati</span></div>
+      <div class="perf-today-item"><span class="perf-today-num" id="t-open">—</span><span class="perf-today-lbl">Aperti</span></div>
+      <div class="perf-today-item"><span class="perf-today-num" id="t-inprog">—</span><span class="perf-today-lbl">In corso</span></div>
+      <div class="perf-today-item warn"><span class="perf-today-num" id="t-overdue">—</span><span class="perf-today-lbl">In ritardo</span></div>
+      <div class="perf-today-item"><span class="perf-today-num" id="t-cancelled">—</span><span class="perf-today-lbl">Annullati</span></div>
+      <div class="perf-today-item"><span class="perf-today-num" id="t-reassigned">—</span><span class="perf-today-lbl">Riassegnati</span></div>
+      <div class="perf-today-item"><span class="perf-today-num" id="t-blocked">—</span><span class="perf-today-lbl">Bloccati</span></div>
+    </div>
+  </section>
+
+  <!-- ── Reliability Index ───────────────────────────────────────────────── -->
+  <section class="card" id="reliability-section">
+    <h2 class="section-title">🎯 Indice di Affidabilità</h2>
+    <div class="perf-reliability-layout">
+      <div class="perf-score-ring" id="score-ring">
+        <svg viewBox="0 0 120 120" class="perf-ring-svg">
+          <circle class="perf-ring-bg" cx="60" cy="60" r="50"/>
+          <circle class="perf-ring-fill" id="ring-fill" cx="60" cy="60" r="50"
+                  stroke-dasharray="314" stroke-dashoffset="314"/>
+        </svg>
+        <div class="perf-ring-label">
+          <span class="perf-ring-score" id="ring-score">—</span>
+          <span class="perf-ring-max">/100</span>
+        </div>
+      </div>
+      <div class="perf-reliability-detail">
+        <div class="perf-classification" id="perf-classification">—</div>
+        <div class="perf-components" id="perf-components">
+          <!-- populated by JS -->
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Operational Metrics ─────────────────────────────────────────────── -->
+  <section class="card" id="metrics-section">
+    <h2 class="section-title">📊 Metriche Operative</h2>
+    <div class="perf-metrics-grid" id="metrics-grid">
+      <div class="perf-metric"><span class="pm-val" id="m-assigned">—</span><span class="pm-lbl">Compiti assegnati</span></div>
+      <div class="perf-metric"><span class="pm-val" id="m-completed">—</span><span class="pm-lbl">Completati</span></div>
+      <div class="perf-metric ok"><span class="pm-val" id="m-ontime">—</span><span class="pm-lbl">In tempo</span></div>
+      <div class="perf-metric warn"><span class="pm-val" id="m-late">—</span><span class="pm-lbl">In ritardo</span></div>
+      <div class="perf-metric"><span class="pm-val" id="m-avgtime">—</span><span class="pm-lbl">Tempo medio (min)</span></div>
+      <div class="perf-metric"><span class="pm-val" id="m-urgent">—</span><span class="pm-lbl">Urgenti completati</span></div>
+      <div class="perf-metric"><span class="pm-val" id="m-recurring">—</span><span class="pm-lbl">Ricorrenti completati</span></div>
+      <div class="perf-metric"><span class="pm-val" id="m-cancelled">—</span><span class="pm-lbl">Annullati</span></div>
+      <div class="perf-metric"><span class="pm-val" id="m-transferred">—</span><span class="pm-lbl">Trasferiti</span></div>
+      <div class="perf-metric warn"><span class="pm-val" id="m-blocked">—</span><span class="pm-lbl">Bloccati</span></div>
+    </div>
+  </section>
+
+  <!-- ── Punctuality ─────────────────────────────────────────────────────── -->
+  <section class="card" id="punctuality-section">
+    <h2 class="section-title">⏱ Puntualità</h2>
+    <div class="perf-punctuality-grid">
+      <div class="perf-pct-item">
+        <span class="pct-label">Completamento in tempo</span>
+        <div class="pct-bar-wrap"><div class="pct-bar ok" id="bar-ontime" style="width:0%"></div></div>
+        <span class="pct-value" id="pct-ontime">—</span>
+      </div>
+      <div class="perf-pct-item">
+        <span class="pct-label">Completamento in ritardo</span>
+        <div class="pct-bar-wrap"><div class="pct-bar warn" id="bar-late" style="width:0%"></div></div>
+        <span class="pct-value" id="pct-late">—</span>
+      </div>
+      <div class="perf-pct-item">
+        <span class="pct-label">Ritardo medio</span>
+        <span class="pct-value big" id="pct-avg-delay">—</span>
+      </div>
+      <div class="perf-pct-item">
+        <span class="pct-label">Anticipo medio</span>
+        <span class="pct-value big" id="pct-avg-anticip">—</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Evolution ─────────────────────────────────────────────────────────── -->
+  <section class="card" id="evolution-section">
+    <h2 class="section-title">📈 Evoluzione</h2>
+    <div class="perf-evolution-grid" id="evolution-grid">
+      <!-- populated by JS -->
+    </div>
+  </section>
+
+  <!-- ── Workload History ───────────────────────────────────────────────── -->
+  <section class="card" id="workload-section">
+    <h2 class="section-title">⚙️ Storico Carico</h2>
+    <div class="perf-wl-grid">
+      <div class="perf-wl-item"><span class="wl-val" id="wl-avg">—</span><span class="wl-lbl">Media giornaliera</span></div>
+      <div class="perf-wl-item"><span class="wl-val" id="wl-peak">—</span><span class="wl-lbl">Picco</span></div>
+      <div class="perf-wl-item warn"><span class="wl-val" id="wl-over">—</span><span class="wl-lbl">Giorni sovraccarichi</span></div>
+      <div class="perf-wl-item"><span class="wl-val" id="wl-under">—</span><span class="wl-lbl">Giorni senza attività</span></div>
+    </div>
+  </section>
+
+  <!-- ── Strengths ─────────────────────────────────────────────────────── -->
+  <section class="card" id="strengths-section">
+    <h2 class="section-title">✅ Punti di Forza</h2>
+    <div class="perf-strengths" id="strengths-list">
+      <p class="perf-empty">Nessun punto di forza rilevato per questo periodo.</p>
+    </div>
+  </section>
+
+  <!-- ── Coaching Opportunities ────────────────────────────────────────── -->
+  <section class="card" id="coaching-section">
+    <h2 class="section-title">💡 Opportunità di Crescita</h2>
+    <div class="perf-coaching" id="coaching-list">
+      <p class="perf-empty">Nessuna opportunità rilevata per questo periodo.</p>
+    </div>
+  </section>
+
+  <!-- ── Task History ───────────────────────────────────────────────────── -->
+  <section class="card" id="history-section">
+    <h2 class="section-title">📋 Storico Compiti</h2>
+    <div class="perf-task-history" id="task-history-list">
+      <p class="perf-empty">Nessun compito nel periodo selezionato.</p>
+    </div>
+  </section>
+
+  <!-- ── Exception Register ────────────────────────────────────────────── -->
+  <section class="card" id="exception-section">
+    <div class="perf-exc-header">
+      <h2 class="section-title">⚠️ Registro Eccezioni</h2>
+      <button class="hdr-btn" id="btn-add-exc" onclick="openExceptionModal()" style="display:none">+ Eccezione</button>
+    </div>
+    <div id="exception-list">
+      <p class="perf-empty">Nessuna eccezione registrata.</p>
+    </div>
+  </section>
+
+</div>
+
+<!-- Exception Modal -->
+<div class="modal-overlay" id="exc-modal" style="display:none" onclick="if(event.target===this)closeExceptionModal()">
+  <div class="modal-box">
+    <h3>Registra Eccezione</h3>
+    <div class="form-group">
+      <label>Compito</label>
+      <select id="exc-task-select" class="form-control"></select>
+    </div>
+    <div class="form-group">
+      <label>Tipo</label>
+      <select id="exc-type-select" class="form-control">
+        <option value="CANCELLED">Annullato</option>
+        <option value="TRANSFERRED">Trasferito</option>
+        <option value="BLOCKED">Bloccato</option>
+        <option value="WAITING_DEPT">In attesa di reparto</option>
+        <option value="WAITING_MATERIALS">In attesa di materiali</option>
+        <option value="CUSTOMER_REQUEST">Richiesta cliente</option>
+        <option value="DIRECTOR_DECISION">Decisione Direttore</option>
+        <option value="OPERATIONAL_EMERGENCY">Emergenza operativa</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Note (opzionale)</label>
+      <textarea id="exc-reason" class="form-control" rows="3" placeholder="Dettagli aggiuntivi..."></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="hdr-btn" onclick="closeExceptionModal()">Annulla</button>
+      <button class="hdr-btn ok-btn" onclick="submitException()">Salva</button>
+    </div>
+  </div>
+</div>
+
+<script src="ws-auth.js"></script>
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+import { OpsCommon } from './js/ops-common.js';
+import { OpsRealtime } from './js/ops-realtime.js';
+
+window.OpsCommon = OpsCommon;
+
+let currentPeriod    = '30d';
+let customFrom       = null;
+let customTo         = null;
+let targetUserId     = null;
+let myRole           = null;
+let myOpsId          = null;
+let companyTasks     = [];
+
+// ── Period selector ──────────────────────────────────────────────────────────
+document.querySelectorAll('.perf-period-btn[data-period]').forEach(btn => {
+    btn.addEventListener('click', () => {
+        if (btn.dataset.period === 'custom') {
+            document.getElementById('custom-range').style.display = '';
+            return;
+        }
+        document.getElementById('custom-range').style.display = 'none';
+        document.querySelectorAll('.perf-period-btn[data-period]').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentPeriod = btn.dataset.period;
+        loadProfile();
+    });
+});
+
+window.applyCustomPeriod = function () {
+    customFrom = document.getElementById('custom-from').value;
+    customTo   = document.getElementById('custom-to').value;
+    if (!customFrom || !customTo) { alert('Seleziona entrambe le date.'); return; }
+    document.querySelectorAll('.perf-period-btn[data-period]').forEach(b => b.classList.remove('active'));
+    document.getElementById('btn-custom-period').classList.add('active');
+    currentPeriod = 'custom';
+    loadProfile();
+};
+
+// ── Auth bootstrap ────────────────────────────────────────────────────────────
+async function fetchFirebaseConfig() {
+    const r = await fetch('/api/firebase-config');
+    return r.json();
+}
+
+async function boot() {
+    const config = await fetchFirebaseConfig();
+    const app    = initializeApp(config);
+    const auth   = getAuth(app);
+    onAuthStateChanged(auth, async user => {
+        if (!user) { location.href = 'login.html'; return; }
+        const idToken = await user.getIdToken();
+        const wsToken = await OpsCommon.exchangeToken(idToken);
+        if (!wsToken) { location.href = 'login.html'; return; }
+
+        // Determine target user (from ?uid= query param or self)
+        const params = new URLSearchParams(location.search);
+        const uidParam = params.get('uid');
+
+        // Fetch own ops profile first
+        const meRes = await fetch('/api/operations/me', {
+            headers: { 'X-WS-Token': wsToken }
+        });
+        if (!meRes.ok) { location.href = 'operations-login.html'; return; }
+        const me = await meRes.json();
+        myRole  = me.role;
+        myOpsId = me.id;
+
+        document.getElementById('hdr-company').textContent = me.companyName || '';
+
+        // Show role-appropriate nav buttons
+        if (['DIRECTOR','CHEF_CUISINE','ADJOINT'].includes(myRole)) {
+            document.getElementById('btn-tasks').style.display = '';
+            document.getElementById('btn-team').style.display  = '';
+        }
+
+        // Show exception-add button for managers
+        if (['DIRECTOR','CHEF_CUISINE','ADJOINT'].includes(myRole)) {
+            document.getElementById('btn-add-exc').style.display = '';
+        }
+
+        // SC/CDB always see own profile; others may see others via ?uid=
+        if (['SOUS_CHEF','CHEF_DE_BRIGADE'].includes(myRole)) {
+            targetUserId = myOpsId;
+        } else {
+            targetUserId = uidParam || myOpsId;
+        }
+
+        await loadProfile();
+
+        // Realtime: re-load on any task change
+        OpsRealtime.connect(wsToken, (msg) => {
+            if (['OPS_TASK_CREATED','OPS_TASK_UPDATED','OPS_TASK_COMPLETED',
+                 'OPS_TASK_CANCELLED','OPS_TASK_DELETED'].includes(msg.action)) {
+                loadProfile();
+            }
+        });
+    });
+}
+
+// ── Profile loader ─────────────────────────────────────────────────────────────
+async function loadProfile() {
+    const wsToken = OpsCommon.getWsToken();
+    const params  = new URLSearchParams();
+    params.set('period', currentPeriod);
+    if (currentPeriod === 'custom' && customFrom && customTo) {
+        params.set('from', customFrom);
+        params.set('to',   customTo);
+    }
+
+    const url = `/api/operations/performance/${targetUserId}?${params}`;
+    let data;
+    try {
+        const res = await fetch(url, { headers: { 'X-WS-Token': wsToken } });
+        if (!res.ok) {
+            document.querySelector('.ops-container').innerHTML =
+                `<div class="card"><p class="perf-empty">Profilo non disponibile o non autorizzato.</p></div>`;
+            return;
+        }
+        data = await res.json();
+    } catch {
+        return;
+    }
+
+    renderProfile(data);
+}
+
+// ── Renderers ─────────────────────────────────────────────────────────────────
+function renderProfile(d) {
+    const u = d.user;
+    const m = d.metrics;
+    const r = d.reliability;
+    const e = d.evolution;
+    const w = d.workloadHistory;
+
+    // Profile header
+    document.getElementById('perf-avatar').textContent = (u.name || '?')[0].toUpperCase();
+    document.getElementById('perf-name').textContent   = u.name || '—';
+    document.getElementById('perf-role-badge').textContent = roleLabel(u.role);
+    document.getElementById('perf-dept').textContent   = u.department || '';
+    document.getElementById('perf-status-badge').textContent = u.status || '';
+    document.getElementById('perf-status-badge').className =
+        'perf-status ' + (u.status === 'ACTIVE' ? 'ok' : 'warn');
+    document.getElementById('perf-joined').textContent =
+        u.createdAt ? new Date(u.createdAt).toLocaleDateString('it-IT') : '—';
+    document.getElementById('perf-workload-status').textContent = d.workloadStatus || '—';
+    document.getElementById('period-label').textContent = d.periodLabel || '';
+
+    // Today
+    setText('t-completed', m.completedToday);
+    setText('t-open',      m.currentOpen);
+    setText('t-inprog',    m.currentInProgress);
+    setText('t-overdue',   m.currentOverdue);
+    setText('t-cancelled', m.cancelled);
+    setText('t-reassigned',m.reassignedToday);
+    setText('t-blocked',   m.blocked);
+
+    // Reliability ring
+    if (r.score !== null) {
+        const score = r.score;
+        const circ  = 2 * Math.PI * 50; // 314.16
+        const offset = circ - (score / 100) * circ;
+        document.getElementById('ring-score').textContent  = score;
+        document.getElementById('ring-fill').style.strokeDashoffset = offset.toFixed(1);
+        const color = score >= 85 ? '#22c55e' : score >= 70 ? '#3b82f6' : score >= 55 ? '#f59e0b' : score >= 40 ? '#f97316' : '#ef4444';
+        document.getElementById('ring-fill').style.stroke = color;
+        document.getElementById('perf-classification').textContent = r.classification;
+        document.getElementById('perf-classification').style.color = color;
+        if (r.components) renderComponents(r.components);
+    } else {
+        document.getElementById('ring-score').textContent = 'N/D';
+        document.getElementById('perf-classification').textContent = r.classification || 'Dati insufficienti';
+    }
+
+    // Metrics
+    setText('m-assigned',   m.assigned);
+    setText('m-completed',  m.completed);
+    setText('m-ontime',     m.completedOnTime);
+    setText('m-late',       m.completedLate);
+    setText('m-avgtime',    m.avgCompletionTime);
+    setText('m-urgent',     m.urgentCompleted + ' / ' + m.urgentAssigned);
+    setText('m-recurring',  m.recurringCompleted + ' / ' + m.recurringAssigned);
+    setText('m-cancelled',  m.cancelled);
+    setText('m-transferred',m.transferred);
+    setText('m-blocked',    m.blocked);
+
+    // Punctuality
+    const onTimePct = m.onTimeRate !== null ? Math.round(m.onTimeRate * 100) : null;
+    const latePct   = m.lateRate   !== null ? Math.round(m.lateRate   * 100) : null;
+    setText('pct-ontime', onTimePct !== null ? onTimePct + '%' : '—');
+    setText('pct-late',   latePct   !== null ? latePct   + '%' : '—');
+    document.getElementById('bar-ontime').style.width = (onTimePct || 0) + '%';
+    document.getElementById('bar-late').style.width   = (latePct   || 0) + '%';
+    setText('pct-avg-delay',  m.avgDelay       ? m.avgDelay   + ' min' : '—');
+    setText('pct-avg-anticip',m.avgAnticipation ? m.avgAnticipation + ' min' : '—');
+
+    // Evolution
+    renderEvolution(e);
+
+    // Workload history
+    if (w) {
+        setText('wl-avg',   w.avgDailyTasks);
+        setText('wl-peak',  w.peakWorkload);
+        setText('wl-over',  w.daysOverloaded);
+        setText('wl-under', w.daysUnderloaded);
+    }
+
+    // Strengths
+    renderList('strengths-list', d.strengths, text =>
+        `<div class="strength-tag">✅ ${esc(text)}</div>`,
+        'Nessun punto di forza rilevato per questo periodo.');
+
+    // Coaching
+    renderList('coaching-list', d.coaching, text =>
+        `<div class="coaching-item">💡 ${esc(text)}</div>`,
+        'Nessuna opportunità rilevata per questo periodo.');
+
+    // Task History
+    renderTaskHistory(d.taskHistory || []);
+
+    // Exception Register
+    renderExceptions(d.exceptions || []);
+
+    // Populate task select in exception modal
+    companyTasks = (d.taskHistory || []).filter(t => !['COMPLETED_ON_TIME','COMPLETED_LATE'].includes(t.outcome));
+    const sel = document.getElementById('exc-task-select');
+    sel.innerHTML = (d.taskHistory || []).map(t =>
+        `<option value="${esc(t.id)}">${esc(t.title)}</option>`
+    ).join('');
+}
+
+function renderComponents(c) {
+    const rows = [
+        { key: 'onTime',        label: 'Puntualità',         val: c.onTime        },
+        { key: 'completion',    label: 'Completamento',       val: c.completion    },
+        { key: 'urgent',        label: 'Urgenze',             val: c.urgent        },
+        { key: 'recurring',     label: 'Ricorrenti',          val: c.recurring     },
+        { key: 'consistency',   label: 'Consistenza',         val: c.consistency   },
+        { key: 'engagement',    label: 'Engagement',          val: c.engagement    },
+        { key: 'penaltyLate',   label: 'Penalità ritardi',    val: c.penaltyLate   },
+        { key: 'penaltyBlocked',label: 'Penalità blocchi',    val: c.penaltyBlocked},
+    ];
+    const html = rows.map(r => {
+        const isPenalty = r.val < 0;
+        return `<div class="perf-comp-row">
+          <span class="comp-lbl">${esc(r.label)}</span>
+          <span class="comp-val ${isPenalty ? 'neg' : ''}">${(r.val >= 0 ? '+' : '') + r.val.toFixed(1)}</span>
+        </div>`;
+    }).join('');
+    document.getElementById('perf-components').innerHTML = html;
+}
+
+function renderEvolution(e) {
+    if (!e) { document.getElementById('evolution-grid').innerHTML = '<p class="perf-empty">Dati insufficienti.</p>'; return; }
+    function dirIcon(d) {
+        if (d === 'IMPROVING')         return '<span class="evo-icon improving">↑ Miglioramento</span>';
+        if (d === 'DECLINING')         return '<span class="evo-icon declining">↓ Declino</span>';
+        if (d === 'STABLE')            return '<span class="evo-icon stable">→ Stabile</span>';
+        return '<span class="evo-icon neutral">N/D</span>';
+    }
+    function fmtRate(r) { return r !== null ? Math.round(r * 100) + '%' : '—'; }
+    const periods = [
+        { label: e.currentMonth.label, m: e.currentMonth.metrics },
+        { label: e.prevMonth.label,    m: e.prevMonth.metrics },
+        { label: e.last90.label,       m: e.last90.metrics },
+    ];
+    let html = '<div class="evo-periods">' +
+        periods.map(p => `<div class="evo-period-card">
+          <div class="evo-period-name">${esc(p.label)}</div>
+          <div class="evo-metric">Completamento: <strong>${fmtRate(p.m.completionRate)}</strong></div>
+          <div class="evo-metric">In tempo: <strong>${fmtRate(p.m.onTimeRate)}</strong></div>
+          <div class="evo-metric">Completati: <strong>${p.m.completed}</strong></div>
+        </div>`).join('') +
+        '</div>' +
+        `<div class="evo-directions">
+          <div>Mese corrente vs mese precedente: ${dirIcon(e.curVsPrev.direction)}</div>
+          <div>Mese corrente vs 90 giorni: ${dirIcon(e.curVs90.direction)}</div>
+        </div>`;
+    document.getElementById('evolution-grid').innerHTML = html;
+}
+
+const OUTCOME_LABELS = {
+    COMPLETED_ON_TIME: { label: 'In tempo',    cls: 'ok'     },
+    COMPLETED_LATE:    { label: 'In ritardo',  cls: 'warn'   },
+    CANCELLED:         { label: 'Annullato',   cls: 'neutral'},
+    TRANSFERRED:       { label: 'Trasferito',  cls: 'neutral'},
+    BLOCKED:           { label: 'Bloccato',    cls: 'warn'   },
+    OPEN:              { label: 'Aperto',       cls: 'neutral'},
+    IN_PROGRESS:       { label: 'In corso',    cls: 'ok'     },
+    OVERDUE:           { label: 'In ritardo',  cls: 'warn'   },
+};
+
+function renderTaskHistory(items) {
+    const el = document.getElementById('task-history-list');
+    if (!items.length) { el.innerHTML = '<p class="perf-empty">Nessun compito nel periodo selezionato.</p>'; return; }
+    el.innerHTML = items.map(t => {
+        const o = OUTCOME_LABELS[t.outcome] || { label: t.outcome, cls: 'neutral' };
+        const due = t.dueDate ? new Date(t.dueDate).toLocaleDateString('it-IT') : '';
+        return `<div class="perf-hist-row">
+          <span class="hist-title">${esc(t.title)}</span>
+          <span class="hist-dept">${esc(t.department || '')}</span>
+          <span class="hist-priority prio-${(t.priority||'').toLowerCase()}">${t.priority || ''}</span>
+          <span class="hist-outcome outcome-${o.cls}">${o.label}</span>
+          <span class="hist-due">${due}</span>
+        </div>`;
+    }).join('');
+}
+
+const EXC_LABELS = {
+    CANCELLED: 'Annullato', TRANSFERRED: 'Trasferito', BLOCKED: 'Bloccato',
+    WAITING_DEPT: 'Attesa reparto', WAITING_MATERIALS: 'Attesa materiali',
+    CUSTOMER_REQUEST: 'Richiesta cliente', DIRECTOR_DECISION: 'Decisione Direttore',
+    OPERATIONAL_EMERGENCY: 'Emergenza operativa',
+};
+
+function renderExceptions(items) {
+    const el = document.getElementById('exception-list');
+    if (!items.length) { el.innerHTML = '<p class="perf-empty">Nessuna eccezione registrata.</p>'; return; }
+    el.innerHTML = items.map(e => `<div class="exc-row">
+      <span class="exc-type">${esc(EXC_LABELS[e.type] || e.type)}</span>
+      <span class="exc-task">${esc(e.taskTitle || e.taskId)}</span>
+      <span class="exc-reason">${esc(e.reason || '')}</span>
+      <span class="exc-date">${new Date(e.recordedAt).toLocaleDateString('it-IT')}</span>
+      <span class="exc-by">${esc(e.recordedByName || '')}</span>
+    </div>`).join('');
+}
+
+function renderList(elId, items, tmpl, empty) {
+    const el = document.getElementById(elId);
+    if (!items || !items.length) { el.innerHTML = `<p class="perf-empty">${empty}</p>`; return; }
+    el.innerHTML = items.map(tmpl).join('');
+}
+
+// ── Exception modal ────────────────────────────────────────────────────────────
+window.openExceptionModal  = () => { document.getElementById('exc-modal').style.display = ''; };
+window.closeExceptionModal = () => { document.getElementById('exc-modal').style.display = 'none'; };
+window.submitException = async function () {
+    const wsToken = OpsCommon.getWsToken();
+    const taskId  = document.getElementById('exc-task-select').value;
+    const type    = document.getElementById('exc-type-select').value;
+    const reason  = document.getElementById('exc-reason').value;
+    if (!taskId) { alert('Seleziona un compito.'); return; }
+    const res = await fetch('/api/operations/exceptions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-WS-Token': wsToken },
+        body: JSON.stringify({ taskId, userId: targetUserId, type, reason }),
+    });
+    if (res.ok) { closeExceptionModal(); loadProfile(); }
+    else { const d = await res.json(); alert(d.error || 'Errore.'); }
+};
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+function setText(id, val) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = val ?? '—';
+}
+function esc(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function roleLabel(r) {
+    return { DIRECTOR:'Direttore', CHEF_CUISINE:'Chef Cuisine', ADJOINT:'Adjoint',
+             SOUS_CHEF:'Sous Chef', CHEF_DE_BRIGADE:'Chef de Brigade' }[r] || r;
+}
+
+boot();
+</script>
+</body>
+</html>

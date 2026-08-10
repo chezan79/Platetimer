@@ -1438,6 +1438,8 @@ const opsIntelligence = require('./operations/ops-intelligence');
 const opsSnapshots    = require('./operations/ops-snapshots');
 const opsTrends       = require('./operations/ops-trends');
 const opsAssistant    = require('./operations/ops-assistant');
+const opsPerformance  = require('./operations/ops-performance');
+const opsExceptions   = require('./operations/ops-exceptions');
 
 const OPS_USERS_FILE = path.join(DATA_DIR, 'ops-users.json');
 const OPS_TASKS_FILE = path.join(DATA_DIR, 'ops-tasks.json');
@@ -2822,6 +2824,156 @@ app.get('/api/operations/intelligence', (req, res) => {
 // =========================================================================
 // ===== PLATETIMER OPERATIONS — SPRINT 3: RECURRING / SCHEDULER ===========
 // =========================================================================
+
+// =========================================================================
+// ===== SPRINT 6.4 — PERFORMANCE & COACHING CENTER ========================
+// =========================================================================
+
+// Helper: can actor view performance profile of target ops-user?
+// Director: any; CC: own ASSIGNABLE_ROLES + self; Adjoint: own ASSIGNABLE_ROLES + self; SC/CDB: self only.
+function canViewPerformance(actor, targetUser) {
+    if (!actor || !targetUser) return false;
+    if (actor.companyId !== targetUser.companyId) return false;
+    if (actor.id === targetUser.id) return true;
+    if (actor.role === 'DIRECTOR') return true;
+    if (['CHEF_CUISINE','ADJOINT'].includes(actor.role))
+        return (opsAuth.ASSIGNABLE_ROLES[actor.role] || []).includes(targetUser.role);
+    return false; // SC/CDB: self only
+}
+
+// GET /api/operations/performance/:userId — individual performance profile
+app.get('/api/operations/performance/:userId', (req, res) => {
+    const ctx = requireOpsAuth(req, res);
+    if (!ctx) return;
+    const actor     = ctx.opsUser;
+    const companyId = actor.companyId;
+
+    // Resolve target — 'me' is a convenience alias
+    const rawId     = req.params.userId;
+    const byId      = opsUsersById(companyId);
+    const targetUser = rawId === 'me' ? actor : byId[rawId];
+
+    if (!targetUser || targetUser.companyId !== companyId) {
+        return res.status(404).json({ error: 'Utente non trovato.' });
+    }
+    if (!canViewPerformance(actor, targetUser)) {
+        console.log(`⛔ [OPS-SECURITY] performance rejected — ${actor.role} cannot view ${targetUser.role} (company "${companyId}")`);
+        return res.status(403).json({ error: 'Non autorizzato a visualizzare questo profilo.' });
+    }
+
+    const period    = (req.query.period || '30d').trim();
+    const periodMs  = opsPerformance.parsePeriod(period, req.query.from, req.query.to);
+
+    const allTasks  = getOpsTasks(companyId);
+    const userExc   = opsExceptions.getExceptionsForUser(companyId, targetUser.id);
+
+    // Enrich exceptions with task title
+    const taskById  = {};
+    allTasks.forEach(t => { taskById[t.id] = t; });
+    const enrichedExc = userExc.map(e => ({
+        ...e,
+        taskTitle: taskById[e.taskId] ? taskById[e.taskId].title : e.taskId,
+    }));
+
+    const metrics      = opsPerformance.computeMetrics(allTasks, targetUser.id, periodMs, userExc);
+    const reliability  = opsPerformance.computeReliabilityIndex(metrics);
+    const strengths    = opsPerformance.generateStrengths(metrics, reliability);
+    const coaching     = opsPerformance.generateCoachingOpportunities(metrics, reliability);
+    const evolution    = opsPerformance.computeEvolution(allTasks, targetUser.id, userExc);
+    const workloadHistory = opsPerformance.computeWorkloadHistory(allTasks, targetUser.id);
+    const relatedTasks = opsPerformance.getUserRelatedTasks(allTasks, targetUser.id);
+    const taskHistory  = opsPerformance.buildTaskHistory(relatedTasks, targetUser.id, userExc, 30);
+
+    // Workload status: derive from current open tasks
+    const openCount   = relatedTasks.filter(t => t.assigneeId === targetUser.id && !['COMPLETED','CANCELLED'].includes(t.status)).length;
+    const wlScore     = openCount;
+    const workloadStatus = wlScore >= 10 ? 'SOVRACCARICO' : wlScore >= 5 ? 'OCCUPATO' : 'NORMALE';
+
+    res.json({
+        user: {
+            id:          targetUser.id,
+            name:        targetUser.name,
+            role:        targetUser.role,
+            department:  targetUser.department || null,
+            status:      targetUser.status,
+            createdAt:   targetUser.createdAt,
+        },
+        periodLabel:     periodMs.label,
+        metrics,
+        reliability,
+        strengths,
+        coaching,
+        evolution,
+        workloadHistory,
+        taskHistory,
+        exceptions:      enrichedExc,
+        workloadStatus,
+    });
+});
+
+// POST /api/operations/exceptions — record a non-standard task outcome
+// Only Director, CC, Adjoint may record exceptions.
+app.post('/api/operations/exceptions', (req, res) => {
+    const ctx = requireOpsAuth(req, res);
+    if (!ctx) return;
+    const actor     = ctx.opsUser;
+    const companyId = actor.companyId;
+
+    if (!['DIRECTOR','CHEF_CUISINE','ADJOINT'].includes(actor.role)) {
+        console.log(`⛔ [OPS-SECURITY] exception-create rejected — role ${actor.role}`);
+        return res.status(403).json({ error: 'Solo i manager possono registrare eccezioni.' });
+    }
+
+    const { taskId, userId, type, reason } = req.body;
+    if (!taskId || !userId || !type) {
+        return res.status(400).json({ error: 'taskId, userId e type sono obbligatori.' });
+    }
+
+    // Validate task belongs to company
+    const task = findOpsTask(companyId, taskId);
+    if (!task) return res.status(404).json({ error: 'Compito non trovato.' });
+
+    // Validate userId belongs to company and actor can view their performance
+    const byId = opsUsersById(companyId);
+    const targetUser = byId[userId];
+    if (!targetUser) return res.status(404).json({ error: 'Utente non trovato.' });
+    if (!canViewPerformance(actor, targetUser)) {
+        return res.status(403).json({ error: 'Non autorizzato per questo utente.' });
+    }
+
+    try {
+        const record = opsExceptions.createException(companyId, {
+            taskId,
+            userId,
+            type: String(type).toUpperCase(),
+            reason: reason || '',
+            recordedBy:     actor.id,
+            recordedByName: actor.name,
+        });
+        res.json({ success: true, exception: record });
+    } catch (e) {
+        res.status(400).json({ error: e.message });
+    }
+});
+
+// GET /api/operations/exceptions — list exceptions for a user
+app.get('/api/operations/exceptions', (req, res) => {
+    const ctx = requireOpsAuth(req, res);
+    if (!ctx) return;
+    const actor     = ctx.opsUser;
+    const companyId = actor.companyId;
+
+    const userId = req.query.userId || actor.id;
+    const byId   = opsUsersById(companyId);
+    const targetUser = byId[userId];
+    if (!targetUser) return res.status(404).json({ error: 'Utente non trovato.' });
+    if (!canViewPerformance(actor, targetUser)) {
+        return res.status(403).json({ error: 'Non autorizzato.' });
+    }
+
+    const exceptions = opsExceptions.getExceptionsForUser(companyId, userId);
+    res.json({ exceptions });
+});
 
 // ── Template CRUD ──────────────────────────────────────────────────────────
 

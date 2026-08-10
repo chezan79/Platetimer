@@ -135,6 +135,135 @@
 .role-intel-rw-item:last-child{border-bottom:none;}
 @media(max-width:600px){.pq-item,.rw-item{flex-direction:column;gap:8px;}.pq-rank{align-self:flex-start;}}
 /* Sprint 6.3 end */
+
+/* ── Sprint 6.4 — Performance & Coaching Center ─────────────────────────── */
+
+/* Profile card */
+.perf-profile-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:24px;margin-bottom:20px;box-shadow:var(--shadow);}
+.perf-profile-main{display:flex;align-items:flex-start;gap:20px;flex-wrap:wrap;}
+.perf-avatar{width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,#4f46e5,#818cf8);display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:700;color:#fff;flex-shrink:0;}
+.perf-profile-info{flex:1;min-width:200px;}
+.perf-name{margin:0 0 6px;font-size:22px;font-weight:700;color:var(--text);}
+.perf-meta{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;}
+.perf-role{background:rgba(79,70,229,.12);color:#4f46e5;border-radius:20px;padding:3px 12px;font-size:12px;font-weight:600;}
+.perf-dept{background:var(--bg);border:1px solid var(--border);border-radius:20px;padding:3px 12px;font-size:12px;color:var(--muted);}
+.perf-status{border-radius:20px;padding:3px 12px;font-size:12px;font-weight:600;}
+.perf-status.ok{background:rgba(34,197,94,.12);color:#16a34a;}
+.perf-status.warn{background:rgba(249,115,22,.12);color:#ea580c;}
+.perf-profile-details{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--muted);}
+
+/* Period bar */
+.perf-period-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:20px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 16px;}
+.perf-period-btn{background:none;border:1px solid var(--border);border-radius:8px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;color:var(--muted);transition:all .15s;}
+.perf-period-btn:hover,.perf-period-btn.active{background:#4f46e5;color:#fff;border-color:#4f46e5;}
+.perf-date-input{border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:12px;background:var(--bg);color:var(--text);}
+.perf-custom-range{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.perf-period-label{margin-left:auto;font-size:12px;color:var(--muted);font-style:italic;}
+
+/* Today grid */
+.perf-grid-today{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:12px;}
+.perf-today-item{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 10px;text-align:center;display:flex;flex-direction:column;gap:4px;}
+.perf-today-item.warn{border-color:rgba(249,115,22,.3);background:rgba(249,115,22,.04);}
+.perf-today-num{font-size:28px;font-weight:700;color:var(--text);}
+.perf-today-lbl{font-size:11px;color:var(--muted);font-weight:500;}
+
+/* Reliability ring */
+.perf-reliability-layout{display:flex;align-items:flex-start;gap:32px;flex-wrap:wrap;}
+.perf-score-ring{position:relative;width:140px;height:140px;flex-shrink:0;}
+.perf-ring-svg{width:100%;height:100%;transform:rotate(-90deg);}
+.perf-ring-bg{fill:none;stroke:var(--border);stroke-width:10;}
+.perf-ring-fill{fill:none;stroke:#4f46e5;stroke-width:10;stroke-linecap:round;transition:stroke-dashoffset .6s ease,stroke .4s;}
+.perf-ring-label{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;}
+.perf-ring-score{font-size:28px;font-weight:800;color:var(--text);}
+.perf-ring-max{font-size:12px;color:var(--muted);}
+.perf-reliability-detail{flex:1;min-width:220px;}
+.perf-classification{font-size:20px;font-weight:700;margin-bottom:12px;}
+.perf-components{display:flex;flex-direction:column;gap:4px;}
+.perf-comp-row{display:flex;justify-content:space-between;font-size:13px;padding:3px 0;}
+.comp-lbl{color:var(--muted);}
+.comp-val{font-weight:600;color:var(--text);}
+.comp-val.neg{color:#ef4444;}
+
+/* Metrics grid */
+.perf-metrics-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:14px;}
+.perf-metric{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:16px 14px;display:flex;flex-direction:column;gap:4px;align-items:center;text-align:center;}
+.perf-metric.ok{border-color:rgba(34,197,94,.3);}
+.perf-metric.warn{border-color:rgba(249,115,22,.3);}
+.pm-val{font-size:22px;font-weight:700;color:var(--text);}
+.pm-lbl{font-size:11px;color:var(--muted);font-weight:500;}
+
+/* Punctuality bars */
+.perf-punctuality-grid{display:flex;flex-direction:column;gap:14px;}
+.perf-pct-item{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+.pct-label{font-size:13px;color:var(--muted);min-width:170px;}
+.pct-bar-wrap{flex:1;min-width:100px;height:8px;background:var(--border);border-radius:4px;overflow:hidden;}
+.pct-bar{height:100%;border-radius:4px;transition:width .5s ease;}
+.pct-bar.ok{background:#22c55e;}
+.pct-bar.warn{background:#f97316;}
+.pct-value{font-size:14px;font-weight:700;color:var(--text);min-width:40px;text-align:right;}
+.pct-value.big{font-size:18px;}
+
+/* Evolution */
+.evo-periods{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:14px;margin-bottom:16px;}
+.evo-period-card{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px;}
+.evo-period-name{font-size:12px;font-weight:700;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em;}
+.evo-metric{font-size:13px;color:var(--text);margin-bottom:4px;}
+.evo-directions{display:flex;flex-direction:column;gap:8px;}
+.evo-directions > div{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:8px;}
+.evo-icon{font-weight:700;padding:3px 10px;border-radius:6px;font-size:12px;}
+.evo-icon.improving{background:rgba(34,197,94,.12);color:#16a34a;}
+.evo-icon.declining{background:rgba(239,68,68,.12);color:#dc2626;}
+.evo-icon.stable{background:rgba(107,114,128,.1);color:#6b7280;}
+.evo-icon.neutral{background:var(--bg);color:var(--muted);}
+
+/* Workload history */
+.perf-wl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:14px;}
+.perf-wl-item{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center;display:flex;flex-direction:column;gap:4px;}
+.perf-wl-item.warn{border-color:rgba(249,115,22,.3);}
+.wl-val{font-size:26px;font-weight:700;color:var(--text);}
+.wl-lbl{font-size:11px;color:var(--muted);font-weight:500;}
+
+/* Strengths & Coaching */
+.perf-strengths,.perf-coaching{display:flex;flex-direction:column;gap:8px;}
+.strength-tag{background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.2);border-radius:10px;padding:10px 16px;font-size:13px;color:var(--text);font-weight:500;}
+.coaching-item{background:rgba(249,115,22,.06);border:1px solid rgba(249,115,22,.2);border-radius:10px;padding:10px 16px;font-size:13px;color:var(--text);}
+.perf-empty{color:var(--muted);font-size:13px;font-style:italic;padding:8px 0;}
+
+/* Task history */
+.perf-task-history{display:flex;flex-direction:column;gap:6px;}
+.perf-hist-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:10px;font-size:13px;}
+.hist-title{flex:1;min-width:120px;font-weight:600;color:var(--text);}
+.hist-dept{min-width:80px;color:var(--muted);font-size:12px;}
+.hist-priority{min-width:60px;font-size:11px;font-weight:700;border-radius:6px;padding:2px 8px;text-align:center;}
+.hist-priority.prio-urgent{background:rgba(239,68,68,.1);color:#dc2626;}
+.hist-priority.prio-high{background:rgba(249,115,22,.1);color:#ea580c;}
+.hist-priority.prio-normal{background:rgba(59,130,246,.1);color:#2563eb;}
+.hist-priority.prio-low{background:rgba(107,114,128,.08);color:#6b7280;}
+.hist-outcome{min-width:90px;font-size:11px;font-weight:700;border-radius:6px;padding:2px 8px;text-align:center;}
+.outcome-ok{background:rgba(34,197,94,.1);color:#16a34a;}
+.outcome-warn{background:rgba(249,115,22,.1);color:#ea580c;}
+.outcome-neutral{background:rgba(107,114,128,.08);color:#6b7280;}
+.hist-due{font-size:12px;color:var(--muted);}
+
+/* Exception register */
+.perf-exc-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+.perf-exc-header h2{margin:0;}
+.exc-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:10px;font-size:13px;margin-bottom:6px;}
+.exc-type{font-weight:700;color:#ea580c;min-width:120px;}
+.exc-task{flex:1;min-width:100px;color:var(--text);}
+.exc-reason{flex:2;color:var(--muted);font-size:12px;font-style:italic;}
+.exc-date{font-size:12px;color:var(--muted);min-width:80px;}
+.exc-by{font-size:12px;color:var(--muted);min-width:80px;}
+
+@media(max-width:600px){
+  .perf-profile-main{flex-direction:column;}
+  .perf-avatar{width:48px;height:48px;font-size:20px;}
+  .perf-name{font-size:18px;}
+  .perf-reliability-layout{flex-direction:column;align-items:center;}
+  .perf-hist-row{flex-direction:column;align-items:flex-start;}
+  .exc-row{flex-direction:column;align-items:flex-start;}
+}
+/* Sprint 6.4 end */
 /* Sprint 6 end */
 
 /* Sprint 4 additions */
