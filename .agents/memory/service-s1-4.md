@@ -1,6 +1,6 @@
 ---
-name: Service S1.4 REST Department Locking
-description: Server-side department access restriction for bound Department Account users.
+name: Service S1.4 + S1.4.1 REST Department Locking
+description: Server-side department access restriction for bound Department Account users; S1.4.1 adds centralized errors, GET /api/service/department, and explicit inactive-dept code.
 ---
 
 # New Helper

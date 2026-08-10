@@ -323,6 +323,16 @@ function getBoundDepartmentContext(session) {
     return account; // { id, companyId, departmentId, status, firebaseUid, … }
 }
 
+// [S1.4.1] Centralized structured error response for department access checks.
+// Returns { status, body } — caller does res.status(e.status).json(e.body).
+// All codes are stable strings for UI-layer branching (never parse the message).
+function departmentAccessError(boundAcct) {
+    if (boundAcct.status === 'SUSPENDED') {
+        return { status: 403, body: { error: 'Account reparto sospeso.', code: 'ACCOUNT_SUSPENDED' } };
+    }
+    return { status: 403, body: { error: 'Account reparto non autorizzato a gestire i reparti.', code: 'ACCOUNT_NOT_AUTHORIZED' } };
+}
+
 // ===== SECURITY: Session Token Exchange Endpoint =====
 // The frontend calls this after Firebase login to get a server-signed session token.
 // The server verifies the Firebase ID token, fetches the company from Firestore
@@ -499,9 +509,9 @@ app.get('/api/departments', (req, res) => {
 
     const boundAcct = getBoundDepartmentContext(session);
     if (boundAcct) {
-        if (boundAcct.status === 'SUSPENDED') {
-            return res.status(403).json({ error: 'Account reparto sospeso.' });
-        }
+        const e = departmentAccessError(boundAcct);
+        if (boundAcct.status !== 'ACTIVE') return res.status(e.status).json(e.body);
+
         // ACTIVE bound account — return ONLY the assigned active department.
         // departmentId is always from the server-side account record — never from the client.
         const assignedDept = getCompanyDepts(companyId).find(
@@ -509,7 +519,11 @@ app.get('/api/departments', (req, res) => {
         );
         const plan = getCompanyPlan(companyId);
         const limit = getPlanLimit(plan);
-        return res.json({ success: true, departments: assignedDept ? [assignedDept] : [], plan, limit });
+        // [S1.4.1] Return explicit error instead of empty array when assigned dept is inactive.
+        if (!assignedDept) {
+            return res.status(410).json({ error: 'Assigned department inactive', code: 'DEPARTMENT_INACTIVE' });
+        }
+        return res.json({ success: true, departments: [assignedDept], plan, limit });
     }
 
     // Unbound legacy user — existing behaviour preserved
@@ -525,12 +539,7 @@ app.post('/api/departments', (req, res) => {
     const session = requireAuth(req, res);
     if (!session) return;
     const boundAcct = getBoundDepartmentContext(session);
-    if (boundAcct) {
-        const msg = boundAcct.status === 'SUSPENDED'
-            ? 'Account reparto sospeso.'
-            : 'Account reparto non autorizzato a gestire i reparti.';
-        return res.status(403).json({ error: msg });
-    }
+    if (boundAcct) { const e = departmentAccessError(boundAcct); return res.status(e.status).json(e.body); }
     const companyId = session.companyName;
     const name = (req.body.name || '').trim();
     if (!name) return res.status(400).json({ error: 'Department name is required.' });
@@ -560,12 +569,7 @@ app.put('/api/departments/:id', (req, res) => {
     const session = requireAuth(req, res);
     if (!session) return;
     const boundAcct = getBoundDepartmentContext(session);
-    if (boundAcct) {
-        const msg = boundAcct.status === 'SUSPENDED'
-            ? 'Account reparto sospeso.'
-            : 'Account reparto non autorizzato a gestire i reparti.';
-        return res.status(403).json({ error: msg });
-    }
+    if (boundAcct) { const e = departmentAccessError(boundAcct); return res.status(e.status).json(e.body); }
     const companyId = session.companyName;
     const depts = departmentsStore[companyId] || [];
     const idx = depts.findIndex(d => d.id === req.params.id);
@@ -607,12 +611,7 @@ app.delete('/api/departments/:id', (req, res) => {
     const session = requireAuth(req, res);
     if (!session) return;
     const boundAcct = getBoundDepartmentContext(session);
-    if (boundAcct) {
-        const msg = boundAcct.status === 'SUSPENDED'
-            ? 'Account reparto sospeso.'
-            : 'Account reparto non autorizzato a gestire i reparti.';
-        return res.status(403).json({ error: msg });
-    }
+    if (boundAcct) { const e = departmentAccessError(boundAcct); return res.status(e.status).json(e.body); }
     const companyId = session.companyName;
     const depts = departmentsStore[companyId] || [];
     const idx = depts.findIndex(d => d.id === req.params.id);
@@ -734,6 +733,49 @@ app.get('/api/service/identity', (req, res) => {
     res.json({ success: true, ...ctx });
 });
 
+// GET /api/service/department — dedicated endpoint for bound Department Accounts.
+// [S1.4.1] Returns the authenticated account's assigned department in a clean,
+// purpose-built shape. Replaces relying on GET /api/departments for bound users.
+//
+// Response:
+//   { success, departmentId, departmentName, departmentType, status, departmentAccountId }
+//
+// Error codes (stable, UI-layer branching):
+//   NOT_BOUND           — caller has no Department Account binding
+//   ACCOUNT_SUSPENDED   — account is SUSPENDED
+//   DEPARTMENT_INACTIVE — assigned department no longer active (410)
+//
+// All values come from server-side verified records — never from the client.
+app.get('/api/service/department', (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+
+    const boundAcct = getBoundDepartmentContext(session);
+    if (!boundAcct) {
+        return res.status(403).json({ error: 'No department account binding.', code: 'NOT_BOUND' });
+    }
+    if (boundAcct.status !== 'ACTIVE') {
+        const e = departmentAccessError(boundAcct);
+        return res.status(e.status).json(e.body);
+    }
+
+    // departmentId always from the server-side account record — never from the client
+    const dept = getCompanyDepts(session.companyName).find(d => d.id === boundAcct.departmentId);
+    if (!dept || !dept.active) {
+        return res.status(410).json({ error: 'Assigned department inactive', code: 'DEPARTMENT_INACTIVE' });
+    }
+
+    const departmentType = departmentAccounts.getDepartmentType(dept);
+    res.json({
+        success:            true,
+        departmentId:       dept.id,
+        departmentName:     dept.name,
+        departmentType,                    // STANDARD | CENTRAL — from dept record
+        status:             boundAcct.status,
+        departmentAccountId: boundAcct.id
+    });
+});
+
 // PUT /api/departments/:id/type — set departmentType (STANDARD | CENTRAL)
 // [TRANSITIONAL] Representation only in this sprint: no permission is derived
 // from CENTRAL yet. Max one CENTRAL per company (reject-until-reverted).
@@ -742,12 +784,7 @@ app.put('/api/departments/:id/type', (req, res) => {
     const session = requireAuth(req, res);
     if (!session) return;
     const boundAcct = getBoundDepartmentContext(session);
-    if (boundAcct) {
-        const msg = boundAcct.status === 'SUSPENDED'
-            ? 'Account reparto sospeso.'
-            : 'Account reparto non autorizzato a gestire i reparti.';
-        return res.status(403).json({ error: msg });
-    }
+    if (boundAcct) { const e = departmentAccessError(boundAcct); return res.status(e.status).json(e.body); }
     const companyId = session.companyName;
     const depts = departmentsStore[companyId] || [];
     const result = departmentAccounts.setDepartmentType(depts, req.params.id, (req.body || {}).departmentType);
