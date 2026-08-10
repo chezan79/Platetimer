@@ -92,6 +92,7 @@
 
 <script src="js/ws-auth.js"></script>
 <script src="js/operations-common.js"></script>
+<script src="js/operations-realtime.js"></script>
 <script>
 const esc = OpsCommon.escHtml;
 const fmt = OpsCommon.fmtDue;
@@ -218,6 +219,23 @@ function renderAttentionCard(t, users, label, color='#dc2626') {
 }
 
 load();
+
+// Sprint 5: real-time live updates ──────────────────────────────────────────
+OpsRealtime.init();
+let _rtTimer = null;
+function rtReload(d) { clearTimeout(_rtTimer); _rtTimer = setTimeout(load, d || 700); }
+OpsRealtime.on('OPS_TASK_CREATED',        () => { rtReload(400); OpsRealtime.toast('📌 Nuovo compito creato', 'info'); });
+OpsRealtime.on('OPS_TASK_UPDATED',        () => { rtReload(500); });
+OpsRealtime.on('OPS_TASK_COMPLETED',      () => { rtReload(400); OpsRealtime.toast('✅ Compito completato', 'ok'); });
+OpsRealtime.on('OPS_TASK_REASSIGNED',     () => { rtReload(400); OpsRealtime.toast('🔄 Compito riassegnato', 'info'); });
+OpsRealtime.on('OPS_TASK_PROGRESS',       () => { rtReload(600); });
+OpsRealtime.on('OPS_COMMENT_ADDED',       () => { rtReload(800); });
+OpsRealtime.on('OPS_USER_CREATED',        () => { rtReload(400); });
+OpsRealtime.on('OPS_USER_UPDATED',        () => { rtReload(500); });
+OpsRealtime.on('OPS_USER_SUSPENDED',      () => { rtReload(400); OpsRealtime.toast('⚠️ Utente sospeso', 'warn'); });
+OpsRealtime.on('OPS_USER_ARCHIVED',       () => { rtReload(400); OpsRealtime.toast('📦 Utente archiviato', 'warn'); });
+OpsRealtime.on('OPS_USER_RESTORED',       () => { rtReload(400); OpsRealtime.toast('♻️ Utente ripristinato', 'ok'); });
+OpsRealtime.on('OPS_INVITATION_ACCEPTED', () => { rtReload(400); OpsRealtime.toast('👤 Nuovo membro attivato!', 'ok'); });
 </script>
 </body>
 </html>

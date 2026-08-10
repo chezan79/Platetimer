@@ -57,6 +57,7 @@
 
 <script src="js/ws-auth.js"></script>
 <script src="js/operations-common.js"></script>
+<script src="js/operations-realtime.js"></script>
 <script>
 const esc = OpsCommon.escHtml;
 
@@ -120,6 +121,20 @@ async function load() {
 }
 
 load();
+
+// Sprint 5: real-time live updates ──────────────────────────────────────────
+OpsRealtime.init();
+let _rtTimer = null;
+function rtReload(d) { clearTimeout(_rtTimer); _rtTimer = setTimeout(load, d || 700); }
+OpsRealtime.on('OPS_TASK_CREATED',    () => { rtReload(400); OpsRealtime.toast('📌 Nuovo compito assegnato', 'info'); });
+OpsRealtime.on('OPS_TASK_UPDATED',    () => { rtReload(500); });
+OpsRealtime.on('OPS_TASK_COMPLETED',  () => { rtReload(400); OpsRealtime.toast('✅ Compito completato', 'ok'); });
+OpsRealtime.on('OPS_TASK_REASSIGNED', () => { rtReload(400); OpsRealtime.toast('🔄 Compito riassegnato', 'info'); });
+OpsRealtime.on('OPS_TASK_PROGRESS',   () => { rtReload(600); });
+OpsRealtime.on('OPS_COMMENT_ADDED',   () => { rtReload(800); });
+OpsRealtime.on('OPS_USER_SUSPENDED',  () => { rtReload(500); OpsRealtime.toast('⚠️ Utente sospeso', 'warn'); });
+OpsRealtime.on('OPS_USER_ARCHIVED',   () => { rtReload(500); });
+OpsRealtime.on('OPS_USER_RESTORED',   () => { rtReload(500); });
 </script>
 </body>
 </html>

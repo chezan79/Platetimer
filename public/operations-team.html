@@ -121,6 +121,7 @@
 
 <script src="js/ws-auth.js"></script>
 <script src="js/operations-common.js"></script>
+<script src="js/operations-realtime.js"></script>
 <script>
 let myOpsId    = null;
 let currentFilter = '';
@@ -442,6 +443,18 @@ async function archiveFromModal() {
 }
 
 load();
+
+// Sprint 5: real-time live updates ──────────────────────────────────────────
+OpsRealtime.init();
+let _rtTimer = null;
+function rtReload(d) { clearTimeout(_rtTimer); _rtTimer = setTimeout(loadUsers, d || 600); }
+OpsRealtime.on('OPS_USER_CREATED',        () => { rtReload(400); OpsRealtime.toast('👤 Nuovo invito creato', 'info'); });
+OpsRealtime.on('OPS_USER_UPDATED',        () => { rtReload(400); });
+OpsRealtime.on('OPS_USER_SUSPENDED',      () => { rtReload(400); OpsRealtime.toast('⚠️ Utente sospeso', 'warn'); });
+OpsRealtime.on('OPS_USER_ARCHIVED',       () => { rtReload(400); OpsRealtime.toast('📦 Utente archiviato', 'warn'); });
+OpsRealtime.on('OPS_USER_RESTORED',       () => { rtReload(400); OpsRealtime.toast('♻️ Utente ripristinato', 'ok'); });
+OpsRealtime.on('OPS_USER_DELETED',        () => { rtReload(400); });
+OpsRealtime.on('OPS_INVITATION_ACCEPTED', () => { rtReload(400); OpsRealtime.toast('✅ Membro attivato!', 'ok'); });
 </script>
 </body>
 </html>

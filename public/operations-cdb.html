@@ -65,6 +65,7 @@
 
 <script src="js/ws-auth.js"></script>
 <script src="js/operations-common.js"></script>
+<script src="js/operations-realtime.js"></script>
 <script>
 const esc = OpsCommon.escHtml;
 
@@ -135,6 +136,17 @@ async function load() {
 }
 
 load();
+
+// Sprint 5: real-time live updates ──────────────────────────────────────────
+OpsRealtime.init();
+let _rtTimer = null;
+function rtReload(d) { clearTimeout(_rtTimer); _rtTimer = setTimeout(load, d || 700); }
+OpsRealtime.on('OPS_TASK_CREATED',    () => { rtReload(400); OpsRealtime.toast('📌 Nuovo compito', 'info'); });
+OpsRealtime.on('OPS_TASK_UPDATED',    () => { rtReload(500); });
+OpsRealtime.on('OPS_TASK_COMPLETED',  () => { rtReload(400); OpsRealtime.toast('✅ Completato!', 'ok'); });
+OpsRealtime.on('OPS_TASK_REASSIGNED', () => { rtReload(400); OpsRealtime.toast('🔄 Riassegnato', 'info'); });
+OpsRealtime.on('OPS_TASK_PROGRESS',   () => { rtReload(600); });
+OpsRealtime.on('OPS_COMMENT_ADDED',   () => { rtReload(800); });
 </script>
 </body>
 </html>

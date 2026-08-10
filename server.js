@@ -1666,12 +1666,6 @@ app.post('/api/operations/users', async (req, res) => {
     const activationPath = `/operations-activate.html?code=${user.inviteCode}`;
     const activationUrl = baseUrl ? `${baseUrl}${activationPath}` : activationPath;
 
-    // ── TEMPORARY DIAGNOSTIC LOG (remove after investigation) ────────────────
-    console.log(`🔍 [DIAG-INVITE] pid=${process.pid}`);
-    console.log(`🔍 [DIAG-INVITE] APP_BASE_URL raw="${process.env.APP_BASE_URL || '(not set)'}"`);
-    console.log(`🔍 [DIAG-INVITE] activationUrl prefix="${baseUrl ? baseUrl + '/operations-activate.html' : '(relative — no APP_BASE_URL)'}"`);
-    // ─────────────────────────────────────────────────────────────────────────
-
     // Attempt invitation email AFTER persist. Failure is non-fatal and logged.
     let emailResult = { result: opsEmail.RESULT.FAILED, transport: opsEmail.TRANSPORT, reason: 'not attempted' };
     try {
@@ -1687,6 +1681,7 @@ app.post('/api/operations/users', async (req, res) => {
     }
     console.log(`📧 [OPS] Invitation email result: ${emailResult.result} (transport: ${emailResult.transport}) for ${email}`);
 
+    broadcastOps(companyId, { action: 'OPS_USER_CREATED', user: publicOpsUser(user) });
     res.status(201).json({
         success: true,
         user: { ...publicOpsUser(user), inviteCode: user.inviteCode },
@@ -1805,6 +1800,7 @@ app.put('/api/operations/users/:id', (req, res) => {
     user.updatedAt = Date.now();
     saveOpsUsers();
     console.log(`✅ [OPS] User ${user.id} updated by Director ${ctx.opsUser.id} (company "${companyId}")`);
+    broadcastOps(companyId, { action: 'OPS_USER_UPDATED', user: publicOpsUser(user) });
     res.json({ success: true, user: publicOpsUser(user) });
 });
 
@@ -1828,6 +1824,7 @@ app.post('/api/operations/users/:id/suspend', (req, res) => {
     user.updatedAt   = Date.now();
     saveOpsUsers();
     console.log(`✅ [OPS] User ${user.id} suspended by Director ${ctx.opsUser.id} (company "${companyId}", openTasks=${openTasks})`);
+    broadcastOps(companyId, { action: 'OPS_USER_SUSPENDED', user: publicOpsUser(user) });
     res.json({ success: true, user: publicOpsUser(user), openTasks });
 });
 
@@ -1847,6 +1844,7 @@ app.post('/api/operations/users/:id/reactivate', (req, res) => {
     user.updatedAt     = Date.now();
     saveOpsUsers();
     console.log(`✅ [OPS] User ${user.id} reactivated by Director ${ctx.opsUser.id} (company "${companyId}")`);
+    broadcastOps(companyId, { action: 'OPS_USER_RESTORED', user: publicOpsUser(user) });
     res.json({ success: true, user: publicOpsUser(user) });
 });
 
@@ -1866,6 +1864,7 @@ app.post('/api/operations/users/:id/archive', (req, res) => {
     user.updatedAt  = Date.now();
     saveOpsUsers();
     console.log(`✅ [OPS] User ${user.id} archived by Director ${ctx.opsUser.id} (company "${companyId}")`);
+    broadcastOps(companyId, { action: 'OPS_USER_ARCHIVED', user: publicOpsUser(user) });
     res.json({ success: true, user: publicOpsUser(user) });
 });
 
@@ -1885,6 +1884,7 @@ app.post('/api/operations/users/:id/restore', (req, res) => {
     user.updatedAt  = Date.now();
     saveOpsUsers();
     console.log(`✅ [OPS] User ${user.id} restored by Director ${ctx.opsUser.id} (company "${companyId}")`);
+    broadcastOps(companyId, { action: 'OPS_USER_RESTORED', user: publicOpsUser(user) });
     res.json({ success: true, user: publicOpsUser(user) });
 });
 
@@ -1917,6 +1917,7 @@ app.delete('/api/operations/users/:id', (req, res) => {
     opsUsersStore[companyId].splice(idx, 1);
     saveOpsUsers();
     console.log(`✅ [OPS] User ${user.id} permanently deleted by Director ${ctx.opsUser.id} (company "${companyId}", hadFirebase=${hadFirebaseAccount})`);
+    broadcastOps(companyId, { action: 'OPS_USER_DELETED', userId: user.id });
     res.json({
         success: true,
         firebaseNote: hadFirebaseAccount
@@ -1985,6 +1986,7 @@ app.post('/api/operations/activate', async (req, res) => {
         invited.activatedAt = Date.now();
         saveOpsUsers();
         console.log(`✅ [OPS] Invitation activated → company "${invitedCompany}" (uid=${uid})`);
+        broadcastOps(invitedCompany, { action: 'OPS_INVITATION_ACCEPTED', userId: invited.id, role: invited.role });
         res.json({ success: true, companyId: invitedCompany, role: invited.role });
     } catch (e) {
         console.error('❌ [OPS] activation error:', e);
@@ -2130,6 +2132,7 @@ app.post('/api/operations/tasks', async (req, res) => {
         console.log(`📧 [OPS] Task notification: ${notificationResult} → ${assignee.email} (task: ${task.id})`);
     }
 
+    broadcastOps(companyId, { action: 'OPS_TASK_CREATED', task: opsTaskWithComputedStatus(task) });
     res.status(201).json({ success: true, task: opsTaskWithComputedStatus(task), notificationResult });
 });
 
@@ -2287,6 +2290,7 @@ app.put('/api/operations/tasks/:id', (req, res) => {
 
     task.updatedAt = Date.now();
     saveOpsTasks();
+    broadcastOps(companyId, { action: 'OPS_TASK_UPDATED', task: opsTaskWithComputedStatus(task) });
     res.json({ success: true, task: opsTaskWithComputedStatus(task) });
 });
 
@@ -2356,6 +2360,7 @@ app.patch('/api/operations/tasks/:id', (req, res) => {
     task.updatedAt = Date.now();
     saveOpsTasks();
     console.log(`✅ [OPS] Task patched: ${task.id} by ${actor.id} — fields: ${Object.keys(patch).join(',')}`);
+    broadcastOps(actor.companyId, { action: 'OPS_TASK_UPDATED', task: opsTaskWithComputedStatus(task) });
     res.json({ success: true, task: opsTaskWithComputedStatus(task) });
 });
 
@@ -2380,6 +2385,7 @@ app.post('/api/operations/tasks/:id/start', (req, res) => {
     addHistory(task, 'TASK_STARTED', actor.id, actor.name, { from: prevStatus });
     task.updatedAt = Date.now();
     saveOpsTasks();
+    broadcastOps(actor.companyId, { action: 'OPS_TASK_UPDATED', task: opsTaskWithComputedStatus(task) });
     res.json({ success: true, task: opsTaskWithComputedStatus(task) });
 });
 
@@ -2426,6 +2432,11 @@ app.post('/api/operations/tasks/:id/progress', (req, res) => {
 
     task.updatedAt = Date.now();
     saveOpsTasks();
+    // Emit COMPLETED if progress hit 100 (auto-completed), else PROGRESS
+    broadcastOps(actor.companyId, {
+        action: task.status === 'COMPLETED' ? 'OPS_TASK_COMPLETED' : 'OPS_TASK_PROGRESS',
+        task: opsTaskWithComputedStatus(task)
+    });
     res.json({ success: true, task: opsTaskWithComputedStatus(task) });
 });
 
@@ -2455,6 +2466,7 @@ app.post('/api/operations/tasks/:id/complete', (req, res) => {
     }
     task.updatedAt = Date.now();
     saveOpsTasks();
+    broadcastOps(actor.companyId, { action: 'OPS_TASK_COMPLETED', task: opsTaskWithComputedStatus(task) });
     res.json({ success: true, task: opsTaskWithComputedStatus(task) });
 });
 
@@ -2523,6 +2535,7 @@ app.post('/api/operations/tasks/:id/reassign', async (req, res) => {
     }
 
     console.log(`✅ [OPS] Task ${task.id} reassigned: ${oldAssigneeId} → ${newAssignee.id} by ${actor.id}`);
+    broadcastOps(actor.companyId, { action: 'OPS_TASK_REASSIGNED', task: opsTaskWithComputedStatus(task), prevAssigneeId: oldAssigneeId });
     res.json({ success: true, task: opsTaskWithComputedStatus(task), notificationResult });
 });
 
@@ -2547,6 +2560,7 @@ app.post('/api/operations/tasks/:id/cancel', (req, res) => {
     task.updatedAt = Date.now();
     saveOpsTasks();
     console.log(`✅ [OPS] Task ${task.id} cancelled by Director ${actor.id}`);
+    broadcastOps(actor.companyId, { action: 'OPS_TASK_UPDATED', task: opsTaskWithComputedStatus(task) });
     res.json({ success: true, task: opsTaskWithComputedStatus(task) });
 });
 
@@ -2577,6 +2591,7 @@ app.post('/api/operations/tasks/:id/comments', (req, res) => {
     addHistory(task, 'COMMENT_ADDED', actor.id, actor.name, { commentId: comment.id, preview: text.substring(0, 80) });
     task.updatedAt = Date.now();
     saveOpsTasks();
+    broadcastOps(actor.companyId, { action: 'OPS_COMMENT_ADDED', taskId: task.id, comment, task: opsTaskWithComputedStatus(task) });
     res.json({ success: true, comment, task: opsTaskWithComputedStatus(task) });
 });
 
@@ -2963,6 +2978,27 @@ app.get('/api/operations/escalation-status', (req, res) => {
 
 // Store per le room delle aziende
 const companyRooms = new Map();
+
+// ── OPS real-time broadcast helper ───────────────────────────────────────────
+// Sends an OPS_* event to every authenticated WS client in a company room.
+// [SECURITY] companyId always comes from the verified server-side session;
+//            never from client-supplied payload.
+// Failures are intentionally silent — WS delivery is best-effort;
+// HTTP persistence is the source of truth.
+function broadcastOps(companyId, payload) {
+    const room = companyRooms.get(companyId);
+    if (!room || room.size === 0) return;
+    const msg = JSON.stringify(payload);
+    let sent = 0;
+    room.forEach(client => {
+        if (client.readyState === 1) { // WebSocket.OPEN
+            try { client.send(msg); sent++; }
+            catch (_) { /* ignore per-client send errors */ }
+        }
+    });
+    if (sent > 0)
+        console.log(`📡 [OPS-RT] ${payload.action} → "${companyId}" (${sent} client${sent !== 1 ? 's' : ''})`);
+}
 
 // Store per i countdown attivi per ogni azienda
 const activeCountdowns = new Map();
