@@ -29,9 +29,27 @@
 
   <div id="ops-error" class="msg msg-error" style="display:none"></div>
 
-  <!-- Today's Brief -->
-  <div class="brief-card" id="brief-card">
-    <div class="brief-text" id="brief-text">Caricamento…</div>
+  <!-- Today's Brief — Executive Brief (Sprint 6.3) -->
+  <div class="brief-card exec-brief-card" id="brief-card">
+    <div class="exec-brief-text" id="brief-text">Caricamento…</div>
+  </div>
+
+  <!-- Priority Queue (Sprint 6.3) -->
+  <div id="pq-section" style="display:none;margin-bottom:24px">
+    <p class="section-title">🎯 Coda priorità</p>
+    <div class="card" style="padding:0;overflow:hidden" id="pq-content"></div>
+  </div>
+
+  <!-- Risk Watch (Sprint 6.3) -->
+  <div id="rw-section" style="display:none;margin-bottom:24px">
+    <p class="section-title">⚠️ Risk Watch</p>
+    <div class="card" style="padding:0;overflow:hidden" id="rw-content"></div>
+  </div>
+
+  <!-- Changes Since Yesterday (Sprint 6.3) -->
+  <div id="cs-section" style="display:none;margin-bottom:24px">
+    <p class="section-title">📊 Rispetto a ieri</p>
+    <div class="card" id="cs-content"></div>
   </div>
 
   <!-- Quick Actions -->
@@ -253,13 +271,60 @@ async function load() {
   }
 }
 
-// ── Intelligence rendering (Sprint 6) ────────────────────────────────────────
+// ── Intelligence rendering (Sprint 6 + 6.3) ──────────────────────────────────
 function renderIntelligence(r) {
   if (!r || !r.success) return;
   document.getElementById('intel-section').style.display = '';
 
-  // — Briefing (Sprint 6.2) —
-  if (r.briefing) document.getElementById('brief-text').textContent = r.briefing;
+  // — Executive Brief (Sprint 6.3) — prefer rich brief; fall back to 6.2 briefing
+  const briefEl = document.getElementById('brief-text');
+  if (r.executiveBrief) briefEl.textContent = r.executiveBrief;
+  else if (r.briefing)  briefEl.textContent = r.briefing;
+
+  // — Priority Queue (Sprint 6.3) —
+  if (r.priorityQueue && r.priorityQueue.length) {
+    document.getElementById('pq-section').style.display = '';
+    const RANK_CLS = { HIGH:'pq-rank-high', MEDIUM:'pq-rank-medium', LOW:'pq-rank-low' };
+    document.getElementById('pq-content').innerHTML = r.priorityQueue.slice(0,8).map(p => `
+      <div class="pq-item">
+        <div class="pq-rank ${RANK_CLS[p.priority]||'pq-rank-low'}">${p.rank}</div>
+        <div class="pq-body">
+          <div class="pq-title">${esc(p.title)}</div>
+          <div class="pq-reason">${esc(p.reason)}</div>
+          <div class="pq-action">→ ${esc(p.recommendedAction)}</div>
+          <div class="pq-meta">
+            <span class="pq-conf">${p.confidence}% fiducia</span>
+            ${p.quickAction ? `<a class="pq-qa-btn" href="${esc(p.quickAction.url)}">${esc(p.quickAction.label)}</a>` : ''}
+          </div>
+        </div>
+      </div>`).join('');
+  }
+
+  // — Risk Watch (Sprint 6.3) —
+  if (r.riskWatch && r.riskWatch.length) {
+    document.getElementById('rw-section').style.display = '';
+    document.getElementById('rw-content').innerHTML = r.riskWatch.slice(0,10).map(rk => `
+      <div class="rw-item">
+        <div class="rw-level-badge rw-level-${rk.level}">${rk.level}</div>
+        <div class="rw-body">
+          <div class="rw-title">${esc(rk.title)}</div>
+          <div class="rw-desc">${esc(rk.description)}</div>
+          ${typeof rk.minutesUntilDue === 'number' ? `<div class="rw-eta">⏱ Scade tra ${rk.minutesUntilDue} minuti</div>` : ''}
+        </div>
+      </div>`).join('');
+  }
+
+  // — Changes Since Yesterday (Sprint 6.3) —
+  if (r.changesSince && r.changesSince.length) {
+    document.getElementById('cs-section').style.display = '';
+    document.getElementById('cs-content').innerHTML = r.changesSince.map(c => `
+      <div class="cs-item">
+        <div class="cs-arrow ${c.direction === 'IMPROVING' ? 'cs-arrow-improving' : 'cs-arrow-worsening'}">${c.direction === 'IMPROVING' ? '↓' : '↑'}</div>
+        <div class="cs-text">${esc(c.text)}</div>
+      </div>`).join('');
+  }
+
+  // — Briefing (Sprint 6.2 fallback — already handled above) —
 
   // — Trends (Sprint 6.2) —
   const trendDiv = document.getElementById('intel-trends');

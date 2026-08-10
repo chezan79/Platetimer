@@ -139,7 +139,8 @@ function renderRoleIntel(r) {
   const area = document.getElementById('role-intel');
   if (!r || !r.success || !area) return;
   const parts = [];
-  if (r.briefing) parts.push(`<div class="role-intel-briefing">${esc(r.briefing)}</div>`);
+  if (r.executiveBrief) parts.push(`<div class="role-intel-briefing">${esc(r.executiveBrief)}</div>`);
+  else if (r.briefing)  parts.push(`<div class="role-intel-briefing">${esc(r.briefing)}</div>`);
   if (r.myTasks) {
     const m = r.myTasks;
     parts.push(`<div class="role-intel-metrics">
@@ -148,6 +149,15 @@ function renderRoleIntel(r) {
       ${m.urgent?`<span style="color:#d97706"> · ${m.urgent} urgenti</span>`:''}
       ${m.completedToday?`<span style="color:#16a34a"> · ${m.completedToday} completati</span>`:''}
     </div>`);
+  }
+  if (r.riskWatch && r.riskWatch.length) {
+    parts.push(`<div class="role-intel-rw">`);
+    parts.push(r.riskWatch.slice(0,2).map(rk => `
+      <div class="role-intel-rw-item">
+        <span class="rw-level-badge rw-level-${rk.level}" style="display:inline-block;margin-right:8px">${rk.level}</span>
+        <span style="font-weight:700;font-size:12px">${esc(rk.title)}</span>
+      </div>`).join(''));
+    parts.push(`</div>`);
   }
   area.innerHTML = parts.join('');
 }

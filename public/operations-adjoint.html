@@ -128,16 +128,37 @@ async function load() {
 function renderRoleIntel(r) {
   const area = document.getElementById('role-intel');
   if (!r || !r.success || !area) return;
-  const SEV_C = { HIGH:'#dc2626', MEDIUM:'#d97706', LOW:'#64748b' };
+  const RANK_CLS = { HIGH:'pq-rank-high', MEDIUM:'pq-rank-medium', LOW:'pq-rank-low' };
   const parts = [];
-  if (r.briefing) parts.push(`<div class="role-intel-briefing">${esc(r.briefing)}</div>`);
-  if (r.decisions && r.decisions.length) {
-    parts.push(r.decisions.slice(0,3).map(d => `
-      <div class="role-dec-card" style="border-left-color:${SEV_C[d.severity]}">
-        <div class="role-dec-top"><span class="role-dec-sev" style="color:${SEV_C[d.severity]}">${d.severity}</span><span class="role-dec-conf">${d.confidence}% fiducia</span></div>
-        <div class="role-dec-title">${esc(d.title)}</div>
-        <div class="role-dec-reason">${esc(d.reason)}</div>
-        ${d.quickAction?`<a class="dec-qa-btn" href="${esc(d.quickAction.url)}">${esc(d.quickAction.label)}</a>`:''}
+  if (r.executiveBrief) parts.push(`<div class="role-intel-briefing">${esc(r.executiveBrief)}</div>`);
+  else if (r.briefing)  parts.push(`<div class="role-intel-briefing">${esc(r.briefing)}</div>`);
+  if (r.priorityQueue && r.priorityQueue.length) {
+    parts.push(`<div class="role-intel-pq">`);
+    parts.push(r.priorityQueue.slice(0,3).map(p => `
+      <div class="pq-item">
+        <div class="pq-rank ${RANK_CLS[p.priority]||'pq-rank-low'}">${p.rank}</div>
+        <div class="pq-body">
+          <div class="pq-title">${esc(p.title)}</div>
+          <div class="pq-action">→ ${esc(p.recommendedAction)}</div>
+          <div class="pq-meta"><span class="pq-conf">${p.confidence}% fiducia</span>${p.quickAction?`<a class="pq-qa-btn" href="${esc(p.quickAction.url)}">${esc(p.quickAction.label)}</a>`:''}</div>
+        </div>
+      </div>`).join(''));
+    parts.push(`</div>`);
+  }
+  if (r.riskWatch && r.riskWatch.length) {
+    parts.push(`<div class="role-intel-rw">`);
+    parts.push(r.riskWatch.slice(0,3).map(rk => `
+      <div class="role-intel-rw-item">
+        <span class="rw-level-badge rw-level-${rk.level}" style="display:inline-block;margin-right:8px">${rk.level}</span>
+        <span style="font-weight:700;font-size:12px">${esc(rk.title)}</span>
+      </div>`).join(''));
+    parts.push(`</div>`);
+  }
+  if (r.changesSince && r.changesSince.length) {
+    parts.push(r.changesSince.slice(0,2).map(c => `
+      <div class="cs-item">
+        <div class="cs-arrow ${c.direction==='IMPROVING'?'cs-arrow-improving':'cs-arrow-worsening'}">${c.direction==='IMPROVING'?'↓':'↑'}</div>
+        <div class="cs-text">${esc(c.text)}</div>
       </div>`).join(''));
   }
   area.innerHTML = parts.join('');

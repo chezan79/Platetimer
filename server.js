@@ -1437,6 +1437,7 @@ const opsScheduler    = require('./operations/ops-scheduler');
 const opsIntelligence = require('./operations/ops-intelligence');
 const opsSnapshots    = require('./operations/ops-snapshots');
 const opsTrends       = require('./operations/ops-trends');
+const opsAssistant    = require('./operations/ops-assistant');
 
 const OPS_USERS_FILE = path.join(DATA_DIR, 'ops-users.json');
 const OPS_TASKS_FILE = path.join(DATA_DIR, 'ops-tasks.json');
@@ -2776,7 +2777,16 @@ app.get('/api/operations/intelligence', (req, res) => {
         nextTask = nt ? { id: nt.id, title: nt.title, dueDate: nt.dueDate, priority: nt.priority } : null;
     }
 
-    // ── Briefing ─────────────────────────────────────────────────────────────
+    // ── Sprint 6.3: Executive Assistant ──────────────────────────────────────
+    const priorityQueue  = opsAssistant.generatePriorityQueue(result.decisions);
+    const riskWatch      = opsAssistant.detectRisks(scopedTasks, scopedUsers, result.workload);
+    const changesSince   = opsAssistant.buildChangesSince(trends, yesterdaySnap, result.summary);
+    const executiveBrief = opsAssistant.buildExecutiveBrief(
+        actor.role, result.summary, priorityQueue, riskWatch, changesSince,
+        result.decisions, trends, myMetrics, nextTask
+    );
+
+    // ── Briefing (Sprint 6.2 — kept for backward compat) ─────────────────────
     const briefing = opsIntelligence.generateBriefing(actor.role, {
         summary:       result.summary,
         decisionsCount: result.decisions.length,
@@ -2786,20 +2796,23 @@ app.get('/api/operations/intelligence', (req, res) => {
     });
 
     // ── Build role-appropriate response ──────────────────────────────────────
-    const base = { success: true, briefing, role: actor.role };
+    const base = { success: true, briefing, executiveBrief, role: actor.role };
 
     if (['SOUS_CHEF','CHEF_DE_BRIGADE'].includes(actor.role)) {
-        return res.json({ ...base, myTasks: myMetrics, nextTask });
+        return res.json({ ...base, myTasks: myMetrics, nextTask, priorityQueue, riskWatch });
     }
 
     const response = {
         ...base,
-        attention:   result.attention,
-        workload:    result.workload,
-        suggestions: result.suggestions,
-        summary:     result.summary,
-        decisions:   result.decisions,
+        attention:    result.attention,
+        workload:     result.workload,
+        suggestions:  result.suggestions,
+        summary:      result.summary,
+        decisions:    result.decisions,
         departmentHealth,
+        priorityQueue,
+        riskWatch,
+        changesSince,
     };
     if (trends) response.trends = trends;
 

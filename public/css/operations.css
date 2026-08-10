@@ -90,6 +90,51 @@
 .role-dec-reason{font-size:12px;color:var(--text);line-height:1.4;}
 @media(max-width:600px){.trend-grid{grid-template-columns:repeat(2,1fr);}}
 /* Sprint 6.2 end */
+
+/* Sprint 6.3 — Executive Assistant */
+/* Executive Brief */
+.exec-brief-card{border-radius:14px;padding:20px 24px;margin-bottom:20px;background:linear-gradient(135deg,rgba(79,70,229,.06) 0%,rgba(99,102,241,.04) 100%);border:1px solid rgba(79,70,229,.15);}
+.exec-brief-text{font-size:13px;line-height:1.9;color:var(--text);white-space:pre-line;font-family:inherit;}
+/* Priority Queue */
+.pq-item{display:flex;align-items:flex-start;gap:14px;padding:14px 18px;border-bottom:1px solid var(--border);}
+.pq-item:last-child{border-bottom:none;}
+.pq-rank{min-width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;flex-shrink:0;}
+.pq-rank-high{background:#fef2f2;color:#dc2626;border:1.5px solid #dc2626;}
+.pq-rank-medium{background:#fffbeb;color:#d97706;border:1.5px solid #d97706;}
+.pq-rank-low{background:#f8fafc;color:#64748b;border:1.5px solid #94a3b8;}
+.pq-body{flex:1;min-width:0;}
+.pq-title{font-size:13px;font-weight:800;margin-bottom:3px;color:var(--text);}
+.pq-reason{font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:5px;}
+.pq-action{font-size:12px;font-weight:600;color:var(--accent);}
+.pq-meta{display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap;}
+.pq-conf{font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;background:rgba(79,70,229,.08);color:var(--accent);}
+.pq-qa-btn{font-size:11px;font-weight:700;padding:3px 10px;border-radius:6px;background:var(--accent);color:#fff;text-decoration:none;white-space:nowrap;}
+/* Risk Watch */
+.rw-item{display:flex;align-items:flex-start;gap:12px;padding:12px 18px;border-bottom:1px solid var(--border);}
+.rw-item:last-child{border-bottom:none;}
+.rw-level-badge{font-size:10px;font-weight:900;letter-spacing:.5px;padding:3px 8px;border-radius:4px;white-space:nowrap;flex-shrink:0;margin-top:2px;}
+.rw-level-CRITICAL{background:#fef2f2;color:#7f1d1d;border:1px solid #dc2626;}
+.rw-level-HIGH{background:#fef2f2;color:#dc2626;border:1px solid #fca5a5;}
+.rw-level-MEDIUM{background:#fffbeb;color:#92400e;border:1px solid #fcd34d;}
+.rw-level-LOW{background:#f8fafc;color:#475569;border:1px solid #cbd5e1;}
+.rw-body{flex:1;min-width:0;}
+.rw-title{font-size:13px;font-weight:800;margin-bottom:3px;color:var(--text);}
+.rw-desc{font-size:12px;color:var(--muted);line-height:1.5;}
+.rw-eta{font-size:11px;font-weight:700;color:#dc2626;margin-top:4px;}
+/* Changes Since Yesterday */
+.cs-item{display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);}
+.cs-item:last-child{border-bottom:none;}
+.cs-arrow{font-size:18px;font-weight:900;flex-shrink:0;line-height:1.3;}
+.cs-arrow-improving{color:#16a34a;}
+.cs-arrow-worsening{color:#dc2626;}
+.cs-text{font-size:13px;color:var(--text);line-height:1.5;}
+/* Role intel extended (SC/CDB) */
+.role-intel-pq{margin-top:10px;}
+.role-intel-rw{margin-top:10px;}
+.role-intel-rw-item{font-size:12px;padding:6px 0;border-bottom:1px solid var(--border);}
+.role-intel-rw-item:last-child{border-bottom:none;}
+@media(max-width:600px){.pq-item,.rw-item{flex-direction:column;gap:8px;}.pq-rank{align-self:flex-start;}}
+/* Sprint 6.3 end */
 /* Sprint 6 end */
 
 /* Sprint 4 additions */
