@@ -88,6 +88,51 @@
                     <span><a href="#" id="back-to-login-from-change">Torna al Login</a></span>
                 </div>
             </div>
+
+            <!-- ── Accesso Reparto (S2.x Department Account entry point) ── -->
+            <!-- Navigates to service-login.html — no auth logic here.       -->
+            <div id="dept-access" style="
+                margin-top: 2rem;
+                padding-top: 1.5rem;
+                border-top: 1px solid #e8ecf1;
+                text-align: center;
+            ">
+                <p style="
+                    font-size: 0.78rem;
+                    font-weight: 700;
+                    letter-spacing: 0.08em;
+                    color: var(--text-light);
+                    text-transform: uppercase;
+                    margin-bottom: 0.6rem;
+                ">Accesso Reparto</p>
+                <p style="
+                    font-size: 0.9rem;
+                    color: var(--text-light);
+                    margin-bottom: 1.1rem;
+                    line-height: 1.4;
+                ">Accedi alla postazione del tuo reparto</p>
+                <button
+                    type="button"
+                    onclick="window.location.href='service-login.html'"
+                    style="
+                        display: inline-block;
+                        padding: 0.65rem 1.6rem;
+                        background: transparent;
+                        color: var(--primary);
+                        border: 2px solid var(--primary);
+                        border-radius: 8px;
+                        font-size: 0.88rem;
+                        font-weight: 700;
+                        letter-spacing: 0.06em;
+                        cursor: pointer;
+                        transition: background 0.18s, color 0.18s;
+                    "
+                    onmouseover="this.style.background='var(--primary)';this.style.color='#fff'"
+                    onmouseout="this.style.background='transparent';this.style.color='var(--primary)'"
+                >ENTRA NEL REPARTO</button>
+            </div>
+            <!-- ── end Accesso Reparto ── -->
+
         </div>
     </div>
 
