@@ -204,30 +204,31 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 <header class="hdr">
   <span id="hdr-company" class="hdr-brand">Servizio</span>
   <span class="hdr-sep"></span>
-  <span class="hdr-page">Servizio</span>
+  <span class="hdr-page" data-i18n="sala.title">Servizio</span>
   <span id="connectionStatus" class="conn-badge">🔴 Riconnessione…</span>
-  <button id="voice-toggle-btn" class="hdr-btn" onclick="toggleVoicePanel()" title="Messaggi vocali">🎙️ Vocale</button>
-  <button class="hdr-btn" onclick="window.location.href='home.html'">Home</button>
-  <button class="hdr-btn danger" onclick="window.location.href='index.html'">Esci</button>
+  <button id="voice-toggle-btn" class="hdr-btn" onclick="toggleVoicePanel()" title="Messaggi vocali" data-i18n="sala.voiceBtn">🎙️ Vocale</button>
+  <span id="i18n-sala-sel"></span>
+  <button class="hdr-btn" onclick="window.location.href='home.html'" data-i18n="common.home">Home</button>
+  <button class="hdr-btn danger" onclick="window.location.href='index.html'" data-i18n="common.logout">Esci</button>
 </header>
 
 <!-- ── VOICE PANEL ──────────────────────── -->
 <div id="voice-panel" class="voice-panel">
-  <div class="vp-title">📤 Invia messaggio vocale</div>
+  <div class="vp-title" data-i18n="sala.sendVoice">📤 Invia messaggio vocale</div>
 
   <div class="vp-section">
-    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:8px;">INVIA A</div>
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:8px;" data-i18n="sala.sendTo">INVIA A</div>
     <!-- "All departments" shortcut -->
     <div class="vp-dest-all" onclick="toggleAllDepts()">
       <input type="checkbox" id="vchk-all" onclick="event.stopPropagation()">
-      <label for="vchk-all" style="cursor:pointer;">Tutti i reparti</label>
+      <label for="vchk-all" style="cursor:pointer;" data-i18n="sala.allDepts">Tutti i reparti</label>
     </div>
-    <div id="voice-dest-list"><div class="no-depts">Caricamento reparti…</div></div>
+    <div id="voice-dest-list"><div class="no-depts" data-i18n="sala.loadingDepts">Caricamento reparti…</div></div>
   </div>
 
   <div class="vp-section">
-    <button id="voice-btn" class="voice-btn-main" onclick="toggleRec()" disabled>🎙️ Avvia registrazione</button>
-    <div id="voice-status-txt" class="voice-status">Seleziona destinatario</div>
+    <button id="voice-btn" class="voice-btn-main" onclick="toggleRec()" disabled data-i18n="sala.startRecording">🎙️ Avvia registrazione</button>
+    <div id="voice-status-txt" class="voice-status" data-i18n="sala.noSelRecipient">Seleziona destinatario</div>
   </div>
 </div>
 
@@ -237,15 +238,15 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
   <!-- Stats -->
   <div class="stats-row">
     <div class="stat-card">
-      <div class="stat-label">Countdown Attivi</div>
+      <div class="stat-label" data-i18n="sala.activeCountdowns">Countdown Attivi</div>
       <div class="stat-value" id="activeCount">0</div>
     </div>
     <div class="stat-card">
-      <div class="stat-label">Tempo Medio Attesa</div>
+      <div class="stat-label" data-i18n="sala.avgWaitTime">Tempo Medio Attesa</div>
       <div class="stat-value" id="avgTime">0:00</div>
     </div>
     <div class="stat-card">
-      <div class="stat-label">Tavoli in Attesa</div>
+      <div class="stat-label" data-i18n="sala.tablesWaiting">Tavoli in Attesa</div>
       <div class="stat-value" id="tableCount">0</div>
     </div>
   </div>
@@ -254,13 +255,13 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
   <div class="filters-bar">
     <input type="text" id="searchInput" class="search-input" placeholder="🔍 Cerca tavolo…">
     <div class="filter-group" id="filter-group">
-      <button class="filter-btn active" data-filter="all">Tutti</button>
+      <button class="filter-btn active" data-filter="all" data-i18n="sala.all">Tutti</button>
     </div>
   </div>
 
   <!-- List -->
   <div class="section-hdr">
-    <span class="section-title">Countdown attivi</span>
+    <span class="section-title" data-i18n="sala.countdownsTitle">Countdown attivi</span>
     <span class="section-count" id="visibleCount">0</span>
   </div>
   <div class="cd-list" id="countdownsList"></div>
@@ -268,7 +269,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
   <!-- Incoming voice messages (hidden until a message arrives) -->
   <div id="voice-msgs-section" class="vm-section" style="display:none;">
     <div class="section-hdr">
-      <span class="section-title">📥 Messaggi vocali ricevuti</span>
+      <span class="section-title" data-i18n="sala.voiceMessages">📥 Messaggi vocali ricevuti</span>
       <span class="section-count" id="voice-msg-count">0</span>
     </div>
     <div id="voice-msg-list"></div>
@@ -279,10 +280,12 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 <audio id="snd-warn"   src="alerte-346112.mp3"           preload="auto"></audio>
 <audio id="snd-expiry" src="costa-rica-eas-alarm-346194.mp3" preload="auto"></audio>
 
+<script src="js/i18n.js"></script>
 <script src="js/ws-auth.js"></script>
 <script src="js/countdowns.js"></script>
 <script src="company-header.js"></script>
 <script>
+    const _t = k => window.I18n ? window.I18n.t(k) : k;
     let countdowns = [];
     let activeFilter = 'all';
     let searchTerm = '';
@@ -409,17 +412,17 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
         const sts = document.getElementById('voice-status-txt');
         if (!btn) return;
         btn.classList.toggle('recording', state === 'recording');
-        if (state === 'recording') { btn.textContent = '⏹ Ferma'; }
-        else if (state === 'sending') { btn.textContent = '📤 Invio…'; btn.disabled = true; }
+        if (state === 'recording') { btn.textContent = _t('sala.recording'); }
+        else if (state === 'sending') { btn.textContent = _t('sala.sending'); btn.disabled = true; }
         else if (state === 'done') {
-            btn.textContent = '✅ Inviato';
+            btn.textContent = _t('sala.sent');
             btn.disabled = true;
-            if (sts) sts.textContent = 'Messaggio inviato!';
+            if (sts) sts.textContent = _t('sala.messageSent');
             setTimeout(() => setVoiceState('idle'), 2500);
         } else if (state === 'failed') {
-            btn.textContent = '❌ Errore';
+            btn.textContent = _t('sala.failed');
         } else { // idle
-            btn.textContent = '🎙️ Avvia registrazione';
+            btn.textContent = _t('sala.startRecording');
             refreshVoiceBtn();
         }
     }
@@ -430,7 +433,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
         const el = document.getElementById('voice-dest-list');
         if (!el) return;
         if (!others.length) {
-            el.innerHTML = '<div class="no-depts">Nessun reparto attivo.</div>';
+            el.innerHTML = `<div class="no-depts">${_t('sala.noDepts')}</div>`;
             return;
         }
         el.innerHTML = others.map(d => `
@@ -475,7 +478,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
         btn.disabled = locked || (!isRecording && voiceDests.size === 0);
         if (!locked && !isRecording) {
             const sts = document.getElementById('voice-status-txt');
-            if (sts) sts.textContent = voiceDests.size === 0 ? 'Seleziona destinatario' : `${voiceDests.size} reparto/i selezionato/i`;
+            if (sts) sts.textContent = voiceDests.size === 0 ? _t('sala.noSelRecipient') : `${voiceDests.size} ${_t('sala.selectedDepts')}`;
         }
     }
 
@@ -489,11 +492,11 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
     async function startRec() {
         const sts = document.getElementById('voice-status-txt');
         if (voiceDests.size === 0) {
-            if (sts) sts.textContent = 'Seleziona almeno un reparto.';
+            if (sts) sts.textContent = _t('sala.selectAtLeastOne');
             return;
         }
         if (!navigator.mediaDevices || !window.MediaRecorder) {
-            if (sts) sts.textContent = 'Registrazione non supportata in questo browser.';
+            if (sts) sts.textContent = _t('sala.recNotSupported');
             setVoiceState('failed');
             setTimeout(() => setVoiceState('idle'), 4000);
             return;
@@ -654,7 +657,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 
     let companyName = localStorage.getItem('userCompany');
     if (!companyName) {
-        alert('❌ Nome azienda non trovato. Effettua il login.');
+        alert(_t('sala.companyMissing'));
         window.location.href = 'index.html';
     }
     companyName = companyName.trim().toLowerCase();
@@ -898,7 +901,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
             container.innerHTML = `
                 <div class="empty-state">
                     <div class="empty-state-icon">🍽️</div>
-                    <div class="empty-state-text">Nessun countdown attivo</div>
+                    <div class="empty-state-text">${_t('sala.noActive')}</div>
                 </div>
             `;
             return;
@@ -923,12 +926,12 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
                     <div class="cd-table">T${countdown.tableNumber}</div>
                     <div class="cd-stations">${stationBadges}</div>
                     <div class="cd-meta">
-                        <div class="cd-meta-row">Inizio: <strong>${countdown.startedAt}</strong></div>
-                        <div class="cd-meta-row">Durata: <strong>${initialTimeFormatted}</strong></div>
+                        <div class="cd-meta-row">${_t('sala.start')} <strong>${countdown.startedAt}</strong></div>
+                        <div class="cd-meta-row">${_t('sala.duration')} <strong>${initialTimeFormatted}</strong></div>
                     </div>
                     <div class="cd-time ${alertLevel}">${countdown.remainingTimeFormatted}</div>
                     <span class="status-badge ${statusClass}">
-                        ${isExpired ? '⏰ Scaduto' : statusClass === 'alert' ? '🔥 Urgente' : '✅ Attivo'}
+                        ${isExpired ? _t('sala.expired') : statusClass === 'alert' ? _t('sala.urgent') : _t('sala.active')}
                     </span>
                 </div>
             `;
@@ -957,10 +960,10 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
         const statusEl = document.getElementById('connectionStatus');
         if (connected) {
             statusEl.className = 'conn-badge ok';
-            statusEl.innerHTML = '🟢 Connesso';
+            statusEl.innerHTML = _t('sala.connected');
         } else {
             statusEl.className = 'conn-badge';
-            statusEl.innerHTML = '🔴 Riconnessione…';
+            statusEl.innerHTML = _t('sala.reconnecting');
         }
     }
 
@@ -988,7 +991,9 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
         }
     }
 
-    window.addEventListener('load', initializePage);
+    I18n.init({ selector: '#i18n-sala-sel' }).then(() => {
+        window.addEventListener('load', initializePage);
+    });
 
     window.addEventListener('beforeunload', () => {
         if (subscription) {

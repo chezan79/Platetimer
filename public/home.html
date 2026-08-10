@@ -156,8 +156,9 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 <header class="hdr">
   <span id="hdr-company" class="hdr-brand"></span>
   <span class="hdr-sep"></span>
-  <span class="hdr-page">Home</span>
-  <button class="hdr-btn danger" onclick="window.location.href='index.html'">Esci</button>
+  <span class="hdr-page" data-i18n="common.home">Home</span>
+  <span id="i18n-home-sel"></span>
+  <button class="hdr-btn danger" onclick="window.location.href='index.html'" data-i18n="common.logout">Esci</button>
 </header>
 
 <!-- ── MAIN ───────────────────────────── -->
@@ -170,7 +171,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
     <div id="logo-monogram" class="logo-monogram" aria-label="Logo ristorante">?</div>
     <div class="identity-text">
       <div id="company-name" class="identity-company"></div>
-      <div class="identity-sub">Seleziona postazione · Scegli il reparto o la funzione da aprire</div>
+      <div class="identity-sub" data-i18n="home.subtitle">Seleziona postazione · Scegli il reparto o la funzione da aprire</div>
     </div>
   </div>
 
@@ -178,56 +179,56 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
   <!-- Suspension notice — shown when bound account is SUSPENDED -->
   <div id="suspended-msg" class="dept-account-msg suspended" style="display:none;" role="alert">
     <div class="dam-icon">🔒</div>
-    <div class="dam-title">Account reparto sospeso</div>
-    <div class="dam-sub">Contatta l'amministratore per riattivare l'accesso al reparto.</div>
-    <div class="dam-action"><a href="index.html">← Torna al login</a></div>
+    <div class="dam-title" data-i18n="home.suspendedTitle">Account reparto sospeso</div>
+    <div class="dam-sub" data-i18n="home.suspendedSub">Contatta l'amministratore per riattivare l'accesso al reparto.</div>
+    <div class="dam-action"><a href="index.html" data-i18n="home.backToLogin">← Torna al login</a></div>
   </div>
   <!-- Dept resolution error — assigned dept missing or inactive -->
   <div id="dept-error-msg" class="dept-account-msg error" style="display:none;" role="alert">
     <div class="dam-icon">⚠️</div>
-    <div class="dam-title">Reparto assegnato non disponibile</div>
-    <div class="dam-sub">Il reparto associato a questo account non è attivo o non esiste.<br>Contatta l'amministratore.</div>
-    <div class="dam-action"><a href="index.html">← Torna al login</a></div>
+    <div class="dam-title" data-i18n="home.deptErrorTitle">Reparto assegnato non disponibile</div>
+    <div class="dam-sub" data-i18n="home.deptErrorSub">Il reparto associato a questo account non è attivo o non esiste.<br>Contatta l'amministratore.</div>
+    <div class="dam-action"><a href="index.html" data-i18n="home.backToLogin">← Torna al login</a></div>
   </div>
 
   <!-- Dynamic department cards — hidden until identity resolves (avoids flash for bound accounts) -->
   <div id="dept-section" style="display:none;">
-    <p class="section-label">Reparti</p>
+    <p class="section-label" data-i18n="home.depts">Reparti</p>
     <div id="dept-grid" class="card-grid">
-      <div class="grid-msg">Caricamento reparti…</div>
+      <div class="grid-msg" data-i18n="home.loadingDepts">Caricamento reparti…</div>
     </div>
   </div>
 
   <!-- Static function cards -->
-  <p class="section-label">Funzioni</p>
+  <p class="section-label" data-i18n="home.functions">Funzioni</p>
   <div class="card-grid">
     <a href="sala.html" class="nav-card floor">
       <span class="card-icon" aria-hidden="true">🍽️</span>
-      <span class="card-name">Floor</span>
-      <span class="card-sub">Monitoraggio tavoli</span>
+      <span class="card-name" data-i18n="home.floor">Floor</span>
+      <span class="card-sub" data-i18n="home.floorSub">Monitoraggio tavoli</span>
     </a>
     <a href="calendar.html" class="nav-card calendar">
       <span class="card-icon" aria-hidden="true">📅</span>
-      <span class="card-name">Calendario<span id="cal-notif-badge" class="card-notif-badge" style="display:none;"></span></span>
-      <span class="card-sub">Agenda operativa</span>
+      <span class="card-name"><span data-i18n="home.calendar">Calendario</span><span id="cal-notif-badge" class="card-notif-badge" style="display:none;"></span></span>
+      <span class="card-sub" data-i18n="home.calendarSub">Agenda operativa</span>
     </a>
     <a href="operations.html" class="nav-card calendar">
       <span class="card-icon" aria-hidden="true">📋</span>
       <span class="card-name">Operations</span>
-      <span class="card-sub">Gestione compiti brigata</span>
+      <span class="card-sub" data-i18n="home.operationsSub">Gestione compiti brigata</span>
     </a>
     <a href="admin-departments.html" class="nav-card admin">
       <span class="card-icon" aria-hidden="true">⚙️</span>
-      <span class="card-name">Gestione Reparti</span>
-      <span class="card-sub">Configurazione</span>
+      <span class="card-name" data-i18n="home.adminDepts">Gestione Reparti</span>
+      <span class="card-sub" data-i18n="home.adminDeptsSub">Configurazione</span>
     </a>
   </div>
 
   <!-- Today calendar summary -->
   <div class="today-summary" id="today-summary" style="display:none;">
     <div class="today-summary-hdr">
-      <span class="today-summary-title">📅 Oggi</span>
-      <a href="calendar.html" class="today-summary-link">Apri calendario →</a>
+      <span class="today-summary-title" data-i18n="home.todayLabel">📅 Oggi</span>
+      <a href="calendar.html" class="today-summary-link" data-i18n="home.openCalendar">Apri calendario →</a>
     </div>
     <div id="today-summary-body">
       <div class="today-empty">Caricamento…</div>
@@ -240,8 +241,11 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 <div id="company-display" style="display:none;"></div>
 
 <!-- ── SCRIPTS ──────────────────────── -->
+<script src="js/i18n.js"></script>
+<script>I18n.init({ selector: '#i18n-home-sel' });</script>
 <script src="js/ws-auth.js"></script>
 <script type="module">
+    const _t = k => window.I18n ? window.I18n.t(k) : k;
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
     import { getAuth, onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
     import { getFirestore, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
@@ -283,7 +287,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
     // Mostra un indicatore di caricamento
     const loadingIndicator = document.createElement('div');
     loadingIndicator.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #1a1a35; color: #e2e2f0; padding: 20px 28px; border-radius: 12px; border: 1.5px solid rgba(255,255,255,0.1); box-shadow: 0 8px 32px rgba(0,0,0,0.4); z-index: 9999; font-size: 16px; text-align: center;';
-    loadingIndicator.innerHTML = '⏳ Caricamento...';
+    loadingIndicator.innerHTML = _t('home.loading');
     document.body.appendChild(loadingIndicator);
 
     // Timeout di sicurezza aumentato: riabilita i pulsanti dopo 5 secondi in ogni caso
@@ -450,11 +454,11 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
         grid.style.pointerEvents = 'auto';
 
         // Show loading state (clearing any previous content)
-        grid.innerHTML = '<div class="grid-msg">Caricamento reparti…</div>';
+        grid.innerHTML = '<div class="grid-msg">' + _t('home.loadingDepts') + '</div>';
 
         const token = WsAuth.getStoredToken();
         if (!token) {
-            grid.innerHTML = '<div class="grid-msg">Sessione scaduta. <a href="index.html">Effettua il login</a>.</div>';
+            grid.innerHTML = '<div class="grid-msg">' + _t('home.sessionExpired') + ' <a href="index.html">' + _t('home.login') + '</a>.</div>';
             return;
         }
 
@@ -463,14 +467,14 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
             const data = await res.json();
 
             if (!data.success) {
-                grid.innerHTML = `<div class="grid-msg">${data.error || 'Errore nel caricamento dei reparti.'}</div>`;
+                grid.innerHTML = `<div class="grid-msg">${data.error || _t('home.loadError')}</div>`;
                 return;
             }
 
             const active = (data.departments || []).filter(d => d.active);
 
             if (active.length === 0) {
-                grid.innerHTML = '<div class="grid-msg">Nessun reparto attivo.<br>Vai in <a href="admin-departments.html">Gestione Reparti</a> per crearne uno.</div>';
+                grid.innerHTML = '<div class="grid-msg">' + _t('home.noDepts') + '<br>' + _t('home.goTo') + ' <a href="admin-departments.html">' + _t('home.adminDepts') + '</a> ' + _t('home.toCreateOne') + '</div>';
                 return;
             }
 
@@ -493,7 +497,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 
                 const sub = document.createElement('span');
                 sub.className = 'card-sub';
-                sub.textContent = 'Apri postazione';
+                sub.textContent = _t('home.openStation');
 
                 a.appendChild(icon);
                 a.appendChild(name);
@@ -502,7 +506,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
             });
         } catch (e) {
             console.error('Error loading departments:', e);
-            grid.innerHTML = '<div class="grid-msg">Errore di rete. <a href="javascript:void(0)" onclick="location.reload()">Riprova</a>.</div>';
+            grid.innerHTML = '<div class="grid-msg">' + _t('home.networkError') + ' <a href="javascript:void(0)" onclick="location.reload()">' + _t('home.retry') + '</a>.</div>';
         }
     }
 
@@ -522,7 +526,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
                     companyElement.textContent = companyName;
                 } else {
                     // Mostra un messaggio temporaneo mentre i dati vengono caricati
-                    companyElement.textContent = 'Caricamento...';
+                    companyElement.textContent = _t('common.loading');
                 }
             }
 
@@ -684,14 +688,14 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
             const display = allToday.slice(0, 4);
 
             if (display.length === 0) {
-                bodyEl.innerHTML = '<div class="today-empty">Nessun evento programmato per oggi.</div>';
+                bodyEl.innerHTML = '<div class="today-empty">' + _t('home.noEvents') + '</div>';
                 return;
             }
 
             let html = '';
             for (const ev of display) {
                 const icon = EVENT_TYPE_ICONS[ev.eventType] || '📌';
-                const timeStr = ev.allDay ? 'Todo il giorno' : (ev.startTime || '');
+                const timeStr = ev.allDay ? _t('home.allDay') : (ev.startTime || '');
                 const sub = ev.guestCount ? `👥 ${ev.guestCount} coperti` :
                             (ev.customerName ? ev.customerName : '');
                 const completed = ev.status === 'completed';
@@ -705,7 +709,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
                 </div>`;
             }
             if (allToday.length > 4) {
-                html += `<div class="today-empty" style="margin-top:6px;">+${allToday.length - 4} altri eventi → <a href="calendar.html" style="color:var(--accent2);">Apri calendario</a></div>`;
+                html += `<div class="today-empty" style="margin-top:6px;">+${allToday.length - 4} ${_t('home.moreEvents')} <a href="calendar.html" style="color:var(--accent2);">${_t('home.openCalendar')}</a></div>`;
             }
             bodyEl.innerHTML = html;
         } catch(e) {

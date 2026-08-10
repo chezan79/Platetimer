@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Operations — Team — PlateTimer</title>
 <link rel="stylesheet" href="css/operations.css">
+<script src="js/i18n.js"></script>
 </head>
 <body>
 
@@ -12,16 +13,17 @@
   <span id="hdr-company" class="hdr-brand"></span>
   <span class="hdr-sep"></span>
   <span class="hdr-page">Operations · Team</span>
-  <button class="hdr-btn" onclick="location.href='operations.html'">Dashboard</button>
-  <button class="hdr-btn" onclick="location.href='operations-tasks.html'">Compiti</button>
-  <button class="hdr-btn" onclick="location.href='home.html'">Home</button>
-  <button class="hdr-btn danger" onclick="OpsCommon.logout()">Esci</button>
+  <button class="hdr-btn" onclick="location.href='operations.html'" data-i18n="ops.nav.dashboard">Dashboard</button>
+  <button class="hdr-btn" onclick="location.href='operations-tasks.html'" data-i18n="ops.nav.tasks">Compiti</button>
+  <button class="hdr-btn" onclick="location.href='home.html'" data-i18n="common.home">Home</button>
+  <span id="i18n-sel"></span>
+  <button class="hdr-btn danger" onclick="OpsCommon.logout()" data-i18n="common.logout">Esci</button>
 </header>
 
 <main class="main">
   <div class="pg-heading">
-    <h1 class="pg-title">Gestione Team</h1>
-    <p class="pg-sub">Solo il Direttore può creare e gestire gli account del team.</p>
+    <h1 class="pg-title" data-i18n="ops.team.heading">Gestione Team</h1>
+    <p class="pg-sub" data-i18n="ops.team.subtitle">Solo il Direttore può creare e gestire gli account del team.</p>
   </div>
 
   <div id="ops-error" class="msg msg-error" style="display:none"></div>
@@ -29,12 +31,12 @@
   <div class="two-col">
     <!-- Invite form -->
     <div class="card">
-      <p class="card-title">Invita un membro</p>
-      <label class="form-label" for="u-name">Nome</label>
-      <input id="u-name" class="form-input" maxlength="80" placeholder="es. Mario Rossi">
-      <label class="form-label" for="u-email">Email</label>
-      <input id="u-email" class="form-input" type="email" placeholder="mario@esempio.it">
-      <label class="form-label" for="u-role">Ruolo</label>
+      <p class="card-title" data-i18n="ops.team.invite">Invita un membro</p>
+      <label class="form-label" for="u-name" data-i18n="ops.team.name">Nome</label>
+      <input id="u-name" class="form-input" maxlength="80" data-i18n-placeholder="ops.team.placeholder.name" placeholder="es. Mario Rossi">
+      <label class="form-label" for="u-email" data-i18n="ops.team.email">Email</label>
+      <input id="u-email" class="form-input" type="email" data-i18n-placeholder="ops.team.placeholder.email" placeholder="mario@esempio.it">
+      <label class="form-label" for="u-role" data-i18n="ops.team.role">Ruolo</label>
       <select id="u-role" class="form-select">
         <option value="CHEF_CUISINE">Chef di Cucina</option>
         <option value="ADJOINT">Adjoint</option>
@@ -42,24 +44,24 @@
         <option value="CHEF_DE_BRIGADE" selected>Chef de Brigade</option>
         <option value="DIRECTOR">Direttore</option>
       </select>
-      <button id="invite-btn" class="btn btn-primary" style="width:100%" onclick="inviteUser()">Crea invito</button>
+      <button id="invite-btn" class="btn btn-primary" style="width:100%" onclick="inviteUser()" data-i18n="ops.team.createInvite">Crea invito</button>
       <div id="form-msg" style="display:none" class="msg"></div>
       <div id="invite-link" style="display:none" class="msg msg-success"></div>
     </div>
 
     <!-- Team list -->
     <div>
-      <p class="section-title" style="margin-top:0">Membri del team</p>
+      <p class="section-title" style="margin-top:0" data-i18n="ops.team.members">Membri del team</p>
 
       <!-- Status filter tabs -->
       <div class="team-tabs">
-        <button class="team-tab active" data-filter="" onclick="setFilter(this)">Attivi e Invitati</button>
-        <button class="team-tab" data-filter="suspended" onclick="setFilter(this)">Sospesi</button>
-        <button class="team-tab" data-filter="archived" onclick="setFilter(this)">Archiviati</button>
-        <button class="team-tab" data-filter="all" onclick="setFilter(this)">Tutti</button>
+        <button class="team-tab active" data-filter="" onclick="setFilter(this)" data-i18n="ops.team.tabActive">Attivi e Invitati</button>
+        <button class="team-tab" data-filter="suspended" onclick="setFilter(this)" data-i18n="ops.team.tabSuspended">Sospesi</button>
+        <button class="team-tab" data-filter="archived" onclick="setFilter(this)" data-i18n="ops.team.tabArchived">Archiviati</button>
+        <button class="team-tab" data-filter="all" onclick="setFilter(this)" data-i18n="ops.team.tabAll">Tutti</button>
       </div>
 
-      <div id="user-list"><div class="empty-state">Caricamento…</div></div>
+      <div id="user-list"><div class="empty-state" data-i18n="ops.team.loading">Caricamento…</div></div>
     </div>
   </div>
 </main>
@@ -67,16 +69,16 @@
 <!-- ── Edit modal ───────────────────────────────────────────────────────── -->
 <div id="edit-modal" class="modal-overlay" onclick="closeEditIfOutside(event)">
   <div class="modal-box">
-    <p class="modal-title">✏️ Modifica utente</p>
+    <p class="modal-title" data-i18n="ops.team.editModal">✏️ Modifica utente</p>
     <p class="modal-sub" id="edit-modal-sub"></p>
 
-    <label class="form-label">Nome</label>
+    <label class="form-label" data-i18n="ops.team.name">Nome</label>
     <input id="edit-name" class="form-input" maxlength="80">
 
-    <label class="form-label">Email</label>
-    <div id="edit-email-wrap"></div><!-- filled by openEdit() -->
+    <label class="form-label" data-i18n="ops.team.email">Email</label>
+    <div id="edit-email-wrap"></div>
 
-    <label class="form-label">Ruolo</label>
+    <label class="form-label" data-i18n="ops.team.role">Ruolo</label>
     <select id="edit-role" class="form-select">
       <option value="DIRECTOR">Direttore</option>
       <option value="CHEF_CUISINE">Chef di Cucina</option>
@@ -87,8 +89,8 @@
 
     <div id="edit-msg" style="display:none" class="msg" style="margin-top:10px"></div>
     <div class="modal-actions">
-      <button class="btn-ghost" onclick="closeEdit()">Annulla</button>
-      <button class="btn btn-primary" onclick="saveEdit()">Salva modifiche</button>
+      <button class="btn-ghost" onclick="closeEdit()" data-i18n="common.cancel">Annulla</button>
+      <button class="btn btn-primary" onclick="saveEdit()" data-i18n="ops.team.saveChanges">Salva modifiche</button>
     </div>
   </div>
 </div>
@@ -96,13 +98,13 @@
 <!-- ── Delete confirm modal ─────────────────────────────────────────────── -->
 <div id="del-modal" class="modal-overlay" onclick="closeDelIfOutside(event)">
   <div class="modal-box">
-    <p class="modal-title">Eliminare definitivamente questo utente?</p>
+    <p class="modal-title" data-i18n="ops.team.deleteTitle">Eliminare definitivamente questo utente?</p>
     <p class="modal-sub" id="del-modal-name"></p>
-    <p class="modal-sub" style="color:#dc2626;">Questa operazione è irreversibile.</p>
+    <p class="modal-sub" style="color:#dc2626;" data-i18n="ops.team.deleteSubtitle">Questa operazione è irreversibile.</p>
     <div id="del-msg" style="display:none" class="msg"></div>
     <div class="modal-actions">
-      <button class="btn-ghost" onclick="closeDel()">Annulla</button>
-      <button class="btn btn-danger" onclick="confirmDelete()">Elimina definitivamente</button>
+      <button class="btn-ghost" onclick="closeDel()" data-i18n="common.cancel">Annulla</button>
+      <button class="btn btn-danger" onclick="confirmDelete()" data-i18n="ops.team.deleteForever">Elimina definitivamente</button>
     </div>
   </div>
 </div>
@@ -110,11 +112,11 @@
 <!-- ── Archive suggestion modal ─────────────────────────────────────────── -->
 <div id="arch-modal" class="modal-overlay" onclick="closeArchIfOutside(event)">
   <div class="modal-box">
-    <p class="modal-title">📦 Impossibile eliminare</p>
+    <p class="modal-title" data-i18n="ops.team.cantDelete">📦 Impossibile eliminare</p>
     <p class="modal-sub" id="arch-modal-msg"></p>
     <div class="modal-actions">
-      <button class="btn-ghost" onclick="closeArch()">Annulla</button>
-      <button class="btn btn-primary" onclick="archiveFromModal()">📦 Archivia utente</button>
+      <button class="btn-ghost" onclick="closeArch()" data-i18n="common.cancel">Annulla</button>
+      <button class="btn btn-primary" onclick="archiveFromModal()" data-i18n="ops.team.archiveInstead">📦 Archivia utente</button>
     </div>
   </div>
 </div>
@@ -123,9 +125,11 @@
 <script src="js/operations-common.js"></script>
 <script src="js/operations-realtime.js"></script>
 <script>
+const t = (key) => (typeof I18n !== 'undefined' && I18n.t) ? I18n.t(key) : key;
+
 let myOpsId    = null;
 let currentFilter = '';
-let editTarget = null;  // { id, status, hasFirebaseAccount }
+let editTarget = null;
 let delTarget  = null;
 let archTarget = null;
 
@@ -134,7 +138,7 @@ async function load() {
   const me = await OpsCommon.loadMe();
   if (!me) return;
   if (me.user.role !== 'DIRECTOR') {
-    OpsCommon.showError('Solo il Direttore può accedere a questa pagina.');
+    OpsCommon.showError(t('ops.team.directorOnly'));
     setTimeout(() => location.href = 'operations.html', 1500);
     return;
   }
@@ -157,7 +161,7 @@ async function loadUsers() {
   const list = document.getElementById('user-list');
   if (!data || !data.success) { OpsCommon.showError(data && data.error); return; }
   if (!data.users.length) {
-    list.innerHTML = '<div class="empty-state">Nessun membro in questa categoria.</div>';
+    list.innerHTML = `<div class="empty-state">${t('ops.team.noMembers')}</div>`;
     return;
   }
   list.innerHTML = data.users.map(u => renderUserRow(u)).join('');
@@ -178,12 +182,12 @@ function renderUserRow(u) {
   const statusClass = u.status === 'SUSPENDED' ? 'suspended' : u.status === 'ARCHIVED' ? 'archived' : '';
   const statusBadge = statusBadgeHtml(u.status);
   const inviteLink  = u.inviteCode
-    ? `<div class="team-row-sub">Link: <code>${location.origin}/operations-activate.html?code=${OpsCommon.escHtml(u.inviteCode)}</code></div>`
+    ? `<div class="team-row-sub">${t('ops.team.link')}: <code>${location.origin}/operations-activate.html?code=${OpsCommon.escHtml(u.inviteCode)}</code></div>`
     : '';
 
   const menu = isSelf ? '' : `
     <div class="action-menu-wrap">
-      <button class="action-menu-btn" title="Azioni">⋯</button>
+      <button class="action-menu-btn" title="${t('ops.team.actions')}">⋯</button>
       <div class="action-dropdown">${menuItems(u)}</div>
     </div>`;
 
@@ -191,7 +195,7 @@ function renderUserRow(u) {
     <div class="team-row-info">
       <div class="team-row-name">${OpsCommon.escHtml(u.name)}</div>
       <div class="team-row-email">${OpsCommon.escHtml(u.email || '—')}</div>
-      ${u.status === 'INVITED' ? '<div class="team-row-sub"><b>In attesa di attivazione</b></div>' : ''}
+      ${u.status === 'INVITED' ? `<div class="team-row-sub"><b>${t('ops.team.pendingActivation')}</b></div>` : ''}
       ${inviteLink}
     </div>
     <div class="team-row-badges">
@@ -204,10 +208,10 @@ function renderUserRow(u) {
 
 function statusBadgeHtml(status) {
   const map = {
-    ACTIVE:    ['badge-active',    'Attivo'],
-    INVITED:   ['badge-invited',   'Invitato'],
-    SUSPENDED: ['badge-suspended', 'Sospeso'],
-    ARCHIVED:  ['badge-archived',  'Archiviato'],
+    ACTIVE:    ['badge-active',    t('ops.team.statusActive')],
+    INVITED:   ['badge-invited',   t('ops.team.statusInvited')],
+    SUSPENDED: ['badge-suspended', t('ops.team.statusSuspended')],
+    ARCHIVED:  ['badge-archived',  t('ops.team.statusArchived')],
   };
   const [cls, label] = map[status] || ['badge-archived', status];
   return `<span class="badge ${cls}">${label}</span>`;
@@ -217,24 +221,24 @@ function menuItems(u) {
   const id = OpsCommon.escHtml(u.id);
   const lines = [];
   if (u.status === 'ACTIVE' || u.status === 'INVITED' || u.status === 'SUSPENDED') {
-    lines.push(`<button onclick="openEdit('${id}')">✏️ Modifica</button>`);
+    lines.push(`<button onclick="openEdit('${id}')">✏️ ${t('ops.team.menuEdit')}</button>`);
   }
   if (u.status === 'INVITED') {
-    lines.push(`<button onclick="resendInvite('${id}')">✉️ Reinvia invito</button>`);
+    lines.push(`<button onclick="resendInvite('${id}')">✉️ ${t('ops.team.menuResend')}</button>`);
   }
   if (u.status === 'ACTIVE') {
-    lines.push(`<button onclick="suspendUser('${id}')">⏸️ Sospendi</button>`);
-    lines.push(`<button onclick="archiveUser('${id}')">📦 Archivia</button>`);
+    lines.push(`<button onclick="suspendUser('${id}')">⏸️ ${t('ops.team.menuSuspend')}</button>`);
+    lines.push(`<button onclick="archiveUser('${id}')">📦 ${t('ops.team.menuArchive')}</button>`);
   }
   if (u.status === 'SUSPENDED') {
-    lines.push(`<button onclick="reactivateUser('${id}')">▶️ Riattiva</button>`);
-    lines.push(`<button onclick="archiveUser('${id}')">📦 Archivia</button>`);
+    lines.push(`<button onclick="reactivateUser('${id}')">▶️ ${t('ops.team.menuReactivate')}</button>`);
+    lines.push(`<button onclick="archiveUser('${id}')">📦 ${t('ops.team.menuArchive')}</button>`);
   }
   if (u.status === 'ARCHIVED') {
-    lines.push(`<button onclick="restoreUser('${id}')">♻️ Ripristina</button>`);
+    lines.push(`<button onclick="restoreUser('${id}')">♻️ ${t('ops.team.menuRestore')}</button>`);
   }
   if (lines.length) lines.push('<hr>');
-  lines.push(`<button class="danger" onclick="openDelete('${id}')">🗑️ Elimina</button>`);
+  lines.push(`<button class="danger" onclick="openDelete('${id}')">🗑️ ${t('ops.team.menuDelete')}</button>`);
   return lines.join('');
 }
 
@@ -259,18 +263,19 @@ async function inviteUser() {
   btn.disabled = false;
   if (r && r.success) {
     const sent = r.emailResult === 'SENT';
-    msg.innerHTML = '<strong>Account creato con successo.</strong><br>' +
-      (sent ? '✅ Email di invito inviata.'
-             : '⚠️ ' + OpsCommon.escHtml(r.emailNote || 'Email non inviata: condividi manualmente il link.'));
+    msg.innerHTML = `<strong>${t('ops.team.inviteSuccess')}</strong><br>` +
+      (sent ? `✅ ${t('ops.team.inviteSent')}`
+             : `⚠️ ${OpsCommon.escHtml(r.emailNote || t('ops.team.inviteNoEmail'))}`);
     msg.className = 'msg ' + (sent ? 'msg-success' : 'msg-warn');
     msg.style.display = 'block';
-    linkEl.innerHTML = 'Link di attivazione da condividere:<br><code>' + location.origin + OpsCommon.escHtml(r.activationUrl) + '</code>';
+    linkEl.innerHTML = `${t('ops.team.linkToShare')}:<br><code>${location.origin}${OpsCommon.escHtml(r.activationUrl)}</code>`;
     linkEl.style.display = 'block';
     document.getElementById('u-name').value = '';
     document.getElementById('u-email').value = '';
+    OpsRealtime.toast(t('ops.rt.inviteCreated'), 'info');
     await loadUsers();
   } else {
-    msg.textContent = (r && r.error) || 'Errore.';
+    msg.textContent = (r && r.error) || t('common.error');
     msg.className = 'msg msg-error';
     msg.style.display = 'block';
   }
@@ -281,17 +286,15 @@ async function resendInvite(id) {
   closeAllDropdowns();
   const r = await OpsCommon.api(`/api/operations/users/${id}/resend-invite`, { method: 'POST', body: '{}' });
   if (r && r.success) {
-    alert(r.emailResult === 'SENT' ? '✅ Invito reinviato.' : '⚠️ ' + (r.emailNote || 'Reinvio non riuscito.'));
+    alert(r.emailResult === 'SENT' ? `✅ ${t('ops.team.inviteSent')}` : `⚠️ ${r.emailNote || ''}`);
   } else {
-    alert('Errore: ' + ((r && r.error) || 'sconosciuto'));
+    alert(`${t('common.error')}: ` + ((r && r.error) || ''));
   }
 }
 
 // ── Edit user ────────────────────────────────────────────────────────────────
 async function openEdit(id) {
   closeAllDropdowns();
-  // Fetch current data from already-loaded list
-  const qs   = currentFilter ? `?status=${currentFilter}` : '';
   const data = await OpsCommon.api('/api/operations/users?status=all');
   if (!data || !data.success) return;
   const u = data.users.find(x => x.id === id);
@@ -302,7 +305,6 @@ async function openEdit(id) {
   document.getElementById('edit-name').value = u.name;
   document.getElementById('edit-role').value = u.role;
 
-  // Email: editable only for INVITED users without a Firebase account
   const emailWrap = document.getElementById('edit-email-wrap');
   if (u.status === 'INVITED' && !u.hasFirebaseAccount) {
     emailWrap.innerHTML = `<input id="edit-email" class="form-input" type="email" value="${OpsCommon.escHtml(u.email || '')}">`;
@@ -333,7 +335,7 @@ async function saveEdit() {
     closeEdit();
     await loadUsers();
   } else {
-    msg.textContent = (r && r.error) || 'Errore.';
+    msg.textContent = (r && r.error) || t('common.error');
     msg.className = 'msg msg-error';
     msg.style.display = 'block';
   }
@@ -342,13 +344,13 @@ async function saveEdit() {
 // ── Suspend ──────────────────────────────────────────────────────────────────
 async function suspendUser(id) {
   closeAllDropdowns();
-  if (!confirm('Sospendere questo utente? Non potrà più accedere a Operations. I suoi compiti aperti saranno preservati.')) return;
+  if (!confirm(t('ops.team.confirmSuspend'))) return;
   const r = await OpsCommon.api(`/api/operations/users/${id}/suspend`, { method: 'POST', body: '{}' });
   if (r && r.success) {
-    if (r.openTasks > 0) alert(`⚠️ Utente sospeso. Ha ${r.openTasks} compito/i ancora aperti — controlla e riassegna se necessario.`);
+    OpsRealtime.toast(t('ops.rt.userSuspended'), 'warn');
     await loadUsers();
   } else {
-    OpsCommon.showError((r && r.error) || 'Errore durante la sospensione.');
+    OpsCommon.showError((r && r.error) || t('common.error'));
   }
 }
 
@@ -357,21 +359,23 @@ async function reactivateUser(id) {
   closeAllDropdowns();
   const r = await OpsCommon.api(`/api/operations/users/${id}/reactivate`, { method: 'POST', body: '{}' });
   if (r && r.success) {
+    OpsRealtime.toast(t('ops.rt.userActivated'), 'ok');
     await loadUsers();
   } else {
-    OpsCommon.showError((r && r.error) || 'Errore durante la riattivazione.');
+    OpsCommon.showError((r && r.error) || t('common.error'));
   }
 }
 
 // ── Archive ──────────────────────────────────────────────────────────────────
 async function archiveUser(id) {
   closeAllDropdowns();
-  if (!confirm('Archiviare questo utente? Non apparirà più nella lista normale. I suoi dati storici sono preservati.')) return;
+  if (!confirm(t('ops.team.confirmArchive'))) return;
   const r = await OpsCommon.api(`/api/operations/users/${id}/archive`, { method: 'POST', body: '{}' });
   if (r && r.success) {
+    OpsRealtime.toast(t('ops.rt.userArchived'), 'warn');
     await loadUsers();
   } else {
-    OpsCommon.showError((r && r.error) || 'Errore durante l\'archiviazione.');
+    OpsCommon.showError((r && r.error) || t('common.error'));
   }
 }
 
@@ -380,9 +384,10 @@ async function restoreUser(id) {
   closeAllDropdowns();
   const r = await OpsCommon.api(`/api/operations/users/${id}/restore`, { method: 'POST', body: '{}' });
   if (r && r.success) {
+    OpsRealtime.toast(t('ops.rt.userRestored'), 'ok');
     await loadUsers();
   } else {
-    OpsCommon.showError((r && r.error) || 'Errore durante il ripristino.');
+    OpsCommon.showError((r && r.error) || t('common.error'));
   }
 }
 
@@ -391,7 +396,6 @@ function openDelete(id) {
   closeAllDropdowns();
   delTarget = id;
   archTarget = id;
-  // Try to show name
   const row = document.querySelector(`.action-dropdown .danger[onclick="openDelete('${id}')"]`);
   const teamRow = row ? row.closest('.team-row') : null;
   const name = teamRow ? teamRow.querySelector('.team-row-name').textContent : id;
@@ -415,13 +419,13 @@ async function confirmDelete() {
     closeDel();
     await loadUsers();
   } else if (r && r.suggestArchive) {
-    // Has historical data — suggest archive instead
     closeDel();
-    document.getElementById('arch-modal-msg').textContent = (r.error || 'L\'utente ha dati storici.') + '\n\nVuoi archiviarlo invece?';
+    document.getElementById('arch-modal-msg').textContent =
+      (r.error || t('ops.team.hasData')) + '\n\n' + t('ops.team.archiveInsteadQ');
     document.getElementById('arch-modal').classList.add('open');
   } else {
     const msg = document.getElementById('del-msg');
-    msg.textContent = (r && r.error) || 'Errore durante l\'eliminazione.';
+    msg.textContent = (r && r.error) || t('common.error');
     msg.className = 'msg msg-error';
     msg.style.display = 'block';
   }
@@ -438,23 +442,23 @@ async function archiveFromModal() {
     closeArch();
     await loadUsers();
   } else {
-    alert('Errore: ' + ((r && r.error) || 'sconosciuto'));
+    alert(`${t('common.error')}: ` + ((r && r.error) || ''));
   }
 }
 
-load();
+I18n.init({ selector: '#i18n-sel' }).then(() => load());
 
-// Sprint 5: real-time live updates ──────────────────────────────────────────
+// Sprint 5: real-time live updates
 OpsRealtime.init();
 let _rtTimer = null;
 function rtReload(d) { clearTimeout(_rtTimer); _rtTimer = setTimeout(loadUsers, d || 600); }
-OpsRealtime.on('OPS_USER_CREATED',        () => { rtReload(400); OpsRealtime.toast('👤 Nuovo invito creato', 'info'); });
+OpsRealtime.on('OPS_USER_CREATED',        () => { rtReload(400); OpsRealtime.toast(t('ops.rt.inviteCreated'), 'info'); });
 OpsRealtime.on('OPS_USER_UPDATED',        () => { rtReload(400); });
-OpsRealtime.on('OPS_USER_SUSPENDED',      () => { rtReload(400); OpsRealtime.toast('⚠️ Utente sospeso', 'warn'); });
-OpsRealtime.on('OPS_USER_ARCHIVED',       () => { rtReload(400); OpsRealtime.toast('📦 Utente archiviato', 'warn'); });
-OpsRealtime.on('OPS_USER_RESTORED',       () => { rtReload(400); OpsRealtime.toast('♻️ Utente ripristinato', 'ok'); });
+OpsRealtime.on('OPS_USER_SUSPENDED',      () => { rtReload(400); OpsRealtime.toast(t('ops.rt.userSuspended'), 'warn'); });
+OpsRealtime.on('OPS_USER_ARCHIVED',       () => { rtReload(400); OpsRealtime.toast(t('ops.rt.userArchived'), 'warn'); });
+OpsRealtime.on('OPS_USER_RESTORED',       () => { rtReload(400); OpsRealtime.toast(t('ops.rt.userRestored'), 'ok'); });
 OpsRealtime.on('OPS_USER_DELETED',        () => { rtReload(400); });
-OpsRealtime.on('OPS_INVITATION_ACCEPTED', () => { rtReload(400); OpsRealtime.toast('✅ Membro attivato!', 'ok'); });
+OpsRealtime.on('OPS_INVITATION_ACCEPTED', () => { rtReload(400); OpsRealtime.toast(t('ops.rt.memberActivated'), 'ok'); });
 </script>
 </body>
 </html>

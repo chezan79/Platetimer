@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Operations — Chef di Cucina — PlateTimer</title>
 <link rel="stylesheet" href="css/operations.css">
+<script src="js/i18n.js"></script>
 </head>
 <body>
 
@@ -12,10 +13,11 @@
   <span id="hdr-company" class="hdr-brand"></span>
   <span class="hdr-sep"></span>
   <span class="hdr-page">Operations · Chef di Cucina</span>
-  <button class="hdr-btn" onclick="location.href='operations-tasks.html'">Compiti</button>
-  <button class="hdr-btn" onclick="location.href='operations-performance.html'">📊 Prestazioni</button>
-  <button class="hdr-btn" onclick="location.href='home.html'">Home</button>
-  <button class="hdr-btn danger" onclick="OpsCommon.logout()">Esci</button>
+  <button class="hdr-btn" onclick="location.href='operations-tasks.html'" data-i18n="ops.nav.tasks">Compiti</button>
+  <button class="hdr-btn" onclick="location.href='operations-performance.html'" data-i18n="ops.nav.performance">📊 Prestazioni</button>
+  <button class="hdr-btn" onclick="location.href='home.html'" data-i18n="common.home">Home</button>
+  <span id="i18n-sel"></span>
+  <button class="hdr-btn danger" onclick="OpsCommon.logout()" data-i18n="common.logout">Esci</button>
 </header>
 
 <main class="main">
@@ -26,34 +28,34 @@
 
   <div id="ops-error" class="msg msg-error" style="display:none"></div>
 
-  <!-- Today's Briefing -->
+  <!-- Today's Briefing — generated narrative, not translated -->
   <div class="brief-card">
-    <div class="brief-text" id="brief-text">Caricamento…</div>
+    <div class="brief-text" id="brief-text"></div>
   </div>
 
   <!-- Quick Actions -->
-  <p class="section-title" style="margin-top:0">Azioni rapide</p>
+  <p class="section-title" style="margin-top:0" data-i18n="ops.dir.quickActions">Azioni rapide</p>
   <div class="qa-grid">
     <button class="qa-btn qa-primary" onclick="location.href='operations-tasks.html?action=create'">
-      <span class="qa-icon">➕</span>Crea compito cucina
+      <span class="qa-icon">➕</span><span data-i18n="ops.dir.createTask">Crea compito</span>
     </button>
     <button class="qa-btn qa-danger" onclick="location.href='operations-tasks.html?filter=overdue'">
-      <span class="qa-icon">🕐</span>In ritardo
+      <span class="qa-icon">🕐</span><span data-i18n="ops.sec.overdue">In ritardo</span>
     </button>
     <button class="qa-btn" onclick="location.href='operations-tasks.html?filter=today'">
-      <span class="qa-icon">📅</span>Compiti di oggi
+      <span class="qa-icon">📅</span><span data-i18n="ops.sec.todayDue">Compiti di oggi</span>
     </button>
     <button class="qa-btn" onclick="location.href='operations-tasks.html?filter=recurring'">
-      <span class="qa-icon">🔁</span>Ricorrenti cucina
+      <span class="qa-icon">🔁</span><span data-i18n="ops.sec.recurring">Ricorrenti</span>
     </button>
   </div>
 
   <!-- Stats -->
   <div class="stat-row" style="grid-template-columns:repeat(4,1fr);margin-bottom:24px">
-    <div class="stat-card ok"><div class="stat-num" id="stat-done">—</div><div class="stat-lbl">Completati oggi</div></div>
-    <div class="stat-card"><div class="stat-num" id="stat-today">—</div><div class="stat-lbl">Totale oggi</div></div>
-    <div class="stat-card danger"><div class="stat-num" id="stat-overdue">—</div><div class="stat-lbl">In ritardo</div></div>
-    <div class="stat-card danger"><div class="stat-num" id="stat-urgent">—</div><div class="stat-lbl">Urgenti</div></div>
+    <div class="stat-card ok"><div class="stat-num" id="stat-done">—</div><div class="stat-lbl" data-i18n="ops.dir.completedToday">Completati oggi</div></div>
+    <div class="stat-card"><div class="stat-num" id="stat-today">—</div><div class="stat-lbl" data-i18n="ops.dir.openToday">Totale oggi</div></div>
+    <div class="stat-card danger"><div class="stat-num" id="stat-overdue">—</div><div class="stat-lbl" data-i18n="ops.dir.overdue">In ritardo</div></div>
+    <div class="stat-card danger"><div class="stat-num" id="stat-urgent">—</div><div class="stat-lbl" data-i18n="ops.dir.urgent">Urgenti</div></div>
   </div>
 
   <!-- Main content -->
@@ -66,6 +68,7 @@
 <script src="js/operations-realtime.js"></script>
 <script>
 const esc = OpsCommon.escHtml;
+const t = (key) => (typeof I18n !== 'undefined' && I18n.t) ? I18n.t(key) : key;
 
 async function load() {
   const me = await OpsCommon.loadMe();
@@ -80,7 +83,6 @@ async function load() {
   const tasks = data.tasks, users = data.users;
   const now = new Date();
 
-  // Kitchen = all visible tasks (CC sees their team: SousChef, CdB, themselves)
   const active  = tasks.filter(t => t.status !== 'CANCELLED');
   const overdue = active.filter(t => (t.effectiveStatus||t.status)==='OVERDUE' || (t.dueDate && new Date(t.dueDate) < now && t.status !== 'COMPLETED'));
   const urgent  = active.filter(t => t.priority === 'URGENT' && t.status !== 'COMPLETED');
@@ -88,7 +90,6 @@ async function load() {
   const done    = tasks.filter(t => OpsCommon.isCompletedToday(t));
   const recurringToday = active.filter(t => t.templateId && OpsCommon.isToday(t.dueDate));
 
-  // My tasks vs sous chef vs CdB
   const mine      = active.filter(t => t.assigneeId === myId && t.status !== 'COMPLETED');
   const sousChefTasks = active.filter(t => { const u = users[t.assigneeId]; return u && u.role === 'SOUS_CHEF' && t.status !== 'COMPLETED'; });
   const cdbTasks  = active.filter(t => { const u = users[t.assigneeId]; return u && u.role === 'CHEF_DE_BRIGADE' && t.status !== 'COMPLETED'; });
@@ -99,7 +100,7 @@ async function load() {
   document.getElementById('stat-overdue').textContent = overdue.length;
   document.getElementById('stat-urgent').textContent  = urgent.length;
 
-  // Briefing
+  // Briefing — generated narrative text, kept in Italian
   document.getElementById('brief-text').innerHTML = `
     La cucina ha <span class="brief-num">${today.length}</span> compiti pianificati oggi.
     <span class="brief-num ok">${done.length}</span> sono già stati completati.
@@ -107,30 +108,17 @@ async function load() {
     ${overdue.length===0 ? '<span style="color:var(--ok)">✅ Nessun ritardo.</span>' : ''}
   `;
 
-  // Render
   const container = document.getElementById('main-content');
   container.innerHTML = '';
 
-  // Overdue first
-  OpsCommon.renderSection(container, '🕐 In ritardo', overdue.slice(0,8), users, 'Nessun compito in ritardo. Ottimo!');
+  OpsCommon.renderSection(container, '🕐 ' + t('ops.sec.overdue'),   overdue.slice(0,8),        users, t('ops.sec.noOverdue'));
+  const urgentOnly = urgent.filter(tk => !overdue.find(o=>o.id===tk.id));
+  OpsCommon.renderSection(container, '⚡ ' + t('ops.sec.urgent'),    urgentOnly.slice(0,5),      users, t('ops.sec.noUrgent'));
+  OpsCommon.renderSection(container, '👤 ' + t('ops.sec.mine'),      mine.slice(0,5),            users, t('ops.sec.noMine'));
+  OpsCommon.renderSection(container, t('ops.sec.sousChefs'),          sousChefTasks.slice(0,5),   users, t('ops.sec.noSousChef'));
+  OpsCommon.renderSection(container, t('ops.sec.brigade'),            cdbTasks.slice(0,5),        users, t('ops.sec.noBrigade'));
+  OpsCommon.renderSection(container, '🔁 ' + t('ops.sec.recurring'), recurringToday.slice(0,5),  users, t('ops.sec.noRecurring'));
 
-  // Urgent (not already in overdue)
-  const urgentOnly = urgent.filter(t => !overdue.find(o=>o.id===t.id));
-  OpsCommon.renderSection(container, '⚡ Urgenti', urgentOnly.slice(0,5), users, 'Nessun compito urgente.');
-
-  // I miei compiti
-  OpsCommon.renderSection(container, '👤 I miei compiti', mine.slice(0,5), users, 'Nessun compito assegnato a te.');
-
-  // Sous Chef tasks
-  OpsCommon.renderSection(container, 'Sous Chef', sousChefTasks.slice(0,5), users, 'Nessun compito assegnato ai Sous Chef.');
-
-  // Chef de Brigade tasks
-  OpsCommon.renderSection(container, 'Chef de Brigade', cdbTasks.slice(0,5), users, 'Nessun compito assegnato ai Chef de Brigade.');
-
-  // Recurring today
-  OpsCommon.renderSection(container, '🔁 Ricorrenti di oggi', recurringToday.slice(0,5), users, 'Nessun compito ricorrente pianificato per oggi.');
-
-  // Sprint 6.2+: role-scoped intelligence (intentional load — updates lastVisitAt)
   const intelRes = await OpsCommon.api('/api/operations/intelligence');
   renderRoleIntel(intelRes);
 }
@@ -140,17 +128,15 @@ function renderRoleIntel(r) {
   if (!r || !r.success || !area) return;
   const RANK_CLS = { HIGH:'pq-rank-high', MEDIUM:'pq-rank-medium', LOW:'pq-rank-low' };
   const parts = [];
-  // New Since Last Visit (Sprint 6.3.1)
   if (r.newSinceLastVisit) {
     const nsv = r.newSinceLastVisit;
     if (nsv.newCount > 0 || nsv.previousVisitAt) {
       parts.push(`<div id="cc-nsv-content" class="card" style="margin-bottom:14px"></div>`);
     }
   }
-  // Executive Brief (Sprint 6.3)
+  // executiveBrief is server-generated narrative — keep as-is
   if (r.executiveBrief) parts.push(`<div class="role-intel-briefing">${esc(r.executiveBrief)}</div>`);
   else if (r.briefing)  parts.push(`<div class="role-intel-briefing">${esc(r.briefing)}</div>`);
-  // Priority Queue (top 3)
   if (r.priorityQueue && r.priorityQueue.length) {
     parts.push(`<div class="role-intel-pq">`);
     parts.push(r.priorityQueue.slice(0,3).map(p => `
@@ -159,12 +145,11 @@ function renderRoleIntel(r) {
         <div class="pq-body">
           <div class="pq-title">${esc(p.title)}</div>
           <div class="pq-action">→ ${esc(p.recommendedAction)}</div>
-          <div class="pq-meta"><span class="pq-conf">${p.confidence}% fiducia</span>${p.quickAction?`<a class="pq-qa-btn" href="${esc(p.quickAction.url)}">${esc(p.quickAction.label)}</a>`:''}</div>
+          <div class="pq-meta"><span class="pq-conf">${p.confidence}% ${t('ops.intel.confidence')}</span>${p.quickAction?`<a class="pq-qa-btn" href="${esc(p.quickAction.url)}">${esc(p.quickAction.label)}</a>`:''}</div>
         </div>
       </div>`).join(''));
     parts.push(`</div>`);
   }
-  // Risk Watch (top 3)
   if (r.riskWatch && r.riskWatch.length) {
     parts.push(`<div class="role-intel-rw">`);
     parts.push(r.riskWatch.slice(0,3).map(rk => `
@@ -174,7 +159,6 @@ function renderRoleIntel(r) {
       </div>`).join(''));
     parts.push(`</div>`);
   }
-  // Changes Since Yesterday
   if (r.changesSince && r.changesSince.length) {
     parts.push(r.changesSince.slice(0,2).map(c => `
       <div class="cs-item">
@@ -183,23 +167,22 @@ function renderRoleIntel(r) {
       </div>`).join(''));
   }
   area.innerHTML = parts.join('');
-  // Render NSV widget into its placeholder
   if (r.newSinceLastVisit) OpsCommon.renderNewSinceLastVisit(r.newSinceLastVisit, null, 'cc-nsv-content');
 }
 
-load();
+I18n.init({ selector: '#i18n-sel' }).then(() => load());
 
-// Sprint 5: real-time live updates ──────────────────────────────────────────
+// Sprint 5: real-time live updates
 OpsRealtime.init();
 let _rtTimer = null;
 function rtReload(d) { clearTimeout(_rtTimer); _rtTimer = setTimeout(load, d || 700); }
-OpsRealtime.on('OPS_TASK_CREATED',    () => { rtReload(400); OpsRealtime.toast('📌 Nuovo compito in cucina', 'info'); });
+OpsRealtime.on('OPS_TASK_CREATED',    () => { rtReload(400); OpsRealtime.toast(t('ops.rt.kitchenTask'), 'info'); });
 OpsRealtime.on('OPS_TASK_UPDATED',    () => { rtReload(500); });
-OpsRealtime.on('OPS_TASK_COMPLETED',  () => { rtReload(400); OpsRealtime.toast('✅ Compito completato', 'ok'); });
-OpsRealtime.on('OPS_TASK_REASSIGNED', () => { rtReload(400); OpsRealtime.toast('🔄 Compito riassegnato', 'info'); });
+OpsRealtime.on('OPS_TASK_COMPLETED',  () => { rtReload(400); OpsRealtime.toast(t('ops.rt.taskCompleted'), 'ok'); });
+OpsRealtime.on('OPS_TASK_REASSIGNED', () => { rtReload(400); OpsRealtime.toast(t('ops.rt.taskReassigned'), 'info'); });
 OpsRealtime.on('OPS_TASK_PROGRESS',   () => { rtReload(600); });
 OpsRealtime.on('OPS_COMMENT_ADDED',   () => { rtReload(800); });
-OpsRealtime.on('OPS_USER_SUSPENDED',  () => { rtReload(500); OpsRealtime.toast('⚠️ Utente sospeso', 'warn'); });
+OpsRealtime.on('OPS_USER_SUSPENDED',  () => { rtReload(500); OpsRealtime.toast(t('ops.rt.userSuspended'), 'warn'); });
 OpsRealtime.on('OPS_USER_ARCHIVED',   () => { rtReload(500); });
 OpsRealtime.on('OPS_USER_RESTORED',   () => { rtReload(500); });
 </script>

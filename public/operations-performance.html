@@ -10,11 +10,12 @@
 <header class="hdr">
   <span id="hdr-company" class="hdr-brand"></span>
   <span class="hdr-sep"></span>
-  <span class="hdr-page">Operations · Prestazioni</span>
-  <button class="hdr-btn" id="btn-tasks" onclick="location.href='operations-tasks.html'" style="display:none">Compiti</button>
-  <button class="hdr-btn" id="btn-team"  onclick="location.href='operations-team.html'"  style="display:none">Team</button>
-  <button class="hdr-btn" onclick="location.href='javascript:history.back()'">← Indietro</button>
-  <button class="hdr-btn danger" onclick="OpsCommon.logout()">Esci</button>
+  <span class="hdr-page" data-i18n="ops.perf.pageTitle">Operations · Prestazioni</span>
+  <button class="hdr-btn" id="btn-tasks" onclick="location.href='operations-tasks.html'" style="display:none" data-i18n="ops.nav.tasks">Compiti</button>
+  <button class="hdr-btn" id="btn-team"  onclick="location.href='operations-team.html'"  style="display:none" data-i18n="ops.nav.team">Team</button>
+  <button class="hdr-btn" onclick="location.href='javascript:history.back()'" data-i18n="common.back">← Indietro</button>
+  <button class="hdr-btn danger" onclick="OpsCommon.logout()" data-i18n="common.logout">Esci</button>
+  <span id="i18n-sel"></span>
 </header>
 
 <div class="ops-container">
@@ -40,38 +41,38 @@
 
   <!-- ── Period Selector ─────────────────────────────────────────────────── -->
   <section class="perf-period-bar">
-    <button class="perf-period-btn" data-period="today">Oggi</button>
-    <button class="perf-period-btn active" data-period="30d">30 giorni</button>
-    <button class="perf-period-btn" data-period="7d">7 giorni</button>
-    <button class="perf-period-btn" data-period="90d">90 giorni</button>
-    <button class="perf-period-btn" data-period="year">Anno</button>
-    <button class="perf-period-btn" data-period="custom" id="btn-custom-period">Personalizzato</button>
+    <button class="perf-period-btn" data-period="today" data-i18n="ops.perf.period.today">Oggi</button>
+    <button class="perf-period-btn active" data-period="30d" data-i18n="ops.perf.period.30d">30 giorni</button>
+    <button class="perf-period-btn" data-period="7d" data-i18n="ops.perf.period.7d">7 giorni</button>
+    <button class="perf-period-btn" data-period="90d" data-i18n="ops.perf.period.90d">90 giorni</button>
+    <button class="perf-period-btn" data-period="year" data-i18n="ops.perf.period.year">Anno</button>
+    <button class="perf-period-btn" data-period="custom" id="btn-custom-period" data-i18n="ops.perf.period.custom">Personalizzato</button>
     <div class="perf-custom-range" id="custom-range" style="display:none">
       <input type="date" id="custom-from" class="perf-date-input">
       <span>→</span>
       <input type="date" id="custom-to" class="perf-date-input">
-      <button class="perf-period-btn" onclick="applyCustomPeriod()">Applica</button>
+      <button class="perf-period-btn" onclick="applyCustomPeriod()" data-i18n="ops.perf.period.apply">Applica</button>
     </div>
-    <span class="perf-period-label" id="period-label">Ultimi 30 giorni</span>
+    <span class="perf-period-label" id="period-label" data-i18n="ops.perf.period.last30">Ultimi 30 giorni</span>
   </section>
 
   <!-- ── Today Stats ─────────────────────────────────────────────────────── -->
   <section class="card" id="today-section">
-    <h2 class="section-title">📅 Oggi</h2>
+    <h2 class="section-title" data-i18n="ops.perf.today">📅 Oggi</h2>
     <div class="perf-grid-today">
-      <div class="perf-today-item"><span class="perf-today-num" id="t-completed">—</span><span class="perf-today-lbl">Completati</span></div>
-      <div class="perf-today-item"><span class="perf-today-num" id="t-open">—</span><span class="perf-today-lbl">Aperti</span></div>
-      <div class="perf-today-item"><span class="perf-today-num" id="t-inprog">—</span><span class="perf-today-lbl">In corso</span></div>
-      <div class="perf-today-item warn"><span class="perf-today-num" id="t-overdue">—</span><span class="perf-today-lbl">In ritardo</span></div>
-      <div class="perf-today-item"><span class="perf-today-num" id="t-cancelled">—</span><span class="perf-today-lbl">Annullati</span></div>
-      <div class="perf-today-item"><span class="perf-today-num" id="t-reassigned">—</span><span class="perf-today-lbl">Riassegnati</span></div>
-      <div class="perf-today-item"><span class="perf-today-num" id="t-blocked">—</span><span class="perf-today-lbl">Bloccati</span></div>
+      <div class="perf-today-item"><span class="perf-today-num" id="t-completed">—</span><span class="perf-today-lbl" data-i18n="ops.perf.completedToday">Completati</span></div>
+      <div class="perf-today-item"><span class="perf-today-num" id="t-open">—</span><span class="perf-today-lbl" data-i18n="ops.perf.open">Aperti</span></div>
+      <div class="perf-today-item"><span class="perf-today-num" id="t-inprog">—</span><span class="perf-today-lbl" data-i18n="ops.perf.inProgress">In corso</span></div>
+      <div class="perf-today-item warn"><span class="perf-today-num" id="t-overdue">—</span><span class="perf-today-lbl" data-i18n="ops.perf.overdue">In ritardo</span></div>
+      <div class="perf-today-item"><span class="perf-today-num" id="t-cancelled">—</span><span class="perf-today-lbl" data-i18n="ops.perf.cancelled">Annullati</span></div>
+      <div class="perf-today-item"><span class="perf-today-num" id="t-reassigned">—</span><span class="perf-today-lbl" data-i18n="ops.perf.reassigned">Riassegnati</span></div>
+      <div class="perf-today-item"><span class="perf-today-num" id="t-blocked">—</span><span class="perf-today-lbl" data-i18n="ops.perf.blocked">Bloccati</span></div>
     </div>
   </section>
 
   <!-- ── Reliability Index ───────────────────────────────────────────────── -->
   <section class="card" id="reliability-section">
-    <h2 class="section-title">🎯 Indice di Affidabilità</h2>
+    <h2 class="section-title" data-i18n="ops.perf.reliability">🎯 Indice di Affidabilità</h2>
     <div class="perf-reliability-layout">
       <div class="perf-score-ring" id="score-ring">
         <svg viewBox="0 0 120 120" class="perf-ring-svg">
@@ -95,41 +96,41 @@
 
   <!-- ── Operational Metrics ─────────────────────────────────────────────── -->
   <section class="card" id="metrics-section">
-    <h2 class="section-title">📊 Metriche Operative</h2>
+    <h2 class="section-title" data-i18n="ops.perf.metrics">📊 Metriche Operative</h2>
     <div class="perf-metrics-grid" id="metrics-grid">
-      <div class="perf-metric"><span class="pm-val" id="m-assigned">—</span><span class="pm-lbl">Compiti assegnati</span></div>
-      <div class="perf-metric"><span class="pm-val" id="m-completed">—</span><span class="pm-lbl">Completati</span></div>
-      <div class="perf-metric ok"><span class="pm-val" id="m-ontime">—</span><span class="pm-lbl">In tempo</span></div>
-      <div class="perf-metric warn"><span class="pm-val" id="m-late">—</span><span class="pm-lbl">In ritardo</span></div>
-      <div class="perf-metric"><span class="pm-val" id="m-avgtime">—</span><span class="pm-lbl">Tempo medio (min)</span></div>
-      <div class="perf-metric"><span class="pm-val" id="m-urgent">—</span><span class="pm-lbl">Urgenti completati</span></div>
-      <div class="perf-metric"><span class="pm-val" id="m-recurring">—</span><span class="pm-lbl">Ricorrenti completati</span></div>
-      <div class="perf-metric"><span class="pm-val" id="m-cancelled">—</span><span class="pm-lbl">Annullati</span></div>
-      <div class="perf-metric"><span class="pm-val" id="m-transferred">—</span><span class="pm-lbl">Trasferiti</span></div>
-      <div class="perf-metric warn"><span class="pm-val" id="m-blocked">—</span><span class="pm-lbl">Bloccati</span></div>
+      <div class="perf-metric"><span class="pm-val" id="m-assigned">—</span><span class="pm-lbl" data-i18n="ops.perf.assigned">Compiti assegnati</span></div>
+      <div class="perf-metric"><span class="pm-val" id="m-completed">—</span><span class="pm-lbl" data-i18n="ops.perf.completedToday">Completati</span></div>
+      <div class="perf-metric ok"><span class="pm-val" id="m-ontime">—</span><span class="pm-lbl" data-i18n="ops.perf.onTime">In tempo</span></div>
+      <div class="perf-metric warn"><span class="pm-val" id="m-late">—</span><span class="pm-lbl" data-i18n="ops.perf.overdue">In ritardo</span></div>
+      <div class="perf-metric"><span class="pm-val" id="m-avgtime">—</span><span class="pm-lbl" data-i18n="ops.perf.avgTime">Tempo medio (min)</span></div>
+      <div class="perf-metric"><span class="pm-val" id="m-urgent">—</span><span class="pm-lbl" data-i18n="ops.perf.urgentCompleted">Urgenti completati</span></div>
+      <div class="perf-metric"><span class="pm-val" id="m-recurring">—</span><span class="pm-lbl" data-i18n="ops.perf.recurringCompleted">Ricorrenti completati</span></div>
+      <div class="perf-metric"><span class="pm-val" id="m-cancelled">—</span><span class="pm-lbl" data-i18n="ops.perf.cancelled">Annullati</span></div>
+      <div class="perf-metric"><span class="pm-val" id="m-transferred">—</span><span class="pm-lbl" data-i18n="ops.perf.transferred">Trasferiti</span></div>
+      <div class="perf-metric warn"><span class="pm-val" id="m-blocked">—</span><span class="pm-lbl" data-i18n="ops.perf.blocked">Bloccati</span></div>
     </div>
   </section>
 
   <!-- ── Punctuality ─────────────────────────────────────────────────────── -->
   <section class="card" id="punctuality-section">
-    <h2 class="section-title">⏱ Puntualità</h2>
+    <h2 class="section-title" data-i18n="ops.perf.punctuality">⏱ Puntualità</h2>
     <div class="perf-punctuality-grid">
       <div class="perf-pct-item">
-        <span class="pct-label">Completamento in tempo</span>
+        <span class="pct-label" data-i18n="ops.perf.onTimeCompletion">Completamento in tempo</span>
         <div class="pct-bar-wrap"><div class="pct-bar ok" id="bar-ontime" style="width:0%"></div></div>
         <span class="pct-value" id="pct-ontime">—</span>
       </div>
       <div class="perf-pct-item">
-        <span class="pct-label">Completamento in ritardo</span>
+        <span class="pct-label" data-i18n="ops.perf.lateCompletion">Completamento in ritardo</span>
         <div class="pct-bar-wrap"><div class="pct-bar warn" id="bar-late" style="width:0%"></div></div>
         <span class="pct-value" id="pct-late">—</span>
       </div>
       <div class="perf-pct-item">
-        <span class="pct-label">Ritardo medio</span>
+        <span class="pct-label" data-i18n="ops.perf.avgDelay">Ritardo medio</span>
         <span class="pct-value big" id="pct-avg-delay">—</span>
       </div>
       <div class="perf-pct-item">
-        <span class="pct-label">Anticipo medio</span>
+        <span class="pct-label" data-i18n="ops.perf.avgAdvance">Anticipo medio</span>
         <span class="pct-value big" id="pct-avg-anticip">—</span>
       </div>
     </div>
@@ -137,7 +138,7 @@
 
   <!-- ── Evolution ─────────────────────────────────────────────────────────── -->
   <section class="card" id="evolution-section">
-    <h2 class="section-title">📈 Evoluzione</h2>
+    <h2 class="section-title" data-i18n="ops.perf.evolution">📈 Evoluzione</h2>
     <div class="perf-evolution-grid" id="evolution-grid">
       <!-- populated by JS -->
     </div>
@@ -145,47 +146,47 @@
 
   <!-- ── Workload History ───────────────────────────────────────────────── -->
   <section class="card" id="workload-section">
-    <h2 class="section-title">⚙️ Storico Carico</h2>
+    <h2 class="section-title" data-i18n="ops.perf.workloadHistory">⚙️ Storico Carico</h2>
     <div class="perf-wl-grid">
-      <div class="perf-wl-item"><span class="wl-val" id="wl-avg">—</span><span class="wl-lbl">Media giornaliera</span></div>
-      <div class="perf-wl-item"><span class="wl-val" id="wl-peak">—</span><span class="wl-lbl">Picco</span></div>
-      <div class="perf-wl-item warn"><span class="wl-val" id="wl-over">—</span><span class="wl-lbl">Giorni sovraccarichi</span></div>
-      <div class="perf-wl-item"><span class="wl-val" id="wl-under">—</span><span class="wl-lbl">Giorni senza attività</span></div>
+      <div class="perf-wl-item"><span class="wl-val" id="wl-avg">—</span><span class="wl-lbl" data-i18n="ops.perf.dailyAvg">Media giornaliera</span></div>
+      <div class="perf-wl-item"><span class="wl-val" id="wl-peak">—</span><span class="wl-lbl" data-i18n="ops.perf.peak">Picco</span></div>
+      <div class="perf-wl-item warn"><span class="wl-val" id="wl-over">—</span><span class="wl-lbl" data-i18n="ops.perf.overloadedDays">Giorni sovraccarichi</span></div>
+      <div class="perf-wl-item"><span class="wl-val" id="wl-under">—</span><span class="wl-lbl" data-i18n="ops.perf.inactiveDays">Giorni senza attività</span></div>
     </div>
   </section>
 
   <!-- ── Strengths ─────────────────────────────────────────────────────── -->
   <section class="card" id="strengths-section">
-    <h2 class="section-title">✅ Punti di Forza</h2>
+    <h2 class="section-title" data-i18n="ops.perf.strengths">✅ Punti di Forza</h2>
     <div class="perf-strengths" id="strengths-list">
-      <p class="perf-empty">Nessun punto di forza rilevato per questo periodo.</p>
+      <p class="perf-empty" data-i18n="ops.perf.noStrengths">Nessun punto di forza rilevato per questo periodo.</p>
     </div>
   </section>
 
   <!-- ── Coaching Opportunities ────────────────────────────────────────── -->
   <section class="card" id="coaching-section">
-    <h2 class="section-title">💡 Opportunità di Crescita</h2>
+    <h2 class="section-title" data-i18n="ops.perf.growth">💡 Opportunità di Crescita</h2>
     <div class="perf-coaching" id="coaching-list">
-      <p class="perf-empty">Nessuna opportunità rilevata per questo periodo.</p>
+      <p class="perf-empty" data-i18n="ops.perf.noGrowth">Nessuna opportunità rilevata per questo periodo.</p>
     </div>
   </section>
 
   <!-- ── Task History ───────────────────────────────────────────────────── -->
   <section class="card" id="history-section">
-    <h2 class="section-title">📋 Storico Compiti</h2>
+    <h2 class="section-title" data-i18n="ops.perf.history">📋 Storico Compiti</h2>
     <div class="perf-task-history" id="task-history-list">
-      <p class="perf-empty">Nessun compito nel periodo selezionato.</p>
+      <p class="perf-empty" data-i18n="ops.perf.noHistory">Nessun compito nel periodo selezionato.</p>
     </div>
   </section>
 
   <!-- ── Exception Register ────────────────────────────────────────────── -->
   <section class="card" id="exception-section">
     <div class="perf-exc-header">
-      <h2 class="section-title">⚠️ Registro Eccezioni</h2>
+      <h2 class="section-title" data-i18n="ops.perf.exceptions">⚠️ Registro Eccezioni</h2>
       <button class="hdr-btn" id="btn-add-exc" onclick="openExceptionModal()" style="display:none">+ Eccezione</button>
     </div>
     <div id="exception-list">
-      <p class="perf-empty">Nessuna eccezione registrata.</p>
+      <p class="perf-empty" data-i18n="ops.perf.noExceptions">Nessuna eccezione registrata.</p>
     </div>
   </section>
 
@@ -194,37 +195,40 @@
 <!-- Exception Modal -->
 <div class="modal-overlay" id="exc-modal" style="display:none" onclick="if(event.target===this)closeExceptionModal()">
   <div class="modal-box">
-    <h3>Registra Eccezione</h3>
+    <h3 data-i18n="ops.perf.exTitle">Registra Eccezione</h3>
     <div class="form-group">
-      <label>Compito</label>
+      <label data-i18n="ops.task.task">Compito</label>
       <select id="exc-task-select" class="form-control"></select>
     </div>
     <div class="form-group">
-      <label>Tipo</label>
+      <label data-i18n="ops.perf.exType">Tipo</label>
       <select id="exc-type-select" class="form-control">
-        <option value="CANCELLED">Annullato</option>
-        <option value="TRANSFERRED">Trasferito</option>
-        <option value="BLOCKED">Bloccato</option>
-        <option value="WAITING_DEPT">In attesa di reparto</option>
-        <option value="WAITING_MATERIALS">In attesa di materiali</option>
-        <option value="CUSTOMER_REQUEST">Richiesta cliente</option>
-        <option value="DIRECTOR_DECISION">Decisione Direttore</option>
-        <option value="OPERATIONAL_EMERGENCY">Emergenza operativa</option>
+        <option value="CANCELLED" data-i18n="ops.perf.exTypes.cancelled">Annullato</option>
+        <option value="TRANSFERRED" data-i18n="ops.perf.exTypes.transferred">Trasferito</option>
+        <option value="BLOCKED" data-i18n="ops.perf.exTypes.blocked">Bloccato</option>
+        <option value="WAITING_DEPT" data-i18n="ops.perf.exTypes.waitDept">In attesa di reparto</option>
+        <option value="WAITING_MATERIALS" data-i18n="ops.perf.exTypes.waitMaterials">In attesa di materiali</option>
+        <option value="CUSTOMER_REQUEST" data-i18n="ops.perf.exTypes.clientRequest">Richiesta cliente</option>
+        <option value="DIRECTOR_DECISION" data-i18n="ops.perf.exTypes.directorDecision">Decisione Direttore</option>
+        <option value="OPERATIONAL_EMERGENCY" data-i18n="ops.perf.exTypes.emergency">Emergenza operativa</option>
       </select>
     </div>
     <div class="form-group">
-      <label>Note (opzionale)</label>
-      <textarea id="exc-reason" class="form-control" rows="3" placeholder="Dettagli aggiuntivi..."></textarea>
+      <label data-i18n="ops.perf.exNotes">Note (opzionale)</label>
+      <textarea id="exc-reason" class="form-control" rows="3" data-i18n-placeholder="ops.perf.exNotesPlaceholder" placeholder="Dettagli aggiuntivi..."></textarea>
     </div>
     <div class="modal-actions">
-      <button class="hdr-btn" onclick="closeExceptionModal()">Annulla</button>
-      <button class="hdr-btn ok-btn" onclick="submitException()">Salva</button>
+      <button class="hdr-btn" onclick="closeExceptionModal()" data-i18n="common.cancel">Annulla</button>
+      <button class="hdr-btn ok-btn" onclick="submitException()" data-i18n="common.save">Salva</button>
     </div>
   </div>
 </div>
 
+<script src="js/i18n.js"></script>
+<script>I18n.init({ selector: '#i18n-sel' });</script>
 <script src="ws-auth.js"></script>
 <script type="module">
+const _t = k => window.I18n ? window.I18n.t(k) : k;
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
 import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
 import { OpsCommon } from './js/ops-common.js';
@@ -342,7 +346,7 @@ async function loadProfile() {
         const res = await fetch(url, { headers: { 'X-WS-Token': wsToken } });
         if (!res.ok) {
             document.querySelector('.ops-container').innerHTML =
-                `<div class="card"><p class="perf-empty">Profilo non disponibile o non autorizzato.</p></div>`;
+                `<div class="card"><p class="perf-empty">${_t('ops.perf.notAvailable')}</p></div>`;
             return;
         }
         data = await res.json();
@@ -436,12 +440,12 @@ function renderProfile(d) {
     // Strengths
     renderList('strengths-list', d.strengths, text =>
         `<div class="strength-tag">✅ ${esc(text)}</div>`,
-        'Nessun punto di forza rilevato per questo periodo.');
+        'ops.perf.noStrengths');
 
     // Coaching
     renderList('coaching-list', d.coaching, text =>
         `<div class="coaching-item">💡 ${esc(text)}</div>`,
-        'Nessuna opportunità rilevata per questo periodo.');
+        'ops.perf.noGrowth');
 
     // Task History
     renderTaskHistory(d.taskHistory || []);
@@ -459,14 +463,14 @@ function renderProfile(d) {
 
 function renderComponents(c) {
     const rows = [
-        { key: 'onTime',        label: 'Puntualità',         val: c.onTime        },
-        { key: 'completion',    label: 'Completamento',       val: c.completion    },
-        { key: 'urgent',        label: 'Urgenze',             val: c.urgent        },
-        { key: 'recurring',     label: 'Ricorrenti',          val: c.recurring     },
-        { key: 'consistency',   label: 'Consistenza',         val: c.consistency   },
-        { key: 'engagement',    label: 'Engagement',          val: c.engagement    },
-        { key: 'penaltyLate',   label: 'Penalità ritardi',    val: c.penaltyLate   },
-        { key: 'penaltyBlocked',label: 'Penalità blocchi',    val: c.penaltyBlocked},
+        { key: 'onTime',        label: _t('ops.perf.rel.punctuality'),   val: c.onTime        },
+        { key: 'completion',    label: _t('ops.perf.rel.completion'),     val: c.completion    },
+        { key: 'urgent',        label: _t('ops.perf.rel.urgency'),        val: c.urgent        },
+        { key: 'recurring',     label: _t('ops.perf.rel.recurring'),      val: c.recurring     },
+        { key: 'consistency',   label: _t('ops.perf.rel.consistency'),    val: c.consistency   },
+        { key: 'engagement',    label: _t('ops.perf.rel.engagement'),     val: c.engagement    },
+        { key: 'penaltyLate',   label: _t('ops.perf.rel.latePenalty'),    val: c.penaltyLate   },
+        { key: 'penaltyBlocked',label: _t('ops.perf.rel.blockPenalty'),   val: c.penaltyBlocked},
     ];
     const html = rows.map(r => {
         const isPenalty = r.val < 0;
@@ -479,12 +483,12 @@ function renderComponents(c) {
 }
 
 function renderEvolution(e) {
-    if (!e) { document.getElementById('evolution-grid').innerHTML = '<p class="perf-empty">Dati insufficienti.</p>'; return; }
+    if (!e) { document.getElementById('evolution-grid').innerHTML = `<p class="perf-empty">${_t('ops.perf.reliability.insufficient')}</p>`; return; }
     function dirIcon(d) {
-        if (d === 'IMPROVING')         return '<span class="evo-icon improving">↑ Miglioramento</span>';
-        if (d === 'DECLINING')         return '<span class="evo-icon declining">↓ Declino</span>';
-        if (d === 'STABLE')            return '<span class="evo-icon stable">→ Stabile</span>';
-        return '<span class="evo-icon neutral">N/D</span>';
+        if (d === 'IMPROVING')  return `<span class="evo-icon improving">${_t('ops.perf.evo.improving')}</span>`;
+        if (d === 'DECLINING')  return `<span class="evo-icon declining">${_t('ops.perf.evo.declining')}</span>`;
+        if (d === 'STABLE')     return `<span class="evo-icon stable">${_t('ops.perf.evo.stable')}</span>`;
+        return `<span class="evo-icon neutral">${_t('ops.perf.evo.na')}</span>`;
     }
     function fmtRate(r) { return r !== null ? Math.round(r * 100) + '%' : '—'; }
     const periods = [
@@ -495,34 +499,35 @@ function renderEvolution(e) {
     let html = '<div class="evo-periods">' +
         periods.map(p => `<div class="evo-period-card">
           <div class="evo-period-name">${esc(p.label)}</div>
-          <div class="evo-metric">Completamento: <strong>${fmtRate(p.m.completionRate)}</strong></div>
-          <div class="evo-metric">In tempo: <strong>${fmtRate(p.m.onTimeRate)}</strong></div>
-          <div class="evo-metric">Completati: <strong>${p.m.completed}</strong></div>
+          <div class="evo-metric">${_t('ops.perf.evo.completion')} <strong>${fmtRate(p.m.completionRate)}</strong></div>
+          <div class="evo-metric">${_t('ops.perf.evo.onTime')} <strong>${fmtRate(p.m.onTimeRate)}</strong></div>
+          <div class="evo-metric">${_t('ops.perf.evo.completed')} <strong>${p.m.completed}</strong></div>
         </div>`).join('') +
         '</div>' +
         `<div class="evo-directions">
-          <div>Mese corrente vs mese precedente: ${dirIcon(e.curVsPrev.direction)}</div>
-          <div>Mese corrente vs 90 giorni: ${dirIcon(e.curVs90.direction)}</div>
+          <div>${_t('ops.perf.evo.currentVsPrev')} ${dirIcon(e.curVsPrev.direction)}</div>
+          <div>${_t('ops.perf.evo.currentVs90')} ${dirIcon(e.curVs90.direction)}</div>
         </div>`;
     document.getElementById('evolution-grid').innerHTML = html;
 }
 
-const OUTCOME_LABELS = {
-    COMPLETED_ON_TIME: { label: 'In tempo',    cls: 'ok'     },
-    COMPLETED_LATE:    { label: 'In ritardo',  cls: 'warn'   },
-    CANCELLED:         { label: 'Annullato',   cls: 'neutral'},
-    TRANSFERRED:       { label: 'Trasferito',  cls: 'neutral'},
-    BLOCKED:           { label: 'Bloccato',    cls: 'warn'   },
-    OPEN:              { label: 'Aperto',       cls: 'neutral'},
-    IN_PROGRESS:       { label: 'In corso',    cls: 'ok'     },
-    OVERDUE:           { label: 'In ritardo',  cls: 'warn'   },
-};
+const OUTCOME_LABELS = () => ({
+    COMPLETED_ON_TIME: { label: _t('ops.perf.outcome.onTime'),      cls: 'ok'     },
+    COMPLETED_LATE:    { label: _t('ops.perf.outcome.late'),         cls: 'warn'   },
+    CANCELLED:         { label: _t('ops.perf.outcome.cancelled'),    cls: 'neutral'},
+    TRANSFERRED:       { label: _t('ops.perf.outcome.transferred'),  cls: 'neutral'},
+    BLOCKED:           { label: _t('ops.perf.outcome.blocked'),      cls: 'warn'   },
+    OPEN:              { label: _t('ops.perf.outcome.open'),         cls: 'neutral'},
+    IN_PROGRESS:       { label: _t('ops.perf.outcome.inProgress'),   cls: 'ok'     },
+    OVERDUE:           { label: _t('ops.perf.outcome.late'),         cls: 'warn'   },
+});
 
 function renderTaskHistory(items) {
     const el = document.getElementById('task-history-list');
-    if (!items.length) { el.innerHTML = '<p class="perf-empty">Nessun compito nel periodo selezionato.</p>'; return; }
+    if (!items.length) { el.innerHTML = `<p class="perf-empty">${_t('ops.perf.noHistory')}</p>`; return; }
+    const labels = OUTCOME_LABELS();
     el.innerHTML = items.map(t => {
-        const o = OUTCOME_LABELS[t.outcome] || { label: t.outcome, cls: 'neutral' };
+        const o = labels[t.outcome] || { label: t.outcome, cls: 'neutral' };
         const due = t.dueDate ? new Date(t.dueDate).toLocaleDateString('it-IT') : '';
         return `<div class="perf-hist-row">
           <span class="hist-title">${esc(t.title)}</span>
@@ -534,18 +539,23 @@ function renderTaskHistory(items) {
     }).join('');
 }
 
-const EXC_LABELS = {
-    CANCELLED: 'Annullato', TRANSFERRED: 'Trasferito', BLOCKED: 'Bloccato',
-    WAITING_DEPT: 'Attesa reparto', WAITING_MATERIALS: 'Attesa materiali',
-    CUSTOMER_REQUEST: 'Richiesta cliente', DIRECTOR_DECISION: 'Decisione Direttore',
-    OPERATIONAL_EMERGENCY: 'Emergenza operativa',
-};
+const EXC_LABELS = () => ({
+    CANCELLED:             _t('ops.perf.exTypes.cancelled'),
+    TRANSFERRED:           _t('ops.perf.exTypes.transferred'),
+    BLOCKED:               _t('ops.perf.exTypes.blocked'),
+    WAITING_DEPT:          _t('ops.perf.exTypes.waitDept'),
+    WAITING_MATERIALS:     _t('ops.perf.exTypes.waitMaterials'),
+    CUSTOMER_REQUEST:      _t('ops.perf.exTypes.clientRequest'),
+    DIRECTOR_DECISION:     _t('ops.perf.exTypes.directorDecision'),
+    OPERATIONAL_EMERGENCY: _t('ops.perf.exTypes.emergency'),
+});
 
 function renderExceptions(items) {
     const el = document.getElementById('exception-list');
-    if (!items.length) { el.innerHTML = '<p class="perf-empty">Nessuna eccezione registrata.</p>'; return; }
+    const excLabels = EXC_LABELS();
+    if (!items.length) { el.innerHTML = `<p class="perf-empty">${_t('ops.perf.noExceptions')}</p>`; return; }
     el.innerHTML = items.map(e => `<div class="exc-row">
-      <span class="exc-type">${esc(EXC_LABELS[e.type] || e.type)}</span>
+      <span class="exc-type">${esc(excLabels[e.type] || e.type)}</span>
       <span class="exc-task">${esc(e.taskTitle || e.taskId)}</span>
       <span class="exc-reason">${esc(e.reason || '')}</span>
       <span class="exc-date">${new Date(e.recordedAt).toLocaleDateString('it-IT')}</span>
@@ -553,9 +563,9 @@ function renderExceptions(items) {
     </div>`).join('');
 }
 
-function renderList(elId, items, tmpl, empty) {
+function renderList(elId, items, tmpl, emptyKey) {
     const el = document.getElementById(elId);
-    if (!items || !items.length) { el.innerHTML = `<p class="perf-empty">${empty}</p>`; return; }
+    if (!items || !items.length) { el.innerHTML = `<p class="perf-empty">${_t(emptyKey)}</p>`; return; }
     el.innerHTML = items.map(tmpl).join('');
 }
 
@@ -567,7 +577,7 @@ window.submitException = async function () {
     const taskId  = document.getElementById('exc-task-select').value;
     const type    = document.getElementById('exc-type-select').value;
     const reason  = document.getElementById('exc-reason').value;
-    if (!taskId) { alert('Seleziona un compito.'); return; }
+    if (!taskId) { alert(_t('ops.perf.selectTask')); return; }
     const res = await fetch('/api/operations/exceptions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-WS-Token': wsToken },
@@ -584,8 +594,14 @@ function setText(id, val) {
 }
 function esc(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function roleLabel(r) {
-    return { DIRECTOR:'Direttore', CHEF_CUISINE:'Chef Cuisine', ADJOINT:'Adjoint',
-             SOUS_CHEF:'Sous Chef', CHEF_DE_BRIGADE:'Chef de Brigade' }[r] || r;
+    const map = {
+        DIRECTOR:        _t('ops.role.director'),
+        CHEF_CUISINE:    _t('ops.role.chef_cuisine'),
+        ADJOINT:         _t('ops.role.adjoint'),
+        SOUS_CHEF:       _t('ops.role.sous_chef'),
+        CHEF_DE_BRIGADE: _t('ops.role.chef_de_brigade'),
+    };
+    return map[r] || r;
 }
 
 boot();

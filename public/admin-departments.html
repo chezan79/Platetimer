@@ -165,9 +165,10 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 <header class="hdr">
   <span id="hdr-company" class="hdr-brand"></span>
   <span class="hdr-sep"></span>
-  <span class="hdr-page">Gestione Reparti</span>
-  <button class="hdr-btn" onclick="window.location.href='home.html'">Home</button>
-  <button class="hdr-btn danger" onclick="logout()">Esci</button>
+  <span class="hdr-page" data-i18n="admin.heading">Gestione Reparti</span>
+  <span id="i18n-admin-sel"></span>
+  <button class="hdr-btn" onclick="window.location.href='home.html'" data-i18n="common.home">Home</button>
+  <button class="hdr-btn danger" onclick="logout()" data-i18n="common.logout">Esci</button>
 </header>
 
 <!-- ── MAIN ──────────────────────────────── -->
@@ -175,7 +176,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 
   <!-- Page heading -->
   <div class="pg-heading">
-    <h1 class="pg-title">Gestione Reparti</h1>
+    <h1 class="pg-title" data-i18n="admin.heading">Gestione Reparti</h1>
     <p id="pg-company" class="pg-sub"></p>
     <span id="plan-badge" class="plan-badge">Piano: …</span>
   </div>
@@ -185,7 +186,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 
     <!-- Usage card -->
     <div class="card">
-      <p class="card-title">Utilizzo Reparti</p>
+      <p class="card-title" data-i18n="admin.usage">Utilizzo Reparti</p>
       <div id="usage-count" class="usage-count">—</div>
       <div id="usage-sub" class="usage-sub">Caricamento…</div>
       <div class="limit-bar"><div id="limit-bar-fill" class="limit-bar-fill" style="width:0%"></div></div>
@@ -194,12 +195,12 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 
     <!-- Create card -->
     <div class="card">
-      <p class="card-title">Crea Nuovo Reparto</p>
+      <p class="card-title" data-i18n="admin.createHeading">Crea Nuovo Reparto</p>
       <div id="limit-notice" class="limit-notice" style="display:none;"></div>
-      <label class="form-label" for="dept-name-input">Nome reparto</label>
+      <label class="form-label" for="dept-name-input" data-i18n="admin.colName">Nome reparto</label>
       <input id="dept-name-input" class="form-input" type="text"
              placeholder="es. Cucina, Bar, Pasticceria…" maxlength="40">
-      <button id="create-btn" class="btn btn-primary" onclick="createDepartment()">Crea reparto</button>
+      <button id="create-btn" class="btn btn-primary" onclick="createDepartment()" data-i18n="admin.createBtn">Crea reparto</button>
       <div id="error-msg" class="msg msg-error"></div>
       <div id="success-msg" class="msg msg-success"></div>
     </div>
@@ -207,32 +208,34 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
   </div>
 
   <!-- Departments table -->
-  <p class="section-title">Reparti configurati</p>
+  <p class="section-title" data-i18n="admin.tableHeading">Reparti configurati</p>
   <div class="table-wrap">
     <table class="dept-table">
       <thead>
         <tr>
-          <th>Nome</th>
-          <th>Tipo</th>
-          <th>Login</th>
-          <th>Password</th>
-          <th>Stato Account</th>
-          <th>Azioni</th>
+          <th data-i18n="admin.colName">Nome</th>
+          <th data-i18n="admin.colType">Tipo</th>
+          <th data-i18n="admin.colLogin">Login</th>
+          <th data-i18n="admin.colPassword">Password</th>
+          <th data-i18n="admin.colStatus">Stato Account</th>
+          <th data-i18n="admin.colActions">Azioni</th>
         </tr>
       </thead>
       <tbody id="dept-table-body">
-        <tr><td colspan="6" class="empty-state">Caricamento…</td></tr>
+        <tr><td colspan="6" class="empty-state" data-i18n="admin.loading">Caricamento…</td></tr>
       </tbody>
     </table>
   </div>
 
 </main>
 
+<script src="js/i18n.js"></script>
 <script src="js/ws-auth.js"></script>
 <script>
+    const _t = k => window.I18n ? window.I18n.t(k) : k;
     const token = WsAuth.getStoredToken();
     if (!token) {
-        alert('Sessione scaduta. Effettua nuovamente il login.');
+        alert(_t('common.sessionExpired'));
         window.location.href = 'index.html';
     }
 
@@ -292,20 +295,20 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
         const atLimit = active >= planLimit;
         const planLabels = { base:'Base', medium:'Medium', premium:'Premium' };
         document.getElementById('plan-badge').textContent =
-            `Piano: ${planLabels[planName] || planName} — massimo ${planLimit} reparti`;
+            `${_t('admin.plan')} ${planLabels[planName] || planName} — max ${planLimit}`;
         document.getElementById('usage-count').textContent = `${active} / ${planLimit}`;
         document.getElementById('usage-sub').textContent =
-            `${active} reparti attivi su ${planLimit} consentiti (${total} totali)`;
+            `${active} ${_t('admin.activeOf')} ${planLimit} (${total} ${_t('admin.total')})`;
         const pct  = planLimit > 0 ? Math.min(100, Math.round((active / planLimit) * 100)) : 0;
         const fill = document.getElementById('limit-bar-fill');
         fill.style.width = pct + '%';
         fill.classList.toggle('at-limit', atLimit);
         const usageMsg = document.getElementById('usage-msg');
         if (atLimit) {
-            usageMsg.textContent = 'Limite del piano raggiunto';
+            usageMsg.textContent = _t('admin.limitReached');
             usageMsg.className   = 'usage-msg warn';
         } else {
-            usageMsg.textContent = `${planLimit - active} slot disponibili`;
+            usageMsg.textContent = `${planLimit - active} ${_t('admin.slotAvailable')}`;
             usageMsg.className   = 'usage-msg ok';
         }
 
@@ -314,7 +317,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
         const input       = document.getElementById('dept-name-input');
         const createBtn   = document.getElementById('create-btn');
         if (atLimit) {
-            limitNotice.textContent = `Limite di ${planLimit} reparti attivi raggiunto. Disattiva un reparto per crearne uno nuovo.`;
+            limitNotice.textContent = _t('admin.atLimitNotice');
             limitNotice.style.display = 'block';
             input.disabled = true; createBtn.disabled = true;
         } else {
@@ -328,7 +331,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
     function renderTable() {
         const tbody = document.getElementById('dept-table-body');
         if (departments.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Nessun reparto configurato.<br>Crea il primo reparto qui sopra.</td></tr>';
+            tbody.innerHTML = `<tr><td colspan="6" class="empty-state">${_t('admin.noConfig')}</td></tr>`;
             return;
         }
 
@@ -346,35 +349,35 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
                 passCell   = acct.hasPassword ? '<span class="dash-muted">••••••</span>' : '<span class="dash-muted">—</span>';
                 const isActive = acct.status === 'ACTIVE';
                 statusCell = isActive
-                    ? '<span class="badge badge-active">ATTIVO</span>'
-                    : '<span class="badge badge-susp">SOSPESO</span>';
+                    ? `<span class="badge badge-active">${_t('admin.accountActive')}</span>`
+                    : `<span class="badge badge-susp">${_t('admin.accountSuspended')}</span>`;
                 acctBtns = `
-                    <button class="btn btn-sm btn-neutral" onclick="openEdit('${d.id}')">Modifica</button>
+                    <button class="btn btn-sm btn-neutral" onclick="openEdit('${d.id}')">${_t('admin.edit')}</button>
                     <button class="btn btn-sm ${isActive ? 'btn-warn' : 'btn-neutral'}"
-                        onclick="toggleAcctStatus('${acct.id}','${isActive ? 'SUSPENDED' : 'ACTIVE'}')">${isActive ? 'Sospendi' : 'Riattiva'}</button>`;
+                        onclick="toggleAcctStatus('${acct.id}','${isActive ? 'SUSPENDED' : 'ACTIVE'}')">${isActive ? _t('admin.suspend') : _t('admin.reactivate')}</button>`;
             } else {
                 loginCell  = '<span class="dash-muted">—</span>';
                 passCell   = '<span class="dash-muted">—</span>';
                 statusCell = '<span class="dash-muted">—</span>';
-                acctBtns   = `<button class="btn btn-sm btn-primary" onclick="openCreate('${d.id}')">Crea Account</button>`;
+                acctBtns   = `<button class="btn btn-sm btn-primary" onclick="openCreate('${d.id}')">${_t('admin.createAccount')}</button>`;
             }
 
             // Department active/inactive + delete
             const canDelete = !d.usedInCountdowns;
             const deptBtns = `
                 <button class="btn btn-sm btn-neutral"
-                    onclick="toggleDept('${d.id}',${!d.active})">${d.active ? 'Disattiva' : 'Attiva'}</button>
+                    onclick="toggleDept('${d.id}',${!d.active})">${d.active ? _t('admin.deactivate') : _t('admin.activate')}</button>
                 ${canDelete
-                    ? `<button class="btn btn-sm btn-danger" onclick="deleteDept('${d.id}')">Elimina</button>`
-                    : `<button class="btn btn-sm btn-danger" disabled title="Reparto già utilizzato">Elimina</button>`}`;
+                    ? `<button class="btn btn-sm btn-danger" onclick="deleteDept('${d.id}')">${_t('admin.delete')}</button>`
+                    : `<button class="btn btn-sm btn-danger" disabled title="${_t('admin.alreadyInUse')}">${_t('admin.delete')}</button>`}`;
 
             return `
                 <tr class="${d.active ? '' : 'inactive-dept'}">
                   <td>
                     <div class="dept-name-cell">
                       <span class="dept-name-text">${escHtml(d.name)}</span>
-                      <span class="badge ${d.active ? 'badge-dept-on' : 'badge-dept-off'}">${d.active ? 'Attivo' : 'Inattivo'}</span>
-                      ${d.usedInCountdowns ? '<span class="badge badge-used">In uso</span>' : ''}
+                      <span class="badge ${d.active ? 'badge-dept-on' : 'badge-dept-off'}">${d.active ? _t('admin.deptActive') : _t('admin.deptInactive')}</span>
+                      ${d.usedInCountdowns ? `<span class="badge badge-used">${_t('admin.inUse')}</span>` : ''}
                     </div>
                   </td>
                   <td>${typeBadge}</td>
@@ -429,18 +432,18 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
         document.getElementById(`form-cell-${deptId}`).innerHTML = `
             <div class="acct-form">
               <div class="acct-form-group">
-                <label>Login</label>
+                <label>${_t('admin.accountLogin')}</label>
                 <input id="f-login-${deptId}" class="form-input-sm" type="text"
-                       placeholder="es. cucina1, reparto2" autocomplete="off">
+                       placeholder="${_t('admin.loginPlaceholder')}" autocomplete="off">
               </div>
               <div class="acct-form-group">
-                <label>Password</label>
+                <label>${_t('admin.accountPassword')}</label>
                 <input id="f-pass-${deptId}" class="form-input-sm" type="text"
-                       placeholder="es. 1234, pizza" autocomplete="off">
+                       placeholder="${_t('admin.passwordPlaceholder')}" autocomplete="off">
               </div>
               <div class="acct-form-btns">
-                <button class="btn btn-sm btn-primary" onclick="submitCreate('${deptId}')">Crea</button>
-                <button class="btn btn-sm btn-neutral" onclick="closeForm()">Annulla</button>
+                <button class="btn btn-sm btn-primary" onclick="submitCreate('${deptId}')">${_t('admin.create')}</button>
+                <button class="btn btn-sm btn-neutral" onclick="closeForm()">${_t('common.cancel')}</button>
               </div>
             </div>
             <div id="form-err-${deptId}" class="form-inline-err"></div>`;
@@ -457,18 +460,18 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
         document.getElementById(`form-cell-${deptId}`).innerHTML = `
             <div class="acct-form">
               <div class="acct-form-group">
-                <label>Login</label>
+                <label>${_t('admin.accountLogin')}</label>
                 <input id="f-login-${deptId}" class="form-input-sm" type="text"
                        value="${escHtml(acct.loginIdentifier || '')}" autocomplete="off">
               </div>
               <div class="acct-form-group">
-                <label>Nuova Password <span style="font-weight:400;text-transform:none">(vuoto = invariata)</span></label>
+                <label>${_t('admin.accountNewPassword')}</label>
                 <input id="f-pass-${deptId}" class="form-input-sm" type="text"
-                       placeholder="lascia vuoto per non cambiare" autocomplete="off">
+                       placeholder="${_t('admin.newPasswordPlaceholder')}" autocomplete="off">
               </div>
               <div class="acct-form-btns">
-                <button class="btn btn-sm btn-primary" onclick="submitEdit('${acct.id}','${deptId}')">Salva</button>
-                <button class="btn btn-sm btn-neutral" onclick="closeForm()">Annulla</button>
+                <button class="btn btn-sm btn-primary" onclick="submitEdit('${acct.id}','${deptId}')">${_t('admin.save')}</button>
+                <button class="btn btn-sm btn-neutral" onclick="closeForm()">${_t('common.cancel')}</button>
               </div>
             </div>
             <div id="form-err-${deptId}" class="form-inline-err"></div>`;
@@ -481,8 +484,8 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
         const login = (document.getElementById(`f-login-${deptId}`)?.value || '').trim();
         const pass  = (document.getElementById(`f-pass-${deptId}`)?.value  || '').trim();
         hideFormErr(deptId);
-        if (!login) { showFormErr(deptId, 'Login obbligatorio.'); return; }
-        if (!pass)  { showFormErr(deptId, 'Password obbligatoria.'); return; }
+        if (!login) { showFormErr(deptId, _t('admin.loginRequired')); return; }
+        if (!pass)  { showFormErr(deptId, _t('admin.passwordRequired')); return; }
 
         const data = await apiFetch('/api/department-accounts', {
             method: 'POST',
@@ -490,7 +493,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
         });
         if (data.success) {
             editingId = null;          // clear before reload so form stays closed
-            showSuccess('Account creato.');
+            showSuccess(_t('admin.accountCreated'));
             await loadAll();
         } else {
             showFormErr(deptId, data.error || 'Errore nella creazione.');
@@ -501,7 +504,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
         const login = (document.getElementById(`f-login-${deptId}`)?.value || '').trim();
         const pass  = (document.getElementById(`f-pass-${deptId}`)?.value  || '').trim();
         hideFormErr(deptId);
-        if (!login) { showFormErr(deptId, 'Login obbligatorio.'); return; }
+        if (!login) { showFormErr(deptId, _t('admin.loginRequired')); return; }
 
         const body = { loginIdentifier: login };
         if (pass) body.password = pass;
@@ -512,7 +515,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
         });
         if (data.success) {
             editingId = null;
-            showSuccess('Account aggiornato.');
+            showSuccess(_t('admin.accountUpdated'));
             await loadAll();
         } else {
             showFormErr(deptId, data.error || 'Errore.');
@@ -525,7 +528,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
             method: 'PUT', body: JSON.stringify({ status: newStatus })
         });
         if (data.success) {
-            showSuccess(newStatus === 'ACTIVE' ? 'Account riattivato.' : 'Account sospeso.');
+            showSuccess(newStatus === 'ACTIVE' ? _t('admin.accountReactivated') : _t('admin.accountSuspendedMsg'));
             await loadAll();
         } else {
             showError(data.error || 'Errore.');
@@ -535,13 +538,13 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
     // ── Department mutations ──────────────────────────────────────────
     async function createDepartment() {
         const name = document.getElementById('dept-name-input').value.trim();
-        if (!name) { showError('Inserisci un nome per il reparto.'); return; }
+        if (!name) { showError(_t('admin.nameRequired')); return; }
         clearMessages();
         const btn = document.getElementById('create-btn');
-        btn.disabled = true; btn.textContent = 'Creazione…';
+        btn.disabled = true; btn.textContent = _t('admin.creating');
 
         const data = await apiFetch('/api/departments', { method: 'POST', body: JSON.stringify({ name }) });
-        btn.disabled = false; btn.textContent = 'Crea reparto';
+        btn.disabled = false; btn.textContent = _t('admin.createBtn');
 
         if (data.success) {
             document.getElementById('dept-name-input').value = '';
@@ -562,10 +565,10 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
     }
 
     async function deleteDept(id) {
-        if (!confirm('Eliminare definitivamente questo reparto?')) return;
+        if (!confirm(_t('admin.confirmDelete'))) return;
         clearMessages();
         const data = await apiFetch(`/api/departments/${id}`, { method: 'DELETE' });
-        if (data.success) { showSuccess('Reparto eliminato.'); await loadAll(); }
+        if (data.success) { showSuccess(_t('admin.deptDeleted')); await loadAll(); }
         else { showError(data.error || 'Errore.'); }
     }
 
@@ -593,7 +596,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
         if (e.key === 'Enter') createDepartment();
     });
 
-    loadAll();
+    I18n.init({ selector: '#i18n-admin-sel' }).then(loadAll);
 </script>
 </body>
 </html>

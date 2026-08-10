@@ -5,25 +5,27 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Operations — Direttore — PlateTimer</title>
 <link rel="stylesheet" href="css/operations.css">
+<script src="js/i18n.js"></script>
 </head>
 <body>
 
 <header class="hdr">
   <span id="hdr-company" class="hdr-brand"></span>
   <span class="hdr-sep"></span>
-  <span class="hdr-page">Operations · Direttore</span>
-  <button class="hdr-btn" onclick="location.href='operations-tasks.html'">Compiti</button>
-  <button class="hdr-btn" onclick="location.href='operations-team.html'">Team</button>
-  <button class="hdr-btn" onclick="location.href='operations-templates.html'">🔁 Template</button>
-  <button class="hdr-btn" onclick="location.href='operations-performance.html'">📊 Prestazioni</button>
-  <button class="hdr-btn" onclick="location.href='home.html'">Home</button>
-  <button class="hdr-btn danger" onclick="OpsCommon.logout()">Esci</button>
+  <span class="hdr-page" data-i18n="ops.dir.heading">Operations · Direttore</span>
+  <button class="hdr-btn" onclick="location.href='operations-tasks.html'" data-i18n="ops.nav.tasks">Compiti</button>
+  <button class="hdr-btn" onclick="location.href='operations-team.html'" data-i18n="ops.nav.team">Team</button>
+  <button class="hdr-btn" onclick="location.href='operations-templates.html'" data-i18n="ops.nav.templates">🔁 Template</button>
+  <button class="hdr-btn" onclick="location.href='operations-performance.html'" data-i18n="ops.nav.performance">📊 Prestazioni</button>
+  <button class="hdr-btn" onclick="location.href='home.html'" data-i18n="common.home">Home</button>
+  <span id="i18n-sel"></span>
+  <button class="hdr-btn danger" onclick="OpsCommon.logout()" data-i18n="common.logout">Esci</button>
 </header>
 
 <main class="main">
   <div class="pg-heading" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px">
     <div>
-      <h1 class="pg-title">Dashboard Direttore</h1>
+      <h1 class="pg-title" data-i18n="ops.dir.heading">Dashboard Direttore</h1>
       <p class="pg-sub"><span id="me-name"></span> · <span id="me-role" class="role-badge"></span></p>
     </div>
   </div>
@@ -32,126 +34,126 @@
 
   <!-- Today's Brief — Executive Brief (Sprint 6.3) -->
   <div class="brief-card exec-brief-card" id="brief-card">
-    <div class="exec-brief-text" id="brief-text">Caricamento…</div>
+    <div class="exec-brief-text" id="brief-text"></div>
   </div>
 
   <!-- New Since Last Visit (Sprint 6.3.1) -->
   <div id="nsv-section" style="display:none;margin-bottom:24px">
-    <p class="section-title">🔔 Nuovo dalla tua ultima visita</p>
+    <p class="section-title" data-i18n="ops.dir.newSinceVisit">🔔 Nuovo dalla tua ultima visita</p>
     <div class="card" id="nsv-content"></div>
   </div>
 
   <!-- Priority Queue (Sprint 6.3) -->
   <div id="pq-section" style="display:none;margin-bottom:24px">
-    <p class="section-title">🎯 Coda priorità</p>
+    <p class="section-title" data-i18n="ops.dir.priorityQueue">🎯 Coda priorità</p>
     <div class="card" style="padding:0;overflow:hidden" id="pq-content"></div>
   </div>
 
   <!-- Risk Watch (Sprint 6.3) -->
   <div id="rw-section" style="display:none;margin-bottom:24px">
-    <p class="section-title">⚠️ Risk Watch</p>
+    <p class="section-title" data-i18n="ops.dir.riskWatch">⚠️ Risk Watch</p>
     <div class="card" style="padding:0;overflow:hidden" id="rw-content"></div>
   </div>
 
   <!-- Changes Since Yesterday (Sprint 6.3) -->
   <div id="cs-section" style="display:none;margin-bottom:24px">
-    <p class="section-title">📊 Rispetto a ieri</p>
+    <p class="section-title" data-i18n="ops.dir.vsYesterday">📊 Rispetto a ieri</p>
     <div class="card" id="cs-content"></div>
   </div>
 
   <!-- Quick Actions -->
-  <p class="section-title" style="margin-top:0">Azioni rapide</p>
+  <p class="section-title" style="margin-top:0" data-i18n="ops.dir.quickActions">Azioni rapide</p>
   <div class="qa-grid">
     <button class="qa-btn qa-primary" onclick="location.href='operations-tasks.html?action=create'">
-      <span class="qa-icon">➕</span>Crea compito
+      <span class="qa-icon">➕</span><span data-i18n="ops.dir.createTask">Crea compito</span>
     </button>
     <button class="qa-btn" onclick="location.href='operations-team.html?action=create'">
-      <span class="qa-icon">👤</span>Crea utente
+      <span class="qa-icon">👤</span><span data-i18n="ops.dir.createUser">Crea utente</span>
     </button>
     <button class="qa-btn" onclick="location.href='operations-templates.html?action=create'">
-      <span class="qa-icon">🔁</span>Crea template
+      <span class="qa-icon">🔁</span><span data-i18n="ops.dir.createTemplate">Crea template</span>
     </button>
     <button class="qa-btn qa-danger" id="qa-esc-btn" onclick="scrollTo(0,document.getElementById('attention-section').offsetTop - 80)">
-      <span class="qa-icon">🚨</span>Escalation
+      <span class="qa-icon">🚨</span><span data-i18n="ops.dir.escalation">Escalation</span>
     </button>
     <button class="qa-btn" onclick="location.href='operations-tasks.html?filter=today'">
-      <span class="qa-icon">📅</span>Operazioni oggi
+      <span class="qa-icon">📅</span><span data-i18n="ops.dir.todayOps">Operazioni oggi</span>
     </button>
   </div>
 
   <!-- Requires Attention -->
   <div id="attention-section">
-    <p class="section-title">🔴 Richiede la tua attenzione</p>
+    <p class="section-title" data-i18n="ops.dir.attention">🔴 Richiede la tua attenzione</p>
     <div id="attention-content"></div>
   </div>
 
   <!-- Today's Operations Stats -->
-  <p class="section-title">Operazioni di oggi</p>
+  <p class="section-title" data-i18n="ops.dir.todayStats">Operazioni di oggi</p>
   <div class="stat-row" style="grid-template-columns:repeat(4,1fr);margin-bottom:24px">
-    <div class="stat-card ok"><div class="stat-num" id="stat-done-today">—</div><div class="stat-lbl">Completati oggi</div></div>
-    <div class="stat-card"><div class="stat-num" id="stat-open-today">—</div><div class="stat-lbl">Aperti oggi</div></div>
-    <div class="stat-card danger"><div class="stat-num" id="stat-urgent-cnt">—</div><div class="stat-lbl">Urgenti</div></div>
-    <div class="stat-card accent"><div class="stat-num" id="stat-recurring-today">—</div><div class="stat-lbl">Ricorrenti generati</div></div>
+    <div class="stat-card ok"><div class="stat-num" id="stat-done-today">—</div><div class="stat-lbl" data-i18n="ops.dir.completedToday">Completati oggi</div></div>
+    <div class="stat-card"><div class="stat-num" id="stat-open-today">—</div><div class="stat-lbl" data-i18n="ops.dir.openToday">Aperti oggi</div></div>
+    <div class="stat-card danger"><div class="stat-num" id="stat-urgent-cnt">—</div><div class="stat-lbl" data-i18n="ops.dir.urgent">Urgenti</div></div>
+    <div class="stat-card accent"><div class="stat-num" id="stat-recurring-today">—</div><div class="stat-lbl" data-i18n="ops.dir.recurring">Ricorrenti generati</div></div>
   </div>
 
   <!-- Company overview -->
   <div class="stat-row" style="grid-template-columns:repeat(4,1fr);margin-bottom:24px">
-    <div class="stat-card"><div class="stat-num" id="stat-open-all">—</div><div class="stat-lbl">Totale aperti</div></div>
-    <div class="stat-card accent"><div class="stat-num" id="stat-ip-all">—</div><div class="stat-lbl">In corso</div></div>
-    <div class="stat-card danger"><div class="stat-num" id="stat-overdue-all">—</div><div class="stat-lbl">In ritardo</div></div>
-    <div class="stat-card ok"><div class="stat-num" id="stat-done-all">—</div><div class="stat-lbl">Completati totale</div></div>
+    <div class="stat-card"><div class="stat-num" id="stat-open-all">—</div><div class="stat-lbl" data-i18n="ops.dir.totalOpen">Totale aperti</div></div>
+    <div class="stat-card accent"><div class="stat-num" id="stat-ip-all">—</div><div class="stat-lbl" data-i18n="ops.dir.inProgress">In corso</div></div>
+    <div class="stat-card danger"><div class="stat-num" id="stat-overdue-all">—</div><div class="stat-lbl" data-i18n="ops.dir.overdue">In ritardo</div></div>
+    <div class="stat-card ok"><div class="stat-num" id="stat-done-all">—</div><div class="stat-lbl" data-i18n="ops.dir.completedTotal">Completati totale</div></div>
   </div>
 
   <!-- Delegated Work -->
-  <p class="section-title">Lavoro delegato</p>
+  <p class="section-title" data-i18n="ops.dir.delegated">Lavoro delegato</p>
   <div class="card" style="margin-bottom:24px" id="workload-card">
-    <div class="empty-state" style="padding:16px 0">Caricamento…</div>
+    <div class="empty-state" style="padding:16px 0" data-i18n="ops.dir.loading">Caricamento…</div>
   </div>
 
   <!-- Overdue by dept -->
   <div id="dept-section" style="display:none;margin-bottom:24px">
-    <p class="section-title">In ritardo per reparto</p>
+    <p class="section-title" data-i18n="ops.dir.overdueByDept">In ritardo per reparto</p>
     <div class="card" id="dept-bars"></div>
   </div>
 
   <!-- Intelligence Engine Card (Sprint 6) -->
   <div id="intel-section" style="display:none;margin-bottom:24px">
-    <p class="section-title">🧠 Operations Intelligence</p>
+    <p class="section-title" data-i18n="ops.dir.intelligence">🧠 Operations Intelligence</p>
     <div class="card" style="padding:0;overflow:hidden">
 
       <!-- Attention -->
       <div class="intel-section">
-        <div class="intel-section-hdr">🔴 Allerta</div>
+        <div class="intel-section-hdr" data-i18n="ops.intel.alerts">🔴 Allerta</div>
         <div id="intel-attention" class="intel-body"></div>
       </div>
 
       <!-- Today's Summary -->
       <div class="intel-section">
-        <div class="intel-section-hdr">📊 Riepilogo di oggi</div>
+        <div class="intel-section-hdr" data-i18n="ops.intel.summary">📊 Riepilogo di oggi</div>
         <div id="intel-summary" class="intel-body"></div>
       </div>
 
       <!-- Trend di oggi (Sprint 6.2) -->
       <div class="intel-section">
-        <div class="intel-section-hdr">📈 Trend di oggi</div>
+        <div class="intel-section-hdr" data-i18n="ops.intel.trends">📈 Trend di oggi</div>
         <div id="intel-trends" class="intel-body"></div>
       </div>
 
       <!-- Workload Analysis -->
       <div class="intel-section">
-        <div class="intel-section-hdr">⚖️ Analisi carico di lavoro</div>
+        <div class="intel-section-hdr" data-i18n="ops.intel.workload">⚖️ Analisi carico di lavoro</div>
         <div id="intel-workload" class="intel-body"></div>
       </div>
 
       <!-- Department Health (Sprint 6.2) -->
       <div class="intel-section">
-        <div class="intel-section-hdr">🏥 Salute reparti</div>
+        <div class="intel-section-hdr" data-i18n="ops.intel.health">🏥 Salute reparti</div>
         <div id="intel-dept-health" class="intel-body"></div>
       </div>
 
       <!-- Decision Cards (Sprint 6.1) -->
       <div class="intel-section">
-        <div class="intel-section-hdr">🎯 Decisioni consigliate</div>
+        <div class="intel-section-hdr" data-i18n="ops.intel.decisions">🎯 Decisioni consigliate</div>
         <div id="intel-decisions" class="intel-body"></div>
       </div>
 
@@ -165,6 +167,23 @@
 <script>
 const esc = OpsCommon.escHtml;
 const fmt = OpsCommon.fmtDue;
+const t = (key) => (typeof I18n !== 'undefined' && I18n.t) ? I18n.t(key) : key;
+
+// ── Severity / status label helpers ──
+function sevLabel(s) {
+  return { HIGH: t('ops.intel.high'), MEDIUM: t('ops.intel.medium'), LOW: t('ops.intel.low') }[s] || s;
+}
+function wlStatusLabel(s) {
+  return { OVERLOADED: t('ops.intel.overloaded'), BUSY: t('ops.intel.busy'), NORMAL: t('ops.intel.normal') }[s] || s;
+}
+function trendDir(d) {
+  return {
+    IMPROVING: t('ops.intel.improving'),
+    WORSENING: t('ops.intel.worsening'),
+    STABLE:    t('ops.intel.stable'),
+    INSUFFICIENT_DATA: t('ops.intel.noData')
+  }[d] || d;
+}
 
 async function load() {
   const me = await OpsCommon.loadMe();
@@ -182,9 +201,8 @@ async function load() {
   ]);
 
   if (!taskRes || !taskRes.success) { OpsCommon.showError(taskRes && taskRes.error); return; }
-  const tasks = taskRes.tasks, users = taskRes.users, myId = taskRes.me.id;
+  const tasks = taskRes.tasks, users = taskRes.users;
   const now = new Date();
-  const todayStr = now.toISOString().slice(0,10);
 
   // Derive counts
   const allActive  = tasks.filter(t => t.status !== 'CANCELLED');
@@ -194,7 +212,6 @@ async function load() {
   const overdue    = tasks.filter(t => (t.effectiveStatus||t.status) === 'OVERDUE' || (t.dueDate && new Date(t.dueDate) < now && t.status !== 'COMPLETED' && t.status !== 'CANCELLED'));
   const recurring  = tasks.filter(t => t.templateId && OpsCommon.isToday(t.dueDate));
   const escalated  = (escRes && escRes.success) ? escRes.escalated : [];
-  const cancelled  = tasks.filter(t => t.status === 'CANCELLED');
 
   // Stats
   document.getElementById('stat-done-today').textContent = doneToday.length;
@@ -210,7 +227,7 @@ async function load() {
     document.getElementById('stat-done-all').textContent  = s.completed;
   }
 
-  // Today's Brief
+  // Today's Brief — brief text is a generated narrative; do NOT translate
   const escCount = escalated.length;
   const overdueCount = overdue.length;
   document.getElementById('brief-text').innerHTML = `
@@ -223,25 +240,24 @@ async function load() {
 
   // Quick action escalation badge
   if (escCount > 0) {
-    document.getElementById('qa-esc-btn').innerHTML = `<span class="qa-icon">🚨</span>Escalation <span style="background:var(--danger);color:#fff;border-radius:20px;padding:1px 7px;font-size:11px">${escCount}</span>`;
+    document.getElementById('qa-esc-btn').innerHTML = `<span class="qa-icon">🚨</span>${t('ops.dir.escalation')} <span style="background:var(--danger);color:#fff;border-radius:20px;padding:1px 7px;font-size:11px">${escCount}</span>`;
   }
 
   // Requires Attention
   const attentionDiv = document.getElementById('attention-content');
   const attItems = [
-    ...overdue.slice(0,5).map(t => renderAttentionCard(t, users, '🕐 In ritardo')),
-    ...escalated.slice(0,5).map(t => renderAttentionCard(t, users, '🚨 In escalation', '#dc2626')),
-    ...urgent.filter(t => !overdue.find(o=>o.id===t.id)).slice(0,3).map(t => renderAttentionCard(t, users, '⚡ Urgente', '#d97706')),
+    ...overdue.slice(0,5).map(tk => renderAttentionCard(tk, users, '🕐 ' + t('ops.sec.overdue'))),
+    ...escalated.slice(0,5).map(tk => renderAttentionCard(tk, users, '🚨 In escalation', '#dc2626')),
+    ...urgent.filter(tk => !overdue.find(o=>o.id===tk.id)).slice(0,3).map(tk => renderAttentionCard(tk, users, '⚡ ' + t('ops.priority.urgent'), '#d97706')),
   ];
   if (attItems.length) {
     attentionDiv.innerHTML = attItems.join('');
   } else {
-    attentionDiv.innerHTML = '<div class="empty-state" style="padding:18px 0;text-align:left;font-size:14px;color:var(--ok)">✅ Nessuna urgenza operativa. Tutto è sotto controllo.</div>';
+    attentionDiv.innerHTML = `<div class="empty-state" style="padding:18px 0;text-align:left;font-size:14px;color:var(--ok)">✅ ${t('ops.intel.noUrgency')}</div>`;
   }
 
   // Workload
   if (statsRes && Array.isArray(statsRes.workload) && statsRes.workload.length) {
-    const wl = statsRes.workload.filter(w => w.role === 'CHEF_CUISINE' || w.role === 'ADJOINT');
     const allWl = statsRes.workload;
     const maxTasks = Math.max(...allWl.map(w => w.activeTasks), 1);
     document.getElementById('workload-card').innerHTML = allWl.map(w => `
@@ -256,7 +272,7 @@ async function load() {
         <div class="workload-member-count${w.activeTasks>8?' critical':w.activeTasks>5?' high':''}">${w.activeTasks}</div>
       </div>`).join('');
   } else {
-    document.getElementById('workload-card').innerHTML = '<div class="empty-state" style="padding:12px 0">Nessun membro del team da mostrare.</div>';
+    document.getElementById('workload-card').innerHTML = `<div class="empty-state" style="padding:12px 0">${t('ops.intel.noTeamActive')}</div>`;
   }
 
   // Intelligence Engine
@@ -283,13 +299,13 @@ function renderIntelligence(r) {
   if (!r || !r.success) return;
   document.getElementById('intel-section').style.display = '';
 
-  // — Executive Brief (Sprint 6.3) — prefer rich brief; fall back to 6.2 briefing
+  // — Executive Brief (Sprint 6.3) — generated narrative, kept as-is
   const briefEl = document.getElementById('brief-text');
   if (r.executiveBrief) briefEl.textContent = r.executiveBrief;
   else if (r.briefing)  briefEl.textContent = r.briefing;
 
   // — New Since Last Visit (Sprint 6.3.1) —
-  renderNewSinceLastVisit(r.newSinceLastVisit, 'nsv-section', 'nsv-content');
+  OpsCommon.renderNewSinceLastVisit(r.newSinceLastVisit, 'nsv-section', 'nsv-content');
 
   // — Priority Queue (Sprint 6.3) —
   if (r.priorityQueue && r.priorityQueue.length) {
@@ -303,7 +319,7 @@ function renderIntelligence(r) {
           <div class="pq-reason">${esc(p.reason)}</div>
           <div class="pq-action">→ ${esc(p.recommendedAction)}</div>
           <div class="pq-meta">
-            <span class="pq-conf">${p.confidence}% fiducia</span>
+            <span class="pq-conf">${p.confidence}% ${t('ops.intel.confidence')}</span>
             ${p.quickAction ? `<a class="pq-qa-btn" href="${esc(p.quickAction.url)}">${esc(p.quickAction.label)}</a>` : ''}
           </div>
         </div>
@@ -319,7 +335,7 @@ function renderIntelligence(r) {
         <div class="rw-body">
           <div class="rw-title">${esc(rk.title)}</div>
           <div class="rw-desc">${esc(rk.description)}</div>
-          ${typeof rk.minutesUntilDue === 'number' ? `<div class="rw-eta">⏱ Scade tra ${rk.minutesUntilDue} minuti</div>` : ''}
+          ${typeof rk.minutesUntilDue === 'number' ? `<div class="rw-eta">⏱ ${t('ops.intel.level')} ${rk.minutesUntilDue}</div>` : ''}
         </div>
       </div>`).join('');
   }
@@ -334,8 +350,6 @@ function renderIntelligence(r) {
       </div>`).join('');
   }
 
-  // — Briefing (Sprint 6.2 fallback — already handled above) —
-
   // — Trends (Sprint 6.2) —
   const trendDiv = document.getElementById('intel-trends');
   const DIR_ARROW = { IMPROVING: '↓', WORSENING: '↑', STABLE: '→', INSUFFICIENT_DATA: '–' };
@@ -343,55 +357,52 @@ function renderIntelligence(r) {
   if (r.trends) {
     const T = r.trends;
     const trendCells = [
-      { label: 'In ritardo',    t: T.overdue },
-      { label: 'Completamento', t: T.completionRate, pct: true },
-      { label: 'Urgenti',       t: T.urgentTasks },
-      { label: 'Carico',        t: T.workload },
-    ].map(({ label, t, pct }) => `
+      { labelKey: 'ops.intel.overdueLbl',      tr: T.overdue },
+      { labelKey: 'ops.intel.completionRate',   tr: T.completionRate, pct: true },
+      { labelKey: 'ops.intel.urgentLbl',        tr: T.urgentTasks },
+      { labelKey: 'ops.intel.workload',         tr: T.workload },
+    ].map(({ labelKey, tr, pct }) => `
       <div class="trend-cell">
-        <div class="trend-arrow" style="color:${DIR_COLOR[t.direction]}">${DIR_ARROW[t.direction]}</div>
-        <div class="trend-val">${t.currentValue !== null ? t.currentValue : '–'}${pct ? '%' : ''}</div>
-        <div class="trend-label">${esc(label)}</div>
-        <div class="trend-vs">${t.previousValue !== null ? `vs ieri: ${t.previousValue}${pct?'%':''}` : 'Dati insufficienti'}</div>
+        <div class="trend-arrow" style="color:${DIR_COLOR[tr.direction]}">${DIR_ARROW[tr.direction]}</div>
+        <div class="trend-val">${tr.currentValue !== null ? tr.currentValue : '–'}${pct ? '%' : ''}</div>
+        <div class="trend-label">${esc(t(labelKey))}</div>
+        <div class="trend-vs">${tr.previousValue !== null ? `${t('ops.intel.vsYesterdayShort')}: ${tr.previousValue}${pct?'%':''}` : t('ops.intel.insufficientData')}</div>
       </div>`).join('');
     const interps = [T.overdue, T.completionRate, T.urgentTasks]
-      .filter(t => t && t.direction !== 'INSUFFICIENT_DATA' && t.interpretation)
+      .filter(tr => tr && tr.direction !== 'INSUFFICIENT_DATA' && tr.interpretation)
       .slice(0, 2)
-      .map(t => `<div class="trend-interp">${esc(t.interpretation)}</div>`).join('');
+      .map(tr => `<div class="trend-interp">${esc(tr.interpretation)}</div>`).join('');
     const sevenDay = T.overdue && T.overdue.sevenDayInterpretation
-      ? `<div class="trend-7d">📅 7 giorni: ${esc(T.overdue.sevenDayInterpretation)}</div>` : '';
+      ? `<div class="trend-7d">📅 ${t('ops.intel.days7')}: ${esc(T.overdue.sevenDayInterpretation)}</div>` : '';
     const crSevenDay = T.completionRate && T.completionRate.sevenDayInterpretation
       ? `<div class="trend-7d">📅 ${esc(T.completionRate.sevenDayInterpretation)}</div>` : '';
     trendDiv.innerHTML = `<div class="trend-grid">${trendCells}</div>${interps}${sevenDay}${crSevenDay}`;
   } else {
-    trendDiv.innerHTML = '<div class="intel-empty">Nessun dato storico disponibile. I trend appariranno dal secondo giorno.</div>';
+    trendDiv.innerHTML = `<div class="intel-empty">${t('ops.intel.noHistory')}</div>`;
   }
 
   // — Dept Health (Sprint 6.2) —
   const deptDiv = document.getElementById('intel-dept-health');
   if (r.departmentHealth && r.departmentHealth.length) {
-    const TSYM  = { IMPROVING: '↓ Miglioramento', WORSENING: '↑ Peggioramento', STABLE: '→ Stabile', INSUFFICIENT_DATA: '– N/D' };
-    const TCOL  = { IMPROVING: '#16a34a', WORSENING: '#dc2626', STABLE: '#64748b', INSUFFICIENT_DATA: '#94a3b8' };
+    const TCOL = { IMPROVING: '#16a34a', WORSENING: '#dc2626', STABLE: '#64748b', INSUFFICIENT_DATA: '#94a3b8' };
     deptDiv.innerHTML = r.departmentHealth.slice(0, 8).map(d => `
       <div class="dept-health-row">
         <div class="dept-health-name">${esc(d.dept)}</div>
         <div class="dept-health-stats">
-          ${d.open          ? `<span>📋 ${d.open} aperti</span>` : ''}
-          ${d.overdue       ? `<span style="color:#dc2626">⏰ ${d.overdue} ritardo</span>` : ''}
-          ${d.urgent        ? `<span style="color:#d97706">⚡ ${d.urgent} urgenti</span>` : ''}
-          ${d.completedToday? `<span style="color:#16a34a">✅ ${d.completedToday} ok</span>` : ''}
+          ${d.open          ? `<span>📋 ${d.open} ${t('ops.intel.open')}</span>` : ''}
+          ${d.overdue       ? `<span style="color:#dc2626">⏰ ${d.overdue} ${t('ops.intel.late')}</span>` : ''}
+          ${d.urgent        ? `<span style="color:#d97706">⚡ ${d.urgent} ${t('ops.intel.urgentLbl')}</span>` : ''}
+          ${d.completedToday? `<span style="color:#16a34a">✅ ${d.completedToday} ${t('ops.intel.ok')}</span>` : ''}
         </div>
-        <div class="dept-health-trend" style="color:${TCOL[d.trend]};font-size:11px;font-weight:700">${TSYM[d.trend]}</div>
+        <div class="dept-health-trend" style="color:${TCOL[d.trend]};font-size:11px;font-weight:700">${trendDir(d.trend)}</div>
       </div>`).join('');
   } else {
-    deptDiv.innerHTML = '<div class="intel-empty">Nessun reparto rilevato.</div>';
+    deptDiv.innerHTML = `<div class="intel-empty">${t('ops.intel.noDept')}</div>`;
   }
 
   const SEV_COLOR = { HIGH: '#dc2626', MEDIUM: '#d97706', LOW: '#64748b' };
   const SEV_BG    = { HIGH: 'rgba(220,38,38,.07)', MEDIUM: 'rgba(217,119,6,.07)', LOW: 'rgba(100,116,139,.05)' };
-  const SEV_LABEL = { HIGH: 'ALTA', MEDIUM: 'MEDIA', LOW: 'BASSA' };
   const STATUS_COLOR = { OVERLOADED: '#dc2626', BUSY: '#d97706', NORMAL: '#16a34a' };
-  const STATUS_LABEL = { OVERLOADED: 'Sovraccarico', BUSY: 'Occupato', NORMAL: 'Normale' };
 
   // — Attention —
   const attDiv = document.getElementById('intel-attention');
@@ -399,14 +410,14 @@ function renderIntelligence(r) {
     attDiv.innerHTML = r.attention.slice(0, 12).map(a => `
       <div class="intel-alert" style="border-left-color:${SEV_COLOR[a.severity]};background:${SEV_BG[a.severity]}">
         <div class="intel-alert-top">
-          <span class="intel-sev-badge" style="background:${SEV_COLOR[a.severity]}">${SEV_LABEL[a.severity]}</span>
+          <span class="intel-sev-badge" style="background:${SEV_COLOR[a.severity]}">${sevLabel(a.severity)}</span>
           <span class="intel-alert-title">${esc(a.title)}</span>
         </div>
         <div class="intel-alert-desc">${esc(a.description)}</div>
         <div class="intel-alert-action">→ ${esc(a.recommendedAction)}</div>
       </div>`).join('');
   } else {
-    attDiv.innerHTML = '<div class="intel-empty">✅ Nessuna allerta attiva. Tutto regolare.</div>';
+    attDiv.innerHTML = `<div class="intel-empty">✅ ${t('ops.intel.noAlerts')}</div>`;
   }
 
   // — Summary —
@@ -415,14 +426,14 @@ function renderIntelligence(r) {
     const s = r.summary;
     sumDiv.innerHTML = `
       <div class="intel-sum-grid">
-        <div class="intel-sum-cell"><div class="intel-sum-num ok">${s.completedToday}</div><div class="intel-sum-lbl">Completati oggi</div></div>
-        <div class="intel-sum-cell"><div class="intel-sum-num danger">${s.overdueToday}</div><div class="intel-sum-lbl">In ritardo</div></div>
-        <div class="intel-sum-cell"><div class="intel-sum-num warn">${s.urgentOpen}</div><div class="intel-sum-lbl">Urgenti aperti</div></div>
-        <div class="intel-sum-cell"><div class="intel-sum-num accent">${s.completionRate}%</div><div class="intel-sum-lbl">Tasso completamento</div></div>
+        <div class="intel-sum-cell"><div class="intel-sum-num ok">${s.completedToday}</div><div class="intel-sum-lbl">${t('ops.intel.completedToday')}</div></div>
+        <div class="intel-sum-cell"><div class="intel-sum-num danger">${s.overdueToday}</div><div class="intel-sum-lbl">${t('ops.intel.overdueLbl')}</div></div>
+        <div class="intel-sum-cell"><div class="intel-sum-num warn">${s.urgentOpen}</div><div class="intel-sum-lbl">${t('ops.intel.urgentOpen')}</div></div>
+        <div class="intel-sum-cell"><div class="intel-sum-num accent">${s.completionRate}%</div><div class="intel-sum-lbl">${t('ops.intel.completionRate')}</div></div>
       </div>
-      ${s.mostActiveDepartment ? `<div class="intel-sum-tag">🏆 Reparto più attivo: <strong>${esc(s.mostActiveDepartment)}</strong></div>` : ''}
-      ${s.mostOverloadedDepartment ? `<div class="intel-sum-tag warn">⚠️ Reparto sotto pressione: <strong>${esc(s.mostOverloadedDepartment)}</strong></div>` : ''}
-      ${s.usersNeedingAttention && s.usersNeedingAttention.length ? `<div class="intel-sum-tag danger">👤 Attenzione: ${esc(s.usersNeedingAttention.map(u=>u.userName).join(', '))}</div>` : ''}`;
+      ${s.mostActiveDepartment ? `<div class="intel-sum-tag">🏆 ${t('ops.intel.topDept')}: <strong>${esc(s.mostActiveDepartment)}</strong></div>` : ''}
+      ${s.mostOverloadedDepartment ? `<div class="intel-sum-tag warn">⚠️ ${t('ops.intel.pressureDept')}: <strong>${esc(s.mostOverloadedDepartment)}</strong></div>` : ''}
+      ${s.usersNeedingAttention && s.usersNeedingAttention.length ? `<div class="intel-sum-tag danger">👤 ${t('ops.intel.attn')}: ${esc(s.usersNeedingAttention.map(u=>u.userName).join(', '))}</div>` : ''}`;
   }
 
   // — Workload —
@@ -435,30 +446,28 @@ function renderIntelligence(r) {
           <div class="intel-wl-role">${esc(OpsCommon.roleLabel(w.role))}</div>
         </div>
         <div class="intel-wl-stats">
-          <span title="Aperti">${w.assigned} aperti</span>
-          ${w.overdue  ? `<span class="danger" title="In ritardo">· ${w.overdue} ritardo</span>` : ''}
-          ${w.urgent   ? `<span class="warn"   title="Urgenti">· ${w.urgent} urgenti</span>` : ''}
+          <span title="${t('ops.intel.open')}">${w.assigned} ${t('ops.intel.open')}</span>
+          ${w.overdue  ? `<span class="danger" title="${t('ops.intel.late')}">· ${w.overdue} ${t('ops.intel.late')}</span>` : ''}
+          ${w.urgent   ? `<span class="warn"   title="${t('ops.intel.urgentLbl')}">· ${w.urgent} ${t('ops.intel.urgentLbl')}</span>` : ''}
         </div>
         <div class="intel-wl-score">
-          <span class="intel-status-badge" style="background:${STATUS_COLOR[w.status]}20;color:${STATUS_COLOR[w.status]};border:1px solid ${STATUS_COLOR[w.status]}40">${STATUS_LABEL[w.status]}</span>
+          <span class="intel-status-badge" style="background:${STATUS_COLOR[w.status]}20;color:${STATUS_COLOR[w.status]};border:1px solid ${STATUS_COLOR[w.status]}40">${wlStatusLabel(w.status)}</span>
           <span class="intel-wl-score-num" style="color:${STATUS_COLOR[w.status]}">${w.currentLoadScore}</span>
         </div>
       </div>`).join('');
   } else {
-    wlDiv.innerHTML = '<div class="intel-empty">Nessun membro attivo nel team.</div>';
+    wlDiv.innerHTML = `<div class="intel-empty">${t('ops.intel.noTeam')}</div>`;
   }
 
   // — Decision Cards (Sprint 6.1) —
   const decDiv = document.getElementById('intel-decisions');
-  const SEV_COLOR2  = { HIGH: '#dc2626', MEDIUM: '#d97706', LOW: '#64748b' };
-  const SEV_LABEL2  = { HIGH: 'ALTA',   MEDIUM: 'MEDIA',   LOW: 'BASSA'  };
-  const CONF_COLOR  = c => c >= 90 ? '#16a34a' : c >= 75 ? '#d97706' : '#64748b';
+  const CONF_COLOR = c => c >= 90 ? '#16a34a' : c >= 75 ? '#d97706' : '#64748b';
   if (r.decisions && r.decisions.length) {
     decDiv.innerHTML = r.decisions.slice(0, 10).map(d => `
-      <div class="dec-card" style="border-left-color:${SEV_COLOR2[d.severity]}">
+      <div class="dec-card" style="border-left-color:${SEV_COLOR[d.severity]}">
         <div class="dec-card-top">
-          <span class="dec-sev-badge" style="background:${SEV_COLOR2[d.severity]}">${SEV_LABEL2[d.severity]}</span>
-          <span class="dec-conf-badge" style="background:${CONF_COLOR(d.confidence)}20;color:${CONF_COLOR(d.confidence)};border:1px solid ${CONF_COLOR(d.confidence)}40">${d.confidence}% fiducia</span>
+          <span class="dec-sev-badge" style="background:${SEV_COLOR[d.severity]}">${sevLabel(d.severity)}</span>
+          <span class="dec-conf-badge" style="background:${CONF_COLOR(d.confidence)}20;color:${CONF_COLOR(d.confidence)};border:1px solid ${CONF_COLOR(d.confidence)}40">${d.confidence}% ${t('ops.intel.confidence')}</span>
           <span class="dec-type">${esc(d.type.replace(/_/g,' '))}</span>
         </div>
         <div class="dec-title">${esc(d.title)}</div>
@@ -470,48 +479,41 @@ function renderIntelligence(r) {
         ${d.quickAction ? `<a class="dec-qa-btn" href="${esc(d.quickAction.url)}">${esc(d.quickAction.label)}</a>` : ''}
       </div>`).join('');
   } else {
-    decDiv.innerHTML = '<div class="intel-empty">✅ Nessuna decisione richiesta al momento.</div>';
+    decDiv.innerHTML = `<div class="intel-empty">✅ ${t('ops.intel.noDecisions')}</div>`;
   }
 }
 
-function renderAttentionCard(t, users, label, color='#dc2626') {
-  const assignee = users[t.assigneeId];
-  return `<div class="task-card attention-card" style="cursor:pointer;margin-bottom:8px" onclick="location.href='operations-tasks.html#${esc(t.id)}'">
+function renderAttentionCard(tk, users, label, color='#dc2626') {
+  const assignee = users[tk.assigneeId];
+  return `<div class="task-card attention-card" style="cursor:pointer;margin-bottom:8px" onclick="location.href='operations-tasks.html#${esc(tk.id)}'">
     <div style="font-size:11px;font-weight:800;letter-spacing:.5px;color:${color};margin-bottom:6px">${esc(label)}</div>
-    <div class="task-title">${esc(t.title)}</div>
+    <div class="task-title">${esc(tk.title)}</div>
     <div style="font-size:12px;color:var(--muted);margin-top:4px">
-      ${assignee ? '👤 '+esc(assignee.name||t.assigneeName||'')+'&nbsp;·&nbsp;' : ''}
-      📅 ${esc(fmt(t.dueDate))}
-      ${t.escalationLevel > 0 ? `&nbsp;·&nbsp;<span style="color:#dc2626;font-weight:700">Livello ${t.escalationLevel}</span>` : ''}
+      ${assignee ? '👤 '+esc(assignee.name||tk.assigneeName||'')+'&nbsp;·&nbsp;' : ''}
+      📅 ${esc(fmt(tk.dueDate))}
+      ${tk.escalationLevel > 0 ? `&nbsp;·&nbsp;<span style="color:#dc2626;font-weight:700">${t('ops.intel.level')} ${tk.escalationLevel}</span>` : ''}
     </div>
   </div>`;
 }
 
-load();
+I18n.init({ selector: '#i18n-sel' }).then(() => load());
 
 // Sprint 5: real-time live updates ──────────────────────────────────────────
 OpsRealtime.init();
 let _rtTimer = null;
-// Pass isRealtime=1 so the server does NOT update lastVisitAt on WS-triggered refreshes
-async function loadRealtime() {
-  const me = OpsCommon._lastMe || await OpsCommon.loadMe();
-  if (!me) return;
-  const intelRes = await OpsCommon.api('/api/operations/intelligence?isRealtime=1');
-  renderIntelligence(intelRes);
-}
 function rtReload(d) { clearTimeout(_rtTimer); _rtTimer = setTimeout(load, d || 700); }
-OpsRealtime.on('OPS_TASK_CREATED',        () => { rtReload(400); OpsRealtime.toast('📌 Nuovo compito creato', 'info'); });
+OpsRealtime.on('OPS_TASK_CREATED',        () => { rtReload(400); OpsRealtime.toast(t('ops.rt.taskCreated'), 'info'); });
 OpsRealtime.on('OPS_TASK_UPDATED',        () => { rtReload(500); });
-OpsRealtime.on('OPS_TASK_COMPLETED',      () => { rtReload(400); OpsRealtime.toast('✅ Compito completato', 'ok'); });
-OpsRealtime.on('OPS_TASK_REASSIGNED',     () => { rtReload(400); OpsRealtime.toast('🔄 Compito riassegnato', 'info'); });
+OpsRealtime.on('OPS_TASK_COMPLETED',      () => { rtReload(400); OpsRealtime.toast(t('ops.rt.taskCompleted'), 'ok'); });
+OpsRealtime.on('OPS_TASK_REASSIGNED',     () => { rtReload(400); OpsRealtime.toast(t('ops.rt.taskReassigned'), 'info'); });
 OpsRealtime.on('OPS_TASK_PROGRESS',       () => { rtReload(600); });
 OpsRealtime.on('OPS_COMMENT_ADDED',       () => { rtReload(800); });
 OpsRealtime.on('OPS_USER_CREATED',        () => { rtReload(400); });
 OpsRealtime.on('OPS_USER_UPDATED',        () => { rtReload(500); });
-OpsRealtime.on('OPS_USER_SUSPENDED',      () => { rtReload(400); OpsRealtime.toast('⚠️ Utente sospeso', 'warn'); });
-OpsRealtime.on('OPS_USER_ARCHIVED',       () => { rtReload(400); OpsRealtime.toast('📦 Utente archiviato', 'warn'); });
-OpsRealtime.on('OPS_USER_RESTORED',       () => { rtReload(400); OpsRealtime.toast('♻️ Utente ripristinato', 'ok'); });
-OpsRealtime.on('OPS_INVITATION_ACCEPTED', () => { rtReload(400); OpsRealtime.toast('👤 Nuovo membro attivato!', 'ok'); });
+OpsRealtime.on('OPS_USER_SUSPENDED',      () => { rtReload(400); OpsRealtime.toast(t('ops.rt.userSuspended'), 'warn'); });
+OpsRealtime.on('OPS_USER_ARCHIVED',       () => { rtReload(400); OpsRealtime.toast(t('ops.rt.userArchived'), 'warn'); });
+OpsRealtime.on('OPS_USER_RESTORED',       () => { rtReload(400); OpsRealtime.toast(t('ops.rt.userRestored'), 'ok'); });
+OpsRealtime.on('OPS_INVITATION_ACCEPTED', () => { rtReload(400); OpsRealtime.toast(t('ops.rt.memberActivated'), 'ok'); });
 </script>
 </body>
 </html>

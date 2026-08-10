@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Operations — Chef de Brigade — PlateTimer</title>
 <link rel="stylesheet" href="css/operations.css">
+<script src="js/i18n.js"></script>
 </head>
 <body>
 
@@ -12,15 +13,16 @@
   <span id="hdr-company" class="hdr-brand"></span>
   <span class="hdr-sep"></span>
   <span class="hdr-page">Operations · Chef de Brigade</span>
-  <button class="hdr-btn" onclick="location.href='operations-tasks.html'">Compiti</button>
-  <button class="hdr-btn" onclick="location.href='operations-performance.html'">📊 Il mio profilo</button>
-  <button class="hdr-btn" onclick="location.href='home.html'">Home</button>
-  <button class="hdr-btn danger" onclick="OpsCommon.logout()">Esci</button>
+  <button class="hdr-btn" onclick="location.href='operations-tasks.html'" data-i18n="ops.nav.tasks">Compiti</button>
+  <button class="hdr-btn" onclick="location.href='operations-performance.html'" data-i18n="ops.nav.profile">📊 Il mio profilo</button>
+  <button class="hdr-btn" onclick="location.href='home.html'" data-i18n="common.home">Home</button>
+  <span id="i18n-sel"></span>
+  <button class="hdr-btn danger" onclick="OpsCommon.logout()" data-i18n="common.logout">Esci</button>
 </header>
 
 <main class="main">
   <div class="pg-heading">
-    <h1 class="pg-title">Il mio prossimo compito</h1>
+    <h1 class="pg-title" data-i18n="ops.cdb.heading">Il mio prossimo compito</h1>
     <p class="pg-sub"><span id="me-name"></span> · <span id="me-role" class="role-badge"></span></p>
   </div>
 
@@ -29,33 +31,33 @@
   <!-- Next task — primary focus -->
   <div id="next-task-section" style="display:none">
     <div class="next-task-card" id="next-task-card">
-      <div class="next-task-label">⭐ PROSSIMO COMPITO</div>
+      <div class="next-task-label" data-i18n="ops.sc.nextTask">⭐ PROSSIMO COMPITO</div>
       <div class="next-task-title" id="nt-title">—</div>
       <div class="next-task-meta" id="nt-meta">—</div>
       <div class="next-task-actions">
-        <button class="btn btn-primary" id="nt-start-btn">▶ Inizia ora</button>
-        <button class="btn btn-ok" id="nt-complete-btn">✓ Completa</button>
-        <button class="btn btn-neutral" id="nt-view-btn">Dettagli →</button>
+        <button class="btn btn-primary" id="nt-start-btn" data-i18n="ops.sc.startNow">▶ Inizia ora</button>
+        <button class="btn btn-ok" id="nt-complete-btn" data-i18n="ops.sc.complete">✓ Completa</button>
+        <button class="btn btn-neutral" id="nt-view-btn" data-i18n="ops.sc.details">Dettagli →</button>
       </div>
     </div>
   </div>
   <div id="no-next-task" style="display:none;margin-bottom:24px">
     <div class="brief-card" style="border-color:var(--ok)">
-      <div class="brief-text" style="color:var(--ok)">✅ Tutti i compiti completati. Ottimo lavoro!</div>
+      <div class="brief-text" style="color:var(--ok)" data-i18n="ops.sc.allDone">✅ Tutti i compiti completati. Ottimo lavoro!</div>
     </div>
   </div>
 
   <!-- Minimal stats -->
   <div class="stat-row" style="grid-template-columns:repeat(4,1fr);margin-bottom:24px">
-    <div class="stat-card"><div class="stat-num" id="stat-open">—</div><div class="stat-lbl">Da fare</div></div>
-    <div class="stat-card danger"><div class="stat-num" id="stat-urgent">—</div><div class="stat-lbl">Urgenti</div></div>
-    <div class="stat-card"><div class="stat-num" id="stat-today">—</div><div class="stat-lbl">Oggi</div></div>
-    <div class="stat-card ok"><div class="stat-num" id="stat-done">—</div><div class="stat-lbl">Completati oggi</div></div>
+    <div class="stat-card"><div class="stat-num" id="stat-open">—</div><div class="stat-lbl" data-i18n="ops.cdb.todo">Da fare</div></div>
+    <div class="stat-card danger"><div class="stat-num" id="stat-urgent">—</div><div class="stat-lbl" data-i18n="ops.sc.urgentStat">Urgenti</div></div>
+    <div class="stat-card"><div class="stat-num" id="stat-today">—</div><div class="stat-lbl" data-i18n="ops.sc.todayStat">Oggi</div></div>
+    <div class="stat-card ok"><div class="stat-num" id="stat-done">—</div><div class="stat-lbl" data-i18n="ops.sc.completedStat">Completati oggi</div></div>
   </div>
 
   <!-- Secondary button -->
   <div style="margin-bottom:24px">
-    <button class="btn btn-neutral" style="width:100%;padding:14px;font-size:15px" onclick="location.href='operations-tasks.html'">
+    <button class="btn btn-neutral" style="width:100%;padding:14px;font-size:15px" onclick="location.href='operations-tasks.html'" data-i18n="ops.task.viewAll">
       📋 Visualizza tutti i miei compiti
     </button>
   </div>
@@ -70,6 +72,7 @@
 <script src="js/operations-realtime.js"></script>
 <script>
 const esc = OpsCommon.escHtml;
+const t = (key) => (typeof I18n !== 'undefined' && I18n.t) ? I18n.t(key) : key;
 
 async function load() {
   const me = await OpsCommon.loadMe();
@@ -89,11 +92,6 @@ async function load() {
   const urgent  = active.filter(t => t.priority === 'URGENT');
   const overdue = active.filter(t => (t.effectiveStatus||t.status)==='OVERDUE' || (t.dueDate && new Date(t.dueDate) < now));
   const today   = active.filter(t => OpsCommon.isToday(t.dueDate));
-  const dueSoon = active.filter(t => {
-    if (!t.dueDate) return false;
-    const d = new Date(t.dueDate), diff = d - now;
-    return diff > 0 && diff < 48 * 3600000;
-  });
   const done    = mine.filter(t => OpsCommon.isCompletedToday(t));
 
   document.getElementById('stat-open').textContent   = active.length;
@@ -108,7 +106,7 @@ async function load() {
     document.getElementById('nt-title').textContent = next.title;
     document.getElementById('nt-meta').textContent  = '📅 ' + OpsCommon.fmtDue(next.dueDate) +
       (next.department ? '  ·  🏠 ' + next.department : '') +
-      '  ·  ' + (OpsCommon.PRIORITY_LABELS[next.priority] || next.priority);
+      '  ·  ' + OpsCommon.priorityLabel(next.priority);
 
     const startBtn    = document.getElementById('nt-start-btn');
     const completeBtn = document.getElementById('nt-complete-btn');
@@ -131,12 +129,11 @@ async function load() {
 
   const container = document.getElementById('main-content');
   container.innerHTML = '';
-  OpsCommon.renderSection(container, '🕐 In ritardo', overdue, users, 'Nessun compito in ritardo.');
-  OpsCommon.renderSection(container, '⚡ Urgenti', urgent.filter(t=>!overdue.find(o=>o.id===t.id)), users, 'Nessun compito urgente.');
-  OpsCommon.renderSection(container, '📅 Oggi', today.filter(t=>!overdue.find(o=>o.id===t.id)), users, 'Nessun compito in scadenza oggi.');
-  OpsCommon.renderSection(container, '✅ Completati oggi', done, users, 'Nessun compito completato oggi.');
+  OpsCommon.renderSection(container, '🕐 ' + t('ops.sec.overdue'),        overdue,                                            users, t('ops.sec.noOverdue'));
+  OpsCommon.renderSection(container, '⚡ ' + t('ops.sec.urgent'),         urgent.filter(tk=>!overdue.find(o=>o.id===tk.id)), users, t('ops.sec.noUrgent'));
+  OpsCommon.renderSection(container, '📅 ' + t('ops.sec.todayDue'),      today.filter(tk=>!overdue.find(o=>o.id===tk.id)),  users, t('ops.sec.noTodayDue'));
+  OpsCommon.renderSection(container, '✅ ' + t('ops.sec.completedToday'), done,                                               users, t('ops.sec.noCompletedToday'));
 
-  // Sprint 6.2+: personal intelligence (intentional load — updates lastVisitAt)
   const intelRes = await OpsCommon.api('/api/operations/intelligence');
   renderRoleIntel(intelRes);
 }
@@ -145,7 +142,6 @@ function renderRoleIntel(r) {
   const area = document.getElementById('role-intel');
   if (!r || !r.success || !area) return;
   const parts = [];
-  // New Since Last Visit (Sprint 6.3.1)
   if (r.newSinceLastVisit) {
     const nsv = r.newSinceLastVisit;
     if (nsv.newCount > 0 || nsv.previousVisitAt) {
@@ -157,10 +153,10 @@ function renderRoleIntel(r) {
   if (r.myTasks) {
     const m = r.myTasks;
     parts.push(`<div class="role-intel-metrics">
-      <span>${m.assigned} attivi</span>
-      ${m.overdue?`<span style="color:#dc2626"> · ${m.overdue} ritardo</span>`:''}
-      ${m.urgent?`<span style="color:#d97706"> · ${m.urgent} urgenti</span>`:''}
-      ${m.completedToday?`<span style="color:#16a34a"> · ${m.completedToday} completati</span>`:''}
+      <span>${m.assigned} ${t('ops.intel.open')}</span>
+      ${m.overdue?`<span style="color:#dc2626"> · ${m.overdue} ${t('ops.intel.late')}</span>`:''}
+      ${m.urgent?`<span style="color:#d97706"> · ${m.urgent} ${t('ops.intel.urgentLbl')}</span>`:''}
+      ${m.completedToday?`<span style="color:#16a34a"> · ${m.completedToday} ${t('ops.intel.completedToday')}</span>`:''}
     </div>`);
   }
   if (r.riskWatch && r.riskWatch.length) {
@@ -176,16 +172,16 @@ function renderRoleIntel(r) {
   if (r.newSinceLastVisit) OpsCommon.renderNewSinceLastVisit(r.newSinceLastVisit, null, 'cdb-nsv-content');
 }
 
-load();
+I18n.init({ selector: '#i18n-sel' }).then(() => load());
 
-// Sprint 5: real-time live updates ──────────────────────────────────────────
+// Sprint 5: real-time live updates
 OpsRealtime.init();
 let _rtTimer = null;
 function rtReload(d) { clearTimeout(_rtTimer); _rtTimer = setTimeout(load, d || 700); }
-OpsRealtime.on('OPS_TASK_CREATED',    () => { rtReload(400); OpsRealtime.toast('📌 Nuovo compito', 'info'); });
+OpsRealtime.on('OPS_TASK_CREATED',    () => { rtReload(400); OpsRealtime.toast(t('ops.rt.newTask'), 'info'); });
 OpsRealtime.on('OPS_TASK_UPDATED',    () => { rtReload(500); });
-OpsRealtime.on('OPS_TASK_COMPLETED',  () => { rtReload(400); OpsRealtime.toast('✅ Completato!', 'ok'); });
-OpsRealtime.on('OPS_TASK_REASSIGNED', () => { rtReload(400); OpsRealtime.toast('🔄 Riassegnato', 'info'); });
+OpsRealtime.on('OPS_TASK_COMPLETED',  () => { rtReload(400); OpsRealtime.toast(t('ops.rt.completed'), 'ok'); });
+OpsRealtime.on('OPS_TASK_REASSIGNED', () => { rtReload(400); OpsRealtime.toast(t('ops.rt.reassigned'), 'info'); });
 OpsRealtime.on('OPS_TASK_PROGRESS',   () => { rtReload(600); });
 OpsRealtime.on('OPS_COMMENT_ADDED',   () => { rtReload(800); });
 </script>

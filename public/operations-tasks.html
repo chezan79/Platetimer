@@ -5,60 +5,62 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Operations — Compiti — PlateTimer</title>
 <link rel="stylesheet" href="css/operations.css">
+<script src="js/i18n.js"></script>
 </head>
 <body>
 
 <header class="hdr">
   <span id="hdr-company" class="hdr-brand"></span>
   <span class="hdr-sep"></span>
-  <span class="hdr-page">Operations · Compiti</span>
-  <button class="hdr-btn" onclick="location.href='operations.html'">Dashboard</button>
-  <button id="team-btn" class="hdr-btn" style="display:none" onclick="location.href='operations-team.html'">Team</button>
-  <button id="tpl-btn" class="hdr-btn" style="display:none" onclick="location.href='operations-templates.html'">🔁 Template</button>
-  <button class="hdr-btn" onclick="location.href='home.html'">Home</button>
-  <button class="hdr-btn danger" onclick="OpsCommon.logout()">Esci</button>
+  <span class="hdr-page" data-i18n="ops.task.pageName">Operations · Compiti</span>
+  <button class="hdr-btn" onclick="location.href='operations.html'" data-i18n="ops.nav.dashboard">Dashboard</button>
+  <button id="team-btn" class="hdr-btn" style="display:none" onclick="location.href='operations-team.html'" data-i18n="ops.nav.team">Team</button>
+  <button id="tpl-btn" class="hdr-btn" style="display:none" onclick="location.href='operations-templates.html'" data-i18n="ops.nav.templates">🔁 Template</button>
+  <button class="hdr-btn" onclick="location.href='home.html'" data-i18n="common.home">Home</button>
+  <span id="i18n-sel"></span>
+  <button class="hdr-btn danger" onclick="OpsCommon.logout()" data-i18n="common.logout">Esci</button>
 </header>
 
 <main class="main">
   <div class="pg-heading" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
     <div>
-      <h1 class="pg-title">Compiti</h1>
+      <h1 class="pg-title" data-i18n="ops.nav.tasks">Compiti</h1>
       <p class="pg-sub"><span id="me-name"></span> · <span id="me-role" class="role-badge"></span></p>
     </div>
-    <button class="btn btn-primary" id="new-task-btn" onclick="openCreatePanel()">+ Nuovo compito</button>
+    <button class="btn btn-primary" id="new-task-btn" onclick="openCreatePanel()" data-i18n="ops.task.new">+ Nuovo compito</button>
   </div>
 
   <!-- Filter / search bar -->
   <div class="filter-bar">
-    <input id="flt-search" class="form-input flt-input" placeholder="🔍 Cerca titolo, descrizione, assegnatario…" oninput="scheduleFilter()">
+    <input id="flt-search" class="form-input flt-input" data-i18n-placeholder="ops.task.searchPlaceholder" placeholder="🔍 Cerca titolo, descrizione, assegnatario…" oninput="scheduleFilter()">
     <select id="flt-status" class="form-select flt-select" onchange="applyFilters()">
-      <option value="">Tutti gli stati</option>
-      <option value="OPEN">Aperti</option>
-      <option value="IN_PROGRESS">In corso</option>
-      <option value="OVERDUE">In ritardo</option>
-      <option value="COMPLETED">Completati</option>
-      <option value="CANCELLED">Cancellati</option>
+      <option value="" data-i18n="ops.task.filterAll">Tutti gli stati</option>
+      <option value="OPEN" data-i18n="ops.task.filterOpen">Aperti</option>
+      <option value="IN_PROGRESS" data-i18n="ops.task.filterInProgress">In corso</option>
+      <option value="OVERDUE" data-i18n="ops.task.filterOverdue">In ritardo</option>
+      <option value="COMPLETED" data-i18n="ops.task.filterCompleted">Completati</option>
+      <option value="CANCELLED" data-i18n="ops.task.filterCancelled">Cancellati</option>
     </select>
     <select id="flt-priority" class="form-select flt-select" onchange="applyFilters()">
-      <option value="">Tutte le priorità</option>
-      <option value="URGENT">Urgente</option>
-      <option value="HIGH">Alta</option>
-      <option value="MEDIUM">Media</option>
-      <option value="LOW">Bassa</option>
+      <option value="" data-i18n="ops.task.filterPriority">Tutte le priorità</option>
+      <option value="URGENT" data-i18n="ops.priority.urgent">Urgente</option>
+      <option value="HIGH" data-i18n="ops.priority.high">Alta</option>
+      <option value="MEDIUM" data-i18n="ops.priority.medium">Media</option>
+      <option value="LOW" data-i18n="ops.priority.low">Bassa</option>
     </select>
     <select id="flt-sort" class="form-select flt-select" onchange="applyFilters()">
-      <option value="">Ordinamento smart</option>
-      <option value="dueDate">Per scadenza</option>
-      <option value="priority">Per priorità</option>
-      <option value="createdAt">Per data creazione</option>
-      <option value="status">Per stato</option>
-      <option value="assignee">Per assegnatario</option>
+      <option value="" data-i18n="ops.task.filterSmartSort">Ordinamento smart</option>
+      <option value="dueDate" data-i18n="ops.task.filterByDue">Per scadenza</option>
+      <option value="priority" data-i18n="ops.task.filterByPriority">Per priorità</option>
+      <option value="createdAt" data-i18n="ops.task.filterByCreated">Per data creazione</option>
+      <option value="status" data-i18n="ops.task.filterByStatus">Per stato</option>
+      <option value="assignee" data-i18n="ops.task.filterByAssignee">Per assegnatario</option>
     </select>
-    <label class="flt-check"><input type="checkbox" id="flt-my" onchange="applyFilters()"> Solo i miei</label>
+    <label class="flt-check"><input type="checkbox" id="flt-my" onchange="applyFilters()"> <span data-i18n="ops.task.filterMine">Solo i miei</span></label>
   </div>
 
   <div id="ops-error" class="msg msg-error" style="display:none"></div>
-  <div id="task-list" class="task-list"><div class="empty-state">Caricamento…</div></div>
+  <div id="task-list" class="task-list"><div class="empty-state" data-i18n="ops.task.loading">Caricamento…</div></div>
 </main>
 
 <!-- Panel overlay -->
@@ -73,11 +75,14 @@
 <script src="js/operations-common.js"></script>
 <script src="js/operations-realtime.js"></script>
 <script>
+// Shorthand helpers
+const esc = OpsCommon.escHtml;
+const t = (key) => (typeof I18n !== 'undefined' && I18n.t) ? I18n.t(key) : key;
+
 // ── State ──
 let allTasks = [], allUsers = {}, meData = null;
 let assignableUsers = [];
 let filterTimer = null;
-const esc = OpsCommon.escHtml;
 
 // [S6.4.1] Files staged for upload during task creation.
 let _pendingAttachments = [];
@@ -153,7 +158,6 @@ async function openDetail(taskId) {
   const isAssignee = task.assigneeId === myId;
   const isDirector = myRole === 'DIRECTOR';
   const isCreator = task.createdBy === myId;
-  // canEdit: Director or creator (server re-validates)
   const canEdit = isDirector || isCreator;
   const st = task.effectiveStatus || task.status;
   const assignee = allUsers[task.assigneeId] || {};
@@ -166,23 +170,23 @@ async function openDetail(taskId) {
   // ─ Action buttons ─
   let actions = '';
   if (isAssignee && task.status === 'OPEN')
-    actions += `<button class="btn btn-sm btn-neutral" onclick="doStart('${task.id}')">▶ Avvia</button>`;
+    actions += `<button class="btn btn-sm btn-neutral" onclick="doStart('${task.id}')">${t('ops.task.start')}</button>`;
   if (isAssignee && task.status !== 'COMPLETED' && task.status !== 'CANCELLED')
-    actions += `<button class="btn btn-sm btn-ok" onclick="doComplete('${task.id}')">✓ Completa</button>`;
+    actions += `<button class="btn btn-sm btn-ok" onclick="doComplete('${task.id}')">${t('ops.task.complete')}</button>`;
   if (canEdit && task.status !== 'CANCELLED')
-    actions += `<button class="btn btn-sm btn-neutral" onclick="openEditMode('${task.id}')">✏️ Modifica</button>`;
+    actions += `<button class="btn btn-sm btn-neutral" onclick="openEditMode('${task.id}')">✏️ ${t('ops.task.edit')}</button>`;
   if (canEdit && task.status !== 'CANCELLED')
-    actions += `<button class="btn btn-sm btn-neutral" onclick="openReassignMode('${task.id}')">👤 Riassegna</button>`;
+    actions += `<button class="btn btn-sm btn-neutral" onclick="openReassignMode('${task.id}')">👤 ${t('ops.task.reassign')}</button>`;
   if (isDirector && task.status !== 'CANCELLED')
-    actions += `<button class="btn btn-sm btn-danger" onclick="doCancel('${task.id}')">🗑 Cancella</button>`;
+    actions += `<button class="btn btn-sm btn-danger" onclick="doCancel('${task.id}')">${t('ops.task.cancel')}</button>`;
 
-  // ─ Progress control (assignee or editor, non-cancelled) ─
+  // ─ Progress control ─
   let progressHtml = '';
   const canProgress = isAssignee || canEdit;
   if (canProgress && task.status !== 'CANCELLED') {
     progressHtml = `
     <div class="panel-section">
-      <div class="panel-section-title">Progresso</div>
+      <div class="panel-section-title">${t('ops.task.progress')}</div>
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px">
         <div class="task-progress" style="flex:1;height:8px"><div class="progress-fill" id="pbar-fill" style="width:${pct}%"></div></div>
         <span id="pbar-val" style="font-weight:700;font-size:15px;min-width:38px;text-align:right">${pct}%</span>
@@ -192,13 +196,13 @@ async function openDetail(taskId) {
                oninput="document.getElementById('pct-num').value=this.value;document.getElementById('pbar-fill').style.width=this.value+'%';document.getElementById('pbar-val').textContent=this.value+'%'">
         <input type="number" id="pct-num" min="0" max="100" value="${pct}" style="width:64px;padding:6px 8px;border:1.5px solid var(--border-l);border-radius:7px;font-size:14px"
                oninput="if(this.value>=0&&this.value<=100){document.getElementById('pct-range').value=this.value;document.getElementById('pbar-fill').style.width=this.value+'%';document.getElementById('pbar-val').textContent=this.value+'%'}">
-        <button class="btn btn-sm btn-neutral" onclick="doProgress('${task.id}')">Salva</button>
+        <button class="btn btn-sm btn-neutral" onclick="doProgress('${task.id}')">${t('ops.task.saveProgress')}</button>
       </div>
     </div>`;
   } else {
     progressHtml = pct > 0 ? `
     <div class="panel-section">
-      <div class="panel-section-title">Progresso</div>
+      <div class="panel-section-title">${t('ops.task.progress')}</div>
       <div style="display:flex;align-items:center;gap:12px">
         <div class="task-progress" style="flex:1;height:8px"><div class="progress-fill" style="width:${pct}%"></div></div>
         <span style="font-weight:700;font-size:15px">${pct}%</span>
@@ -214,7 +218,7 @@ async function openDetail(taskId) {
         <div>${OpsCommon.historyLine(h)}</div>
         <div class="history-time">${OpsCommon.fmtDatetime(h.at)}${h.actorName ? ' · ' + esc(h.actorName) : ''}</div>
       </div>
-    </div>`).join('') : '<div class="empty-state" style="padding:16px">Nessuna attività registrata.</div>';
+    </div>`).join('') : `<div class="empty-state" style="padding:16px">${t('ops.task.noActivity')}</div>`;
 
   // ─ Comments ─
   const commentsHtml = comments.map(c => `
@@ -225,25 +229,66 @@ async function openDetail(taskId) {
     </div>`).join('');
 
   // ─ Attachments ─
-  // [S6.4.1] Thumbnails for images; PDF icon + link; authenticated download URLs.
   const attUploadBar = canEdit && task.status !== 'CANCELLED' ? `
     <div style="display:flex;gap:8px;margin-bottom:10px">
-      <button type="button" class="btn btn-sm btn-neutral" onclick="detailPickFile('${esc(task.id)}','image/jpeg,image/png,image/webp')">📷 Aggiungi foto</button>
-      <button type="button" class="btn btn-sm btn-neutral" onclick="detailPickFile('${esc(task.id)}','application/pdf')">📎 Allega PDF</button>
+      <button type="button" class="btn btn-sm btn-neutral" onclick="detailPickFile('${esc(task.id)}','image/jpeg,image/png,image/webp')">${t('ops.task.addPhoto')}</button>
+      <button type="button" class="btn btn-sm btn-neutral" onclick="detailPickFile('${esc(task.id)}','application/pdf')">${t('ops.task.addPdf')}</button>
     </div>
     <input type="file" id="detail-file-input" style="display:none" onchange="detailOnFileSelected(this)">` : '';
 
   const attHtml = attUploadBar
     + (attachments.length
         ? attachments.map(a => _renderAttachment(a, task.id, canEdit)).join('')
-        : '<p style="font-size:13px;color:var(--muted)">Nessun allegato.</p>');
+        : `<p style="font-size:13px;color:var(--muted)">${t('ops.task.noAttachments')}</p>`);
+
+  const reminderSection = canEdit && task.status !== 'CANCELLED' ? `
+      <div class="panel-section">
+        <div class="panel-section-title">${t('ops.task.reminderTitle')}</div>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <select id="reminder-sel" class="form-select" style="max-width:200px">
+            <option value="">${t('ops.task.reminderNone')}</option>
+            <option value="1"${task.reminderDays===1?' selected':''}>${t('ops.task.reminder1d')}</option>
+            <option value="2"${task.reminderDays===2?' selected':''}>${t('ops.task.reminder2d')}</option>
+            <option value="3"${task.reminderDays===3?' selected':''}>${t('ops.task.reminder3d')}</option>
+            <option value="7"${task.reminderDays===7?' selected':''}>${t('ops.task.reminder1w')}</option>
+            <option value="custom"${task.reminderDays&&![1,2,3,7].includes(task.reminderDays)?' selected':''}>${t('ops.task.reminderCustom')}</option>
+          </select>
+          <input type="number" id="reminder-custom" class="form-input" min="1" max="365" placeholder="${t('ops.task.reminderDays')}" value="${task.reminderDays&&![1,2,3,7].includes(task.reminderDays)?task.reminderDays:''}" style="max-width:90px;display:${task.reminderDays&&![1,2,3,7].includes(task.reminderDays)?'':'none'}">
+          <button class="btn btn-sm btn-neutral" onclick="doSetReminder('${esc(task.id)}')">${t('ops.task.saveProgress')}</button>
+        </div>
+        <p style="font-size:12px;color:var(--muted);margin:6px 0 0">${task.reminderSentAt ? t('ops.task.reminderSent') : (task.reminderDays ? t('ops.task.reminderScheduled') : t('ops.task.reminderNoneActive'))}</p>
+      </div>
+
+      <div class="panel-section">
+        <div class="panel-section-title">${t('ops.task.escalationTitle')}</div>
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:8px">
+          <label style="display:flex;align-items:center;gap:6px;font-size:14px">
+            <input type="checkbox" id="esc-enabled"${(task.escalation&&task.escalation.enabled)?' checked':''}>
+            ${t('ops.task.escalationEnable')}
+          </label>
+        </div>
+        <div id="esc-config" style="display:${task.escalation&&task.escalation.enabled?'':'none'}">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px">
+            <label style="font-size:13px">${t('ops.task.escalationWait')}</label>
+            <input type="number" id="esc-after" class="form-input" min="0" max="720" value="${task.escalation?task.escalation.waitHoursAfterDue||24:24}" style="max-width:80px">
+            <label style="font-size:13px">${t('ops.task.escalationHours')}</label>
+            <input type="number" id="esc-between" class="form-input" min="0" max="720" value="${task.escalation?task.escalation.waitHoursBetweenLevels||24:24}" style="max-width:80px">
+            <label style="font-size:13px">${t('ops.task.escalationHoursUnit')}</label>
+          </div>
+          <p style="font-size:12px;color:var(--muted);margin:0">${t('ops.task.escalationChain')}</p>
+        </div>
+        <button class="btn btn-sm btn-neutral" onclick="doSetEscalation('${esc(task.id)}')" style="margin-top:8px">${t('ops.task.saveEdit')}</button>
+        ${task.escalationLevel > 0 ? `<p style="font-size:12px;color:var(--accent);margin:6px 0 0">${t('ops.task.escalationActive')} ${task.escalationLevel}</p>` : ''}
+        <script>document.getElementById('esc-enabled').addEventListener('change',function(){document.getElementById('esc-config').style.display=this.checked?'':'none'});<\/script>
+      </div>
+      ` : '';
 
   document.getElementById('panel-inner').innerHTML = `
     <div class="panel-hdr">
       <div class="panel-hdr-title">${esc(task.title)}</div>
-      <span class="badge badge-status-${st.toLowerCase()}" style="flex-shrink:0">${OpsCommon.STATUS_LABELS[st] || st}</span>
-      <span class="badge badge-${task.priority.toLowerCase()}" style="flex-shrink:0">${OpsCommon.PRIORITY_LABELS[task.priority] || task.priority}</span>
-      <button class="panel-close" onclick="closePanel()">✕ Chiudi</button>
+      <span class="badge badge-status-${st.toLowerCase()}" style="flex-shrink:0">${OpsCommon.statusLabel(st)}</span>
+      <span class="badge badge-${task.priority.toLowerCase()}" style="flex-shrink:0">${OpsCommon.priorityLabel(task.priority)}</span>
+      <button class="panel-close" onclick="closePanel()">${t('ops.task.closePanel')}</button>
     </div>
     <div class="panel-body">
       <div id="panel-msg"></div>
@@ -253,89 +298,47 @@ async function openDetail(taskId) {
       ${progressHtml}
 
       <div class="panel-section">
-        <div class="panel-section-title">Dettagli</div>
+        <div class="panel-section-title">${t('ops.task.detailsSection')}</div>
         <div class="info-grid">
-          <div class="info-cell"><div class="info-cell-label">Assegnatario</div><div class="info-cell-val">${esc(assignee.name || '—')} ${assignee.role ? '<small style="color:var(--muted)">('+OpsCommon.roleLabel(assignee.role)+')</small>' : ''}</div></div>
-          <div class="info-cell"><div class="info-cell-label">Creato da</div><div class="info-cell-val">${esc(creator.name || task.createdByName || '—')}</div></div>
-          <div class="info-cell"><div class="info-cell-label">Scadenza</div><div class="info-cell-val">${esc(OpsCommon.fmtDue(task.dueDate))}</div></div>
-          <div class="info-cell"><div class="info-cell-label">Creato il</div><div class="info-cell-val">${esc(OpsCommon.fmtDatetime(task.createdAt))}</div></div>
-          ${task.startedAt ? `<div class="info-cell"><div class="info-cell-label">Avviato il</div><div class="info-cell-val">${esc(OpsCommon.fmtDatetime(task.startedAt))}</div></div>` : ''}
-          ${task.completedAt ? `<div class="info-cell"><div class="info-cell-label">Completato il</div><div class="info-cell-val">${esc(OpsCommon.fmtDatetime(task.completedAt))}</div></div>` : ''}
-          ${task.department ? `<div class="info-cell"><div class="info-cell-label">Reparto</div><div class="info-cell-val">${esc(task.department)}</div></div>` : ''}
-          ${task.templateId ? `<div class="info-cell"><div class="info-cell-label">Compito ricorrente</div><div class="info-cell-val">🔁 <small style="color:var(--muted)">ID template: ${esc(task.templateId.slice(-8))}</small></div></div>` : ''}
+          <div class="info-cell"><div class="info-cell-label">${t('ops.task.assignee')}</div><div class="info-cell-val">${esc(assignee.name || '—')} ${assignee.role ? '<small style="color:var(--muted)">('+OpsCommon.roleLabel(assignee.role)+')</small>' : ''}</div></div>
+          <div class="info-cell"><div class="info-cell-label">${t('ops.task.createdBy')}</div><div class="info-cell-val">${esc(creator.name || task.createdByName || '—')}</div></div>
+          <div class="info-cell"><div class="info-cell-label">${t('ops.task.dueDate')}</div><div class="info-cell-val">${esc(OpsCommon.fmtDue(task.dueDate))}</div></div>
+          <div class="info-cell"><div class="info-cell-label">${t('ops.task.createdAt')}</div><div class="info-cell-val">${esc(OpsCommon.fmtDatetime(task.createdAt))}</div></div>
+          ${task.startedAt ? `<div class="info-cell"><div class="info-cell-label">${t('ops.task.startedAt')}</div><div class="info-cell-val">${esc(OpsCommon.fmtDatetime(task.startedAt))}</div></div>` : ''}
+          ${task.completedAt ? `<div class="info-cell"><div class="info-cell-label">${t('ops.task.completedAt')}</div><div class="info-cell-val">${esc(OpsCommon.fmtDatetime(task.completedAt))}</div></div>` : ''}
+          ${task.department ? `<div class="info-cell"><div class="info-cell-label">${t('ops.task.department')}</div><div class="info-cell-val">${esc(task.department)}</div></div>` : ''}
+          ${task.templateId ? `<div class="info-cell"><div class="info-cell-label">${t('ops.task.recurring')}</div><div class="info-cell-val">🔁 <small style="color:var(--muted)">ID template: ${esc(task.templateId.slice(-8))}</small></div></div>` : ''}
         </div>
         ${task.description ? `<div style="margin-top:10px;font-size:14px;line-height:1.55;color:var(--muted)">${esc(task.description)}</div>` : ''}
         ${task.notes ? `<div style="margin-top:10px;padding:10px;background:var(--bg);border-radius:8px;font-size:14px;line-height:1.5;white-space:pre-wrap">${esc(task.notes)}</div>` : ''}
       </div>
 
-      ${canEdit && task.status !== 'CANCELLED' ? `
-      <div class="panel-section">
-        <div class="panel-section-title">⏰ Promemoria email</div>
-        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-          <select id="reminder-sel" class="form-select" style="max-width:200px">
-            <option value="">Nessuno</option>
-            <option value="1"${task.reminderDays===1?' selected':''}>1 giorno prima</option>
-            <option value="2"${task.reminderDays===2?' selected':''}>2 giorni prima</option>
-            <option value="3"${task.reminderDays===3?' selected':''}>3 giorni prima</option>
-            <option value="7"${task.reminderDays===7?' selected':''}>1 settimana prima</option>
-            <option value="custom"${task.reminderDays&&![1,2,3,7].includes(task.reminderDays)?' selected':''}>Personalizzato</option>
-          </select>
-          <input type="number" id="reminder-custom" class="form-input" min="1" max="365" placeholder="giorni" value="${task.reminderDays&&![1,2,3,7].includes(task.reminderDays)?task.reminderDays:''}" style="max-width:90px;display:${task.reminderDays&&![1,2,3,7].includes(task.reminderDays)?'':'none'}">
-          <button class="btn btn-sm btn-neutral" onclick="doSetReminder('${esc(task.id)}')">Salva</button>
-        </div>
-        <p style="font-size:12px;color:var(--muted);margin:6px 0 0">${task.reminderSentAt ? '✓ Promemoria inviato' : (task.reminderDays ? 'Invio programmato' : 'Nessun promemoria attivo')}</p>
-      </div>
+      ${reminderSection}
 
       <div class="panel-section">
-        <div class="panel-section-title">🚨 Escalation automatica</div>
-        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:8px">
-          <label style="display:flex;align-items:center;gap:6px;font-size:14px">
-            <input type="checkbox" id="esc-enabled"${(task.escalation&&task.escalation.enabled)?' checked':''}>
-            Attiva escalation per questo compito
-          </label>
-        </div>
-        <div id="esc-config" style="display:${task.escalation&&task.escalation.enabled?'':'none'}">
-          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px">
-            <label style="font-size:13px">Attendi</label>
-            <input type="number" id="esc-after" class="form-input" min="0" max="720" value="${task.escalation?task.escalation.waitHoursAfterDue||24:24}" style="max-width:80px">
-            <label style="font-size:13px">ore dopo scadenza · poi tra livelli</label>
-            <input type="number" id="esc-between" class="form-input" min="0" max="720" value="${task.escalation?task.escalation.waitHoursBetweenLevels||24:24}" style="max-width:80px">
-            <label style="font-size:13px">ore</label>
-          </div>
-          <p style="font-size:12px;color:var(--muted);margin:0">Catena: Assegnatario → Superiore → Direttore (solo notifiche, nessun cambio di permessi)</p>
-        </div>
-        <button class="btn btn-sm btn-neutral" onclick="doSetEscalation('${esc(task.id)}')" style="margin-top:8px">Salva escalation</button>
-        ${task.escalationLevel > 0 ? `<p style="font-size:12px;color:var(--accent);margin:6px 0 0">⚠️ Escalation attiva — livello ${task.escalationLevel}</p>` : ''}
-        <script>document.getElementById('esc-enabled').addEventListener('change',function(){document.getElementById('esc-config').style.display=this.checked?'':'none'});<\/script>
-      </div>
-      ` : ''}
-
-      <div class="panel-section">
-        <div class="panel-section-title">Allegati (${attachments.length})</div>
+        <div class="panel-section-title">${t('ops.task.attachments')} (${attachments.length})</div>
         ${attHtml}
       </div>
 
       <div class="panel-section">
-        <div class="panel-section-title">Commenti (${comments.length})</div>
+        <div class="panel-section-title">${t('ops.task.comments')} (${comments.length})</div>
         ${commentsHtml}
         <div style="margin-top:12px">
-          <textarea id="comment-text" class="form-textarea" maxlength="2000" placeholder="Aggiungi un commento…" style="min-height:60px"></textarea>
-          <button class="btn btn-sm btn-neutral" onclick="doComment('${task.id}')">Invia commento</button>
+          <textarea id="comment-text" class="form-textarea" maxlength="2000" placeholder="${t('ops.task.addComment')}" style="min-height:60px"></textarea>
+          <button class="btn btn-sm btn-neutral" onclick="doComment('${task.id}')">${t('ops.task.sendComment')}</button>
         </div>
       </div>
 
       <details style="margin-bottom:16px">
         <summary style="cursor:pointer;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);margin-bottom:10px">
-          Cronologia attività (${history.length})
+          ${t('ops.task.historySection')} (${history.length})
         </summary>
         <div style="margin-top:12px">${histHtml}</div>
       </details>
     </div>`;
 
   openPanel();
-  // Store current task id for refresh
   document.getElementById('side-panel').dataset.taskId = task.id;
-  // [S6.4.1 rev2] Load image attachments after innerHTML has settled.
   setTimeout(_loadDetailImages, 50);
 }
 
@@ -347,38 +350,38 @@ function openCreatePanel() {
 
   document.getElementById('panel-inner').innerHTML = `
     <div class="panel-hdr">
-      <div class="panel-hdr-title">Nuovo compito</div>
-      <button class="panel-close" onclick="closePanel()">✕ Chiudi</button>
+      <div class="panel-hdr-title">${t('ops.task.newPanel')}</div>
+      <button class="panel-close" onclick="closePanel()">${t('ops.task.closePanel')}</button>
     </div>
     <div class="panel-body">
       <div id="panel-msg"></div>
-      <label class="form-label">Titolo *</label>
+      <label class="form-label">${t('ops.task.titleLabel')}</label>
       <input id="c-title" class="form-input" maxlength="200" placeholder="Es. Preparare mise en place">
-      <label class="form-label">Descrizione</label>
-      <textarea id="c-desc" class="form-textarea" maxlength="2000" placeholder="Dettagli (facoltativo)"></textarea>
-      <label class="form-label">Assegna a</label>
+      <label class="form-label">${t('ops.task.descLabel')}</label>
+      <textarea id="c-desc" class="form-textarea" maxlength="2000"></textarea>
+      <label class="form-label">${t('ops.task.assignLabel')}</label>
       <select id="c-assignee" class="form-select">${assigneeOptions}</select>
-      <label class="form-label">Priorità</label>
+      <label class="form-label">${t('ops.task.priorityLabel')}</label>
       <select id="c-priority" class="form-select">
-        <option value="LOW">Bassa</option>
-        <option value="MEDIUM" selected>Media</option>
-        <option value="HIGH">Alta</option>
-        <option value="URGENT">Urgente</option>
+        <option value="LOW">${OpsCommon.priorityLabel('LOW')}</option>
+        <option value="MEDIUM" selected>${OpsCommon.priorityLabel('MEDIUM')}</option>
+        <option value="HIGH">${OpsCommon.priorityLabel('HIGH')}</option>
+        <option value="URGENT">${OpsCommon.priorityLabel('URGENT')}</option>
       </select>
-      <label class="form-label">Scadenza</label>
+      <label class="form-label">${t('ops.task.dueDateLabel')}</label>
       <input id="c-due" class="form-input" type="datetime-local">
-      <label class="form-label">Reparto (facoltativo)</label>
-      <input id="c-dept" class="form-input" maxlength="80" placeholder="es. Cucina">
+      <label class="form-label">${t('ops.task.deptLabel')}</label>
+      <input id="c-dept" class="form-input" maxlength="80">
 
-      <label class="form-label" style="margin-top:8px">Allegati (facoltativo)</label>
+      <label class="form-label" style="margin-top:8px">${t('ops.task.attachLabel')}</label>
       <div style="display:flex;gap:8px;margin-bottom:8px">
-        <button type="button" class="btn btn-sm btn-neutral" onclick="c_pickFile('image/jpeg,image/png,image/webp')">📷 Foto</button>
-        <button type="button" class="btn btn-sm btn-neutral" onclick="c_pickFile('application/pdf')">📎 PDF</button>
+        <button type="button" class="btn btn-sm btn-neutral" onclick="c_pickFile('image/jpeg,image/png,image/webp')">${t('ops.task.photo')}</button>
+        <button type="button" class="btn btn-sm btn-neutral" onclick="c_pickFile('application/pdf')">${t('ops.task.pdf')}</button>
       </div>
       <div id="c-file-list"></div>
       <input type="file" id="c-file-input" style="display:none" onchange="c_onFileSelected(this)">
 
-      <button class="btn btn-primary" style="width:100%;margin-top:6px" id="c-btn" onclick="doCreate()">Crea compito</button>
+      <button class="btn btn-primary" style="width:100%;margin-top:6px" id="c-btn" onclick="doCreate()">${t('ops.task.create')}</button>
     </div>`;
   openPanel();
 }
@@ -388,51 +391,51 @@ function openEditMode(taskId) {
   const task = allTasks.find(t => t.id === taskId) || {};
   document.getElementById('panel-inner').innerHTML = `
     <div class="panel-hdr">
-      <div class="panel-hdr-title">Modifica compito</div>
-      <button class="panel-close" onclick="closePanel()">✕ Chiudi</button>
+      <div class="panel-hdr-title">${t('ops.task.edit')}</div>
+      <button class="panel-close" onclick="closePanel()">${t('ops.task.closePanel')}</button>
     </div>
     <div class="panel-body">
       <div id="panel-msg"></div>
-      <label class="form-label">Titolo *</label>
+      <label class="form-label">${t('ops.task.titleLabel')}</label>
       <input id="e-title" class="form-input" maxlength="200" value="${esc(task.title || '')}">
-      <label class="form-label">Descrizione</label>
+      <label class="form-label">${t('ops.task.descLabel')}</label>
       <textarea id="e-desc" class="form-textarea" maxlength="2000">${esc(task.description || '')}</textarea>
-      <label class="form-label">Priorità</label>
+      <label class="form-label">${t('ops.task.priorityLabel')}</label>
       <select id="e-priority" class="form-select">
-        ${['LOW','MEDIUM','HIGH','URGENT'].map(p => `<option value="${p}"${task.priority===p?' selected':''}>${OpsCommon.PRIORITY_LABELS[p]}</option>`).join('')}
+        ${['LOW','MEDIUM','HIGH','URGENT'].map(p => `<option value="${p}"${task.priority===p?' selected':''}>${OpsCommon.priorityLabel(p)}</option>`).join('')}
       </select>
-      <label class="form-label">Scadenza</label>
+      <label class="form-label">${t('ops.task.dueDateLabel')}</label>
       <input id="e-due" class="form-input" type="datetime-local" value="${esc(task.dueDate ? task.dueDate.slice(0,16) : '')}">
-      <label class="form-label">Reparto</label>
+      <label class="form-label">${t('ops.task.deptLabel')}</label>
       <input id="e-dept" class="form-input" maxlength="80" value="${esc(task.department || '')}">
-      <label class="form-label">Note interne</label>
-      <textarea id="e-notes" class="form-textarea" maxlength="5000" placeholder="Note visibili a chi può modificare il compito">${esc(task.notes || '')}</textarea>
+      <label class="form-label">${t('ops.task.notesLabel')}</label>
+      <textarea id="e-notes" class="form-textarea" maxlength="5000">${esc(task.notes || '')}</textarea>
       <div style="display:flex;gap:10px;margin-top:4px">
-        <button class="btn btn-primary" style="flex:1" id="e-btn" onclick="doEdit('${esc(taskId)}')">Salva modifiche</button>
-        <button class="btn btn-neutral" onclick="openDetail('${esc(taskId)}')">Annulla</button>
+        <button class="btn btn-primary" style="flex:1" id="e-btn" onclick="doEdit('${esc(taskId)}')">${t('ops.task.saveEdit')}</button>
+        <button class="btn btn-neutral" onclick="openDetail('${esc(taskId)}')">${t('common.cancel')}</button>
       </div>
     </div>`;
 }
 
 // ── Reassign mode ──
 function openReassignMode(taskId) {
-  const task = allTasks.find(t => t.id === taskId) || {};
+  const task = allTasks.find(tsk => tsk.id === taskId) || {};
   const assigneeOptions = assignableUsers.map(u =>
     `<option value="${esc(u.id)}"${u.id === task.assigneeId ? ' selected' : ''}>${esc(u.name)} (${esc(OpsCommon.roleLabel(u.role))})</option>`
   ).join('');
   document.getElementById('panel-inner').innerHTML = `
     <div class="panel-hdr">
-      <div class="panel-hdr-title">Riassegna compito</div>
-      <button class="panel-close" onclick="closePanel()">✕ Chiudi</button>
+      <div class="panel-hdr-title">${t('ops.task.reassign')}</div>
+      <button class="panel-close" onclick="closePanel()">${t('ops.task.closePanel')}</button>
     </div>
     <div class="panel-body">
       <div id="panel-msg"></div>
-      <p style="font-size:14px;margin-bottom:16px">Compito: <strong>${esc(task.title || '')}</strong></p>
-      <label class="form-label">Nuovo assegnatario</label>
+      <p style="font-size:14px;margin-bottom:16px">${t('ops.task.reassignTask')} <strong>${esc(task.title || '')}</strong></p>
+      <label class="form-label">${t('ops.task.newAssignee')}</label>
       <select id="ra-assignee" class="form-select">${assigneeOptions}</select>
       <div style="display:flex;gap:10px;margin-top:4px">
-        <button class="btn btn-primary" style="flex:1" id="ra-btn" onclick="doReassign('${esc(taskId)}')">Conferma riassegnazione</button>
-        <button class="btn btn-neutral" onclick="openDetail('${esc(taskId)}')">Annulla</button>
+        <button class="btn btn-primary" style="flex:1" id="ra-btn" onclick="doReassign('${esc(taskId)}')">${t('ops.task.confirmReassign')}</button>
+        <button class="btn btn-neutral" onclick="openDetail('${esc(taskId)}')">${t('common.cancel')}</button>
       </div>
       <div id="panel-msg" style="margin-top:8px"></div>
     </div>`;
@@ -446,22 +449,16 @@ function openPanel() {
 function closePanel() {
   document.getElementById('side-panel').classList.remove('open');
   document.getElementById('panel-overlay').classList.remove('active');
-  _pendingAttachments = []; // clear staged files when panel closes
+  _pendingAttachments = [];
 }
 
 // ── [S6.4.1 rev2] Attachment helpers ─────────────────────────────────────────
-// [SECURITY] Session token is NEVER placed in URLs.
-// All downloads go through authenticated fetch() + Blob URLs so the token
-// stays out of server access logs, browser history, and shared/copied URLs.
 
-// Build the bare download endpoint path (no auth query param — header only).
 function _attEndpointPath(taskId, attId) {
   return '/api/operations/tasks/' + encodeURIComponent(taskId)
        + '/attachments/' + encodeURIComponent(attId) + '/download';
 }
 
-// Fetch an attachment with Authorization header and return a Blob URL.
-// Caller is responsible for revoking the URL when done.
 async function _fetchBlobUrl(taskId, attId) {
   const tok = WsAuth.getStoredToken();
   const res = await fetch(_attEndpointPath(taskId, attId), {
@@ -472,25 +469,21 @@ async function _fetchBlobUrl(taskId, attId) {
   return URL.createObjectURL(blob);
 }
 
-// Trigger a browser file download via authenticated fetch + Blob.
 async function _downloadAttachment(taskId, attId, fileName) {
   const tok = WsAuth.getStoredToken();
   try {
     const res = await fetch(_attEndpointPath(taskId, attId),
       { headers: tok ? { 'Authorization': 'Bearer ' + tok } : {} });
-    if (!res.ok) { panelMsg('Errore download.'); return; }
+    if (!res.ok) { panelMsg(t('ops.task.downloadError')); return; }
     const blob = await res.blob();
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
     a.href = url; a.download = fileName || 'allegato';
     document.body.appendChild(a); a.click();
     setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
-  } catch (e) { panelMsg('Errore download: ' + e.message); }
+  } catch (e) { panelMsg(t('ops.task.downloadError') + ': ' + e.message); }
 }
 
-// After the detail panel renders, find all placeholder <img> elements and
-// load them via authenticated fetch → Blob URL. Called with a small delay so
-// innerHTML assignment has completed.
 async function _loadDetailImages() {
   const imgs = document.querySelectorAll('img.att-img-placeholder[data-src]');
   const tok  = WsAuth.getStoredToken();
@@ -498,7 +491,7 @@ async function _loadDetailImages() {
     try {
       const res = await fetch(img.dataset.src,
         { headers: tok ? { 'Authorization': 'Bearer ' + tok } : {} });
-      if (!res.ok) { img.alt = '⚠ Errore'; img.classList.remove('att-img-placeholder'); continue; }
+      if (!res.ok) { img.alt = t('ops.task.imageError'); img.classList.remove('att-img-placeholder'); continue; }
       const blob = await res.blob();
       if (img.src && img.src.startsWith('blob:')) URL.revokeObjectURL(img.src);
       img.src = URL.createObjectURL(blob);
@@ -507,7 +500,6 @@ async function _loadDetailImages() {
   }
 }
 
-// Human-readable file size.
 function _fmtSize(bytes) {
   if (!bytes) return '';
   if (bytes < 1024) return bytes + ' B';
@@ -517,7 +509,6 @@ function _fmtSize(bytes) {
 
 // ── Create-panel attachment helpers ─
 
-// Opens the hidden file input with the given accept filter.
 function c_pickFile(accept) {
   const inp = document.getElementById('c-file-input');
   if (!inp) return;
@@ -526,24 +517,21 @@ function c_pickFile(accept) {
   inp.click();
 }
 
-// Called when the user selects a file in the hidden input.
 function c_onFileSelected(inp) {
   const file = inp.files && inp.files[0];
   if (!file) return;
   if (_pendingAttachments.length >= 5) {
-    panelMsg('Massimo 5 allegati per compito.'); return;
+    panelMsg(t('ops.task.maxAttachments')); return;
   }
   _pendingAttachments.push({ file, tempId: 'tmp_' + Date.now() + '_' + Math.random().toString(36).slice(2) });
   c_renderFileList();
 }
 
-// Remove a staged file by tempId.
 function c_removeFile(tempId) {
   _pendingAttachments = _pendingAttachments.filter(a => a.tempId !== tempId);
   c_renderFileList();
 }
 
-// Re-render the staged-files list inside the create panel.
 function c_renderFileList() {
   const el = document.getElementById('c-file-list');
   if (!el) return;
@@ -554,36 +542,30 @@ function c_renderFileList() {
     </div>`).join('');
 }
 
-// Upload a single File to the attachment endpoint using multipart/form-data.
-// Returns the parsed JSON response (may have success:false).
 async function _uploadFile(taskId, file) {
-  const t = WsAuth.getStoredToken();
+  const tok = WsAuth.getStoredToken();
   const fd = new FormData();
   fd.append('file', file);
   try {
     const res = await fetch('/api/operations/tasks/' + encodeURIComponent(taskId) + '/attachments', {
       method: 'POST',
-      headers: t ? { 'Authorization': 'Bearer ' + t } : {},
+      headers: tok ? { 'Authorization': 'Bearer ' + tok } : {},
       body: fd
     });
     if (res.status === 401) {
       WsAuth.clearToken();
-      alert('Sessione scaduta. Effettua nuovamente il login.');
+      alert(t('common.sessionExpired'));
       window.location.href = 'index.html';
-      return { success: false, error: 'Sessione scaduta.' };
+      return { success: false, error: t('common.sessionExpired') };
     }
     return await res.json();
   } catch (e) {
-    return { success: false, error: 'Errore di rete: ' + e.message };
+    return { success: false, error: t('common.networkError') + ': ' + e.message };
   }
 }
 
 // ── Detail-panel attachment helpers ─
 
-// Render one attachment row for the detail view.
-// [S6.4.1 rev2] Images use data-src + class att-img-placeholder; _loadDetailImages()
-// fetches them after render. Download links use _downloadAttachment() (fetch → Blob).
-// No token ever appears in any URL attribute.
 function _renderAttachment(a, taskId, canEdit) {
   const endpointPath = _attEndpointPath(taskId, a.id);
   const isImage = a.contentType && a.contentType.startsWith('image/');
@@ -597,7 +579,6 @@ function _renderAttachment(a, taskId, canEdit) {
     sizeStr || null
   ].filter(Boolean).join(' · ');
 
-  // Image: placeholder fetched by _loadDetailImages(); clicking opens blob URL.
   const preview = isImage
     ? `<img data-src="${endpointPath}" class="att-img-placeholder" alt="${name}"
           onclick="if(this.src&&this.src.startsWith('blob:'))window.open(this.src,'_blank')"
@@ -610,7 +591,6 @@ function _renderAttachment(a, taskId, canEdit) {
     ? `<button class="btn btn-sm btn-danger" style="flex-shrink:0"
           onclick="doDeleteAttachment('${esc(taskId)}','${esc(a.id)}')">🗑</button>` : '';
 
-  // Download link triggers authenticated fetch → Blob → browser save dialog.
   const dlLink = `<a href="#" onclick="event.preventDefault();_downloadAttachment('${esc(taskId)}','${esc(a.id)}',${JSON.stringify(rawName)})"
       style="font-weight:600;font-size:13px;color:var(--accent);text-decoration:none;word-break:break-all">${name}</a>`;
 
@@ -627,7 +607,6 @@ function _renderAttachment(a, taskId, canEdit) {
   </div>`;
 }
 
-// Open file picker for adding an attachment from the detail view.
 function detailPickFile(taskId, accept) {
   const inp = document.getElementById('detail-file-input');
   if (!inp) return;
@@ -637,32 +616,30 @@ function detailPickFile(taskId, accept) {
   inp.click();
 }
 
-// Upload handler triggered when user picks a file from the detail view.
 async function detailOnFileSelected(inp) {
   const file   = inp.files && inp.files[0];
   const taskId = inp.dataset.taskId;
   if (!file || !taskId) return;
   const msgEl = document.getElementById('panel-msg');
-  if (msgEl) { msgEl.textContent = 'Upload in corso…'; msgEl.className = 'msg msg-info'; msgEl.style.display = 'block'; }
+  if (msgEl) { msgEl.textContent = t('ops.task.uploadProgress'); msgEl.className = 'msg msg-info'; msgEl.style.display = 'block'; }
   const r = await _uploadFile(taskId, file);
   if (r && r.success) {
-    panelMsg('Allegato aggiunto.', 'success');
+    panelMsg(t('ops.task.attachmentAdded'), 'success');
     await loadTasks();
     openDetail(taskId);
   } else {
-    panelMsg((r && r.error) || 'Errore upload.');
+    panelMsg((r && r.error) || t('common.error'));
   }
 }
 
-// Delete an attachment from the detail view.
 async function doDeleteAttachment(taskId, attId) {
-  if (!confirm('Eliminare questo allegato?')) return;
+  if (!confirm(t('ops.task.confirmDeleteAttachment'))) return;
   const r = await OpsCommon.api('/api/operations/tasks/' + taskId + '/attachments/' + attId, { method: 'DELETE' });
   if (r && r.success) {
     await loadTasks();
     openDetail(taskId);
   } else {
-    panelMsg((r && r.error) || 'Errore eliminazione.');
+    panelMsg((r && r.error) || t('common.error'));
   }
 }
 
@@ -688,28 +665,26 @@ async function doCreate() {
     dueDate:     document.getElementById('c-due').value || null,
     department:  document.getElementById('c-dept').value.trim() || null
   };
-  if (!body.title) { panelMsg('Inserisci un titolo.'); btn.disabled = false; return; }
+  if (!body.title) { panelMsg(t('ops.task.titleRequired')); btn.disabled = false; return; }
 
   const r = await OpsCommon.api('/api/operations/tasks', { method: 'POST', body: JSON.stringify(body) });
   btn.disabled = false;
-  if (!r || !r.success) { panelMsg((r && r.error) || 'Errore.'); return; }
+  if (!r || !r.success) { panelMsg((r && r.error) || t('common.error')); return; }
 
-  // [S6.4.1] Task is created — upload staged attachments.
-  // Even if uploads fail the task remains created (non-atomic by design).
   const taskId  = r.task.id;
-  const pending = _pendingAttachments.splice(0); // drain the array
+  const pending = _pendingAttachments.splice(0);
   const errors  = [];
   for (const att of pending) {
     const ur = await _uploadFile(taskId, att.file);
-    if (!ur || !ur.success) errors.push(esc(att.file.name) + ': ' + ((ur && ur.error) || 'Errore upload'));
+    if (!ur || !ur.success) errors.push(esc(att.file.name) + ': ' + ((ur && ur.error) || t('common.error')));
   }
 
   await loadTasks();
   if (errors.length) {
-    panelMsg('Compito creato. Errori allegati: ' + errors.join('; '), 'error');
+    panelMsg(t('ops.task.createdMsg') + ' ' + errors.join('; '), 'error');
     setTimeout(() => openDetail(taskId), 1200);
   } else {
-    panelMsg('Compito creato.', 'success');
+    panelMsg(t('ops.task.createdMsg'), 'success');
     setTimeout(() => openDetail(taskId), 500);
   }
 }
@@ -731,7 +706,7 @@ async function doEdit(taskId) {
     await loadTasks();
     openDetail(taskId);
   } else {
-    panelMsg((r && r.error) || 'Errore.');
+    panelMsg((r && r.error) || t('common.error'));
   }
 }
 
@@ -747,51 +722,51 @@ async function doReassign(taskId) {
     await loadTasks();
     openDetail(taskId);
   } else {
-    panelMsg((r && r.error) || 'Errore nella riassegnazione.');
+    panelMsg((r && r.error) || t('ops.task.reassignError'));
   }
 }
 
 async function doStart(taskId) {
   const r = await OpsCommon.api('/api/operations/tasks/' + taskId + '/start', { method: 'POST' });
   if (r && r.success) { await loadTasks(); openDetail(taskId); }
-  else panelMsg((r && r.error) || 'Errore.');
+  else panelMsg((r && r.error) || t('common.error'));
 }
 
 async function doComplete(taskId) {
-  if (!confirm('Segnare il compito come completato?')) return;
+  if (!confirm(t('ops.task.confirmComplete'))) return;
   const r = await OpsCommon.api('/api/operations/tasks/' + taskId + '/complete', { method: 'POST' });
   if (r && r.success) { await loadTasks(); openDetail(taskId); }
-  else panelMsg((r && r.error) || 'Errore.');
+  else panelMsg((r && r.error) || t('common.error'));
 }
 
 async function doProgress(taskId) {
   const pct = parseInt(document.getElementById('pct-num').value, 10);
-  if (isNaN(pct) || pct < 0 || pct > 100) { panelMsg('Valore non valido (0–100).'); return; }
+  if (isNaN(pct) || pct < 0 || pct > 100) { panelMsg(t('ops.task.invalidRange')); return; }
   const r = await OpsCommon.api('/api/operations/tasks/' + taskId + '/progress', {
     method: 'POST', body: JSON.stringify({ completionPercent: pct })
   });
   if (r && r.success) { await loadTasks(); openDetail(taskId); }
-  else panelMsg((r && r.error) || 'Errore.');
+  else panelMsg((r && r.error) || t('common.error'));
 }
 
 async function doCancel(taskId) {
-  const reason = prompt('Motivo della cancellazione (facoltativo):') ?? '';
-  if (reason === null) return; // user cancelled prompt
+  const reason = prompt(t('ops.task.cancelReason')) ?? '';
+  if (reason === null) return;
   const r = await OpsCommon.api('/api/operations/tasks/' + taskId + '/cancel', {
     method: 'POST', body: JSON.stringify({ reason })
   });
   if (r && r.success) { await loadTasks(); openDetail(taskId); }
-  else panelMsg((r && r.error) || 'Errore.');
+  else panelMsg((r && r.error) || t('common.error'));
 }
 
 async function doComment(taskId) {
   const text = (document.getElementById('comment-text').value || '').trim();
-  if (!text) { panelMsg('Il commento non può essere vuoto.'); return; }
+  if (!text) { panelMsg(t('ops.task.commentRequired')); return; }
   const r = await OpsCommon.api('/api/operations/tasks/' + taskId + '/comments', {
     method: 'POST', body: JSON.stringify({ text })
   });
   if (r && r.success) { await loadTasks(); openDetail(taskId); }
-  else panelMsg((r && r.error) || 'Errore.');
+  else panelMsg((r && r.error) || t('common.error'));
 }
 
 // ── Sprint 3: Reminder ──
@@ -808,8 +783,8 @@ async function doSetReminder(taskId) {
   const r = await OpsCommon.api('/api/operations/tasks/' + taskId + '/reminder', {
     method: 'PATCH', body: JSON.stringify({ reminderDays: days })
   });
-  if (r && r.success) { panelMsg('Promemoria impostato.', 'success'); await loadTasks(); setTimeout(() => openDetail(taskId), 500); }
-  else panelMsg((r && r.error) || 'Errore.');
+  if (r && r.success) { panelMsg(t('ops.task.reminderSaved'), 'success'); await loadTasks(); setTimeout(() => openDetail(taskId), 500); }
+  else panelMsg((r && r.error) || t('common.error'));
 }
 
 // ── Sprint 3: Escalation ──
@@ -820,20 +795,21 @@ async function doSetEscalation(taskId) {
   const r = await OpsCommon.api('/api/operations/tasks/' + taskId + '/escalation', {
     method: 'PATCH', body: JSON.stringify({ enabled, waitHoursAfterDue: waitAfter, waitHoursBetweenLevels: waitBetween })
   });
-  if (r && r.success) { panelMsg('Escalation configurata.', 'success'); await loadTasks(); setTimeout(() => openDetail(taskId), 500); }
-  else panelMsg((r && r.error) || 'Errore.');
+  if (r && r.success) { panelMsg(t('ops.task.escalationSaved'), 'success'); await loadTasks(); setTimeout(() => openDetail(taskId), 500); }
+  else panelMsg((r && r.error) || t('common.error'));
 }
 
-load();
+// ── Init: load translations then boot ──
+I18n.init({ selector: '#i18n-sel' }).then(() => load());
 
 // Sprint 5: real-time live updates ──────────────────────────────────────────
 OpsRealtime.init();
 let _rtTimer = null;
 function rtReload(d) { clearTimeout(_rtTimer); _rtTimer = setTimeout(loadTasks, d || 600); }
-OpsRealtime.on('OPS_TASK_CREATED',    () => { rtReload(400); OpsRealtime.toast('📌 Nuovo compito creato', 'info'); });
+OpsRealtime.on('OPS_TASK_CREATED',    () => { rtReload(400); OpsRealtime.toast(t('ops.rt.taskCreated'), 'info'); });
 OpsRealtime.on('OPS_TASK_UPDATED',    () => { rtReload(500); });
-OpsRealtime.on('OPS_TASK_COMPLETED',  () => { rtReload(400); OpsRealtime.toast('✅ Compito completato', 'ok'); });
-OpsRealtime.on('OPS_TASK_REASSIGNED', () => { rtReload(400); OpsRealtime.toast('🔄 Compito riassegnato', 'info'); });
+OpsRealtime.on('OPS_TASK_COMPLETED',  () => { rtReload(400); OpsRealtime.toast(t('ops.rt.taskCompleted'), 'ok'); });
+OpsRealtime.on('OPS_TASK_REASSIGNED', () => { rtReload(400); OpsRealtime.toast(t('ops.rt.taskReassigned'), 'info'); });
 OpsRealtime.on('OPS_TASK_PROGRESS',   () => { rtReload(500); });
 OpsRealtime.on('OPS_COMMENT_ADDED',   () => { rtReload(500); });
 OpsRealtime.on('OPS_USER_SUSPENDED',  () => { rtReload(600); });

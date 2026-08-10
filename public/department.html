@@ -537,6 +537,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
   <span class="conn-badge" id="conn-badge">Disconnesso</span>
   <button class="hdr-btn" id="btn-home" onclick="window.location.href='home.html'" data-i18n="dept.home">Home</button>
   <button class="hdr-btn danger" onclick="doLogout()" data-i18n="dept.logout">Esci</button>
+  <span id="i18n-dept-sel"></span>
 </header>
 
 <!-- Left panel: countdown + voice tabs -->
@@ -746,7 +747,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 
 <script src="js/ws-auth.js"></script>
 <script src="js/i18n.js"></script>
-<script>I18n.init({ selector: false });</script>
+<script>I18n.init({ selector: '#i18n-dept-sel' });</script>
 <script src="js/ptt-voice.js"></script>
 <script>
 'use strict';
