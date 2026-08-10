@@ -92,6 +92,21 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
   padding:20px 0;font-size:14px;line-height:1.7;}
 .grid-msg a{color:var(--accent2);}
 
+/* ── DEPT ACCOUNT STATES ─────────────── */
+.dept-account-msg{background:var(--card);border:1.5px solid var(--border);
+  border-radius:13px;padding:24px 20px;margin-bottom:28px;
+  box-shadow:0 1px 3px rgba(0,0,0,.06);text-align:center;}
+.dept-account-msg.suspended{border-color:rgba(220,38,38,.3);
+  background:rgba(220,38,38,.04);}
+.dept-account-msg.error{border-color:rgba(234,179,8,.35);
+  background:rgba(234,179,8,.04);}
+.dam-icon{font-size:32px;margin-bottom:10px;}
+.dam-title{font-size:16px;font-weight:700;color:var(--text);margin-bottom:6px;}
+.dam-sub{font-size:13px;color:var(--muted);line-height:1.55;}
+.dam-action{margin-top:14px;}
+.dam-action a{font-size:13px;color:var(--accent2);text-decoration:none;font-weight:600;}
+.dam-action a:hover{text-decoration:underline;}
+
 /* ── LIGHT THEME OVERRIDES ─────────────────────────────── */
 .hdr{background:rgba(255,255,255,.97);box-shadow:0 1px 3px rgba(0,0,0,.08);}
 .hdr-btn{background:rgba(0,0,0,.04);color:var(--text);border-color:var(--border-l);}
@@ -159,10 +174,28 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
     </div>
   </div>
 
-  <!-- Dynamic department cards -->
-  <p class="section-label">Reparti</p>
-  <div id="dept-grid" class="card-grid">
-    <div class="grid-msg">Caricamento reparti…</div>
+  <!-- Department Account state messages (shown before dept grid resolves) -->
+  <!-- Suspension notice — shown when bound account is SUSPENDED -->
+  <div id="suspended-msg" class="dept-account-msg suspended" style="display:none;" role="alert">
+    <div class="dam-icon">🔒</div>
+    <div class="dam-title">Account reparto sospeso</div>
+    <div class="dam-sub">Contatta l'amministratore per riattivare l'accesso al reparto.</div>
+    <div class="dam-action"><a href="index.html">← Torna al login</a></div>
+  </div>
+  <!-- Dept resolution error — assigned dept missing or inactive -->
+  <div id="dept-error-msg" class="dept-account-msg error" style="display:none;" role="alert">
+    <div class="dam-icon">⚠️</div>
+    <div class="dam-title">Reparto assegnato non disponibile</div>
+    <div class="dam-sub">Il reparto associato a questo account non è attivo o non esiste.<br>Contatta l'amministratore.</div>
+    <div class="dam-action"><a href="index.html">← Torna al login</a></div>
+  </div>
+
+  <!-- Dynamic department cards — hidden until identity resolves (avoids flash for bound accounts) -->
+  <div id="dept-section" style="display:none;">
+    <p class="section-label">Reparti</p>
+    <div id="dept-grid" class="card-grid">
+      <div class="grid-msg">Caricamento reparti…</div>
+    </div>
   </div>
 
   <!-- Static function cards -->
@@ -336,8 +369,8 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
                             loadingIndicator.remove();
                         }
 
-                        // Load dynamic department buttons
-                        loadDepartmentsGrid();
+                        // [S1.3] Route via identity first — bound accounts redirect directly.
+                        resolveIdentityAndRoute();
                     }, 100);
                 } else {
                     console.error('❌ Documento utente non trovato');
@@ -403,7 +436,11 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 
     // Load (or refresh) departments from API and populate the dept-grid.
     // Safe to call multiple times — always clears and rebuilds.
+    // [S1.3] Also reveals #dept-section (hidden by default to prevent flash for bound accounts).
     async function loadDepartmentsGrid() {
+        const section = document.getElementById('dept-section');
+        if (section) section.style.display = '';      // reveal Reparti section for legacy users
+
         const grid = document.getElementById('dept-grid');
         if (!grid) return;
 
@@ -514,16 +551,88 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
         console.log('Nome azienda impostato manualmente:', name);
     }
 
-    // Reload departments whenever user returns to this page
-    // (covers back navigation, bfcache restore, and tab re-focus)
-    window.addEventListener('pageshow', () => {
+    // [S1.3] Identity-first routing: call GET /api/service/identity and route accordingly.
+    //   • ACTIVE bound account + valid dept → redirect to department.html?id=<departmentId>
+    //   • SUSPENDED bound account           → show suspension message (no redirect)
+    //   • Unbound / error / no token        → fall through to legacy dept selector
+    //
+    // A guard flag prevents a second identity resolution when both the early stored-token
+    // path and the Firebase onAuthStateChanged path fire in the same page load.
+    let _identityResolved = false;
+    async function resolveIdentityAndRoute() {
+        if (_identityResolved) return;
+
+        const token = WsAuth.getStoredToken();
+        if (!token) {
+            // No session yet — show legacy dept selector
+            loadDepartmentsGrid();
+            return;
+        }
+
+        _identityResolved = true;
+
+        try {
+            const res = await fetch('/api/service/identity', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json().catch(() => ({}));
+
+            if (res.ok && data.success && data.departmentAccountId) {
+                if (data.departmentAccountStatus === 'SUSPENDED') {
+                    // Show suspension notice — do NOT redirect, do NOT render dept selector
+                    if (loadingIndicator && loadingIndicator.parentNode) loadingIndicator.remove();
+                    const msg = document.getElementById('suspended-msg');
+                    if (msg) msg.style.display = '';
+                    console.warn('[S1.3] Department account suspended — routing blocked.');
+                    return;
+                }
+
+                if (data.departmentAccountStatus === 'ACTIVE' && data.departmentId) {
+                    // Verify the assigned department is still active before redirecting.
+                    // [SECURITY] departmentId comes from the server (session-verified) —
+                    // never from localStorage or any client-supplied value.
+                    const deptRes = await fetch('/api/departments', {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    const deptData = await deptRes.json().catch(() => ({}));
+                    const validDept = (deptData.departments || []).find(
+                        d => d.id === data.departmentId && d.active
+                    );
+
+                    if (validDept) {
+                        if (loadingIndicator && loadingIndicator.parentNode) loadingIndicator.remove();
+                        console.log(`[S1.3] Bound account → redirecting to dept ${data.departmentId}`);
+                        window.location.href = `department.html?id=${encodeURIComponent(data.departmentId)}`;
+                        return;
+                    } else {
+                        // Dept missing or inactive — safe error, no redirect
+                        if (loadingIndicator && loadingIndicator.parentNode) loadingIndicator.remove();
+                        const msg = document.getElementById('dept-error-msg');
+                        if (msg) msg.style.display = '';
+                        console.warn('[S1.3] Assigned department not found or inactive.');
+                        return;
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn('[S1.3] Identity resolution failed, falling back to legacy flow:', e.message);
+        }
+
+        // Unbound user or identity error — show legacy dept selector
         loadDepartmentsGrid();
+    }
+
+    // Reload whenever user returns to this page (back navigation, bfcache, tab re-focus).
+    // [S1.3] Calls resolveIdentityAndRoute() so bound accounts are re-routed on return.
+    window.addEventListener('pageshow', () => {
+        _identityResolved = false;   // allow re-resolution after back/forward navigation
+        resolveIdentityAndRoute();
         loadCalendarSummary();
     });
 
-    // Also try immediately on first script execution using the stored token —
-    // no need to wait for Firebase auth to resolve on repeat visits.
-    loadDepartmentsGrid();
+    // Also try immediately using the stored token — covers repeat visits where
+    // Firebase auth hasn't fired yet but the HMAC session is still valid.
+    resolveIdentityAndRoute();
     loadCalendarSummary();
 
     // ── Calendar today summary ──────────────────────────────────────
