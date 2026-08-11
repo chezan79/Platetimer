@@ -422,6 +422,14 @@ const OpsCommon = (() => {
           <div class="nsv-items">${itemsHtml}</div>`;
     }
 
+    // briefFmt(key, n, cls) — translate an ops.brief.* sentence key and replace
+    // {n} with a styled <span class="brief-num {cls}">{n}</span>.
+    // Used by director, cc, and adjoint dashboards to render localised narrative.
+    function briefFmt(key, n, cls) {
+        const span = '<span class="brief-num' + (cls ? ' ' + cls : '') + '">' + n + '</span>';
+        return _t(key).replace('{n}', span);
+    }
+
     return {
         api, loadMe, showError, escHtml,
         fmtDue, fmtDatetime, fmtDateShort,
@@ -431,5 +439,6 @@ const OpsCommon = (() => {
         nextTask, isToday, isCompletedToday, greeting, taskCard, renderSection,
         renderNewSinceLastVisit,
         langParam, intelligenceUrl,
+        briefFmt,
     };
 })();
