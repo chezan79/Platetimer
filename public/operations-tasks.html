@@ -215,7 +215,7 @@ async function openDetail(taskId) {
   if (isDirector && task.status !== 'CANCELLED')
     actions += `<button class="btn btn-sm btn-danger" onclick="doCancel('${task.id}')">${t('ops.task.cancel')}</button>`;
   if (isDirector && task.status === 'CANCELLED')
-    actions += `<button class="btn btn-sm btn-danger" onclick="doDeletePermanently('${escHtml(task.id)}')" data-i18n="ops.task.deletePermanently">${t('ops.task.deletePermanently')}</button>`;
+    actions += `<button class="btn btn-sm btn-danger" onclick="doDeletePermanently('${task.id}')">${t('ops.task.deletePermanently')}</button>`;
 
   // ─ Progress control ─
   let progressHtml = '';
