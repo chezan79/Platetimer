@@ -5,17 +5,24 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PlateTimer Operations · Prestazioni</title>
 <link rel="stylesheet" href="css/operations.css">
+<link rel="stylesheet" href="css/operations-redesign.css">
 </head>
-<body>
+<body class="operations-shell">
 <header class="hdr">
-  <span id="hdr-company" class="hdr-brand"></span>
-  <span class="hdr-sep"></span>
-  <span class="hdr-page" data-i18n="ops.perf.pageTitle">Operations · Prestazioni</span>
-  <button class="hdr-btn" id="btn-tasks" onclick="location.href='operations-tasks.html'" style="display:none" data-i18n="ops.nav.tasks">Compiti</button>
-  <button class="hdr-btn" id="btn-team"  onclick="location.href='operations-team.html'"  style="display:none" data-i18n="ops.nav.team">Team</button>
-  <button class="hdr-btn" onclick="location.href='javascript:history.back()'" data-i18n="common.back">← Indietro</button>
-  <button class="hdr-btn danger" onclick="OpsCommon.logout()" data-i18n="common.logout">Esci</button>
-  <span id="i18n-sel"></span>
+  <a class="ops-brand" href="operations.html">
+    <span class="ob-pt">PLATETIMER</span><span class="ob-sep"> / </span><span class="ob-ops">OPERATIONS</span>
+  </a>
+  <nav class="ops-nav">
+    <a class="ops-nav-item" href="operations.html" data-i18n="ops.nav.dashboard">Dashboard</a>
+    <a id="btn-tasks" class="ops-nav-item" href="operations-tasks.html" style="display:none" data-i18n="ops.nav.tasks">Compiti</a>
+    <a id="btn-team"  class="ops-nav-item" href="operations-team.html"  style="display:none" data-i18n="ops.nav.team">Team</a>
+    <span class="ops-nav-item active" data-i18n="ops.nav.performance">Prestazioni</span>
+  </nav>
+  <div class="ops-hdr-util">
+    <span id="i18n-sel"></span>
+    <button class="hdr-btn" onclick="history.back()" data-i18n="common.back">← Indietro</button>
+    <button class="hdr-btn danger" onclick="OpsCommon.logout()" data-i18n="common.logout">Esci</button>
+  </div>
 </header>
 
 <div class="ops-container">

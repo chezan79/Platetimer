@@ -5,18 +5,25 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Operations — Template Ricorrenti — PlateTimer</title>
 <link rel="stylesheet" href="css/operations.css">
+<link rel="stylesheet" href="css/operations-redesign.css">
 </head>
-<body>
+<body class="operations-shell">
 
 <header class="hdr">
-  <span id="hdr-company" class="hdr-brand"></span>
-  <span class="hdr-sep"></span>
-  <span class="hdr-page">Operations · Template Ricorrenti</span>
-  <button class="hdr-btn" onclick="location.href='operations.html'">Dashboard</button>
-  <button class="hdr-btn" onclick="location.href='operations-tasks.html'">Compiti</button>
-  <button class="hdr-btn" onclick="location.href='operations-team.html'">Team</button>
-  <button class="hdr-btn" onclick="location.href='home.html'">Home</button>
-  <button class="hdr-btn danger" onclick="OpsCommon.logout()">Esci</button>
+  <a class="ops-brand" href="operations.html">
+    <span class="ob-pt">PLATETIMER</span><span class="ob-sep"> / </span><span class="ob-ops">OPERATIONS</span>
+  </a>
+  <nav class="ops-nav">
+    <a class="ops-nav-item" href="operations.html">Dashboard</a>
+    <a class="ops-nav-item" href="operations-tasks.html" data-i18n="ops.nav.tasks">Compiti</a>
+    <a class="ops-nav-item" href="operations-team.html" data-i18n="ops.nav.team">Team</a>
+    <span class="ops-nav-item active" data-i18n="ops.nav.templates">Template</span>
+  </nav>
+  <div class="ops-hdr-util">
+    <span id="hdr-company" class="hdr-company"></span>
+    <a class="hdr-btn" href="home.html">Home</a>
+    <button class="hdr-btn danger" onclick="OpsCommon.logout()">Esci</button>
+  </div>
 </header>
 
 <main class="main">

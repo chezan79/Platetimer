@@ -5,21 +5,28 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Operations — Direttore — PlateTimer</title>
 <link rel="stylesheet" href="css/operations.css">
+<link rel="stylesheet" href="css/operations-redesign.css">
 <script src="js/i18n.js"></script>
 </head>
-<body>
+<body class="operations-shell">
 
 <header class="hdr">
-  <span id="hdr-company" class="hdr-brand"></span>
-  <span class="hdr-sep"></span>
-  <span class="hdr-page" data-i18n="ops.dir.heading">Operations · Direttore</span>
-  <button class="hdr-btn" onclick="location.href='operations-tasks.html'" data-i18n="ops.nav.tasks">Compiti</button>
-  <button class="hdr-btn" onclick="location.href='operations-team.html'" data-i18n="ops.nav.team">Team</button>
-  <button class="hdr-btn" onclick="location.href='operations-templates.html'" data-i18n="ops.nav.templates">🔁 Template</button>
-  <button class="hdr-btn" onclick="location.href='operations-performance.html'" data-i18n="ops.nav.performance">📊 Prestazioni</button>
-  <button class="hdr-btn" onclick="location.href='home.html'" data-i18n="common.home">Home</button>
-  <span id="i18n-sel"></span>
-  <button class="hdr-btn danger" onclick="OpsCommon.logout()" data-i18n="common.logout">Esci</button>
+  <a class="ops-brand" href="operations.html">
+    <span class="ob-pt">PLATETIMER</span><span class="ob-sep"> / </span><span class="ob-ops">OPERATIONS</span>
+  </a>
+  <nav class="ops-nav">
+    <span class="ops-nav-item active" data-i18n="ops.nav.dashboard">Dashboard</span>
+    <a class="ops-nav-item" href="operations-tasks.html" data-i18n="ops.nav.tasks">Compiti</a>
+    <a class="ops-nav-item" href="operations-team.html" data-i18n="ops.nav.team">Team</a>
+    <a class="ops-nav-item" href="operations-templates.html" data-i18n="ops.nav.templates">Template</a>
+    <a class="ops-nav-item" href="operations-performance.html" data-i18n="ops.nav.performance">Prestazioni</a>
+  </nav>
+  <div class="ops-hdr-util">
+    <span id="hdr-company" class="hdr-company"></span>
+    <span id="i18n-sel"></span>
+    <a class="hdr-btn" href="home.html" data-i18n="common.home">Home</a>
+    <button class="hdr-btn danger" onclick="OpsCommon.logout()" data-i18n="common.logout">Esci</button>
+  </div>
 </header>
 
 <main class="main">

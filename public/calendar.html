@@ -355,21 +355,28 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 .detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
 @media(max-width:400px){.detail-grid{grid-template-columns:1fr;}}
 </style>
+<link rel="stylesheet" href="css/operations-redesign.css">
 </head>
-<body>
+<body class="operations-shell">
 
 <!-- ── HEADER ── -->
 <header class="hdr">
-  <span class="operations-brand"><span class="ob-name">PLATETIMER</span><span class="ob-area">OPERATIONS</span></span>
-  <span class="hdr-sep"></span>
-  <span id="hdr-company" class="hdr-brand"></span>
-  <span class="hdr-sep"></span>
-  <span class="hdr-page">📅 Calendario</span>
-  <button class="notif-btn" onclick="toggleNotifDrawer()" title="Notifiche" aria-label="Notifiche">
-    🔔<span id="notif-badge" class="notif-badge"></span>
-  </button>
-  <button class="hdr-btn" onclick="window.location.href='home.html'">← Home</button>
-  <button class="hdr-btn danger" onclick="window.location.href='index.html'">Esci</button>
+  <a class="ops-brand" href="operations.html">
+    <span class="ob-pt">PLATETIMER</span><span class="ob-sep"> / </span><span class="ob-ops">OPERATIONS</span>
+  </a>
+  <nav class="ops-nav">
+    <a class="ops-nav-item" href="operations.html" data-i18n="ops.nav.dashboard">Dashboard</a>
+    <a class="ops-nav-item" href="operations-tasks.html" data-i18n="ops.nav.tasks">Compiti</a>
+    <span class="ops-nav-item active">📅 Calendario</span>
+  </nav>
+  <div class="ops-hdr-util">
+    <span id="hdr-company" class="hdr-company"></span>
+    <button class="notif-btn" onclick="toggleNotifDrawer()" title="Notifiche" aria-label="Notifiche">
+      🔔<span id="notif-badge" class="notif-badge"></span>
+    </button>
+    <a class="hdr-btn" href="home.html">← Home</a>
+    <button class="hdr-btn danger" onclick="window.location.href='index.html'">Esci</button>
+  </div>
 </header>
 
 <!-- ── NOTIFICATION DRAWER ── -->

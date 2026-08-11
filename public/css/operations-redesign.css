@@ -1,177 +1,996 @@
-/* operations-redesign.css — PlateTimer Operations "control center" dark theme.
-   EVERY rule is scoped under body.operations-shell so no other page that loads
-   operations.css (or any Service page) is affected. Loaded AFTER operations.css. */
+/* operations-redesign.css — PlateTimer Operations light enterprise design.
+   ALL rules are scoped under body.operations-shell.
+   PlateTimer Service is NOT affected by any rule in this file. */
 
+/* ── Design tokens ─────────────────────────────────────────────────── */
 body.operations-shell {
-  /* Override the light palette variables for this page only */
-  --bg:#111315; --panel:#181B1F; --card:#181B1F; --card-h:#1D2126;
-  --border:#262B31; --border-l:#343B43; --text:#E8EAED; --muted:#8B939C;
-  --accent:#4FB8D8; --accent2:#6BC8E4;
-  --warn:#D9A13B; --danger:#E0605E; --ok:#4CBF7A;
-  background:var(--bg); color:var(--text);
+  /* New light-system vars */
+  --ops-navy:     #101722;
+  --ops-navy-b:   #1a2535;
+  --ops-bg:       #F5F7FA;
+  --ops-surface:  #FFFFFF;
+  --ops-border:   #E2E8F0;
+  --ops-border-m: #CBD5E1;
+  --ops-shadow:   0 1px 3px rgba(0,0,0,.07), 0 1px 2px rgba(0,0,0,.04);
+  --ops-shadow-md:0 4px 16px rgba(0,0,0,.08);
+  --ops-accent:   #2563EB;
+  --ops-accent-l: #EFF6FF;
+  --ops-text:     #0F172A;
+  --ops-muted:    #64748B;
+  --ops-green:    #16A34A;
+  --ops-green-b:  #F0FDF4;
+  --ops-amber:    #D97706;
+  --ops-amber-b:  #FFFBEB;
+  --ops-red:      #DC2626;
+  --ops-red-b:    #FEF2F2;
+  /* Override legacy dark variables used by operations.css and calendar's inline styles */
+  --bg:           #F5F7FA;
+  --panel:        #FFFFFF;
+  --card:         #FFFFFF;
+  --card-h:       #F8FAFC;
+  --border:       #E2E8F0;
+  --border-l:     #CBD5E1;
+  --text:         #0F172A;
+  --muted:        #64748B;
+  --accent:       #2563EB;
+  --accent2:      #3B82F6;
+  --warn:         #D97706;
+  --danger:       #DC2626;
+  --ok:           #16A34A;
+  background: var(--ops-bg);
+  color: var(--ops-text);
 }
 
-/* ── Header / identity ─────────────────────────────────────────────── */
-body.operations-shell .hdr{
-  background:rgba(17,19,21,.96); border-bottom:1px solid var(--border);
-  box-shadow:0 1px 0 rgba(0,0,0,.4); backdrop-filter:blur(6px);
-}
-body.operations-shell .operations-brand{
-  display:flex; flex-direction:column; line-height:1.1; flex-shrink:0; white-space:nowrap;
-}
-body.operations-shell .operations-brand .ob-name{
-  font-size:13px; font-weight:800; letter-spacing:.14em; color:var(--text);
-}
-body.operations-shell .operations-brand .ob-area{
-  font-size:10px; font-weight:700; letter-spacing:.22em; color:var(--accent);
-}
-body.operations-shell .hdr-brand{color:var(--muted); font-weight:600; font-size:13px;}
-body.operations-shell .hdr-sep{background:var(--border-l);}
-body.operations-shell .hdr-page{color:var(--text);}
-body.operations-shell .hdr-btn{
-  background:transparent; border:1px solid var(--border-l); color:var(--muted);
-  min-height:36px;
-}
-body.operations-shell .hdr-btn:hover{background:rgba(255,255,255,.06); color:var(--text);}
-body.operations-shell .hdr-btn.danger{border-color:rgba(224,96,94,.4); color:var(--danger);}
-body.operations-shell .hdr-btn.danger:hover{background:rgba(224,96,94,.1);}
-
-/* ── Page heading ──────────────────────────────────────────────────── */
-body.operations-shell .pg-title{font-size:22px; font-weight:700; letter-spacing:.01em;}
-body.operations-shell .pg-sub{color:var(--muted);}
-body.operations-shell .role-badge{
-  background:rgba(79,184,216,.1); border:1px solid rgba(79,184,216,.3); color:var(--accent);
+/* ── Header — dark navy ─────────────────────────────────────────────── */
+body.operations-shell .hdr {
+  background: var(--ops-navy);
+  border-bottom: 1px solid rgba(255,255,255,.06);
+  box-shadow: 0 1px 0 rgba(0,0,0,.3);
+  backdrop-filter: none;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 0 20px;
 }
 
-/* ── Buttons ───────────────────────────────────────────────────────── */
-body.operations-shell .btn{border-radius:8px;}
-body.operations-shell .btn-primary{
-  background:var(--accent); color:#0C1E24; font-weight:700;
+/* Brand — PLATETIMER / OPERATIONS */
+body.operations-shell .ops-brand {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  text-decoration: none;
+  flex-shrink: 0;
+  white-space: nowrap;
+  margin-right: 24px;
 }
-body.operations-shell .btn-primary:hover:not(:disabled){
-  background:var(--accent2); transform:none; box-shadow:0 2px 10px rgba(79,184,216,.25);
+body.operations-shell .ob-pt {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: .12em;
+  color: #FFFFFF;
 }
-body.operations-shell .btn-neutral{
-  background:transparent; color:var(--text); border:1px solid var(--border-l);
+body.operations-shell .ob-sep {
+  font-size: 13px;
+  font-weight: 400;
+  color: rgba(255,255,255,.3);
+  margin: 0 6px;
 }
-body.operations-shell .btn-neutral:hover:not(:disabled){background:rgba(255,255,255,.06);}
-body.operations-shell .btn-ok{
-  background:rgba(76,191,122,.1); color:var(--ok); border:1px solid rgba(76,191,122,.3);
+body.operations-shell .ob-ops {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: .12em;
+  color: #60A5FA;
 }
-body.operations-shell .btn-ok:hover:not(:disabled){background:rgba(76,191,122,.18);}
-body.operations-shell .btn-danger{
-  background:rgba(224,96,94,.1); color:var(--danger); border:1px solid rgba(224,96,94,.3);
+/* Legacy brand markup in tasks/calendar */
+body.operations-shell .operations-brand {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+  flex-shrink: 0;
+  white-space: nowrap;
+  margin-right: 20px;
+}
+body.operations-shell .operations-brand .ob-name {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .14em;
+  color: #FFFFFF;
+}
+body.operations-shell .operations-brand .ob-area {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .22em;
+  color: #60A5FA;
 }
 
-/* ── Filter bar → compact control strip + status tabs ─────────────── */
-body.operations-shell .filter-bar{
-  background:var(--panel); border:1px solid var(--border); border-radius:10px;
-  padding:10px 12px; gap:8px;
+/* Nav — horizontal pill items */
+body.operations-shell .ops-nav {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 1;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
-body.operations-shell .ops-status-tabs{
-  display:flex; gap:4px; flex-wrap:wrap; width:100%;
-  border-bottom:1px solid var(--border); padding-bottom:10px; margin-bottom:2px;
+body.operations-shell .ops-nav::-webkit-scrollbar { display: none; }
+body.operations-shell .ops-nav-item {
+  padding: 6px 13px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(255,255,255,.6);
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  transition: color .12s, background .12s;
+  flex-shrink: 0;
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
 }
-body.operations-shell .ops-status-tab{
-  padding:8px 16px; border:1px solid transparent; border-radius:7px; background:transparent;
-  color:var(--muted); font-size:13px; font-weight:600; cursor:pointer;
-  transition:all .15s; white-space:nowrap; min-height:36px;
+body.operations-shell .ops-nav-item:hover {
+  color: #FFFFFF;
+  background: rgba(255,255,255,.08);
 }
-body.operations-shell .ops-status-tab:hover{color:var(--text); background:rgba(255,255,255,.05);}
-body.operations-shell .ops-status-tab.active{
-  background:rgba(79,184,216,.12); border-color:rgba(79,184,216,.35); color:var(--accent);
+body.operations-shell .ops-nav-item.active {
+  color: #60A5FA;
+  background: rgba(96,165,250,.12);
+  font-weight: 600;
 }
+
+/* Util area — right side of header */
+body.operations-shell .ops-hdr-util {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-left: 12px;
+}
+body.operations-shell .hdr-company {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255,255,255,.45);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+}
+body.operations-shell .hdr-brand {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255,255,255,.45);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+}
+body.operations-shell .hdr-sep { display: none; }
+body.operations-shell .hdr-page { display: none; }
+body.operations-shell .hdr-btn {
+  padding: 6px 13px;
+  border: 1px solid rgba(255,255,255,.15);
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(255,255,255,.65);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  min-height: 32px;
+  white-space: nowrap;
+  transition: background .12s, color .12s, border-color .12s;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+body.operations-shell .hdr-btn:hover {
+  background: rgba(255,255,255,.1);
+  color: #FFFFFF;
+  border-color: rgba(255,255,255,.25);
+}
+body.operations-shell .hdr-btn.danger {
+  border-color: rgba(239,68,68,.3);
+  color: rgba(239,68,68,.8);
+}
+body.operations-shell .hdr-btn.danger:hover {
+  background: rgba(239,68,68,.1);
+  color: #EF4444;
+  border-color: rgba(239,68,68,.5);
+}
+/* Notification button in calendar header */
+body.operations-shell .notif-btn {
+  padding: 6px 10px;
+  border: 1px solid rgba(255,255,255,.15);
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+  font-size: 16px;
+  transition: background .12s;
+  flex-shrink: 0;
+  min-height: 32px;
+}
+body.operations-shell .notif-btn:hover { background: rgba(255,255,255,.1); }
+body.operations-shell .notif-badge {
+  border: 2px solid var(--ops-navy);
+}
+
+/* ── Page body ──────────────────────────────────────────────────────── */
+body.operations-shell .main {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding-top: calc(var(--hdr, 56px) + 24px);
+  padding-bottom: 80px;
+  padding-left: 20px;
+  padding-right: 20px;
+}
+body.operations-shell .ops-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: calc(var(--hdr, 56px) + 24px) 20px 80px;
+}
+
+/* ── Page heading ───────────────────────────────────────────────────── */
+body.operations-shell .pg-heading {
+  margin-bottom: 24px;
+}
+body.operations-shell .pg-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--ops-text);
+  letter-spacing: -.01em;
+}
+body.operations-shell .pg-sub {
+  font-size: 13px;
+  color: var(--ops-muted);
+  margin-top: 4px;
+}
+body.operations-shell .role-badge {
+  background: var(--ops-accent-l);
+  border: 1px solid rgba(37,99,235,.2);
+  color: var(--ops-accent);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+/* ── Cards ──────────────────────────────────────────────────────────── */
+body.operations-shell .card {
+  background: var(--ops-surface);
+  border: 1px solid var(--ops-border);
+  border-radius: 10px;
+  box-shadow: var(--ops-shadow);
+  padding: 20px;
+}
+body.operations-shell .card-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ops-muted);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  margin-bottom: 14px;
+}
+
+/* ── Brief card (director summary) ─────────────────────────────────── */
+body.operations-shell .brief-card,
+body.operations-shell .exec-brief-card {
+  background: var(--ops-surface);
+  border: 1px solid var(--ops-border);
+  border-left: 3px solid var(--ops-accent);
+  border-radius: 10px;
+  box-shadow: var(--ops-shadow);
+  padding: 18px 22px;
+  margin-bottom: 24px;
+}
+body.operations-shell .exec-brief-text {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--ops-text);
+}
+body.operations-shell .brief-num {
+  font-weight: 700;
+  color: var(--ops-text);
+}
+body.operations-shell .brief-num.ok { color: var(--ops-green); }
+body.operations-shell .brief-num.red { color: var(--ops-red); }
+body.operations-shell .brief-num.warn { color: var(--ops-amber); }
+
+/* ── KPI / stat cards ───────────────────────────────────────────────── */
+body.operations-shell .stat-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+body.operations-shell .stat-card {
+  background: var(--ops-surface);
+  border: 1px solid var(--ops-border);
+  border-radius: 10px;
+  box-shadow: var(--ops-shadow);
+  padding: 16px 18px;
+  text-align: left;
+  cursor: default;
+  transition: box-shadow .15s, border-color .15s;
+}
+body.operations-shell .stat-card:hover {
+  border-color: var(--ops-border-m);
+  box-shadow: var(--ops-shadow-md);
+}
+body.operations-shell .stat-card.urgent-card {
+  border-left: 3px solid var(--ops-red);
+}
+body.operations-shell .stat-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--ops-muted);
+  margin-bottom: 6px;
+}
+body.operations-shell .stat-value {
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--ops-accent);
+  line-height: 1;
+  letter-spacing: -.02em;
+}
+body.operations-shell .stat-card.urgent-card .stat-value { color: var(--ops-red); }
+body.operations-shell .stat-sub {
+  font-size: 11px;
+  color: var(--ops-muted);
+  margin-top: 4px;
+}
+
+/* ── Workload / intel cards ─────────────────────────────────────────── */
+body.operations-shell .workload-card {
+  background: var(--ops-surface);
+  border: 1px solid var(--ops-border);
+  border-radius: 10px;
+  box-shadow: var(--ops-shadow);
+}
+body.operations-shell .section-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--ops-muted);
+  margin-bottom: 12px;
+}
+
+/* ── Quick actions grid ─────────────────────────────────────────────── */
+body.operations-shell .qa-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 10px;
+  margin-bottom: 24px;
+}
+body.operations-shell .qa-btn {
+  background: var(--ops-surface);
+  border: 1px solid var(--ops-border);
+  border-radius: 9px;
+  box-shadow: var(--ops-shadow);
+  padding: 14px 16px;
+  text-align: left;
+  cursor: pointer;
+  transition: box-shadow .15s, border-color .15s;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ops-text);
+}
+body.operations-shell .qa-btn:hover {
+  border-color: var(--ops-border-m);
+  box-shadow: var(--ops-shadow-md);
+}
+body.operations-shell .qa-btn.qa-primary {
+  background: var(--ops-accent);
+  border-color: var(--ops-accent);
+  color: #FFFFFF;
+}
+body.operations-shell .qa-btn.qa-primary:hover {
+  background: #1D4ED8;
+  border-color: #1D4ED8;
+  box-shadow: 0 4px 12px rgba(37,99,235,.25);
+}
+
+/* ── Buttons ────────────────────────────────────────────────────────── */
+body.operations-shell .btn {
+  border-radius: 8px;
+  font-weight: 600;
+}
+body.operations-shell .btn-primary {
+  background: var(--ops-accent);
+  color: #FFFFFF;
+  border: 1px solid var(--ops-accent);
+}
+body.operations-shell .btn-primary:hover:not(:disabled) {
+  background: #1D4ED8;
+  border-color: #1D4ED8;
+  transform: none;
+  box-shadow: 0 4px 12px rgba(37,99,235,.25);
+}
+body.operations-shell .btn-secondary {
+  background: var(--ops-surface);
+  color: var(--ops-text);
+  border: 1px solid var(--ops-border-m);
+}
+body.operations-shell .btn-secondary:hover:not(:disabled) {
+  background: var(--ops-bg);
+  border-color: var(--ops-accent);
+}
+body.operations-shell .btn-neutral {
+  background: var(--ops-surface);
+  color: var(--ops-text);
+  border: 1px solid var(--ops-border-m);
+}
+body.operations-shell .btn-neutral:hover:not(:disabled) {
+  background: var(--ops-bg);
+  border-color: var(--ops-border-m);
+}
+body.operations-shell .btn-ok {
+  background: var(--ops-green-b);
+  color: var(--ops-green);
+  border: 1px solid rgba(22,163,74,.2);
+}
+body.operations-shell .btn-ok:hover:not(:disabled) {
+  background: #dcfce7;
+}
+body.operations-shell .btn-danger {
+  background: var(--ops-red-b);
+  color: var(--ops-red);
+  border: 1px solid rgba(220,38,38,.2);
+}
+body.operations-shell .btn-ghost {
+  background: transparent;
+  color: var(--ops-muted);
+  border: 1px solid var(--ops-border);
+}
+body.operations-shell .btn-ghost:hover:not(:disabled) {
+  color: var(--ops-text);
+  border-color: var(--ops-border-m);
+}
+
+/* ── Forms ──────────────────────────────────────────────────────────── */
 body.operations-shell .form-input,
 body.operations-shell .form-select,
-body.operations-shell .form-textarea{
-  background:var(--bg); border:1px solid var(--border-l); color:var(--text);
-  border-radius:8px;
+body.operations-shell .form-textarea {
+  background: var(--ops-surface);
+  border: 1px solid var(--ops-border-m);
+  color: var(--ops-text);
+  border-radius: 8px;
 }
 body.operations-shell .form-input::placeholder,
-body.operations-shell .form-textarea::placeholder{color:var(--muted);}
+body.operations-shell .form-textarea::placeholder { color: var(--ops-muted); }
 body.operations-shell .form-input:focus,
 body.operations-shell .form-select:focus,
-body.operations-shell .form-textarea:focus{border-color:var(--accent);}
-body.operations-shell .form-select option{background:var(--panel); color:var(--text);}
-body.operations-shell .flt-check{color:var(--muted); min-height:36px;}
-body.operations-shell .form-label{color:var(--muted);}
+body.operations-shell .form-textarea:focus {
+  border-color: var(--ops-accent);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(37,99,235,.1);
+}
+body.operations-shell .form-select option {
+  background: var(--ops-surface);
+  color: var(--ops-text);
+}
+body.operations-shell .form-label { color: var(--ops-muted); }
+body.operations-shell .flt-check { color: var(--ops-muted); min-height: 36px; }
+body.operations-shell .field-readonly {
+  background: var(--ops-bg);
+  border-color: var(--ops-border);
+  color: var(--ops-muted);
+}
 
-/* ── Task rows ─────────────────────────────────────────────────────── */
-body.operations-shell .task-list{gap:6px;}
-body.operations-shell .task-item{
-  background:var(--panel); border:1px solid var(--border); border-radius:9px;
-  padding:12px 16px; box-shadow:none; transition:border-color .12s, background .12s;
-  position:relative;
+/* ── Filter bar + status tabs ───────────────────────────────────────── */
+body.operations-shell .filter-bar {
+  background: var(--ops-surface);
+  border: 1px solid var(--ops-border);
+  border-radius: 10px;
+  box-shadow: var(--ops-shadow);
+  padding: 10px 14px;
+  gap: 8px;
+  margin-bottom: 16px;
 }
-body.operations-shell .task-item:hover{border-color:var(--border-l); background:var(--card-h);}
-body.operations-shell .task-item.overdue{border-left:3px solid var(--danger);}
-body.operations-shell .task-item.in-progress{border-left:3px solid var(--accent);}
-body.operations-shell .task-item.completed{opacity:.5;}
-body.operations-shell .task-item.completed .task-title{text-decoration:line-through; text-decoration-color:var(--muted);}
-body.operations-shell .task-item.cancelled{opacity:.4; border-left:3px solid var(--muted);}
-body.operations-shell .task-title{font-size:14px; font-weight:600; color:var(--text);}
-body.operations-shell .task-sub{color:var(--muted); font-size:12px;}
-body.operations-shell .task-progress{background:var(--border);}
-body.operations-shell .progress-fill{background:var(--accent);}
+body.operations-shell .ops-status-tabs {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  width: 100%;
+  border-bottom: 1px solid var(--ops-border);
+  padding-bottom: 10px;
+  margin-bottom: 2px;
+}
+body.operations-shell .ops-status-tab {
+  padding: 7px 15px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ops-muted);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all .12s;
+  white-space: nowrap;
+  min-height: 34px;
+}
+body.operations-shell .ops-status-tab:hover {
+  color: var(--ops-text);
+  background: var(--ops-bg);
+}
+body.operations-shell .ops-status-tab.active {
+  background: var(--ops-accent-l);
+  border-color: rgba(37,99,235,.25);
+  color: var(--ops-accent);
+  font-weight: 600;
+}
 
-/* Badges → compact dot + label indicators */
-body.operations-shell .badge{
-  background:transparent; border:none; border-radius:0; padding:2px 0;
-  font-size:11px; font-weight:600; letter-spacing:.03em; text-transform:uppercase;
-  display:inline-flex; align-items:center; gap:6px;
+/* ── Task rows ──────────────────────────────────────────────────────── */
+body.operations-shell .task-list { gap: 6px; }
+body.operations-shell .task-item {
+  background: var(--ops-surface);
+  border: 1px solid var(--ops-border);
+  border-radius: 9px;
+  padding: 12px 16px;
+  box-shadow: var(--ops-shadow);
+  transition: border-color .12s, box-shadow .12s;
+  position: relative;
 }
-body.operations-shell .badge::before{
-  content:''; width:7px; height:7px; border-radius:50%; flex-shrink:0; background:var(--muted);
+body.operations-shell .task-item:hover {
+  border-color: var(--ops-border-m);
+  box-shadow: var(--ops-shadow-md);
 }
-body.operations-shell .badge-urgent{color:var(--danger);}
-body.operations-shell .badge-urgent::before{background:var(--danger);}
-body.operations-shell .badge-high{color:var(--warn);}
-body.operations-shell .badge-high::before{background:var(--warn);}
-body.operations-shell .badge-medium{color:var(--muted);}
-body.operations-shell .badge-medium::before{background:var(--accent);}
-body.operations-shell .badge-low{color:var(--muted);}
-body.operations-shell .badge-low::before{background:var(--border-l);}
-body.operations-shell .badge-status-open{color:var(--muted);}
-body.operations-shell .badge-status-open::before{background:var(--muted);}
-body.operations-shell .badge-status-in_progress{color:var(--accent); font-weight:700;}
-body.operations-shell .badge-status-in_progress::before{background:var(--accent);}
-body.operations-shell .badge-status-completed{color:var(--ok);}
-body.operations-shell .badge-status-completed::before{background:var(--ok);}
-body.operations-shell .badge-status-overdue{color:var(--danger); font-weight:700;}
-body.operations-shell .badge-status-overdue::before{background:var(--danger);}
-body.operations-shell .badge-status-cancelled{color:var(--muted); text-decoration:line-through;}
-body.operations-shell .badge-status-cancelled::before{background:var(--border-l);}
+body.operations-shell .task-item.overdue { border-left: 3px solid var(--ops-red); }
+body.operations-shell .task-item.in-progress { border-left: 3px solid var(--ops-accent); }
+body.operations-shell .task-item.completed { opacity: .65; }
+body.operations-shell .task-item.completed .task-title {
+  text-decoration: line-through;
+  text-decoration-color: var(--ops-muted);
+}
+body.operations-shell .task-item.cancelled { opacity: .45; border-left: 3px solid var(--ops-border-m); }
+body.operations-shell .task-title { font-size: 14px; font-weight: 600; color: var(--ops-text); }
+body.operations-shell .task-sub { color: var(--ops-muted); font-size: 12px; }
+body.operations-shell .task-progress { background: var(--ops-border); }
+body.operations-shell .progress-fill { background: var(--ops-accent); }
 
-/* ── Side panel (detail / create / edit) ───────────────────────────── */
-body.operations-shell .panel-overlay{background:rgba(0,0,0,.55);}
-body.operations-shell .detail-panel{
-  background:var(--panel); border-left:1px solid var(--border);
-  box-shadow:-8px 0 40px rgba(0,0,0,.5);
+/* Attention / task cards in director */
+body.operations-shell .task-card {
+  background: var(--ops-surface);
+  border: 1px solid var(--ops-border);
+  border-radius: 9px;
+  box-shadow: var(--ops-shadow);
 }
-body.operations-shell .panel-hdr{
-  background:var(--panel); border-bottom:1px solid var(--border);
+body.operations-shell .attention-card {
+  border-left: 3px solid var(--ops-red);
 }
-body.operations-shell .panel-hdr-title{color:var(--text);}
-body.operations-shell .panel-close{
-  background:transparent; border:1px solid var(--border-l); color:var(--muted); min-height:34px;
-}
-body.operations-shell .panel-close:hover{color:var(--text); background:rgba(255,255,255,.06);}
-body.operations-shell .panel-section-title{color:var(--muted);}
-body.operations-shell .info-cell{background:var(--bg); border:1px solid var(--border);}
-body.operations-shell .info-cell-label{color:var(--muted);}
-body.operations-shell .comment-item{background:var(--bg); border:1px solid var(--border);}
-body.operations-shell .comment-author{color:var(--accent);}
-body.operations-shell .history-item{border-bottom-color:var(--border);}
-body.operations-shell .history-dot{background:var(--accent);}
-body.operations-shell .msg-error{background:rgba(224,96,94,.08); color:var(--danger); border-color:rgba(224,96,94,.3);}
-body.operations-shell .msg-success{background:rgba(76,191,122,.08); color:var(--ok); border-color:rgba(76,191,122,.3);}
-body.operations-shell .empty-state{color:var(--muted);}
 
-/* ── Tablet comfort ────────────────────────────────────────────────── */
-@media (max-width:1024px){
-  body.operations-shell .btn-sm{padding:8px 14px;}
-  body.operations-shell .hdr-btn{padding:8px 14px;}
+/* ── Badges — dot + label ───────────────────────────────────────────── */
+body.operations-shell .badge {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 2px 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
-@media (max-width:820px){
-  body.operations-shell .flt-select{flex:1; min-width:130px;}
+body.operations-shell .badge::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--ops-muted);
+}
+body.operations-shell .badge-urgent { color: var(--ops-red); }
+body.operations-shell .badge-urgent::before { background: var(--ops-red); }
+body.operations-shell .badge-high { color: var(--ops-amber); }
+body.operations-shell .badge-high::before { background: var(--ops-amber); }
+body.operations-shell .badge-medium { color: var(--ops-muted); }
+body.operations-shell .badge-medium::before { background: var(--ops-accent); }
+body.operations-shell .badge-low { color: var(--ops-muted); }
+body.operations-shell .badge-low::before { background: var(--ops-border-m); }
+body.operations-shell .badge-status-open { color: var(--ops-muted); }
+body.operations-shell .badge-status-open::before { background: var(--ops-border-m); }
+body.operations-shell .badge-status-in_progress { color: var(--ops-accent); font-weight: 700; }
+body.operations-shell .badge-status-in_progress::before { background: var(--ops-accent); }
+body.operations-shell .badge-status-completed { color: var(--ops-green); }
+body.operations-shell .badge-status-completed::before { background: var(--ops-green); }
+body.operations-shell .badge-status-overdue { color: var(--ops-red); font-weight: 700; }
+body.operations-shell .badge-status-overdue::before { background: var(--ops-red); }
+body.operations-shell .badge-status-cancelled { color: var(--ops-muted); text-decoration: line-through; }
+body.operations-shell .badge-status-cancelled::before { background: var(--ops-border-m); }
+
+/* Team member status badges */
+body.operations-shell .badge-active { background: var(--ops-green-b); color: var(--ops-green); border-color: rgba(22,163,74,.2); }
+body.operations-shell .badge-invited { background: var(--ops-accent-l); color: var(--ops-accent); border-color: rgba(37,99,235,.2); }
+body.operations-shell .badge-suspended { background: var(--ops-amber-b); color: var(--ops-amber); border-color: rgba(217,119,6,.2); }
+body.operations-shell .badge-archived { background: var(--ops-bg); color: var(--ops-muted); border-color: var(--ops-border); }
+
+/* ── Side panel (detail / create / edit) ────────────────────────────── */
+body.operations-shell .panel-overlay { background: rgba(0,0,0,.3); }
+body.operations-shell .detail-panel {
+  background: var(--ops-surface);
+  border-left: 1px solid var(--ops-border);
+  box-shadow: -8px 0 40px rgba(0,0,0,.12);
+}
+body.operations-shell .panel-hdr {
+  background: var(--ops-bg);
+  border-bottom: 1px solid var(--ops-border);
+}
+body.operations-shell .panel-hdr-title { color: var(--ops-text); }
+body.operations-shell .panel-close {
+  background: transparent;
+  border: 1px solid var(--ops-border-m);
+  color: var(--ops-muted);
+  min-height: 34px;
+}
+body.operations-shell .panel-close:hover {
+  color: var(--ops-text);
+  background: var(--ops-bg);
+}
+body.operations-shell .panel-section-title { color: var(--ops-muted); }
+body.operations-shell .info-grid { gap: 8px; }
+body.operations-shell .info-cell {
+  background: var(--ops-bg);
+  border: 1px solid var(--ops-border);
+  border-radius: 8px;
+}
+body.operations-shell .info-cell-label { color: var(--ops-muted); }
+body.operations-shell .comment-item {
+  background: var(--ops-bg);
+  border: 1px solid var(--ops-border);
+  border-radius: 8px;
+}
+body.operations-shell .comment-author { color: var(--ops-accent); }
+body.operations-shell .history-item { border-bottom-color: var(--ops-border); }
+body.operations-shell .history-dot { background: var(--ops-accent); }
+
+/* ── Messages / alerts ──────────────────────────────────────────────── */
+body.operations-shell .msg-error {
+  background: var(--ops-red-b);
+  color: var(--ops-red);
+  border-color: rgba(220,38,38,.2);
+}
+body.operations-shell .msg-success {
+  background: var(--ops-green-b);
+  color: var(--ops-green);
+  border-color: rgba(22,163,74,.2);
+}
+body.operations-shell .empty-state { color: var(--ops-muted); }
+
+/* ── Team rows ──────────────────────────────────────────────────────── */
+body.operations-shell .two-col {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  gap: 20px;
+  align-items: start;
+}
+body.operations-shell .team-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--ops-border);
+  padding-bottom: 0;
+}
+body.operations-shell .team-tab {
+  padding: 7px 14px;
+  border: 1px solid transparent;
+  border-radius: 7px 7px 0 0;
+  background: transparent;
+  color: var(--ops-muted);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all .12s;
+  border-bottom: none;
+}
+body.operations-shell .team-tab:hover { color: var(--ops-text); }
+body.operations-shell .team-tab.active {
+  color: var(--ops-accent);
+  font-weight: 600;
+  border-color: var(--ops-border);
+  border-bottom-color: var(--ops-surface);
+  background: var(--ops-surface);
+}
+body.operations-shell .team-row {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--ops-border);
+  gap: 12px;
+  transition: background .12s;
+}
+body.operations-shell .team-row:last-child { border-bottom: none; }
+body.operations-shell .team-row:hover { background: var(--ops-bg); }
+body.operations-shell .team-row-name { font-weight: 600; font-size: 14px; color: var(--ops-text); }
+body.operations-shell .team-row-email { font-size: 12px; color: var(--ops-muted); }
+body.operations-shell .team-row-role { font-size: 11px; color: var(--ops-muted); }
+body.operations-shell .team-row-actions { margin-left: auto; }
+
+/* ── Action dropdown ────────────────────────────────────────────────── */
+body.operations-shell .action-dropdown { position: relative; }
+body.operations-shell .action-menu-btn {
+  background: transparent;
+  border: 1px solid var(--ops-border);
+  color: var(--ops-muted);
+  padding: 5px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: background .12s, border-color .12s;
+}
+body.operations-shell .action-menu-btn:hover {
+  background: var(--ops-bg);
+  border-color: var(--ops-border-m);
+  color: var(--ops-text);
+}
+body.operations-shell .action-menu {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  margin-top: 4px;
+  background: var(--ops-surface);
+  border: 1px solid var(--ops-border);
+  border-radius: 8px;
+  box-shadow: var(--ops-shadow-md);
+  min-width: 160px;
+  z-index: 50;
+  overflow: hidden;
+}
+body.operations-shell .action-menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 9px 14px;
+  background: transparent;
+  border: none;
+  color: var(--ops-text);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background .1s;
+}
+body.operations-shell .action-menu button:hover { background: var(--ops-bg); }
+body.operations-shell .action-menu button.danger { color: var(--ops-red); }
+body.operations-shell .action-menu hr {
+  border: none;
+  border-top: 1px solid var(--ops-border);
+  margin: 4px 0;
+}
+
+/* ── Modals ─────────────────────────────────────────────────────────── */
+body.operations-shell .modal-overlay {
+  background: rgba(0,0,0,.35);
+}
+body.operations-shell .modal-box {
+  background: var(--ops-surface);
+  border: 1px solid var(--ops-border);
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.15);
+}
+body.operations-shell .modal-title { color: var(--ops-text); font-weight: 700; }
+body.operations-shell .modal-sub { color: var(--ops-muted); }
+body.operations-shell .modal-hdr {
+  background: var(--ops-surface);
+  border-bottom: 1px solid var(--ops-border);
+}
+body.operations-shell .modal-body { overflow-y: auto; }
+body.operations-shell .modal-close {
+  background: transparent;
+  border: 1px solid var(--ops-border);
+  color: var(--ops-muted);
+  border-radius: 6px;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+body.operations-shell .modal-close:hover { color: var(--ops-text); background: var(--ops-bg); }
+
+/* ── Performance page ───────────────────────────────────────────────── */
+body.operations-shell .perf-profile-card {
+  background: var(--ops-surface);
+  border: 1px solid var(--ops-border);
+  border-radius: 12px;
+  box-shadow: var(--ops-shadow);
+}
+body.operations-shell .perf-avatar {
+  background: var(--ops-accent-l);
+  color: var(--ops-accent);
+  border: 2px solid rgba(37,99,235,.15);
+}
+body.operations-shell .perf-name { color: var(--ops-text); }
+body.operations-shell .perf-role { background: var(--ops-accent-l); color: var(--ops-accent); border-radius: 5px; padding: 2px 8px; font-size: 12px; font-weight: 600; }
+body.operations-shell .perf-dept { color: var(--ops-muted); font-size: 13px; }
+body.operations-shell .perf-status { font-size: 13px; }
+body.operations-shell .perf-period-bar {
+  background: var(--ops-surface);
+  border: 1px solid var(--ops-border);
+  border-radius: 10px;
+  box-shadow: var(--ops-shadow);
+  padding: 10px 14px;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+body.operations-shell .perf-period-btn {
+  padding: 6px 14px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ops-muted);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all .12s;
+}
+body.operations-shell .perf-period-btn:hover { color: var(--ops-text); background: var(--ops-bg); }
+body.operations-shell .perf-period-btn.active {
+  background: var(--ops-accent-l);
+  border-color: rgba(37,99,235,.25);
+  color: var(--ops-accent);
+  font-weight: 600;
+}
+body.operations-shell .perf-custom-range {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+body.operations-shell .perf-section-hdr { color: var(--ops-text); font-weight: 700; font-size: 14px; margin-bottom: 14px; }
+body.operations-shell .perf-metric-card,
+body.operations-shell .perf-reliability-card,
+body.operations-shell [class^="perf-"] .card {
+  background: var(--ops-surface);
+  border: 1px solid var(--ops-border);
+  border-radius: 10px;
+  box-shadow: var(--ops-shadow);
+}
+
+/* ── Calendar views ─────────────────────────────────────────────────── */
+body.operations-shell .stats-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 20px;
+}
+body.operations-shell .view-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--ops-border);
+  padding-bottom: 12px;
+}
+body.operations-shell .view-tab {
+  padding: 7px 15px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ops-muted);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all .12s;
+  white-space: nowrap;
+}
+body.operations-shell .view-tab:hover { color: var(--ops-text); background: var(--ops-bg); }
+body.operations-shell .view-tab.active {
+  background: var(--ops-accent-l);
+  border-color: rgba(37,99,235,.25);
+  color: var(--ops-accent);
+  font-weight: 600;
+}
+body.operations-shell .event-card {
+  background: var(--ops-surface);
+  border: 1px solid var(--ops-border);
+  box-shadow: var(--ops-shadow);
+  border-radius: 7px;
+}
+body.operations-shell .event-card:hover { border-color: var(--ops-border-m); box-shadow: var(--ops-shadow-md); }
+body.operations-shell .event-main { color: var(--ops-text); }
+body.operations-shell .event-meta { color: var(--ops-muted); }
+body.operations-shell .week-col-hdr { color: var(--ops-muted); }
+body.operations-shell .today-col .week-col-hdr {
+  background: var(--ops-accent-l);
+  color: var(--ops-accent);
+  border-radius: 6px;
+}
+body.operations-shell .month-cell { border-color: var(--ops-border); }
+body.operations-shell .month-cell.today { background: var(--ops-accent-l); }
+body.operations-shell .month-cell.selected { background: rgba(37,99,235,.08); border-color: var(--ops-accent); }
+body.operations-shell .month-day-header { color: var(--ops-muted); }
+body.operations-shell .day-number { color: var(--ops-text); }
+body.operations-shell .today .day-number {
+  background: var(--ops-accent);
+  color: #FFFFFF;
+  border-radius: 50%;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+}
+body.operations-shell .day-agenda-hdr { color: var(--ops-text); font-weight: 700; }
+body.operations-shell .notif-drawer {
+  background: var(--ops-surface);
+  border-left: 1px solid var(--ops-border);
+  box-shadow: -4px 0 24px rgba(0,0,0,.1);
+}
+body.operations-shell .notif-drawer-hdr {
+  background: var(--ops-bg);
+  border-bottom: 1px solid var(--ops-border);
+  color: var(--ops-text);
+}
+body.operations-shell .form-panel {
+  background: var(--ops-surface);
+  border: 1px solid var(--ops-border);
+  border-radius: 10px;
+  box-shadow: var(--ops-shadow-md);
+}
+body.operations-shell .form-tabs { border-bottom: 1px solid var(--ops-border); }
+body.operations-shell .form-tab {
+  color: var(--ops-muted);
+  border-bottom: 2px solid transparent;
+}
+body.operations-shell .form-tab.active {
+  color: var(--ops-accent);
+  border-bottom-color: var(--ops-accent);
+}
+body.operations-shell .tts-bar {
+  background: var(--ops-surface);
+  border: 1px solid var(--ops-border);
+  border-radius: 8px;
+}
+
+/* ── Templates page ─────────────────────────────────────────────────── */
+body.operations-shell .task-card {
+  background: var(--ops-surface);
+  border: 1px solid var(--ops-border);
+  border-radius: 9px;
+  box-shadow: var(--ops-shadow);
+  padding: 16px;
+  transition: box-shadow .15s, border-color .15s;
+}
+body.operations-shell .task-card:hover {
+  border-color: var(--ops-border-m);
+  box-shadow: var(--ops-shadow-md);
+}
+body.operations-shell .task-card-header { color: var(--ops-text); }
+body.operations-shell .task-meta { color: var(--ops-muted); font-size: 12px; }
+
+/* ── NSV / intelligence section ─────────────────────────────────────── */
+body.operations-shell .intel-summary,
+body.operations-shell .workload-bar,
+body.operations-shell [class^="dec-"],
+body.operations-shell [class^="trend-"],
+body.operations-shell [class^="dept-health-"] {
+  color: var(--ops-text);
+}
+
+/* ── Responsive ─────────────────────────────────────────────────────── */
+@media (max-width: 1024px) {
+  body.operations-shell .ops-nav { gap: 1px; }
+  body.operations-shell .ops-nav-item { padding: 5px 10px; font-size: 12px; }
+  body.operations-shell .two-col { grid-template-columns: 1fr; }
+  body.operations-shell .stats-row { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 768px) {
+  body.operations-shell .hdr { padding: 0 12px; gap: 0; }
+  body.operations-shell .ob-pt,
+  body.operations-shell .ob-sep,
+  body.operations-shell .ob-ops { font-size: 11px; }
+  body.operations-shell .ops-hdr-util .hdr-company { display: none; }
+  body.operations-shell .ops-hdr-util .hdr-brand { display: none; }
+  body.operations-shell .main,
+  body.operations-shell .ops-container { padding-left: 12px; padding-right: 12px; }
+  body.operations-shell .qa-grid { grid-template-columns: repeat(2, 1fr); }
+  body.operations-shell .stats-row { grid-template-columns: repeat(2, 1fr); }
+  body.operations-shell .stat-row { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 500px) {
+  body.operations-shell .ops-nav { display: none; }
+  body.operations-shell .stats-row,
+  body.operations-shell .stat-row { grid-template-columns: 1fr 1fr; gap: 8px; }
 }
