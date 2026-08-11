@@ -5,11 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Operations — Compiti — PlateTimer</title>
 <link rel="stylesheet" href="css/operations.css">
+<link rel="stylesheet" href="css/operations-redesign.css">
 <script src="js/i18n.js"></script>
 </head>
-<body>
+<body class="operations-shell">
 
 <header class="hdr">
+  <span class="operations-brand"><span class="ob-name">PLATETIMER</span><span class="ob-area">OPERATIONS</span></span>
+  <span class="hdr-sep"></span>
   <span id="hdr-company" class="hdr-brand"></span>
   <span class="hdr-sep"></span>
   <span class="hdr-page" data-i18n="ops.task.pageName">Operations · Compiti</span>
@@ -32,8 +35,17 @@
 
   <!-- Filter / search bar -->
   <div class="filter-bar">
+    <!-- Status filter as compact tabs (drives the existing hidden select; same values, same logic) -->
+    <div class="ops-status-tabs" id="ops-status-tabs" role="tablist">
+      <button type="button" class="ops-status-tab active" data-status="" onclick="setStatusTab(this)" data-i18n="ops.task.filterAll">Tutti gli stati</button>
+      <button type="button" class="ops-status-tab" data-status="OPEN" onclick="setStatusTab(this)" data-i18n="ops.task.filterOpen">Aperti</button>
+      <button type="button" class="ops-status-tab" data-status="IN_PROGRESS" onclick="setStatusTab(this)" data-i18n="ops.task.filterInProgress">In corso</button>
+      <button type="button" class="ops-status-tab" data-status="OVERDUE" onclick="setStatusTab(this)" data-i18n="ops.task.filterOverdue">In ritardo</button>
+      <button type="button" class="ops-status-tab" data-status="COMPLETED" onclick="setStatusTab(this)" data-i18n="ops.task.filterCompleted">Completati</button>
+      <button type="button" class="ops-status-tab" data-status="CANCELLED" onclick="setStatusTab(this)" data-i18n="ops.task.filterCancelled">Cancellati</button>
+    </div>
     <input id="flt-search" class="form-input flt-input" data-i18n-placeholder="ops.task.searchPlaceholder" placeholder="🔍 Cerca titolo, descrizione, assegnatario…" oninput="scheduleFilter()">
-    <select id="flt-status" class="form-select flt-select" onchange="applyFilters()">
+    <select id="flt-status" class="form-select flt-select" style="display:none" onchange="applyFilters()">
       <option value="" data-i18n="ops.task.filterAll">Tutti gli stati</option>
       <option value="OPEN" data-i18n="ops.task.filterOpen">Aperti</option>
       <option value="IN_PROGRESS" data-i18n="ops.task.filterInProgress">In corso</option>
@@ -113,6 +125,14 @@ function scheduleFilter() {
 function applyFilters() {
   clearTimeout(filterTimer);
   loadTasks();
+}
+
+// Status tabs are a visual layer over the existing #flt-status select:
+// they only set its value and call the same applyFilters() path.
+function setStatusTab(btn) {
+  document.querySelectorAll('.ops-status-tab').forEach(b => b.classList.toggle('active', b === btn));
+  document.getElementById('flt-status').value = btn.dataset.status;
+  applyFilters();
 }
 
 async function loadTasks() {

@@ -5,20 +5,22 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Calendario — PlateTimer</title>
 <style>
+/* PlateTimer Operations — dark graphite control-center palette.
+   This <style> block is local to calendar.html; nothing here can leak to Service. */
 :root {
-  --bg:       #F1F5F9;
-  --panel:    #FFFFFF;
-  --card:     #FFFFFF;
-  --card-h:   #F8FAFC;
-  --border:   #E2E8F0;
-  --border-l: #CBD5E1;
-  --text:     #0F172A;
-  --muted:    #64748B;
-  --accent:   #4F46E5;
-  --accent2:  #6366F1;
-  --warn:     #D97706;
-  --danger:   #DC2626;
-  --ok:       #16A34A;
+  --bg:       #111315;
+  --panel:    #181B1F;
+  --card:     #181B1F;
+  --card-h:   #1D2126;
+  --border:   #262B31;
+  --border-l: #343B43;
+  --text:     #E8EAED;
+  --muted:    #8B939C;
+  --accent:   #4FB8D8;
+  --accent2:  #6BC8E4;
+  --warn:     #D9A13B;
+  --danger:   #E0605E;
+  --ok:       #4CBF7A;
   --hdr:      56px;
 }
 *{box-sizing:border-box;margin:0;padding:0;}
@@ -26,21 +28,25 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 
 /* ── HEADER ── */
 .hdr{position:fixed;top:0;left:0;right:0;height:var(--hdr);
-  background:rgba(255,255,255,.97);box-shadow:0 1px 3px rgba(0,0,0,.08);
+  background:rgba(17,19,21,.96);box-shadow:0 1px 0 rgba(0,0,0,.4);
+  border-bottom:1px solid var(--border);backdrop-filter:blur(6px);
   display:flex;align-items:center;gap:10px;padding:0 16px;z-index:300;}
-.hdr-brand{font-size:15px;font-weight:700;color:var(--accent2);white-space:nowrap;
+.operations-brand{display:flex;flex-direction:column;line-height:1.1;flex-shrink:0;white-space:nowrap;}
+.operations-brand .ob-name{font-size:13px;font-weight:800;letter-spacing:.14em;color:var(--text);}
+.operations-brand .ob-area{font-size:10px;font-weight:700;letter-spacing:.22em;color:var(--accent);}
+.hdr-brand{font-size:13px;font-weight:600;color:var(--muted);white-space:nowrap;
   overflow:hidden;text-overflow:ellipsis;max-width:180px;}
 .hdr-sep{width:1px;height:20px;background:var(--border-l);flex-shrink:0;}
 .hdr-page{font-size:15px;font-weight:600;color:var(--text);flex:1;}
 .hdr-btn{padding:7px 14px;border:1px solid var(--border-l);border-radius:7px;
-  background:rgba(0,0,0,.04);color:var(--text);font-size:13px;cursor:pointer;
-  white-space:nowrap;flex-shrink:0;transition:background .15s;border:1px solid var(--border-l);}
-.hdr-btn:hover{background:rgba(0,0,0,.09);}
-.hdr-btn.danger{border-color:rgba(220,38,38,.35);color:var(--danger);}
-.hdr-btn.danger:hover{background:rgba(220,38,38,.08);}
+  background:transparent;color:var(--muted);font-size:13px;cursor:pointer;min-height:36px;
+  white-space:nowrap;flex-shrink:0;transition:background .15s,color .15s;}
+.hdr-btn:hover{background:rgba(255,255,255,.06);color:var(--text);}
+.hdr-btn.danger{border-color:rgba(224,96,94,.4);color:var(--danger);}
+.hdr-btn.danger:hover{background:rgba(224,96,94,.1);}
 .notif-btn{position:relative;padding:7px 10px;border:1px solid var(--border-l);border-radius:7px;
-  background:rgba(0,0,0,.04);cursor:pointer;font-size:18px;transition:background .15s;flex-shrink:0;}
-.notif-btn:hover{background:rgba(0,0,0,.09);}
+  background:transparent;cursor:pointer;font-size:18px;transition:background .15s;flex-shrink:0;}
+.notif-btn:hover{background:rgba(255,255,255,.06);}
 .notif-badge{position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;
   background:var(--danger);color:#fff;font-size:10px;font-weight:800;
   border-radius:10px;display:none;align-items:center;justify-content:center;
@@ -70,14 +76,14 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
   background:var(--card);color:var(--muted);font-size:13px;font-weight:600;
   cursor:pointer;transition:all .15s;white-space:nowrap;}
 .view-tab:hover{color:var(--text);background:var(--card-h);}
-.view-tab.active{background:rgba(99,102,241,.15);border-color:var(--accent);color:var(--accent2);}
+.view-tab.active{background:rgba(79,184,216,.15);border-color:var(--accent);color:var(--accent2);}
 
 /* ── SECTION HEADER ── */
 .section-hdr{display:flex;align-items:center;gap:10px;margin-bottom:12px;}
 .section-title{font-size:13px;font-weight:700;text-transform:uppercase;
   letter-spacing:.6px;color:var(--muted);}
 .section-badge{font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;
-  background:rgba(99,102,241,.12);color:var(--accent2);border:1px solid rgba(99,102,241,.25);}
+  background:rgba(79,184,216,.12);color:var(--accent2);border:1px solid rgba(79,184,216,.25);}
 .section-badge.warn{background:rgba(217,119,6,.12);color:var(--warn);border-color:rgba(217,119,6,.25);}
 .section-badge.danger{background:rgba(220,38,38,.12);color:var(--danger);border-color:rgba(220,38,38,.25);}
 
@@ -103,9 +109,9 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
   white-space:nowrap;}
 .badge-priority-urgent{background:rgba(220,38,38,.15);color:var(--danger);}
 .badge-priority-high{background:rgba(217,119,6,.15);color:var(--warn);}
-.badge-priority-normal{background:rgba(99,102,241,.1);color:var(--accent2);}
+.badge-priority-normal{background:rgba(79,184,216,.1);color:var(--accent2);}
 .badge-priority-low{background:rgba(100,116,139,.1);color:var(--muted);}
-.badge-status-scheduled{background:rgba(99,102,241,.1);color:var(--accent2);}
+.badge-status-scheduled{background:rgba(79,184,216,.1);color:var(--accent2);}
 .badge-status-confirmed{background:rgba(22,163,74,.12);color:var(--ok);}
 .badge-status-in_progress{background:rgba(217,119,6,.12);color:var(--warn);}
 .badge-status-completed{background:rgba(22,163,74,.1);color:var(--ok);}
@@ -138,12 +144,12 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 
 /* Day header — fixed, never shifts when events are added */
 .week-col-hdr{padding:8px 8px 6px;text-align:center;flex-shrink:0;}
-.week-col.today-col .week-col-hdr{background:rgba(99,102,241,.06);}
+.week-col.today-col .week-col-hdr{background:rgba(79,184,216,.06);}
 
 /* Events section — visually separated, expands naturally */
 .week-col-events{flex:1;padding:5px;border-top:1.5px solid var(--border);
   display:flex;flex-direction:column;gap:3px;}
-.week-col.today-col .week-col-events{border-top-color:rgba(99,102,241,.3);}
+.week-col.today-col .week-col-events{border-top-color:rgba(79,184,216,.3);}
 
 .week-day-label{font-size:10px;font-weight:700;text-transform:uppercase;
   letter-spacing:.5px;color:var(--muted);margin-bottom:3px;}
@@ -152,11 +158,11 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 
 /* Event pill → small card, wraps long titles, no overlap with header */
 .week-event-pill{font-size:11px;font-weight:600;padding:4px 6px;border-radius:6px;
-  background:rgba(99,102,241,.10);color:var(--accent2);
-  border:1px solid rgba(99,102,241,.16);
+  background:rgba(79,184,216,.10);color:var(--accent2);
+  border:1px solid rgba(79,184,216,.16);
   white-space:normal;word-break:break-word;line-height:1.4;cursor:pointer;
   transition:background .12s;}
-.week-event-pill:hover{background:rgba(99,102,241,.2);}
+.week-event-pill:hover{background:rgba(79,184,216,.2);}
 .week-empty-day{font-size:11px;color:var(--muted);text-align:center;padding:4px 0;}
 .week-nav{display:flex;align-items:center;gap:10px;margin-bottom:14px;}
 .week-nav-btn{padding:7px 14px;border:1.5px solid var(--border-l);border-radius:8px;
@@ -173,26 +179,38 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
   border-radius:6px;padding:6px;min-height:70px;cursor:pointer;transition:background .15s;}
 .month-cell:hover{background:var(--card-h);}
 .month-cell.other-month{opacity:.4;}
-.month-cell.today-cell{border-color:var(--accent);background:rgba(99,102,241,.04);}
+.month-cell.today-cell{border-color:var(--accent);background:rgba(79,184,216,.04);}
 .month-date-num{font-size:12px;font-weight:700;color:var(--muted);margin-bottom:3px;}
 .month-cell.today-cell .month-date-num{color:var(--accent2);}
 .month-event-dot{font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;
   margin-bottom:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-  background:rgba(99,102,241,.12);color:var(--accent2);}
-@media(max-width:600px){.month-event-dot{display:none;}.month-cell{min-height:40px;}}
+  background:rgba(79,184,216,.12);color:var(--accent2);}
+.month-cell.selected-cell{border-color:var(--accent);background:rgba(79,184,216,.10);}
+.month-cell.selected-cell .month-date-num{color:var(--accent2);}
+.month-dots{display:none;gap:3px;justify-content:center;margin-top:2px;}
+.month-dots i{width:5px;height:5px;border-radius:50%;background:var(--accent);display:block;}
+.month-nav .month-label{text-align:left;font-size:16px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;}
+.month-nav .week-nav-btn{min-width:44px;min-height:38px;}
+/* Selected-day agenda under the month grid */
+.day-agenda{background:var(--panel);border:1px solid var(--border);border-radius:12px;
+  padding:16px 18px;margin-bottom:20px;}
+.day-agenda-hdr{display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;}
+.day-agenda-title{flex:1;font-size:13px;font-weight:800;text-transform:uppercase;
+  letter-spacing:.08em;color:var(--accent);}
+@media(max-width:600px){.month-event-dot{display:none;}.month-dots{display:flex;}.month-cell{min-height:44px;}}
 
 /* ── FAB ── */
 .fab{position:fixed;bottom:28px;right:24px;
   width:56px;height:56px;border-radius:50%;
   background:var(--accent);color:#fff;border:none;
-  font-size:28px;cursor:pointer;box-shadow:0 4px 20px rgba(79,70,229,.4);
+  font-size:28px;cursor:pointer;box-shadow:0 4px 20px rgba(79,184,216,.4);
   display:flex;align-items:center;justify-content:center;
   transition:transform .15s,box-shadow .15s;z-index:100;}
-.fab:hover{transform:scale(1.08);box-shadow:0 6px 26px rgba(79,70,229,.5);}
+.fab:hover{transform:scale(1.08);box-shadow:0 6px 26px rgba(79,184,216,.5);}
 .fab-label{position:fixed;bottom:34px;right:90px;
   background:var(--accent);color:#fff;padding:6px 14px;border-radius:8px;
   font-size:13px;font-weight:700;white-space:nowrap;pointer-events:none;
-  box-shadow:0 2px 10px rgba(79,70,229,.3);z-index:100;
+  box-shadow:0 2px 10px rgba(79,184,216,.3);z-index:100;
   opacity:0;transition:opacity .15s;}
 .fab:hover + .fab-label,.fab:focus + .fab-label{opacity:1;}
 
@@ -262,13 +280,13 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
   cursor:pointer;background:var(--card);transition:all .15s;}
 .dept-check-pill:hover{border-color:var(--accent);}
 .dept-check-pill input[type=checkbox]{accent-color:var(--accent);}
-.dept-check-pill.checked{border-color:var(--accent);background:rgba(99,102,241,.08);}
+.dept-check-pill.checked{border-color:var(--accent);background:rgba(79,184,216,.08);}
 
 /* Btn */
 .btn{padding:9px 20px;border:none;border-radius:8px;font-size:14px;font-weight:700;
   cursor:pointer;transition:all .15s;}
-.btn-primary{background:var(--accent);color:#fff;}
-.btn-primary:hover{background:#4338CA;}
+.btn-primary{background:var(--accent);color:#0C1E24;}
+.btn-primary:hover{background:var(--accent2);}
 .btn-secondary{background:var(--bg);color:var(--text);border:1.5px solid var(--border-l);}
 .btn-secondary:hover{background:var(--card-h);}
 .btn-danger{background:rgba(220,38,38,.08);color:var(--danger);border:1.5px solid rgba(220,38,38,.25);}
@@ -311,12 +329,12 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 .notif-item-btn:hover{background:var(--card);color:var(--text);}
 
 /* ── TTS TOGGLE ── */
-.tts-bar{background:rgba(99,102,241,.06);border:1.5px solid rgba(99,102,241,.2);
+.tts-bar{background:rgba(79,184,216,.06);border:1.5px solid rgba(79,184,216,.2);
   border-radius:10px;padding:10px 14px;margin-bottom:18px;
   display:flex;align-items:center;gap:10px;font-size:13px;}
 .tts-toggle{position:relative;width:40px;height:22px;flex-shrink:0;}
 .tts-toggle input{opacity:0;width:0;height:0;}
-.tts-slider{position:absolute;cursor:pointer;inset:0;background:#CBD5E1;border-radius:22px;
+.tts-slider{position:absolute;cursor:pointer;inset:0;background:#3A424B;border-radius:22px;
   transition:background .2s;}
 .tts-slider:before{position:absolute;content:'';height:16px;width:16px;left:3px;bottom:3px;
   background:white;border-radius:50%;transition:transform .2s;}
@@ -342,6 +360,8 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 
 <!-- ── HEADER ── -->
 <header class="hdr">
+  <span class="operations-brand"><span class="ob-name">PLATETIMER</span><span class="ob-area">OPERATIONS</span></span>
+  <span class="hdr-sep"></span>
   <span id="hdr-company" class="hdr-brand"></span>
   <span class="hdr-sep"></span>
   <span class="hdr-page">📅 Calendario</span>
@@ -473,12 +493,14 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 
   <!-- ── MONTH VIEW ── -->
   <div id="view-month" class="view-content" style="display:none;">
-    <div class="week-nav">
-      <button class="week-nav-btn" onclick="shiftMonth(-1)">← Precedente</button>
-      <span class="week-range-label" id="month-range-label"></span>
-      <button class="week-nav-btn" onclick="shiftMonth(1)">Successiva →</button>
+    <div class="week-nav month-nav">
+      <span class="week-range-label month-label" id="month-range-label"></span>
+      <button class="week-nav-btn" onclick="shiftMonth(-1)" aria-label="Mese precedente">‹</button>
+      <button class="week-nav-btn" onclick="goToToday()">Oggi</button>
+      <button class="week-nav-btn" onclick="shiftMonth(1)" aria-label="Mese successivo">›</button>
     </div>
     <div id="month-grid" class="month-grid"></div>
+    <div id="month-day-agenda" class="day-agenda" style="display:none;"></div>
   </div>
 
 </main>
@@ -570,6 +592,8 @@ let currentEventId = null; // editing
 let weekOffset = 0;  // weeks from current
 let monthYear  = null; // {y, m}
 let departments = [];
+let selectedDay = null;        // month view: selected day (YYYY-MM-DD)
+let monthEventsCache = [];     // month view: events of the loaded range
 let upcomingData = null;
 let notifDrawerOpen = false;
 let ttsEnabled = false;
@@ -860,14 +884,27 @@ function shiftMonth(delta) {
     monthYear.m += delta;
     if (monthYear.m > 12) { monthYear.m = 1; monthYear.y++; }
     if (monthYear.m < 1)  { monthYear.m = 12; monthYear.y--; }
+    selectedDay = null; // stale selection from another month: reset (re-defaulted in renderMonthView)
+    loadMonth();
+}
+
+function goToToday() {
+    const today = todayStr();
+    monthYear = { y: parseInt(today.slice(0,4)), m: parseInt(today.slice(5,7)) };
+    selectedDay = today;
     loadMonth();
 }
 
 function renderMonthView(events, firstDay, lastDay) {
+    monthEventsCache = events;
     document.getElementById('month-range-label').textContent =
         `${IT_MONTHS[monthYear.m - 1]} ${monthYear.y}`;
 
     const today = todayStr();
+    // Guard: never keep a selection outside the displayed month
+    if (selectedDay && (selectedDay < firstDay || selectedDay > lastDay)) selectedDay = null;
+    // Default selection: today when it belongs to the displayed month
+    if (!selectedDay && today >= firstDay && today <= lastDay) selectedDay = today;
     const monday = getMondayOfWeek(firstDay);
     const grid = document.getElementById('month-grid');
 
@@ -886,8 +923,8 @@ function renderMonthView(events, firstDay, lastDay) {
         const isToday = dayStr === today;
         const dayEvents = events.filter(e => e.date === dayStr);
 
-        html += `<div class="month-cell${!inMonth?' other-month':''}${isToday?' today-cell':''}"
-                  onclick="onMonthDayClick('${dayStr}')">
+        html += `<div class="month-cell${!inMonth?' other-month':''}${isToday?' today-cell':''}${dayStr===selectedDay?' selected-cell':''}"
+                  data-day="${dayStr}" onclick="onMonthDayClick('${dayStr}')">
           <div class="month-date-num">${d}</div>`;
         for (const ev of dayEvents.slice(0, 3)) {
             const tc = EVENT_TYPES[ev.eventType];
@@ -897,13 +934,40 @@ function renderMonthView(events, firstDay, lastDay) {
         if (dayEvents.length > 3) {
             html += `<div style="font-size:9px;color:var(--muted);">+${dayEvents.length-3} altri</div>`;
         }
+        if (dayEvents.length) {
+            html += `<div class="month-dots">${dayEvents.slice(0,4).map(()=>'<i></i>').join('')}</div>`;
+        }
         html += `</div>`;
     }
     grid.innerHTML = html;
+    renderDayAgenda();
 }
 
+// Select a day in the month grid and show its agenda below the grid.
+// Event creation with the date pre-filled stays available via the agenda button.
 function onMonthDayClick(dateStr) {
-    openCreateModal(dateStr);
+    selectedDay = dateStr;
+    document.querySelectorAll('#month-grid .month-cell').forEach(c =>
+        c.classList.toggle('selected-cell', c.dataset.day === dateStr));
+    renderDayAgenda();
+}
+
+function renderDayAgenda() {
+    const box = document.getElementById('month-day-agenda');
+    if (!box) return;
+    if (!selectedDay) { box.style.display = 'none'; return; }
+    const dayEvents = monthEventsCache
+        .filter(e => e.date === selectedDay)
+        .sort((a,b) => (a.startTime||'').localeCompare(b.startTime||''));
+    let html = `<div class="day-agenda-hdr">
+        <span class="day-agenda-title">${formatDate(selectedDay)}</span>
+        <button class="btn btn-primary" style="padding:7px 16px;font-size:13px;" onclick="openCreateModal('${selectedDay}')">+ Nuovo evento</button>
+      </div>`;
+    html += dayEvents.length
+        ? dayEvents.map(ev => renderEventCardHTML(ev)).join('')
+        : '<div class="empty-state" style="padding:16px;">Nessun evento per questo giorno.</div>';
+    box.innerHTML = html;
+    box.style.display = '';
 }
 
 // =========================================================================
