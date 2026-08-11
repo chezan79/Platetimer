@@ -96,6 +96,7 @@
   "ops.greeting.afternoon": "Buon pomeriggio",
   "ops.greeting.evening": "Buonasera",
 
+  "ops.role.DIRECTOR": "Direttore",
   "ops.nav.tasks": "Compiti",
   "ops.nav.team": "Team",
   "ops.nav.templates": "🔁 Template",
@@ -636,3 +637,517 @@
   "ops.sec.inEscalation": "In escalation",
   "ops.team.emailReadonly": "Email non modificabile: account Firebase già collegato."
 }
+
+  "ops.brief.default": "Controlla le tue attività.",
+
+  "ops.dec.overloaded.title": "{name} è sovraccarico",
+
+  "ops.exec.cc.priorities": "Priorità:",
+
+  "ops.dec.qa.team": "Apri Team",
+
+  "ops.changes.overdueImproving": "I compiti in ritardo sono diminuiti da {prev} a {cur}.",
+
+  "ops.ui.editedDescription": "descrizione",
+
+  "ops.brief.dir.noOverdue": "Nessuna attività in ritardo.",
+
+  "ops.dec.overloaded.reason.score": "Score di carico = {score}.",
+
+  "ops.status.OPEN": "Aperto",
+
+  "ops.exec.adj.overdueN": "{n} compiti richiedono coordinamento (in ritardo).",
+
+  "ops.intel.inactive.title": "Compito inattivo da tempo",
+
+  "ops.dec.overloaded.reason.noCompMin": "Nessun completamento negli ultimi {min} minuti.",
+
+  "ops.dec.notStarted.timeOverdue": "è già in ritardo di {min} minuti",
+
+  "ops.brief.adj.overdueN": "{n} compiti richiedono coordinamento (in ritardo).",
+
+  "ops.status.CANCELLED": "Cancellato",
+
+  "ops.brief.cc.decisions1": "{n} decisione richiede attenzione.",
+
+  "ops.exec.cc.total": "La cucina ha {n} attività.",
+
+  "ops.intel.sug.reviewDept.desc": "Molti compiti urgenti concentrati nel reparto \"{dept}\".",
+
+  "ops.exec.dir.decisions1": "{n} decisione richiede il tuo intervento.",
+
+  "ops.intel.urgent.action": "Avviare il compito o riassegnarlo a chi può iniziare subito.",
+
+  "ops.dec.overloaded.fact.score": "Score: {val}",
+
+  "ops.dec.recurring.fact.assignee": "Assegnato a: {val}",
+
+  "ops.brief.cdb.completed": "Hai già completato {n} compiti oggi.",
+
+  "ops.exec.adj.priorities": "Priorità:",
+
+  "ops.intel.late.title": "Compito in ritardo",
+
+  "ops.dec.urgentDept.reason": "Il reparto \"{dept}\" ha {n} compiti urgenti aperti.",
+
+  "ops.exec.cc.decisionsN": "{n} decisioni richiedono attenzione.",
+
+  "ops.brief.adj.overdue1": "{n} compito richiede coordinamento (in ritardo).",
+
+  "ops.brief.dir.decisions1": "{n} decisione richiede la tua attenzione.",
+
+  "ops.history.TASK_COMPLETED": "✅ Completato",
+
+  "ops.dec.overloaded.reason.overdueN": "{n} sono in ritardo.",
+
+  "ops.dec.notStarted.timeNone": "non ha scadenza impostata",
+
+  "ops.dec.overloaded.fact.overdue": "In ritardo: {n}",
+
+  "ops.status.IN_PROGRESS": "In corso",
+
+  "ops.dec.recurring.action": "Completare questo compito ricorrente il prima possibile.",
+
+  "ops.dec.overloaded.action": "Ridistribuire alcuni compiti a membri con carico minore.",
+
+  "ops.intel.sug.reassign.desc": "\"{task}\" è assegnato a {name} che è sospeso.",
+
+  "ops.exec.adj.decisionsN": "{n} decisioni richiedono attenzione.",
+
+  "ops.dec.underused.fact.completed": "Completati oggi: 0",
+
+  "ops.intel.sug.balance.title": "Sposta un compito da {from} a {to}",
+
+  "ops.dec.urgentDept.reasonWithOverdue": "Il reparto \"{dept}\" ha {n} compiti urgenti aperti, di cui {overdue} in ritardo.",
+
+  "ops.exec.dir.overdue1": "{n} è in ritardo.",
+
+  "ops.changes.completionRateImproving": "Il tasso di completamento è migliorato di {delta} punti percentuali ({prev}% → {cur}%).",
+
+  "ops.dec.suspended.reason1": "{name} è stato sospeso ma ha ancora {n} compito attivo",
+
+  "ops.dec.overloaded.fact.avg": "Completamento medio: {val}",
+
+  "ops.risk.highDeadline.title": "Scadenza imminente — compito non avviato",
+
+  "ops.ui.accessDenied": "Accesso a Operations non autorizzato.",
+
+  "ops.dec.urgentDept.title": "Reparto \"{dept}\" sotto pressione",
+
+  "ops.dec.avgNone": "n/d",
+
+  "ops.ui.editedNotes": "note",
+
+  "ops.intel.late.desc": "\"{title}\" è in ritardo di {min} minuti.",
+
+  "ops.intel.overloaded.desc": "{name} ha un carico elevato: {assigned} compiti aperti, {overdue} in ritardo, {urgent} urgenti (score: {score}).",
+
+  "ops.changes.urgentImproving": "I compiti urgenti sono diminuiti da {prev} a {cur}.",
+
+  "ops.brief.cdb.noNextTask": "Nessun compito imminente.",
+
+  "ops.changes.overdueWorsening": "I compiti in ritardo sono aumentati da {prev} a {cur}.",
+
+  "ops.dec.avg": "{min} min",
+
+  "ops.dec.overloaded.fact.urgent": "Urgenti: {n}",
+
+  "ops.dec.underused.fact.teamOverdue": "Compiti in ritardo nel team: {n}",
+
+  "ops.exec.sc.tasks": "Hai {n} attività oggi.",
+
+  "ops.nsv.escalation.title": "Escalation: \"{title}\"",
+
+  "ops.exec.adj.decisions1": "{n} decisione richiede attenzione.",
+
+  "ops.dec.reassign.action": "Spostare \"{task}\" a {to} per bilanciare il carico.",
+
+  "ops.exec.default": "Controlla le tue attività.",
+
+  "ops.exec.cdb.overdue1": "Un compito è in ritardo. Intervieni subito.",
+
+  "ops.priority.URGENT": "Urgente",
+
+  "ops.brief.cc.total": "La cucina ha {n} attività.",
+
+  "ops.exec.adj.overdue1": "{n} compito richiede coordinamento (in ritardo).",
+
+  "ops.ui.myself": " — io",
+
+  "ops.ui.noNewItems": "Nessuna nuova criticità dalla tua ultima visita.",
+
+  "ops.risk.lowBusy.title": "{name} è occupato con compiti in ritardo",
+
+  "ops.status.OVERDUE": "In ritardo",
+
+  "ops.dec.suspended.fact.status": "Stato utente: SOSPESO",
+
+  "ops.brief.cc.overdueN": "{n} attività sono in ritardo.",
+
+  "ops.exec.dir.urgent1": "{n} è urgente.",
+
+  "ops.risk.highOverloaded.desc": "Score di carico {score}: {assigned} compiti, {overdue} in ritardo, {urgent} urgenti.",
+
+  "ops.nsv.urgentNew.desc": "Compito urgente \"{title}\" creato dopo la tua ultima visita.",
+
+  "ops.dec.never": "mai",
+
+  "ops.intel.sug.reviewDept.title": "Verifica il reparto \"{dept}\"",
+
+  "ops.dec.overloaded.reason.noCompToday": "Nessun completamento oggi.",
+
+  "ops.brief.adj.urgent": "{n} urgenti da gestire.",
+
+  "ops.risk.criticalOverloaded.desc": "\"{title}\" è urgente, in ritardo di {min} min, e l'assegnatario è sovraccarico.",
+
+  "ops.dec.reassign.fact.to": "A: {name} (score {score})",
+
+  "ops.brief.cc.urgentN": "{n} sono urgenti.",
+
+  "ops.risk.highUrgentNotStarted.desc": "Il compito urgente \"{title}\" è ancora in stato OPEN e non è stato avviato.",
+
+  "ops.dec.notStarted.fact.deadline": "Scadenza: {val}",
+
+  "ops.intel.deptUrgent.title": "Concentrazione urgenze nel reparto \"{dept}\"",
+
+  "ops.intel.urgent.desc": "\"{title}\" è urgente ma non è ancora stato avviato.",
+
+  "ops.ui.editedPriority": "priorità",
+
+  "ops.brief.sc.tasks": "Hai {n} attività oggi.",
+
+  "ops.dec.checkDept.title": "Verificare reparto \"{dept}\"",
+
+  "ops.dec.overloaded.fact.active": "Compiti attivi: {n}",
+
+  "ops.dec.recurring.fact.overdue": "In ritardo di: {min} min",
+
+  "ops.intel.overloaded.title": "Membro del team sovraccarico",
+
+  "ops.dec.notStarted.title": "Compito urgente non avviato: \"{title}\"",
+
+  "ops.brief.cc.decisionsN": "{n} decisioni richiedono attenzione.",
+
+  "ops.risk.highDeadline.desc": "\"{title}\" scade tra {min} minuti e non è ancora stato avviato.",
+
+  "ops.intel.overloaded.action": "Ridistribuire alcuni compiti ad altri membri disponibili.",
+
+  "ops.brief.sc.urgentN": "{n} sono urgenti.",
+
+  "ops.role.CHEF_DE_BRIGADE": "Chef de Brigade",
+
+  "ops.history.ATTACHMENT_ADDED": "📎 Allegato aggiunto",
+
+  "ops.brief.cc.noOverdue": "Nessun ritardo.",
+
+  "ops.exec.dir.priorities": "Priorità consigliate:",
+
+  "ops.dec.reassign.reason": "Basato sul carico attuale: {from} ha score {fromScore} (OVERLOADED), {to} ha score {toScore} ({toStatus}).",
+
+  "ops.history.ATTACHMENT_DELETED": "🗑 Allegato eliminato",
+
+  "ops.ui.firstVisit": "Prima visita",
+
+  "ops.dec.suspended.title": "{name} è sospeso con compiti assegnati",
+
+  "ops.brief.cdb.overdue1": "Un compito è in ritardo. Intervieni subito.",
+
+  "ops.exec.cdb.completed": "Hai già completato {n} compiti oggi.",
+
+  "ops.history.STATUS_CHANGED": "🔄 Stato cambiato",
+
+  "ops.dec.underused.reason1": "Basato sul carico attuale: {name} non ha compiti attivi mentre il team ha {n} compito in ritardo.",
+
+  "ops.risk.criticalSuspended.title": "Compito urgente assegnato a utente sospeso",
+
+  "ops.intel.sug.recurring.desc": "\"{task}\" è un compito ricorrente che è in ritardo.",
+
+  "ops.risk.criticalOverloaded.title": "Compito urgente in ritardo su utente sovraccarico",
+
+  "ops.exec.dir.critRisk1": "⚠️ 1 rischio critico rilevato.",
+
+  "ops.dec.urgentDept.action": "Verificare e prioritizzare il reparto \"{dept}\".",
+
+  "ops.role.CHEF_CUISINE": "Chef di Cucina",
+
+  "ops.exec.sc.urgent1": "Una è urgente.",
+
+  "ops.risk.highOverloaded.title": "{name} è sovraccarico",
+
+  "ops.nsv.escalation.desc": "Il compito \"{title}\" ha attivato un'escalation dopo la tua ultima visita."
+
+  "ops.brief.dir.overdue1": "{n} è in ritardo.",
+
+  "ops.brief.dir.trendImproving": "Il numero di attività scadute è migliorato rispetto a ieri.",
+
+  "ops.exec.dir.critRiskN": "⚠️ {n} rischi critici rilevati.",
+
+  "ops.dec.reassign.fact.priority": "Priorità: {val}",
+
+  "ops.risk.mediumDeptOverdue.title": "Reparto \"{dept}\" sotto pressione",
+
+  "ops.dec.qa.task": "Apri Task",
+
+  "ops.dec.notStarted.timeDue": "scade tra {min} minuti",
+
+  "ops.dec.overloaded.fact.last": "Ultimo completamento: {val}",
+
+  "ops.intel.sug.reassign.title": "Riassegna il compito di {name}",
+
+  "ops.dec.reassign.fact.task": "Compito: \"{title}\"",
+
+  "ops.dec.notStarted.reason": "Basato sui compiti urgenti: \"{title}\" è urgente, non è stato avviato e {timeDesc}.",
+
+  "ops.risk.mediumRecurring.desc": "\"{title}\" è un compito ricorrente in ritardo di {min} min. Il ciclo operativo è a rischio.",
+
+  "ops.ui.todayAt": "oggi alle",
+
+  "ops.ui.yesterdayAt": "ieri alle",
+
+  "ops.dec.recurring.reason": "Il compito ricorrente \"{title}\" è in ritardo di {min} minuti. I compiti ricorrenti non completati in tempo interrompono il ciclo operativo.",
+
+  "ops.risk.highUrgentOverdue.desc": "\"{title}\" è urgente e in ritardo di {min} min.",
+
+  "ops.dec.reassign.title": "Sposta \"{task}\" da {from} a {to}",
+
+  "ops.risk.highUrgentNotStarted.title": "Compito urgente non avviato: \"{title}\"",
+
+  "ops.intel.urgent.title": "Compito urgente non avviato",
+
+  "ops.dec.notStarted.fact.priority": "Priorità: URGENTE",
+
+  "ops.dec.underused.title": "{name} non ha compiti assegnati",
+
+  "ops.brief.adj.decisions1": "{n} decisione richiede attenzione.",
+
+  "ops.exec.adj.noOverdue": "Nessun ritardo nel tuo scope.",
+
+  "ops.risk.lowDeptUrgent.desc": "Il reparto \"{dept}\" ha {n} compiti urgenti aperti.",
+
+  "ops.ui.noDeadline": "Nessuna scadenza",
+
+  "ops.intel.deptUrgent.desc": "Il reparto \"{dept}\" ha {n} compiti urgenti aperti.",
+
+  "ops.exec.cdb.noNextTask": "Nessun compito imminente.",
+
+  "ops.dec.urgentDept.fact.overdue": "In ritardo nel reparto: {n}",
+
+  "ops.exec.cdb.noOverdue": "Nessun ritardo.",
+
+  "ops.intel.sug.recurring.title": "Completa il compito ricorrente in ritardo",
+
+  "ops.dec.suspended.fact.urgent": "Urgenti: {n}",
+
+  "ops.ui.editedDept": "reparto",
+
+  "ops.exec.sc.nextTask": "Hai un compito da completare.",
+
+  "ops.history.COMMENT_ADDED": "💬 Commento aggiunto",
+
+  "ops.dec.recurring.fact.type": "Tipo: ricorrente",
+
+  "ops.brief.cc.overdue1": "Una attività è in ritardo.",
+
+  "ops.exec.cc.decisions1": "{n} decisione richiede attenzione.",
+
+  "ops.dec.suspended.reasonN": "{name} è stato sospeso ma ha ancora {n} compiti attivi",
+
+  "ops.history.PRIORITY_CHANGED": "⚡ Priorità cambiata",
+
+  "ops.brief.dir.overdueN": "{n} sono in ritardo.",
+
+  "ops.exec.dir.vsYesterday": "Rispetto a ieri:",
+
+  "ops.changes.completionRateWorsening": "Il tasso di completamento è diminuito di {delta} punti percentuali ({prev}% → {cur}%).",
+
+  "ops.dec.notStarted.fact.status": "Stato: OPEN (non avviato)",
+
+  "ops.changes.urgentWorsening": "I compiti urgenti sono aumentati da {prev} a {cur}.",
+
+  "ops.priority.HIGH": "Alta",
+
+  "ops.dec.suspended.fact.assigned": "Compiti assegnati: {n}",
+
+  "ops.priority.LOW": "Bassa",
+
+  "ops.dec.since": "{min} min fa",
+
+  "ops.dec.overloaded.reason.overdue1": "{n} è in ritardo.",
+
+  "ops.exec.adj.urgent": "{n} urgenti da gestire.",
+
+  "ops.risk.criticalSuspended.desc": "\"{title}\" è urgente ma assegnato a un utente sospeso. Riassegnare immediatamente.",
+
+  "ops.priority.MEDIUM": "Media",
+
+  "ops.ui.editedDeadline": "scadenza modificata",
+
+  "ops.exec.dir.urgentN": "{n} sono urgenti.",
+
+  "ops.brief.dir.trendStable": "Il carico operativo è stabile rispetto a ieri.",
+
+  "ops.risk.highUrgentOverdue.title": "Compito urgente in ritardo: \"{title}\"",
+
+  "ops.exec.sc.urgentN": "{n} sono urgenti.",
+
+  "ops.ui.noTasks": "Nessun compito.",
+
+  "ops.intel.suspended.action": "Riassegnare i compiti a un membro attivo del team.",
+
+  "ops.dec.checkDept.fact.urgentOverdue": "Urgenti in ritardo: {n}",
+
+  "ops.brief.cdb.overdueN": "{n} compiti sono in ritardo. Intervieni subito.",
+
+  "ops.role.SOUS_CHEF": "Sous Chef",
+
+  "ops.exec.dir.today": "Oggi ci sono {n} attività operative.",
+
+  "ops.dec.urgentDept.fact.urgent": "Urgenti nel reparto: {n}",
+
+  "ops.brief.dir.trendWorsening": "Il numero di attività scadute è aumentato rispetto a ieri.",
+
+  "ops.changes.workloadImproving": "Il numero di utenti sovraccarichi è diminuito (da {prev} a {cur}).",
+
+  "ops.brief.sc.urgent1": "Una è urgente.",
+
+  "ops.brief.sc.nextDue": "La prossima scade alle {time}.",
+
+  "ops.dec.checkDept.reason": "Basato sui compiti in ritardo: il reparto \"{dept}\" ha {n} compiti in ritardo. Il più in ritardo è da {maxMin} minuti.",
+
+  "ops.dec.notStarted.fact.assignee": "Assegnato a: {val}",
+
+  "ops.exec.cdb.overdueN": "{n} compiti sono in ritardo. Intervieni subito.",
+
+  "ops.dec.underused.fact.assigned": "Compiti assegnati: 0",
+
+  "ops.risk.lowDeptUrgent.title": "Reparto \"{dept}\" con più urgenze",
+
+  "ops.dec.checkDept.fact.maxDelay": "Ritardo massimo: {min} min",
+
+  "ops.intel.sug.balance.desc": "\"{task}\" può essere spostato per bilanciare il carico di lavoro.",
+
+  "ops.dec.recurring.title": "Compito ricorrente in ritardo: \"{title}\"",
+
+  "ops.dec.overloaded.reason.urgent1": "{n} è urgente.",
+
+  "ops.ui.lastCheck": "Ultimo controllo:",
+
+  "ops.dec.checkDept.fact.overdue": "In ritardo nel reparto: {n}",
+
+  "ops.brief.cdb.noOverdue": "Nessun ritardo.",
+
+  "ops.exec.cc.urgent1": "{n} è urgente.",
+
+  "ops.risk.lowBusy.desc": "{name} (BUSY, score {score}) ha {overdue} compiti in ritardo.",
+
+  "ops.intel.suspended.desc1": "{name} è sospeso ma ha ancora {n} compito assegnato.",
+
+  "ops.dec.underused.reasonN": "Basato sul carico attuale: {name} non ha compiti attivi mentre il team ha {n} compiti in ritardo.",
+
+  "ops.risk.mediumRecurring.title": "Compito ricorrente in ritardo",
+
+  "ops.dec.suspended.action": "Riassegnare immediatamente i compiti a un membro attivo del team.",
+
+  "ops.exec.sc.overdue": "{n} in ritardo — intervieni subito.",
+
+  "ops.dec.qa.ops": "Apri Operazioni",
+
+  "ops.intel.late.action": "Completare o riassegnare immediatamente.",
+
+  "ops.dec.underused.action": "Considerare di assegnare compiti a questo membro disponibile.",
+
+  "ops.ui.networkError": "Errore di rete: ",
+
+  "ops.brief.sc.nextTask": "Hai un compito da completare.",
+
+  "ops.exec.cdb.nextTask": "Prossimo compito: \"{title}\".",
+
+  "ops.brief.dir.totalOps": "Oggi ci sono {n} attività operative.",
+
+  "ops.history.DUE_DATE_CHANGED": "📅 Scadenza cambiata",
+
+  "ops.intel.suspended.descN": "{name} è sospeso ma ha ancora {n} compiti assegnati.",
+
+  "ops.brief.cdb.nextTask": "Prossimo compito: \"{title}\".",
+
+  "ops.dec.overloaded.reason.urgentN": "{n} sono urgenti.",
+
+  "ops.risk.mediumDeptOverdue.desc": "Il reparto \"{dept}\" ha {n} compiti in ritardo.",
+
+  "ops.dec.reassign.fact.from": "Da: {name} (score {score})",
+
+  "ops.risk.mediumInactive.desc": "\"{title}\" è IN_PROGRESS ma non viene aggiornato da {hours} ore.",
+
+  "ops.role.ADJOINT": "Adjoint",
+
+  "ops.exec.cc.noOverdue": "Nessun ritardo.",
+
+  "ops.history.TASK_CREATED": "📝 Compito creato",
+
+  "ops.ui.sessionExpired": "Sessione scaduta. Effettua nuovamente il login.",
+
+  "ops.brief.adj.decisionsN": "{n} decisioni richiedono attenzione.",
+
+  "ops.exec.dir.noOverdue": "Nessuna attività in ritardo.",
+
+  "ops.changes.workloadWorsening": "Il numero di utenti sovraccarichi è aumentato (da {prev} a {cur}).",
+
+  "ops.dec.notStarted.action": "Avviare immediatamente o riassegnare a chi può iniziare ora.",
+
+  "ops.risk.lowStale.desc": "\"{title}\" è stato creato {days} giorni fa e non è ancora iniziato.",
+
+  "ops.history.TASK_STARTED": "▶ Avviato",
+
+  "ops.dec.notStarted.fact.nd": "N/D",
+
+  "ops.exec.cc.overdueN": "{n} attività sono in ritardo.",
+
+  "ops.brief.dir.decisionsN": "{n} decisioni richiedono la tua attenzione.",
+
+  "ops.intel.suspended.title": "Utente sospeso con compiti assegnati",
+
+  "ops.risk.lowStale.title": "Compito aperto da {days} giorni",
+
+  "ops.status.COMPLETED": "Completato",
+
+  "ops.ui.completeBtn": "✓ Completa",
+
+  "ops.dec.suspended.reasonUrgent": ", di cui {n} urgenti",
+
+  "ops.ui.startBtn": "▶ Inizia",
+
+  "ops.ui.editedTitle": "titolo",
+
+  "ops.exec.dir.decisionsN": "{n} decisioni richiedono il tuo intervento.",
+
+  "ops.exec.sc.nextDue": "Prossima scadenza alle {time}.",
+
+  "ops.history.ASSIGNEE_CHANGED": "👤 Riassegnato",
+
+  "ops.intel.inactive.desc": "\"{title}\" è in corso ma non viene aggiornato da {hours} ore.",
+
+  "ops.dec.checkDept.action": "Rivedere le priorità del reparto \"{dept}\" e intervenire sui compiti in ritardo.",
+
+  "ops.exec.cc.urgentN": "{n} sono urgenti.",
+
+  "ops.intel.inactive.action": "Verificare lo stato avanzamento e aggiornare il compito.",
+
+  "ops.nsv.urgentNew.title": "Nuovo compito urgente: \"{title}\"",
+
+  "ops.exec.dir.overdueN": "{n} sono in ritardo.",
+
+  "ops.history.PROGRESS_CHANGED": "📊 Progresso aggiornato",
+
+  "ops.dec.overloaded.reason.tasks": "{name} ha {n} compiti attivi.",
+
+  "ops.intel.deptUrgent.action": "Verificare e prioritizzare il reparto \"{dept}\".",
+
+  "ops.exec.cc.overdue1": "Una attività è in ritardo.",
+
+  "ops.history.TASK_EDITED": "✏️ Modificato",
+
+  "ops.brief.cc.urgent1": "{n} è urgente.",
+
+  "ops.risk.mediumInactive.title": "Compito in corso senza aggiornamenti",
+
+  "ops.brief.adj.noOverdue": "Nessun ritardo nel tuo scope.",

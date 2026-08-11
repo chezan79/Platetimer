@@ -161,6 +161,7 @@
   </div>
 </main>
 
+<script src="js/i18n.js"></script>
 <script src="js/ws-auth.js"></script>
 <script src="js/operations-common.js"></script>
 <script src="js/operations-realtime.js"></script>
@@ -186,6 +187,7 @@ function trendDir(d) {
 }
 
 async function load() {
+  await I18n.init({ selector: false });
   const me = await OpsCommon.loadMe();
   if (!me) return;
   if (me.user.role !== 'DIRECTOR') { location.replace('operations.html'); return; }
@@ -197,7 +199,7 @@ async function load() {
     OpsCommon.api('/api/operations/tasks'),
     OpsCommon.api('/api/operations/stats'),
     OpsCommon.api('/api/operations/escalation-status'),
-    OpsCommon.api('/api/operations/intelligence'),
+    OpsCommon.api(OpsCommon.intelligenceUrl()),
   ]);
 
   if (!taskRes || !taskRes.success) { OpsCommon.showError(taskRes && taskRes.error); return; }
@@ -508,6 +510,13 @@ I18n.init({ selector: '#i18n-sel' }).then(() => {
 // Sprint 5: real-time live updates ──────────────────────────────────────────
 OpsRealtime.init();
 let _rtTimer = null;
+// Pass isRealtime=1 so the server does NOT update lastVisitAt on WS-triggered refreshes
+async function loadRealtime() {
+  const me = OpsCommon._lastMe || await OpsCommon.loadMe();
+  if (!me) return;
+  const intelRes = await OpsCommon.api(OpsCommon.intelligenceUrl('isRealtime=1'));
+  renderIntelligence(intelRes);
+}
 function rtReload(d) { clearTimeout(_rtTimer); _rtTimer = setTimeout(load, d || 700); }
 OpsRealtime.on('OPS_TASK_CREATED',        () => { rtReload(400); OpsRealtime.toast(t('ops.rt.taskCreated'), 'info'); });
 OpsRealtime.on('OPS_TASK_UPDATED',        () => { rtReload(500); });

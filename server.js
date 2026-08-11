@@ -3342,6 +3342,9 @@ app.get('/api/operations/intelligence', (req, res) => {
     const actor     = ctx.opsUser;
     const companyId = actor.companyId;
 
+    // ── Language for generated texts (sanitised server-side by ops-i18n) ─────
+    const lang = req.query.lang || 'it';
+
     const allTasks = getOpsTasks(companyId);
     const allUsers = getOpsUsers(companyId);
 
@@ -3353,7 +3356,7 @@ app.get('/api/operations/intelligence', (req, res) => {
     const result = opsIntelligence.analyzeIntelligence(companyId, {
         tasks: scopedTasks,
         users: scopedUsers,
-    });
+    }, lang);
 
     // ── Snapshot (idempotent — company-wide, Director triggers generation) ───
     if (actor.role === 'DIRECTOR') {
@@ -3409,11 +3412,11 @@ app.get('/api/operations/intelligence', (req, res) => {
     const previousVisitAt = prevVisitRecord ? prevVisitRecord.lastVisitAt : null;
 
     const priorityQueue  = opsAssistant.generatePriorityQueue(result.decisions);
-    const riskWatch      = opsAssistant.detectRisks(scopedTasks, scopedUsers, result.workload);
-    const changesSince   = opsAssistant.buildChangesSince(trends, yesterdaySnap, result.summary);
+    const riskWatch      = opsAssistant.detectRisks(scopedTasks, scopedUsers, result.workload, lang);
+    const changesSince   = opsAssistant.buildChangesSince(trends, yesterdaySnap, result.summary, lang);
     const executiveBrief = opsAssistant.buildExecutiveBrief(
         actor.role, result.summary, priorityQueue, riskWatch, changesSince,
-        result.decisions, trends, myMetrics, nextTask
+        result.decisions, trends, myMetrics, nextTask, lang
     );
 
     // ── Sprint 6.3.1: new-since-last-visit (computed before updating lastVisitAt) ─
@@ -3423,6 +3426,7 @@ app.get('/api/operations/intelligence', (req, res) => {
         tasks:     scopedTasks,
         previousVisitAt,
         now:       Date.now(),
+        lang,
     });
 
     // ── Briefing (Sprint 6.2 — kept for backward compat) ─────────────────────
@@ -3432,7 +3436,7 @@ app.get('/api/operations/intelligence', (req, res) => {
         trends,
         myMetrics,
         nextTask,
-    });
+    }, lang);
 
     // ── Build role-appropriate response ──────────────────────────────────────
     const base = { success: true, briefing, executiveBrief, role: actor.role };

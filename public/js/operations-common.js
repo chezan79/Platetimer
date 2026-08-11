@@ -2,11 +2,11 @@
 // Uses the same server-signed session token as the Service side (ws-auth.js).
 // All authorization is enforced server-side; UI filtering is convenience only.
 //
-// I18N-2: label functions (priorityLabel, statusLabel, historyLabel, roleLabel)
-// resolve via I18n.t() when available, falling back to Italian static values.
+// I18n support: uses I18n.t() when the I18n global is available (loaded before
+// this file via <script src="js/i18n.js">). Falls back to Italian constants.
 
 const OpsCommon = (() => {
-    // ── Static Italian fallbacks (kept for backward compatibility with tests) ──
+    // Legacy constant maps — kept for backward compatibility and as Italian fallbacks.
     const ROLE_LABELS = {
         DIRECTOR: 'Direttore',
         CHEF_CUISINE: 'Chef di Cucina',
@@ -35,56 +35,52 @@ const OpsCommon = (() => {
         ATTACHMENT_DELETED:'🗑 Allegato eliminato'
     };
 
-    // ── I18n helpers ─────────────────────────────────────────────────────────
-
-    // Safe wrapper: returns I18n.t(key) when I18n is loaded, falls back to key.
-    function _t(key) {
-        if (typeof I18n !== 'undefined' && typeof I18n.t === 'function') {
-            return I18n.t(key);
-        }
-        return key;
+    // Safe i18n helper — calls I18n.t() when available, otherwise falls back to the
+    // Italian constant maps above. Never throws.
+    function _t(key, fallback) {
+        try {
+            if (typeof I18n !== 'undefined' && I18n.t) {
+                const v = I18n.t(key);
+                if (v !== key) return v;   // translated successfully
+            }
+        } catch (e) { /* ignore */ }
+        return fallback !== undefined ? fallback : key;
     }
 
-    // Map I18n language to a BCP-47 locale for date formatting.
+    // Return the locale string for date formatting based on the active language.
     function _locale() {
-        if (typeof I18n !== 'undefined' && typeof I18n.getLanguage === 'function') {
-            const lang = I18n.getLanguage();
-            if (lang === 'fr') return 'fr-FR';
-            if (lang === 'en') return 'en-GB';
-        }
+        try {
+            if (typeof I18n !== 'undefined' && I18n.getLanguage) {
+                const l = I18n.getLanguage();
+                if (l === 'fr') return 'fr-FR';
+                if (l === 'en') return 'en-GB';
+            }
+        } catch (e) { /* ignore */ }
         return 'it-IT';
     }
 
-    // ── Translation-aware label functions ────────────────────────────────────
-
-    function priorityLabel(key) {
-        if (!key) return key;
-        const translated = _t('ops.priority.' + key.toLowerCase());
-        // If I18n.t returned the raw key (missing translation), fall back to static
-        if (translated === 'ops.priority.' + key.toLowerCase()) return PRIORITY_LABELS[key] || key;
-        return translated;
+    // Return the current lang for appending to intelligence API calls.
+    function langParam() {
+        try {
+            if (typeof I18n !== 'undefined' && I18n.getLanguage) {
+                return '?lang=' + I18n.getLanguage();
+            }
+        } catch (e) { /* ignore */ }
+        return '?lang=it';
     }
 
-    function statusLabel(key) {
-        if (!key) return key;
-        const translated = _t('ops.status.' + key.toLowerCase());
-        if (translated === 'ops.status.' + key.toLowerCase()) return STATUS_LABELS[key] || key;
-        return translated;
+    // Build the intelligence endpoint URL, merging extra query params.
+    // Usage: intelligenceUrl()           → /api/operations/intelligence?lang=fr
+    //        intelligenceUrl('isRealtime=1') → ...&isRealtime=1
+    function intelligenceUrl(extra) {
+        const base = '/api/operations/intelligence' + langParam();
+        return extra ? base + '&' + extra : base;
     }
-
-    function historyLabel(type) {
-        if (!type) return type;
-        const translated = _t('ops.history.' + type.toLowerCase());
-        if (translated === 'ops.history.' + type.toLowerCase()) return HISTORY_LABELS[type] || type;
-        return translated;
-    }
-
-    // ── Core API helpers ─────────────────────────────────────────────────────
 
     function token() {
         const t = WsAuth.getStoredToken();
         if (!t) {
-            alert(_t('common.sessionExpired'));
+            alert(_t('ops.ui.sessionExpired', 'Sessione scaduta. Effettua nuovamente il login.'));
             window.location.href = 'index.html';
         }
         return t;
@@ -100,13 +96,13 @@ const OpsCommon = (() => {
             });
             if (res.status === 401) {
                 WsAuth.clearToken();
-                alert(_t('common.sessionExpired'));
+                alert(_t('ops.ui.sessionExpired', 'Sessione scaduta. Effettua nuovamente il login.'));
                 window.location.href = 'index.html';
                 return null;
             }
             return await res.json();
         } catch (e) {
-            return { success: false, error: _t('common.networkError') + ' ' + e.message };
+            return { success: false, error: _t('ops.ui.networkError', 'Errore di rete: ') + e.message };
         }
     }
 
@@ -118,7 +114,7 @@ const OpsCommon = (() => {
         const data = await api('/api/operations/me' + (name ? `?name=${encodeURIComponent(name)}` : ''));
         if (!data) return null;
         if (!data.success) {
-            showError(data.error || 'Accesso a Operations non autorizzato.');
+            showError(data.error || _t('ops.ui.accessDenied', 'Accesso a Operations non autorizzato.'));
             return null;
         }
         return data;
@@ -126,8 +122,8 @@ const OpsCommon = (() => {
 
     function showError(msg) {
         const el = document.getElementById('ops-error');
-        if (el) { el.textContent = msg || _t('common.error'); el.style.display = 'block'; }
-        else alert(msg || _t('common.error'));
+        if (el) { el.textContent = msg || 'Errore.'; el.style.display = 'block'; }
+        else alert(msg || 'Errore.');
     }
 
     function escHtml(s) {
@@ -137,7 +133,7 @@ const OpsCommon = (() => {
     }
 
     function fmtDue(d) {
-        if (!d) return _t('ops.task.noDue');
+        if (!d) return _t('ops.ui.noDeadline', 'Nessuna scadenza');
         const dt = new Date(d);
         if (isNaN(dt)) return d;
         return dt.toLocaleString(_locale(), { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -158,10 +154,19 @@ const OpsCommon = (() => {
     }
 
     function roleLabel(r) {
-        if (!r) return r;
-        const translated = _t('ops.role.' + r.toLowerCase());
-        if (translated === 'ops.role.' + r.toLowerCase()) return ROLE_LABELS[r] || r;
-        return translated;
+        return _t('ops.role.' + r, ROLE_LABELS[r] || r);
+    }
+
+    function priorityLabel(p) {
+        return _t('ops.priority.' + p, PRIORITY_LABELS[p] || p);
+    }
+
+    function statusLabel(s) {
+        return _t('ops.status.' + s, STATUS_LABELS[s] || s);
+    }
+
+    function historyLabel(type) {
+        return _t('ops.history.' + type, HISTORY_LABELS[type] || type);
     }
 
     // Build assignee <select> options from an array of { id, name, role } user objects.
@@ -170,26 +175,26 @@ const OpsCommon = (() => {
         (users || []).forEach(u => {
             const o = document.createElement('option');
             o.value = u.id;
-            o.textContent = `${u.name} (${roleLabel(u.role)})${u.id === myId ? ' ' + _t('ops.task.me') : ''}`;
+            o.textContent = `${u.name} (${roleLabel(u.role)})${u.id === myId ? _t('ops.ui.myself', ' — io') : ''}`;
             selectEl.appendChild(o);
         });
     }
 
     // Render history event as readable text
     function historyLine(h) {
-        const label = historyLabel(h.type) || h.type;
+        const label = historyLabel(h.type);
         let detail = '';
         if (h.type === 'ASSIGNEE_CHANGED') detail = ` → ${escHtml(h.toName || h.to)}`;
         else if (h.type === 'STATUS_CHANGED') detail = ` → ${escHtml(statusLabel(h.to) || h.to)}`;
         else if (h.type === 'PROGRESS_CHANGED') detail = ` ${h.from}% → ${h.to}%`;
         else if (h.type === 'TASK_EDITED') {
             const parts = [];
-            if (h.priorityFrom) parts.push(`${_t('ops.history.field.priority')}: ${escHtml(priorityLabel(h.priorityFrom))} → ${escHtml(priorityLabel(h.priorityTo))}`);
-            if (h.dueDateFrom !== undefined) parts.push(_t('ops.history.field.due_date'));
-            if (h.titleChanged) parts.push(_t('ops.history.field.title'));
-            if (h.descriptionChanged) parts.push(_t('ops.history.field.description'));
-            if (h.notesChanged) parts.push(_t('ops.history.field.notes'));
-            if (h.departmentFrom !== undefined) parts.push(_t('ops.history.field.department'));
+            if (h.priorityFrom) parts.push(`${_t('ops.ui.editedPriority','priorità')}: ${escHtml(priorityLabel(h.priorityFrom))} → ${escHtml(priorityLabel(h.priorityTo))}`);
+            if (h.dueDateFrom !== undefined) parts.push(_t('ops.ui.editedDeadline','scadenza modificata'));
+            if (h.titleChanged) parts.push(_t('ops.ui.editedTitle','titolo'));
+            if (h.descriptionChanged) parts.push(_t('ops.ui.editedDescription','descrizione'));
+            if (h.notesChanged) parts.push(_t('ops.ui.editedNotes','note'));
+            if (h.departmentFrom !== undefined) parts.push(_t('ops.ui.editedDept','reparto'));
             if (parts.length) detail = ': ' + parts.join(', ');
         } else if (h.type === 'COMMENT_ADDED') detail = h.preview ? `: "${escHtml(h.preview)}…"` : '';
         return `${label}${detail}`;
@@ -201,12 +206,14 @@ const OpsCommon = (() => {
     // opts.showStart   — show Start button (default: true)
     function renderTaskList(container, tasks, users, myId, onChange, opts = {}) {
         if (!tasks || tasks.length === 0) {
-            container.innerHTML = `<div class="empty-state">${_t('ops.task.noTasks')}</div>`;
+            container.innerHTML = `<div class="empty-state">${escHtml(_t('ops.ui.noTasks', 'Nessun compito.'))}</div>`;
             return;
         }
         const showComplete = opts.showComplete !== false;
         const showStart = opts.showStart !== false;
         const clickable = !!opts.onTaskClick;
+        const completeLabel = _t('ops.ui.completeBtn', '✓ Completa');
+        const startLabel    = _t('ops.ui.startBtn',    '▶ Inizia');
 
         container.innerHTML = tasks.map(t => {
             const st = t.effectiveStatus || t.status;
@@ -229,12 +236,12 @@ const OpsCommon = (() => {
                 </div>
                 ${pct > 0 ? `<div class="task-progress" style="margin-top:6px"><div class="progress-fill" style="width:${pct}%"></div></div>` : ''}
               </div>
-              <span class="badge badge-${t.priority.toLowerCase()}">${priorityLabel(t.priority)}</span>
-              <span class="badge badge-status-${st.toLowerCase()}">${statusLabel(st)}</span>
+              <span class="badge badge-${t.priority.toLowerCase()}">${escHtml(priorityLabel(t.priority))}</span>
+              <span class="badge badge-status-${st.toLowerCase()}">${escHtml(statusLabel(st))}</span>
               ${showComplete && t.assigneeId === myId && t.status !== 'COMPLETED' && t.status !== 'CANCELLED'
-                ? `<button class="btn btn-sm btn-ok" data-complete="${escHtml(t.id)}">${_t('ops.task.completeBtn')}</button>` : ''}
+                ? `<button class="btn btn-sm btn-ok" data-complete="${escHtml(t.id)}">${escHtml(completeLabel)}</button>` : ''}
               ${showStart && t.assigneeId === myId && t.status === 'OPEN'
-                ? `<button class="btn btn-sm btn-neutral" data-start="${escHtml(t.id)}">${_t('ops.task.startBtn')}</button>` : ''}
+                ? `<button class="btn btn-sm btn-neutral" data-start="${escHtml(t.id)}">${escHtml(startLabel)}</button>` : ''}
             </div>`;
         }).join('');
 
@@ -313,12 +320,12 @@ const OpsCommon = (() => {
         return t.status === 'COMPLETED' && (isToday(t.updatedAt) || isToday(t.completedAt));
     }
 
-    // Sprint 4: hour-of-day greeting
+    // Sprint 4: hour-of-day greeting (translated)
     function greeting() {
         const h = new Date().getHours();
-        if (h < 12) return _t('ops.greeting.morning');
-        if (h < 18) return _t('ops.greeting.afternoon');
-        return _t('ops.greeting.evening');
+        if (h < 12) return _t('ops.greeting.morning', 'Buongiorno');
+        if (h < 18) return _t('ops.greeting.afternoon', 'Buon pomeriggio');
+        return _t('ops.greeting.evening', 'Buonasera');
     }
 
     // Sprint 4: render a compact task card (clickable → operations-tasks.html)
@@ -342,8 +349,8 @@ const OpsCommon = (() => {
               </div>
             </div>
             <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
-              <span class="badge badge-${(t.priority||'medium').toLowerCase()}">${priorityLabel(t.priority)}</span>
-              <span class="badge badge-status-${eff.toLowerCase()}">${statusLabel(eff)}</span>
+              <span class="badge badge-${(t.priority||'medium').toLowerCase()}">${escHtml(priorityLabel(t.priority || 'MEDIUM'))}</span>
+              <span class="badge badge-status-${eff.toLowerCase()}">${escHtml(statusLabel(eff))}</span>
             </div>
           </div>
           ${opts.showProgress && t.completionPercent > 0 ? `<div class="task-progress" style="margin-top:8px;height:5px"><div class="progress-fill" style="width:${t.completionPercent}%"></div></div>` : ''}
@@ -366,28 +373,25 @@ const OpsCommon = (() => {
         const section = sectionId ? document.getElementById(sectionId) : null;
         const content = document.getElementById(contentId);
         if (!content) return;
-        // Only manage section visibility when sectionId is provided
         if (section && !nsv) { section.style.display = 'none'; return; }
-
         if (!nsv) { section.style.display = 'none'; return; }
 
         // Format previous visit timestamp
         function fmtVisit(ts) {
-            if (!ts) return _t('ops.nsv.firstVisit');
+            if (!ts) return _t('ops.ui.firstVisit', 'Prima visita');
             const d = new Date(ts);
             const now = new Date();
-            const loc = _locale();
-            const isToday = d.toDateString() === now.toDateString();
-            const hhmm = d.toLocaleTimeString(loc, { hour: '2-digit', minute: '2-digit' });
-            if (isToday) return `${_t('ops.nsv.today')} ${hhmm}`;
+            const isToday2 = d.toDateString() === now.toDateString();
+            const hhmm = d.toLocaleTimeString(_locale(), { hour: '2-digit', minute: '2-digit' });
+            if (isToday2) return `${_t('ops.ui.todayAt', 'oggi alle')} ${hhmm}`;
             const yesterday = new Date(now); yesterday.setDate(yesterday.getDate() - 1);
-            if (d.toDateString() === yesterday.toDateString()) return `${_t('ops.nsv.yesterday')} ${hhmm}`;
-            return d.toLocaleDateString(loc, { day: '2-digit', month: '2-digit' }) + ` ${_t('ops.nsv.at')} ${hhmm}`;
+            if (d.toDateString() === yesterday.toDateString()) return `${_t('ops.ui.yesterdayAt', 'ieri alle')} ${hhmm}`;
+            return d.toLocaleDateString(_locale(), { day: '2-digit', month: '2-digit' }) + ` ${_t('ops.ui.todayAt','alle')} ${hhmm}`;
         }
 
         const visitLabel = nsv.previousVisitAt
-            ? `${_t('ops.nsv.lastCheck')} ${fmtVisit(nsv.previousVisitAt)}`
-            : _t('ops.nsv.firstVisit');
+            ? `${_t('ops.ui.lastCheck', 'Ultimo controllo:')} ${fmtVisit(nsv.previousVisitAt)}`
+            : _t('ops.ui.firstVisit', 'Prima visita');
 
         if (section) section.style.display = '';
 
@@ -395,7 +399,7 @@ const OpsCommon = (() => {
             content.innerHTML = `
               <div class="nsv-empty">
                 <span class="nsv-visit-label">${escHtml(visitLabel)}</span>
-                <span class="nsv-no-new">${_t('ops.nsv.noNew')}</span>
+                <span class="nsv-no-new">${escHtml(_t('ops.ui.noNewItems', 'Nessuna nuova criticità dalla tua ultima visita.'))}</span>
               </div>`;
             return;
         }
@@ -418,13 +422,6 @@ const OpsCommon = (() => {
           <div class="nsv-items">${itemsHtml}</div>`;
     }
 
-    // briefFmt(key, n, cls) — translate a brief sentence, replacing {n} with a styled span.
-    // Used by dashboard pages to render translated narrative briefings.
-    function briefFmt(key, n, cls) {
-        const span = `<span class="brief-num${cls ? ' ' + cls : ''}">${n}</span>`;
-        return _t(key).replace('{n}', span);
-    }
-
     return {
         api, loadMe, showError, escHtml,
         fmtDue, fmtDatetime, fmtDateShort,
@@ -432,6 +429,7 @@ const OpsCommon = (() => {
         buildAssigneeSelect, renderTaskList, historyLine,
         logout, ROLE_LABELS, PRIORITY_LABELS, STATUS_LABELS, HISTORY_LABELS,
         nextTask, isToday, isCompletedToday, greeting, taskCard, renderSection,
-        renderNewSinceLastVisit, briefFmt,
+        renderNewSinceLastVisit,
+        langParam, intelligenceUrl,
     };
 })();

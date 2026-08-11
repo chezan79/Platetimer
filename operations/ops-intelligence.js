@@ -6,11 +6,14 @@
  * No AI, no ML, no external APIs, no database writes, no background jobs.
  * Called on-demand from GET /api/operations/intelligence (Director only).
  *
- * analyzeIntelligence(companyId, { tasks, users }) → { attention, workload, suggestions, summary }
+ * analyzeIntelligence(companyId, { tasks, users }, lang) → { attention, workload, suggestions, summary }
  *
  * `tasks`  — raw task records from getOpsTasks(); effectiveStatus computed internally.
  * `users`  — raw user records from getOpsUsers().
+ * `lang`   — 'it' | 'fr' | 'en' (default 'it'). Controls all generated text.
  */
+
+const opsI18n = require('./ops-i18n');
 
 // ── Thresholds ────────────────────────────────────────────────────────────────
 const OVERDUE_HIGH_MIN       = 30;   // minutes overdue before a HIGH alert is raised
@@ -60,9 +63,13 @@ const SEVERITY_ORDER = { HIGH: 0, MEDIUM: 1, LOW: 2 };
 /**
  * @param {string} companyId
  * @param {{ tasks: object[], users: object[] }} data
+ * @param {string} [lang='it']
  * @returns {{ attention: object[], workload: object[], suggestions: object[], summary: object }}
  */
-function analyzeIntelligence(companyId, { tasks: rawTasks, users: rawUsers }) {
+function analyzeIntelligence(companyId, { tasks: rawTasks, users: rawUsers }, lang = 'it') {
+    lang = opsI18n.sanitizeLang(lang);
+    const t = (key, vars) => opsI18n.t(lang, key, vars);
+
     const now = nowMs();
     const ts  = new Date().toISOString();
 
@@ -79,18 +86,18 @@ function analyzeIntelligence(companyId, { tasks: rawTasks, users: rawUsers }) {
 
     // ── WORKLOAD ──────────────────────────────────────────────────────────────
     const workload = activeUsers.map(u => {
-        const mine       = tasks.filter(t => t.assigneeId === u.id);
-        const openMine   = mine.filter(t => t.status !== 'COMPLETED' && t.status !== 'CANCELLED');
+        const mine       = tasks.filter(t2 => t2.assigneeId === u.id);
+        const openMine   = mine.filter(t2 => t2.status !== 'COMPLETED' && t2.status !== 'CANCELLED');
         const assigned   = openMine.length;
-        const overdue    = openMine.filter(t => t.effectiveStatus === 'OVERDUE').length;
-        const urgent     = openMine.filter(t => t.priority === 'URGENT').length;
-        const completedToday = mine.filter(t => t.status === 'COMPLETED' && isToday(t.completedAt)).length;
+        const overdue    = openMine.filter(t2 => t2.effectiveStatus === 'OVERDUE').length;
+        const urgent     = openMine.filter(t2 => t2.priority === 'URGENT').length;
+        const completedToday = mine.filter(t2 => t2.status === 'COMPLETED' && isToday(t2.completedAt)).length;
 
-        const finished = mine.filter(t => t.status === 'COMPLETED' && t.createdAt && t.completedAt);
+        const finished = mine.filter(t2 => t2.status === 'COMPLETED' && t2.createdAt && t2.completedAt);
         const avgCompletionTime = finished.length
             ? Math.round(
-                finished.reduce((s, t) =>
-                    s + (new Date(t.completedAt).getTime() - new Date(t.createdAt).getTime()), 0
+                finished.reduce((s, t2) =>
+                    s + (new Date(t2.completedAt).getTime() - new Date(t2.createdAt).getTime()), 0
                 ) / finished.length
               )
             : 0;
@@ -115,19 +122,19 @@ function analyzeIntelligence(companyId, { tasks: rawTasks, users: rawUsers }) {
 
     // HIGH — task overdue by more than OVERDUE_HIGH_MIN minutes
     tasks
-        .filter(t => t.effectiveStatus === 'OVERDUE')
-        .forEach(t => {
-            const overdueMin = (now - new Date(t.dueDate).getTime()) / 60000;
+        .filter(t2 => t2.effectiveStatus === 'OVERDUE')
+        .forEach(t2 => {
+            const overdueMin = (now - new Date(t2.dueDate).getTime()) / 60000;
             if (overdueMin >= OVERDUE_HIGH_MIN) {
                 attention.push({
                     id: nextAlertId(),
                     severity: 'HIGH',
-                    title: 'Compito in ritardo',
-                    description: `"${t.title}" è in ritardo di ${Math.round(overdueMin)} minuti.`,
-                    recommendedAction: 'Completare o riassegnare immediatamente.',
-                    linkedTask: t.id,
-                    linkedUser: t.assigneeId || null,
-                    department: t.department || null,
+                    title: t('ops.intel.late.title'),
+                    description: t('ops.intel.late.desc', { title: t2.title, min: Math.round(overdueMin) }),
+                    recommendedAction: t('ops.intel.late.action'),
+                    linkedTask: t2.id,
+                    linkedUser: t2.assigneeId || null,
+                    department: t2.department || null,
                     timestamp: ts,
                 });
             }
@@ -135,17 +142,17 @@ function analyzeIntelligence(companyId, { tasks: rawTasks, users: rawUsers }) {
 
     // HIGH — URGENT task not yet started (status OPEN)
     tasks
-        .filter(t => t.priority === 'URGENT' && t.status === 'OPEN')
-        .forEach(t => {
+        .filter(t2 => t2.priority === 'URGENT' && t2.status === 'OPEN')
+        .forEach(t2 => {
             attention.push({
                 id: nextAlertId(),
                 severity: 'HIGH',
-                title: 'Compito urgente non avviato',
-                description: `"${t.title}" è urgente ma non è ancora stato avviato.`,
-                recommendedAction: 'Avviare il compito o riassegnarlo a chi può iniziare subito.',
-                linkedTask: t.id,
-                linkedUser: t.assigneeId || null,
-                department: t.department || null,
+                title: t('ops.intel.urgent.title'),
+                description: t('ops.intel.urgent.desc', { title: t2.title }),
+                recommendedAction: t('ops.intel.urgent.action'),
+                linkedTask: t2.id,
+                linkedUser: t2.assigneeId || null,
+                department: t2.department || null,
                 timestamp: ts,
             });
         });
@@ -153,17 +160,17 @@ function analyzeIntelligence(companyId, { tasks: rawTasks, users: rawUsers }) {
     // HIGH — suspended user still has active tasks
     suspendedUsers.forEach(u => {
         const activeTasks = tasks.filter(
-            t => t.assigneeId === u.id && t.status !== 'COMPLETED' && t.status !== 'CANCELLED'
+            t2 => t2.assigneeId === u.id && t2.status !== 'COMPLETED' && t2.status !== 'CANCELLED'
         );
         if (activeTasks.length) {
             attention.push({
                 id: nextAlertId(),
                 severity: 'HIGH',
-                title: 'Utente sospeso con compiti assegnati',
-                description:
-                    `${u.name} è sospeso ma ha ancora ${activeTasks.length} ` +
-                    `${activeTasks.length === 1 ? 'compito assegnato' : 'compiti assegnati'}.`,
-                recommendedAction: 'Riassegnare i compiti a un membro attivo del team.',
+                title: t('ops.intel.suspended.title'),
+                description: activeTasks.length === 1
+                    ? t('ops.intel.suspended.desc1', { name: u.name, n: activeTasks.length })
+                    : t('ops.intel.suspended.descN', { name: u.name, n: activeTasks.length }),
+                recommendedAction: t('ops.intel.suspended.action'),
                 linkedTask: null,
                 linkedUser: u.id,
                 department: null,
@@ -179,11 +186,12 @@ function analyzeIntelligence(companyId, { tasks: rawTasks, users: rawUsers }) {
             attention.push({
                 id: nextAlertId(),
                 severity: 'MEDIUM',
-                title: 'Membro del team sovraccarico',
-                description:
-                    `${w.userName} ha un carico elevato: ${w.assigned} compiti aperti, ` +
-                    `${w.overdue} in ritardo, ${w.urgent} urgenti (score: ${w.currentLoadScore}).`,
-                recommendedAction: 'Ridistribuire alcuni compiti ad altri membri disponibili.',
+                title: t('ops.intel.overloaded.title'),
+                description: t('ops.intel.overloaded.desc', {
+                    name: w.userName, assigned: w.assigned, overdue: w.overdue,
+                    urgent: w.urgent, score: w.currentLoadScore,
+                }),
+                recommendedAction: t('ops.intel.overloaded.action'),
                 linkedTask: null,
                 linkedUser: w.userId,
                 department: null,
@@ -194,13 +202,13 @@ function analyzeIntelligence(companyId, { tasks: rawTasks, users: rawUsers }) {
     // MEDIUM — many urgent tasks concentrated in one department
     const deptUrgent = {};
     tasks
-        .filter(t =>
-            t.priority === 'URGENT' &&
-            t.status !== 'COMPLETED' &&
-            t.status !== 'CANCELLED' &&
-            t.department
+        .filter(t2 =>
+            t2.priority === 'URGENT' &&
+            t2.status !== 'COMPLETED' &&
+            t2.status !== 'CANCELLED' &&
+            t2.department
         )
-        .forEach(t => { deptUrgent[t.department] = (deptUrgent[t.department] || 0) + 1; });
+        .forEach(t2 => { deptUrgent[t2.department] = (deptUrgent[t2.department] || 0) + 1; });
 
     Object.entries(deptUrgent)
         .filter(([, cnt]) => cnt >= URGENT_DEPT_THRESHOLD)
@@ -208,9 +216,9 @@ function analyzeIntelligence(companyId, { tasks: rawTasks, users: rawUsers }) {
             attention.push({
                 id: nextAlertId(),
                 severity: 'MEDIUM',
-                title: `Concentrazione urgenze nel reparto "${dept}"`,
-                description: `Il reparto "${dept}" ha ${cnt} compiti urgenti aperti.`,
-                recommendedAction: `Verificare e prioritizzare il reparto "${dept}".`,
+                title: t('ops.intel.deptUrgent.title', { dept }),
+                description: t('ops.intel.deptUrgent.desc', { dept, n: cnt }),
+                recommendedAction: t('ops.intel.deptUrgent.action', { dept }),
                 linkedTask: null,
                 linkedUser: null,
                 department: dept,
@@ -221,23 +229,22 @@ function analyzeIntelligence(companyId, { tasks: rawTasks, users: rawUsers }) {
     // LOW — IN_PROGRESS task inactive for more than INACTIVE_HRS hours
     const inactiveCutoff = now - INACTIVE_HRS * 3_600_000;
     tasks
-        .filter(t =>
-            t.status === 'IN_PROGRESS' &&
-            t.updatedAt &&
-            new Date(t.updatedAt).getTime() < inactiveCutoff
+        .filter(t2 =>
+            t2.status === 'IN_PROGRESS' &&
+            t2.updatedAt &&
+            new Date(t2.updatedAt).getTime() < inactiveCutoff
         )
-        .forEach(t => {
-            const hrsInactive = Math.round((now - new Date(t.updatedAt).getTime()) / 3_600_000);
+        .forEach(t2 => {
+            const hrsInactive = Math.round((now - new Date(t2.updatedAt).getTime()) / 3_600_000);
             attention.push({
                 id: nextAlertId(),
                 severity: 'LOW',
-                title: 'Compito inattivo da tempo',
-                description:
-                    `"${t.title}" è in corso ma non viene aggiornato da ${hrsInactive} ore.`,
-                recommendedAction: 'Verificare lo stato avanzamento e aggiornare il compito.',
-                linkedTask: t.id,
-                linkedUser: t.assigneeId || null,
-                department: t.department || null,
+                title: t('ops.intel.inactive.title'),
+                description: t('ops.intel.inactive.desc', { title: t2.title, hours: hrsInactive }),
+                recommendedAction: t('ops.intel.inactive.action'),
+                linkedTask: t2.id,
+                linkedUser: t2.assigneeId || null,
+                department: t2.department || null,
                 timestamp: ts,
             });
         });
@@ -259,17 +266,16 @@ function analyzeIntelligence(companyId, { tasks: rawTasks, users: rawUsers }) {
             const candidate = normalUsers[0];
             if (!candidate) return;
             const movable = tasks.filter(
-                t => t.assigneeId === w.userId &&
-                     t.status === 'OPEN' &&
-                     t.priority !== 'URGENT'
+                t2 => t2.assigneeId === w.userId &&
+                     t2.status === 'OPEN' &&
+                     t2.priority !== 'URGENT'
             );
             if (movable.length) {
                 suggestions.push({
                     id: nextSugId(),
                     type: 'REASSIGN_BALANCE',
-                    title: `Sposta un compito da ${w.userName} a ${candidate.userName}`,
-                    description:
-                        `"${movable[0].title}" può essere spostato per bilanciare il carico di lavoro.`,
+                    title: t('ops.intel.sug.balance.title', { from: w.userName, to: candidate.userName }),
+                    description: t('ops.intel.sug.balance.desc', { task: movable[0].title }),
                     linkedTask: movable[0].id,
                     linkedUser: w.userId,
                     targetUser: candidate.userId,
@@ -281,18 +287,18 @@ function analyzeIntelligence(companyId, { tasks: rawTasks, users: rawUsers }) {
     // Suggest reassigning tasks from suspended users
     suspendedUsers.forEach(u => {
         const activeTasks = tasks.filter(
-            t => t.assigneeId === u.id && t.status !== 'COMPLETED' && t.status !== 'CANCELLED'
+            t2 => t2.assigneeId === u.id && t2.status !== 'COMPLETED' && t2.status !== 'CANCELLED'
         );
-        activeTasks.forEach(t => {
+        activeTasks.forEach(t2 => {
             suggestions.push({
                 id: nextSugId(),
                 type: 'REASSIGN_SUSPENDED',
-                title: `Riassegna il compito di ${u.name}`,
-                description: `"${t.title}" è assegnato a ${u.name} che è sospeso.`,
-                linkedTask: t.id,
+                title: t('ops.intel.sug.reassign.title', { name: u.name }),
+                description: t('ops.intel.sug.reassign.desc', { task: t2.title, name: u.name }),
+                linkedTask: t2.id,
                 linkedUser: u.id,
                 targetUser: null,
-                department: t.department || null,
+                department: t2.department || null,
             });
         });
     });
@@ -304,8 +310,8 @@ function analyzeIntelligence(companyId, { tasks: rawTasks, users: rawUsers }) {
             suggestions.push({
                 id: nextSugId(),
                 type: 'REVIEW_DEPT',
-                title: `Verifica il reparto "${dept}"`,
-                description: `Molti compiti urgenti concentrati nel reparto "${dept}".`,
+                title: t('ops.intel.sug.reviewDept.title', { dept }),
+                description: t('ops.intel.sug.reviewDept.desc', { dept }),
                 linkedTask: null,
                 linkedUser: null,
                 targetUser: null,
@@ -315,32 +321,32 @@ function analyzeIntelligence(companyId, { tasks: rawTasks, users: rawUsers }) {
 
     // Suggest completing recurring tasks that are overdue
     tasks
-        .filter(t => t.effectiveStatus === 'OVERDUE' && t.templateId)
-        .forEach(t => {
+        .filter(t2 => t2.effectiveStatus === 'OVERDUE' && t2.templateId)
+        .forEach(t2 => {
             suggestions.push({
                 id: nextSugId(),
                 type: 'COMPLETE_RECURRING',
-                title: 'Completa il compito ricorrente in ritardo',
-                description: `"${t.title}" è un compito ricorrente che è in ritardo.`,
-                linkedTask: t.id,
-                linkedUser: t.assigneeId || null,
+                title: t('ops.intel.sug.recurring.title'),
+                description: t('ops.intel.sug.recurring.desc', { task: t2.title }),
+                linkedTask: t2.id,
+                linkedUser: t2.assigneeId || null,
                 targetUser: null,
-                department: t.department || null,
+                department: t2.department || null,
             });
         });
 
     // ── SUMMARY ───────────────────────────────────────────────────────────────
-    const completedToday = tasks.filter(t => t.status === 'COMPLETED' && isToday(t.completedAt));
-    const overdueToday   = tasks.filter(t => t.effectiveStatus === 'OVERDUE');
+    const completedToday = tasks.filter(t2 => t2.status === 'COMPLETED' && isToday(t2.completedAt));
+    const overdueToday   = tasks.filter(t2 => t2.effectiveStatus === 'OVERDUE');
     const urgentOpen     = tasks.filter(
-        t => t.priority === 'URGENT' && t.status !== 'COMPLETED' && t.status !== 'CANCELLED'
+        t2 => t2.priority === 'URGENT' && t2.status !== 'COMPLETED' && t2.status !== 'CANCELLED'
     );
-    const openTasks = tasks.filter(t => t.status !== 'COMPLETED' && t.status !== 'CANCELLED');
+    const openTasks = tasks.filter(t2 => t2.status !== 'COMPLETED' && t2.status !== 'CANCELLED');
 
     // Most active department: most completions today
     const deptCompletions = {};
-    completedToday.filter(t => t.department).forEach(t => {
-        deptCompletions[t.department] = (deptCompletions[t.department] || 0) + 1;
+    completedToday.filter(t2 => t2.department).forEach(t2 => {
+        deptCompletions[t2.department] = (deptCompletions[t2.department] || 0) + 1;
     });
     const mostActiveDepartment =
         Object.entries(deptCompletions).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
@@ -348,12 +354,12 @@ function analyzeIntelligence(companyId, { tasks: rawTasks, users: rawUsers }) {
     // Most overloaded department: most overdue + urgent tasks
     const deptLoad = {};
     tasks
-        .filter(t =>
-            t.department &&
-            (t.effectiveStatus === 'OVERDUE' ||
-             (t.priority === 'URGENT' && t.status !== 'COMPLETED' && t.status !== 'CANCELLED'))
+        .filter(t2 =>
+            t2.department &&
+            (t2.effectiveStatus === 'OVERDUE' ||
+             (t2.priority === 'URGENT' && t2.status !== 'COMPLETED' && t2.status !== 'CANCELLED'))
         )
-        .forEach(t => { deptLoad[t.department] = (deptLoad[t.department] || 0) + 1; });
+        .forEach(t2 => { deptLoad[t2.department] = (deptLoad[t2.department] || 0) + 1; });
     const mostOverloadedDepartment =
         Object.entries(deptLoad).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
 
@@ -365,7 +371,7 @@ function analyzeIntelligence(companyId, { tasks: rawTasks, users: rawUsers }) {
         ...suspendedUsers
             .filter(u =>
                 tasks.some(
-                    t => t.assigneeId === u.id && t.status !== 'COMPLETED' && t.status !== 'CANCELLED'
+                    t2 => t2.assigneeId === u.id && t2.status !== 'COMPLETED' && t2.status !== 'CANCELLED'
                 )
             )
             .map(u => ({ userId: u.id, userName: u.name, reason: 'SUSPENDED_WITH_TASKS' })),
@@ -387,40 +393,29 @@ function analyzeIntelligence(companyId, { tasks: rawTasks, users: rawUsers }) {
     };
 
     // ── DECISIONS (Sprint 6.1) ────────────────────────────────────────────────
-    const decisions = generateDecisions(companyId, { tasks, users, workload, now, generatedAt: ts });
+    const decisions = generateDecisions(companyId, { tasks, users, workload, now, generatedAt: ts }, lang);
 
     return { attention, workload, suggestions, summary, decisions };
 }
 
 // ── Decision Support Engine (Sprint 6.1) ──────────────────────────────────────
-// Transforms intelligence data into Decision Cards with reason, supportingFacts,
-// confidence scores, and quick actions. Fully deterministic — no AI, no random.
-//
-// Confidence tiers:
-//   95   strongest evidence (suspended user with active tasks)
-//   90   strong (overloaded + overdue + urgent + no recent completion; urgent task past due)
-//   85   high   (overdue recurring task)
-//   80   good   (dept concentration, dept overdue)
-//   75   likely (reassign suggestion; urgent task due within 2 h)
-//   70   possible (workload only; underused user)
-//   60   weak   (single overdue < threshold; urgent task, due far out)
-//  <50   suppressed — never shown
-//
-// Sort order: severity (HIGH→LOW), confidence (desc), generatedAt (asc).
 
 const MIN_CONFIDENCE = 50;
-const OVERDUE_DEPT_THRESHOLD = 2; // ≥N overdue in one dept → CHECK_DEPARTMENT
+const OVERDUE_DEPT_THRESHOLD = 2;
 
-function generateDecisions(companyId, { tasks, users, workload, now, generatedAt }) {
+function generateDecisions(companyId, { tasks, users, workload, now, generatedAt }, lang = 'it') {
+    lang = opsI18n.sanitizeLang(lang);
+    const t = (key, vars) => opsI18n.t(lang, key, vars);
+
     const decisions = [];
     let decId = 0;
     const nid = () => `dec_${++decId}`;
 
-    // Helper: minutes since a ms timestamp
-    const minsSince   = ms  => Math.round((now - ms) / 60000);
-    const minsUntil   = ms  => Math.round((ms - now) / 60000);
-    const fmtSince    = ms  => ms ? `${minsSince(ms)} min fa` : 'mai';
-    const fmtAvg      = ms  => ms ? `${Math.round(ms / 60000)} min` : 'n/d';
+    // Helper: minutes since/until a ms timestamp
+    const minsSince = ms  => Math.round((now - ms) / 60000);
+    const minsUntil = ms  => Math.round((ms - now) / 60000);
+    const fmtSince  = ms  => ms ? t('ops.dec.since', { min: minsSince(ms) }) : t('ops.dec.never');
+    const fmtAvg    = ms  => ms ? t('ops.dec.avg',   { min: Math.round(ms / 60000) }) : t('ops.dec.avgNone');
 
     function push(card) {
         if (card.confidence >= MIN_CONFIDENCE) decisions.push(card);
@@ -428,43 +423,45 @@ function generateDecisions(companyId, { tasks, users, workload, now, generatedAt
 
     // ── 1. OVERLOADED_USER ────────────────────────────────────────────────────
     workload.filter(w => w.status === 'OVERLOADED').forEach(w => {
-        const userTasks  = tasks.filter(t => t.assigneeId === w.userId);
+        const userTasks  = tasks.filter(t2 => t2.assigneeId === w.userId);
         const lastComp   = userTasks
-            .filter(t => t.status === 'COMPLETED' && t.completedAt)
+            .filter(t2 => t2.status === 'COMPLETED' && t2.completedAt)
             .sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt))[0];
         const lastCompMs = lastComp ? new Date(lastComp.completedAt).getTime() : null;
         const hasRecentComp = lastCompMs && (now - lastCompMs) < 30 * 60_000;
 
-        let confidence = 70; // workload only
+        let confidence = 70;
         if (w.overdue >= 1 && w.urgent >= 1 && !hasRecentComp) confidence = 90;
         else if (w.overdue >= 1 || w.urgent >= 1)              confidence = 80;
 
         const reasonParts = [
-            `${w.userName} ha ${w.assigned} compiti attivi.`,
-            w.urgent  > 0 ? `${w.urgent} ${w.urgent  === 1 ? 'è urgente'    : 'sono urgenti'}.`    : null,
-            w.overdue > 0 ? `${w.overdue} ${w.overdue === 1 ? 'è in ritardo' : 'sono in ritardo'}.` : null,
+            t('ops.dec.overloaded.reason.tasks', { name: w.userName, n: w.assigned }),
+            w.urgent  > 0 ? (w.urgent  === 1 ? t('ops.dec.overloaded.reason.urgent1',  { n: w.urgent  })
+                                              : t('ops.dec.overloaded.reason.urgentN',  { n: w.urgent  })) : null,
+            w.overdue > 0 ? (w.overdue === 1 ? t('ops.dec.overloaded.reason.overdue1', { n: w.overdue })
+                                              : t('ops.dec.overloaded.reason.overdueN', { n: w.overdue })) : null,
             lastCompMs
-                ? `Nessun completamento negli ultimi ${minsSince(lastCompMs)} minuti.`
-                : 'Nessun completamento oggi.',
-            `Score di carico = ${w.currentLoadScore}.`,
+                ? t('ops.dec.overloaded.reason.noCompMin', { min: minsSince(lastCompMs) })
+                : t('ops.dec.overloaded.reason.noCompToday'),
+            t('ops.dec.overloaded.reason.score', { score: w.currentLoadScore }),
         ].filter(Boolean).join(' ');
 
         push({
             id: nid(), type: 'OVERLOADED_USER', severity: 'HIGH',
-            title:             `${w.userName} è sovraccarico`,
+            title:             t('ops.dec.overloaded.title', { name: w.userName }),
             reason:            reasonParts,
-            recommendedAction: 'Ridistribuire alcuni compiti a membri con carico minore.',
+            recommendedAction: t('ops.dec.overloaded.action'),
             confidence,
             supportingFacts: [
-                `Compiti attivi: ${w.assigned}`,
-                `Urgenti: ${w.urgent}`,
-                `In ritardo: ${w.overdue}`,
-                `Completamento medio: ${fmtAvg(w.averageCompletionTime)}`,
-                `Ultimo completamento: ${fmtSince(lastCompMs)}`,
-                `Score: ${w.currentLoadScore}`,
+                t('ops.dec.overloaded.fact.active',  { n: w.assigned }),
+                t('ops.dec.overloaded.fact.urgent',  { n: w.urgent }),
+                t('ops.dec.overloaded.fact.overdue', { n: w.overdue }),
+                t('ops.dec.overloaded.fact.avg',     { val: fmtAvg(w.averageCompletionTime) }),
+                t('ops.dec.overloaded.fact.last',    { val: fmtSince(lastCompMs) }),
+                t('ops.dec.overloaded.fact.score',   { val: w.currentLoadScore }),
             ],
             linkedTask: null, linkedUser: w.userId, department: null,
-            quickAction: { label: 'Apri Team', url: '/operations-team.html' },
+            quickAction: { label: t('ops.dec.qa.team'), url: '/operations-team.html' },
             generatedAt,
         });
     });
@@ -472,34 +469,37 @@ function generateDecisions(companyId, { tasks, users, workload, now, generatedAt
     // ── 2. SUSPENDED_USER_WITH_TASKS ──────────────────────────────────────────
     users.filter(u => u.status === 'SUSPENDED').forEach(u => {
         const activeTasks = tasks.filter(
-            t => t.assigneeId === u.id && t.status !== 'COMPLETED' && t.status !== 'CANCELLED'
+            t2 => t2.assigneeId === u.id && t2.status !== 'COMPLETED' && t2.status !== 'CANCELLED'
         );
         if (!activeTasks.length) return;
-        const urgentCnt = activeTasks.filter(t => t.priority === 'URGENT').length;
+        const urgentCnt = activeTasks.filter(t2 => t2.priority === 'URGENT').length;
+
+        const baseReason = activeTasks.length === 1
+            ? t('ops.dec.suspended.reason1', { name: u.name, n: activeTasks.length })
+            : t('ops.dec.suspended.reasonN', { name: u.name, n: activeTasks.length });
+        const urgentSuffix = urgentCnt > 0 ? t('ops.dec.suspended.reasonUrgent', { n: urgentCnt }) : '';
 
         push({
             id: nid(), type: 'SUSPENDED_USER_WITH_TASKS', severity: 'HIGH',
-            title:             `${u.name} è sospeso con compiti assegnati`,
-            reason:            `${u.name} è stato sospeso ma ha ancora ${activeTasks.length} ` +
-                               `${activeTasks.length === 1 ? 'compito attivo' : 'compiti attivi'}` +
-                               (urgentCnt > 0 ? `, di cui ${urgentCnt} urgenti` : '') + '.',
-            recommendedAction: 'Riassegnare immediatamente i compiti a un membro attivo del team.',
+            title:             t('ops.dec.suspended.title', { name: u.name }),
+            reason:            baseReason.replace(/\.$/, '') + urgentSuffix + '.',
+            recommendedAction: t('ops.dec.suspended.action'),
             confidence:        95,
             supportingFacts: [
-                `Compiti assegnati: ${activeTasks.length}`,
-                `Urgenti: ${urgentCnt}`,
-                `Stato utente: SOSPESO`,
+                t('ops.dec.suspended.fact.assigned', { n: activeTasks.length }),
+                t('ops.dec.suspended.fact.urgent',   { n: urgentCnt }),
+                t('ops.dec.suspended.fact.status'),
             ],
             linkedTask: null, linkedUser: u.id, department: null,
-            quickAction: { label: 'Apri Team', url: '/operations-team.html' },
+            quickAction: { label: t('ops.dec.qa.team'), url: '/operations-team.html' },
             generatedAt,
         });
     });
 
     // ── 3. OPENING_NOT_STARTED (URGENT + OPEN) ────────────────────────────────
-    tasks.filter(t => t.priority === 'URGENT' && t.status === 'OPEN').forEach(t => {
-        const isOverdue  = t.effectiveStatus === 'OVERDUE';
-        const dueMs      = t.dueDate ? new Date(t.dueDate).getTime() : null;
+    tasks.filter(t2 => t2.priority === 'URGENT' && t2.status === 'OPEN').forEach(t2 => {
+        const isOverdue  = t2.effectiveStatus === 'OVERDUE';
+        const dueMs      = t2.dueDate ? new Date(t2.dueDate).getTime() : null;
         const minsLeft   = dueMs ? minsUntil(dueMs) : null;
         const overdueMin = isOverdue && dueMs ? minsSince(dueMs) : 0;
 
@@ -508,88 +508,100 @@ function generateDecisions(companyId, { tasks, users, workload, now, generatedAt
         else if (minsLeft !== null && minsLeft < 120) confidence = 75;
 
         const timeDesc = isOverdue
-            ? `è già in ritardo di ${overdueMin} minuti`
+            ? t('ops.dec.notStarted.timeOverdue', { min: overdueMin })
             : minsLeft !== null
-                ? `scade tra ${minsLeft} minuti`
-                : 'non ha scadenza impostata';
+                ? t('ops.dec.notStarted.timeDue', { min: minsLeft })
+                : t('ops.dec.notStarted.timeNone');
+
+        // Format deadline for supportingFacts
+        let deadlineVal;
+        if (t2.dueDate) {
+            try {
+                const locale = lang === 'fr' ? 'fr-FR' : lang === 'en' ? 'en-GB' : 'it-IT';
+                deadlineVal = new Date(t2.dueDate).toLocaleString(locale);
+            } catch { deadlineVal = t2.dueDate; }
+        } else {
+            deadlineVal = t('ops.dec.notStarted.fact.nd');
+        }
 
         push({
             id: nid(), type: 'OPENING_NOT_STARTED', severity: 'HIGH',
-            title:             `Compito urgente non avviato: "${t.title}"`,
-            reason:            `Basato sui compiti urgenti: "${t.title}" è urgente, non è stato avviato e ${timeDesc}.`,
-            recommendedAction: 'Avviare immediatamente o riassegnare a chi può iniziare ora.',
+            title:             t('ops.dec.notStarted.title',  { title: t2.title }),
+            reason:            t('ops.dec.notStarted.reason', { title: t2.title, timeDesc }),
+            recommendedAction: t('ops.dec.notStarted.action'),
             confidence,
             supportingFacts: [
-                `Stato: OPEN (non avviato)`,
-                `Priorità: URGENTE`,
-                `Assegnato a: ${t.assigneeName || 'N/D'}`,
-                `Scadenza: ${t.dueDate ? new Date(t.dueDate).toLocaleString('it-IT') : 'N/D'}`,
+                t('ops.dec.notStarted.fact.status'),
+                t('ops.dec.notStarted.fact.priority'),
+                t('ops.dec.notStarted.fact.assignee', { val: t2.assigneeName || t('ops.dec.notStarted.fact.nd') }),
+                t('ops.dec.notStarted.fact.deadline', { val: deadlineVal }),
             ],
-            linkedTask: t.id, linkedUser: t.assigneeId || null, department: t.department || null,
-            quickAction: { label: 'Apri Task', url: `/operations-tasks.html#${t.id}` },
+            linkedTask: t2.id, linkedUser: t2.assigneeId || null, department: t2.department || null,
+            quickAction: { label: t('ops.dec.qa.task'), url: `/operations-tasks.html#${t2.id}` },
             generatedAt,
         });
     });
 
     // ── 4. URGENT_DEPARTMENT ──────────────────────────────────────────────────
     const deptUrgentLists = {};
-    tasks.filter(t =>
-        t.priority === 'URGENT' && t.status !== 'COMPLETED' && t.status !== 'CANCELLED' && t.department
-    ).forEach(t => {
-        if (!deptUrgentLists[t.department]) deptUrgentLists[t.department] = [];
-        deptUrgentLists[t.department].push(t);
+    tasks.filter(t2 =>
+        t2.priority === 'URGENT' && t2.status !== 'COMPLETED' && t2.status !== 'CANCELLED' && t2.department
+    ).forEach(t2 => {
+        if (!deptUrgentLists[t2.department]) deptUrgentLists[t2.department] = [];
+        deptUrgentLists[t2.department].push(t2);
     });
 
     Object.entries(deptUrgentLists)
         .filter(([, list]) => list.length >= URGENT_DEPT_THRESHOLD)
         .forEach(([dept, list]) => {
-            const overdueInDept = list.filter(t => t.effectiveStatus === 'OVERDUE').length;
+            const overdueInDept = list.filter(t2 => t2.effectiveStatus === 'OVERDUE').length;
+            const reason = overdueInDept > 0
+                ? t('ops.dec.urgentDept.reasonWithOverdue', { dept, n: list.length, overdue: overdueInDept })
+                : t('ops.dec.urgentDept.reason',            { dept, n: list.length });
             push({
                 id: nid(), type: 'URGENT_DEPARTMENT', severity: 'MEDIUM',
-                title:             `Reparto "${dept}" sotto pressione`,
-                reason:            `Il reparto "${dept}" ha ${list.length} compiti urgenti aperti` +
-                                   (overdueInDept > 0 ? `, di cui ${overdueInDept} in ritardo` : '') + '.',
-                recommendedAction: `Verificare e prioritizzare il reparto "${dept}".`,
+                title:             t('ops.dec.urgentDept.title',  { dept }),
+                reason,
+                recommendedAction: t('ops.dec.urgentDept.action', { dept }),
                 confidence:        80,
                 supportingFacts: [
-                    `Urgenti nel reparto: ${list.length}`,
-                    `In ritardo nel reparto: ${overdueInDept}`,
+                    t('ops.dec.urgentDept.fact.urgent',  { n: list.length }),
+                    t('ops.dec.urgentDept.fact.overdue', { n: overdueInDept }),
                 ],
                 linkedTask: null, linkedUser: null, department: dept,
-                quickAction: { label: 'Apri Operazioni', url: '/operations-tasks.html' },
+                quickAction: { label: t('ops.dec.qa.ops'), url: '/operations-tasks.html' },
                 generatedAt,
             });
         });
 
     // ── 5. CHECK_DEPARTMENT (≥ OVERDUE_DEPT_THRESHOLD overdue in one dept) ────
     const deptOverdueLists = {};
-    tasks.filter(t => t.effectiveStatus === 'OVERDUE' && t.department)
-        .forEach(t => {
-            if (!deptOverdueLists[t.department]) deptOverdueLists[t.department] = [];
-            deptOverdueLists[t.department].push(t);
+    tasks.filter(t2 => t2.effectiveStatus === 'OVERDUE' && t2.department)
+        .forEach(t2 => {
+            if (!deptOverdueLists[t2.department]) deptOverdueLists[t2.department] = [];
+            deptOverdueLists[t2.department].push(t2);
         });
 
     Object.entries(deptOverdueLists)
         .filter(([, list]) => list.length >= OVERDUE_DEPT_THRESHOLD)
         .forEach(([dept, list]) => {
-            const urgentInDept = list.filter(t => t.priority === 'URGENT').length;
-            const maxMin = Math.max(...list.map(t =>
-                Math.round((now - new Date(t.dueDate).getTime()) / 60_000)
+            const urgentInDept = list.filter(t2 => t2.priority === 'URGENT').length;
+            const maxMin = Math.max(...list.map(t2 =>
+                Math.round((now - new Date(t2.dueDate).getTime()) / 60_000)
             ));
             push({
                 id: nid(), type: 'CHECK_DEPARTMENT', severity: 'MEDIUM',
-                title:             `Verificare reparto "${dept}"`,
-                reason:            `Basato sui compiti in ritardo: il reparto "${dept}" ha ${list.length} compiti in ritardo. ` +
-                                   `Il più in ritardo è da ${maxMin} minuti.`,
-                recommendedAction: `Rivedere le priorità del reparto "${dept}" e intervenire sui compiti in ritardo.`,
+                title:             t('ops.dec.checkDept.title',  { dept }),
+                reason:            t('ops.dec.checkDept.reason', { dept, n: list.length, maxMin }),
+                recommendedAction: t('ops.dec.checkDept.action', { dept }),
                 confidence:        80,
                 supportingFacts: [
-                    `In ritardo nel reparto: ${list.length}`,
-                    `Urgenti in ritardo: ${urgentInDept}`,
-                    `Ritardo massimo: ${maxMin} min`,
+                    t('ops.dec.checkDept.fact.overdue',      { n: list.length }),
+                    t('ops.dec.checkDept.fact.urgentOverdue',{ n: urgentInDept }),
+                    t('ops.dec.checkDept.fact.maxDelay',     { min: maxMin }),
                 ],
                 linkedTask: null, linkedUser: null, department: dept,
-                quickAction: { label: 'Apri Operazioni', url: '/operations-tasks.html' },
+                quickAction: { label: t('ops.dec.qa.ops'), url: '/operations-tasks.html' },
                 generatedAt,
             });
         });
@@ -603,69 +615,73 @@ function generateDecisions(companyId, { tasks, users, workload, now, generatedAt
         const candidate = normalWl[0];
         if (!candidate) return;
         const movable = tasks.filter(
-            t => t.assigneeId === w.userId && t.status === 'OPEN' && t.priority !== 'URGENT'
+            t2 => t2.assigneeId === w.userId && t2.status === 'OPEN' && t2.priority !== 'URGENT'
         );
         if (!movable.length) return;
-        const t = movable[0];
+        const t2 = movable[0];
 
         push({
             id: nid(), type: 'REASSIGN_TASK', severity: 'MEDIUM',
-            title:             `Sposta "${t.title}" da ${w.userName} a ${candidate.userName}`,
-            reason:            `Basato sul carico attuale: ${w.userName} ha score ${w.currentLoadScore} (OVERLOADED), ` +
-                               `${candidate.userName} ha score ${candidate.currentLoadScore} (${candidate.status}).`,
-            recommendedAction: `Spostare "${t.title}" a ${candidate.userName} per bilanciare il carico.`,
+            title:             t('ops.dec.reassign.title',  { task: t2.title, from: w.userName, to: candidate.userName }),
+            reason:            t('ops.dec.reassign.reason', {
+                from: w.userName, fromScore: w.currentLoadScore,
+                to: candidate.userName, toScore: candidate.currentLoadScore,
+                toStatus: candidate.status,
+            }),
+            recommendedAction: t('ops.dec.reassign.action', { task: t2.title, to: candidate.userName }),
             confidence:        75,
             supportingFacts: [
-                `Da: ${w.userName} (score ${w.currentLoadScore})`,
-                `A: ${candidate.userName} (score ${candidate.currentLoadScore})`,
-                `Compito: "${t.title}"`,
-                `Priorità: ${t.priority}`,
+                t('ops.dec.reassign.fact.from',     { name: w.userName,         score: w.currentLoadScore }),
+                t('ops.dec.reassign.fact.to',       { name: candidate.userName, score: candidate.currentLoadScore }),
+                t('ops.dec.reassign.fact.task',     { title: t2.title }),
+                t('ops.dec.reassign.fact.priority', { val: t2.priority }),
             ],
-            linkedTask: t.id, linkedUser: w.userId, department: t.department || null,
-            quickAction: { label: 'Apri Task', url: `/operations-tasks.html#${t.id}` },
+            linkedTask: t2.id, linkedUser: w.userId, department: t2.department || null,
+            quickAction: { label: t('ops.dec.qa.task'), url: `/operations-tasks.html#${t2.id}` },
             generatedAt,
         });
     });
 
     // ── 7. REVIEW_RECURRING ───────────────────────────────────────────────────
-    tasks.filter(t => t.effectiveStatus === 'OVERDUE' && t.templateId).forEach(t => {
-        const overdueMin = Math.round((now - new Date(t.dueDate).getTime()) / 60_000);
+    tasks.filter(t2 => t2.effectiveStatus === 'OVERDUE' && t2.templateId).forEach(t2 => {
+        const overdueMin = Math.round((now - new Date(t2.dueDate).getTime()) / 60_000);
         push({
             id: nid(), type: 'REVIEW_RECURRING', severity: 'MEDIUM',
-            title:             `Compito ricorrente in ritardo: "${t.title}"`,
-            reason:            `Il compito ricorrente "${t.title}" è in ritardo di ${overdueMin} minuti. ` +
-                               'I compiti ricorrenti non completati in tempo interrompono il ciclo operativo.',
-            recommendedAction: 'Completare questo compito ricorrente il prima possibile.',
+            title:             t('ops.dec.recurring.title',  { title: t2.title }),
+            reason:            t('ops.dec.recurring.reason', { title: t2.title, min: overdueMin }),
+            recommendedAction: t('ops.dec.recurring.action'),
             confidence:        85,
             supportingFacts: [
-                `Tipo: ricorrente`,
-                `In ritardo di: ${overdueMin} min`,
-                `Assegnato a: ${t.assigneeName || 'N/D'}`,
+                t('ops.dec.recurring.fact.type'),
+                t('ops.dec.recurring.fact.overdue',   { min: overdueMin }),
+                t('ops.dec.recurring.fact.assignee',  { val: t2.assigneeName || t('ops.dec.notStarted.fact.nd') }),
             ],
-            linkedTask: t.id, linkedUser: t.assigneeId || null, department: t.department || null,
-            quickAction: { label: 'Apri Task', url: `/operations-tasks.html#${t.id}` },
+            linkedTask: t2.id, linkedUser: t2.assigneeId || null, department: t2.department || null,
+            quickAction: { label: t('ops.dec.qa.task'), url: `/operations-tasks.html#${t2.id}` },
             generatedAt,
         });
     });
 
     // ── 8. UNDERUSED_USER ─────────────────────────────────────────────────────
-    const teamOverdueCount = tasks.filter(t => t.effectiveStatus === 'OVERDUE').length;
+    const teamOverdueCount = tasks.filter(t2 => t2.effectiveStatus === 'OVERDUE').length;
     if (teamOverdueCount > 0) {
         workload.filter(w => w.assigned === 0 && w.completedToday === 0).forEach(w => {
+            const reason = teamOverdueCount === 1
+                ? t('ops.dec.underused.reason1', { name: w.userName, n: teamOverdueCount })
+                : t('ops.dec.underused.reasonN', { name: w.userName, n: teamOverdueCount });
             push({
                 id: nid(), type: 'UNDERUSED_USER', severity: 'LOW',
-                title:             `${w.userName} non ha compiti assegnati`,
-                reason:            `Basato sul carico attuale: ${w.userName} non ha compiti attivi mentre il team ` +
-                                   `ha ${teamOverdueCount} ${teamOverdueCount === 1 ? 'compito in ritardo' : 'compiti in ritardo'}.`,
-                recommendedAction: 'Considerare di assegnare compiti a questo membro disponibile.',
+                title:             t('ops.dec.underused.title',  { name: w.userName }),
+                reason,
+                recommendedAction: t('ops.dec.underused.action'),
                 confidence:        70,
                 supportingFacts: [
-                    `Compiti assegnati: 0`,
-                    `Completati oggi: 0`,
-                    `Compiti in ritardo nel team: ${teamOverdueCount}`,
+                    t('ops.dec.underused.fact.assigned'),
+                    t('ops.dec.underused.fact.completed'),
+                    t('ops.dec.underused.fact.teamOverdue', { n: teamOverdueCount }),
                 ],
                 linkedTask: null, linkedUser: w.userId, department: null,
-                quickAction: { label: 'Apri Task', url: '/operations-tasks.html' },
+                quickAction: { label: t('ops.dec.qa.task'), url: '/operations-tasks.html' },
                 generatedAt,
             });
         });
@@ -684,11 +700,13 @@ function generateDecisions(companyId, { tasks, users, workload, now, generatedAt
 }
 
 // ── Briefing Generator (Sprint 6.2) ──────────────────────────────────────────
-// Produces a deterministic role-specific Italian briefing string from structured facts.
 
-function generateBriefing(role, data) {
+function generateBriefing(role, data, lang = 'it') {
+    lang = opsI18n.sanitizeLang(lang);
+    const t = (key, vars) => opsI18n.t(lang, key, vars);
+
     const h = new Date().getHours();
-    const greeting = h < 12 ? 'Buongiorno' : h < 18 ? 'Buon pomeriggio' : 'Buonasera';
+    const greeting = h < 12 ? t('ops.greeting.morning') : h < 18 ? t('ops.greeting.afternoon') : t('ops.greeting.evening');
 
     switch (role) {
         case 'DIRECTOR': {
@@ -696,19 +714,21 @@ function generateBriefing(role, data) {
             const totalOps = (summary.completedToday || 0) + (summary.overdueToday || 0) + (summary.urgentOpen || 0);
             const trendNote = (() => {
                 if (!trends || !trends.overdue) return null;
-                if (trends.overdue.direction === 'IMPROVING')  return 'Il numero di attività scadute è migliorato rispetto a ieri.';
-                if (trends.overdue.direction === 'WORSENING')  return 'Il numero di attività scadute è aumentato rispetto a ieri.';
-                if (trends.overdue.direction === 'STABLE')     return 'Il carico operativo è stabile rispetto a ieri.';
+                if (trends.overdue.direction === 'IMPROVING')  return t('ops.brief.dir.trendImproving');
+                if (trends.overdue.direction === 'WORSENING')  return t('ops.brief.dir.trendWorsening');
+                if (trends.overdue.direction === 'STABLE')     return t('ops.brief.dir.trendStable');
                 return null;
             })();
+            const overdueN = summary.overdueToday || 0;
+            const decN     = decisionsCount || 0;
             return [
                 `${greeting}.`,
-                `Oggi ci sono ${totalOps} attività operative.`,
-                summary.overdueToday > 0
-                    ? `${summary.overdueToday} ${summary.overdueToday === 1 ? 'è in ritardo' : 'sono in ritardo'}.`
-                    : 'Nessuna attività in ritardo.',
-                decisionsCount > 0
-                    ? `${decisionsCount} ${decisionsCount === 1 ? 'decisione richiede' : 'decisioni richiedono'} la tua attenzione.`
+                t('ops.brief.dir.totalOps', { n: totalOps }),
+                overdueN > 0
+                    ? (overdueN === 1 ? t('ops.brief.dir.overdue1', { n: overdueN }) : t('ops.brief.dir.overdueN', { n: overdueN }))
+                    : t('ops.brief.dir.noOverdue'),
+                decN > 0
+                    ? (decN === 1 ? t('ops.brief.dir.decisions1', { n: decN }) : t('ops.brief.dir.decisionsN', { n: decN }))
                     : null,
                 trendNote,
             ].filter(Boolean).join(' ');
@@ -716,80 +736,96 @@ function generateBriefing(role, data) {
         case 'CHEF_CUISINE': {
             const { summary, decisionsCount } = data;
             const totalKitchen = (summary.completedToday || 0) + (summary.overdueToday || 0);
+            const urgN = summary.urgentOpen || 0;
+            const ovdN = summary.overdueToday || 0;
+            const decN = decisionsCount || 0;
             return [
-                `La cucina ha ${totalKitchen} attività.`,
-                (summary.urgentOpen || 0) > 0 ? `${summary.urgentOpen} ${summary.urgentOpen === 1 ? 'è urgente' : 'sono urgenti'}.` : null,
-                (summary.overdueToday || 0) > 0
-                    ? `${summary.overdueToday === 1 ? 'Una attività è in ritardo' : `${summary.overdueToday} attività sono in ritardo`}.`
-                    : 'Nessun ritardo.',
-                decisionsCount > 0 ? `${decisionsCount} ${decisionsCount === 1 ? 'decisione richiede' : 'decisioni richiedono'} attenzione.` : null,
+                t('ops.brief.cc.total', { n: totalKitchen }),
+                urgN > 0 ? (urgN === 1 ? t('ops.brief.cc.urgent1', { n: urgN }) : t('ops.brief.cc.urgentN', { n: urgN })) : null,
+                ovdN > 0 ? (ovdN === 1 ? t('ops.brief.cc.overdue1') : t('ops.brief.cc.overdueN', { n: ovdN })) : t('ops.brief.cc.noOverdue'),
+                decN > 0 ? (decN === 1 ? t('ops.brief.cc.decisions1', { n: decN }) : t('ops.brief.cc.decisionsN', { n: decN })) : null,
             ].filter(Boolean).join(' ');
         }
         case 'ADJOINT': {
             const { summary, decisionsCount } = data;
+            const ovdN = summary.overdueToday || 0;
+            const urgN = summary.urgentOpen || 0;
+            const decN = decisionsCount || 0;
             return [
                 `${greeting}.`,
-                (summary.overdueToday || 0) > 0
-                    ? `${summary.overdueToday} ${summary.overdueToday === 1 ? 'compito richiede' : 'compiti richiedono'} coordinamento (in ritardo).`
-                    : 'Nessun ritardo nel tuo scope.',
-                (summary.urgentOpen || 0) > 0 ? `${summary.urgentOpen} urgenti da gestire.` : null,
-                decisionsCount > 0 ? `${decisionsCount} ${decisionsCount === 1 ? 'decisione richiede' : 'decisioni richiedono'} attenzione.` : null,
+                ovdN > 0
+                    ? (ovdN === 1 ? t('ops.brief.adj.overdue1', { n: ovdN }) : t('ops.brief.adj.overdueN', { n: ovdN }))
+                    : t('ops.brief.adj.noOverdue'),
+                urgN > 0 ? t('ops.brief.adj.urgent', { n: urgN }) : null,
+                decN > 0 ? (decN === 1 ? t('ops.brief.adj.decisions1', { n: decN }) : t('ops.brief.adj.decisionsN', { n: decN })) : null,
             ].filter(Boolean).join(' ');
         }
         case 'SOUS_CHEF': {
             const { myMetrics, nextTask } = data;
+            const urgN = myMetrics ? (myMetrics.urgent || 0) : 0;
+            let nextDueLine = null;
+            if (nextTask && nextTask.dueDate) {
+                try {
+                    const locale = lang === 'fr' ? 'fr-FR' : lang === 'en' ? 'en-GB' : 'it-IT';
+                    const time = new Date(nextTask.dueDate).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+                    nextDueLine = t('ops.brief.sc.nextDue', { time });
+                } catch { nextDueLine = t('ops.brief.sc.nextTask'); }
+            } else if (nextTask) {
+                nextDueLine = t('ops.brief.sc.nextTask');
+            }
             return [
-                `Hai ${myMetrics.assigned} ${myMetrics.assigned === 1 ? 'attività' : 'attività'} oggi.`,
-                myMetrics.urgent > 0 ? `${myMetrics.urgent === 1 ? 'Una è urgente' : `${myMetrics.urgent} sono urgenti`}.` : null,
-                nextTask && nextTask.dueDate
-                    ? `La prossima scade alle ${new Date(nextTask.dueDate).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}.`
-                    : nextTask ? 'Hai un compito da completare.' : null,
+                t('ops.brief.sc.tasks', { n: myMetrics ? (myMetrics.assigned || 0) : 0 }),
+                urgN > 0 ? (urgN === 1 ? t('ops.brief.sc.urgent1') : t('ops.brief.sc.urgentN', { n: urgN })) : null,
+                nextDueLine,
             ].filter(Boolean).join(' ');
         }
         case 'CHEF_DE_BRIGADE': {
             const { myMetrics, nextTask } = data;
+            const ovdN = myMetrics ? (myMetrics.overdue || 0) : 0;
+            const doneN = myMetrics ? (myMetrics.completedToday || 0) : 0;
             return [
-                myMetrics.overdue > 0
-                    ? `${myMetrics.overdue === 1 ? 'Un compito è in ritardo' : `${myMetrics.overdue} compiti sono in ritardo`}. Intervieni subito.`
-                    : 'Nessun ritardo.',
-                nextTask ? `Prossimo compito: "${nextTask.title}".` : 'Nessun compito imminente.',
-                myMetrics.completedToday > 0 ? `Hai già completato ${myMetrics.completedToday} compiti oggi.` : null,
+                ovdN > 0
+                    ? (ovdN === 1 ? t('ops.brief.cdb.overdue1') : t('ops.brief.cdb.overdueN', { n: ovdN }))
+                    : t('ops.brief.cdb.noOverdue'),
+                nextTask ? t('ops.brief.cdb.nextTask', { title: nextTask.title }) : t('ops.brief.cdb.noNextTask'),
+                doneN > 0 ? t('ops.brief.cdb.completed', { n: doneN }) : null,
             ].filter(Boolean).join(' ');
         }
         default:
-            return `${greeting}. Controlla le tue attività.`;
+            return `${greeting}. ${t('ops.brief.default')}`;
     }
 }
 
 // ── Department Health (Sprint 6.2) ────────────────────────────────────────────
 // Returns per-department metrics from scoped tasks, with a trend direction
 // computed by comparing current overdue count against yesterday's snapshot.
+// No i18n needed here — only numeric data and enum strings are returned.
 
 function getDepartmentHealth(scopedTasks, yesterdaySnapshot) {
     const now   = Date.now();
     const today = new Date().toISOString().slice(0, 10);
 
-    const enriched = (scopedTasks || []).map(t => {
-        let effectiveStatus = t.status;
-        if (!['COMPLETED','CANCELLED'].includes(t.status) && t.dueDate) {
-            const due = new Date(t.dueDate).getTime();
+    const enriched = (scopedTasks || []).map(t2 => {
+        let effectiveStatus = t2.status;
+        if (!['COMPLETED','CANCELLED'].includes(t2.status) && t2.dueDate) {
+            const due = new Date(t2.dueDate).getTime();
             if (!isNaN(due) && now > due) effectiveStatus = 'OVERDUE';
         }
-        return { ...t, effectiveStatus };
+        return { ...t2, effectiveStatus };
     });
 
     const depts = {};
-    enriched.forEach(t => {
-        if (!t.department) return;
-        if (!depts[t.department]) {
-            depts[t.department] = { dept: t.department, open: 0, overdue: 0, urgent: 0, completedToday: 0 };
+    enriched.forEach(t2 => {
+        if (!t2.department) return;
+        if (!depts[t2.department]) {
+            depts[t2.department] = { dept: t2.department, open: 0, overdue: 0, urgent: 0, completedToday: 0 };
         }
-        const d = depts[t.department];
-        if (!['COMPLETED','CANCELLED'].includes(t.status)) d.open++;
-        if (t.effectiveStatus === 'OVERDUE')               d.overdue++;
-        if (t.priority === 'URGENT' && !['COMPLETED','CANCELLED'].includes(t.status)) d.urgent++;
-        if (t.status === 'COMPLETED') {
-            try { if (new Date(t.completedAt).toISOString().slice(0, 10) === today) d.completedToday++; }
+        const d = depts[t2.department];
+        if (!['COMPLETED','CANCELLED'].includes(t2.status)) d.open++;
+        if (t2.effectiveStatus === 'OVERDUE')               d.overdue++;
+        if (t2.priority === 'URGENT' && !['COMPLETED','CANCELLED'].includes(t2.status)) d.urgent++;
+        if (t2.status === 'COMPLETED') {
+            try { if (new Date(t2.completedAt).toISOString().slice(0, 10) === today) d.completedToday++; }
             catch { /* skip */ }
         }
     });
