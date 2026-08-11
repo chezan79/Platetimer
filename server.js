@@ -1198,6 +1198,98 @@ app.get('/api/countdown-history', (req, res) => {
     res.json({ success: true, count: records.length, records });
 });
 
+// ── Countdown history analytics (Task 29) ────────────────────────────────────
+// Returns the last N completed countdowns plus pre-computed aggregates:
+//   totalCompleted, avgPlannedSec, avgActualSec, avgOverrunSec,
+//   byReason { manual_deleted, auto_expired, superseded },
+//   byDepartment [ { id, name, count, avgActualSec, avgOverrunSec } ],
+//   busyTables   [ { table, count, avgActualSec } ]
+// All values are company-scoped from the verified session — the client supplies nothing.
+app.get('/api/countdown-history/analytics', (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const companyId = String(session.companyName).trim().toLowerCase();
+    const limit = Math.min(parseInt(req.query.limit, 10) || 100, 500);
+
+    const all = (countdownHistoryStore[companyId] || []).slice(); // copy
+    // Most-recent first
+    all.sort((a, b) => (b.completedAt || 0) - (a.completedAt || 0));
+    const recent = all.slice(0, limit);
+
+    const total = all.length;
+
+    // Aggregate helpers
+    let sumPlanned = 0, sumActual = 0, sumOverrun = 0, counted = 0;
+    const byReason = { manual_deleted: 0, auto_expired: 0, superseded: 0 };
+    const deptMap = {}; // deptId → { count, sumActual, sumOverrun }
+    const tableMap = {}; // tableNumber → { count, sumActual }
+
+    for (const r of all) {
+        const planned = (r.initialDuration || 0);          // seconds
+        const actual  = r.startTime && r.completedAt
+            ? Math.round((r.completedAt - r.startTime) / 1000)
+            : planned;
+        const overrun = actual - planned;
+
+        sumPlanned += planned;
+        sumActual  += actual;
+        sumOverrun += overrun;
+        counted++;
+
+        const reasonKey = r.reason && byReason.hasOwnProperty(r.reason) ? r.reason : null;
+        if (reasonKey) byReason[reasonKey]++;
+
+        // Per-department
+        const dests = Array.isArray(r.destinations) ? r.destinations : [];
+        for (const dId of dests) {
+            if (!deptMap[dId]) deptMap[dId] = { count: 0, sumActual: 0, sumOverrun: 0 };
+            deptMap[dId].count++;
+            deptMap[dId].sumActual  += actual;
+            deptMap[dId].sumOverrun += overrun;
+        }
+
+        // Per-table
+        const tbl = String(r.tableNumber || '?');
+        if (!tableMap[tbl]) tableMap[tbl] = { count: 0, sumActual: 0 };
+        tableMap[tbl].count++;
+        tableMap[tbl].sumActual += actual;
+    }
+
+    const avgPlannedSec = counted ? Math.round(sumPlanned / counted) : 0;
+    const avgActualSec  = counted ? Math.round(sumActual  / counted) : 0;
+    const avgOverrunSec = counted ? Math.round(sumOverrun / counted) : 0;
+
+    const byDepartment = Object.entries(deptMap)
+        .map(([id, v]) => ({
+            id,
+            count:        v.count,
+            avgActualSec: Math.round(v.sumActual  / v.count),
+            avgOverrunSec: Math.round(v.sumOverrun / v.count)
+        }))
+        .sort((a, b) => b.count - a.count);
+
+    const busyTables = Object.entries(tableMap)
+        .map(([table, v]) => ({
+            table,
+            count:        v.count,
+            avgActualSec: Math.round(v.sumActual / v.count)
+        }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 10);
+
+    res.json({
+        success: true,
+        totalCompleted: total,
+        avgPlannedSec,
+        avgActualSec,
+        avgOverrunSec,
+        byReason,
+        byDepartment,
+        busyTables,
+        recent
+    });
+});
+
 // =========================================================================
 // ===== CALENDAR MODULE ===================================================
 // =========================================================================

@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Storico Attese — PlateTimer</title>
+<style>
+:root {
+  --bg:       #F1F5F9;
+  --panel:    #FFFFFF;
+  --card:     #FFFFFF;
+  --card-h:   #F8FAFC;
+  --border:   #E2E8F0;
+  --border-l: #CBD5E1;
+  --text:     #0F172A;
+  --muted:    #64748B;
+  --accent:   #4F46E5;
+  --accent2:  #6366F1;
+  --warn:     #D97706;
+  --danger:   #DC2626;
+  --ok:       #16A34A;
+  --hdr:      56px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,sans-serif;min-height:100vh;}
+
+/* ── HEADER ─────────────────────────────── */
+.hdr{position:fixed;top:0;left:0;right:0;height:var(--hdr);
+  background:rgba(255,255,255,.97);box-shadow:0 1px 3px rgba(0,0,0,.08);
+  display:flex;align-items:center;gap:12px;padding:0 16px;z-index:200;}
+.hdr-brand{font-size:15px;font-weight:700;color:var(--accent2);white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;max-width:200px;}
+.hdr-sep{width:1px;height:20px;background:var(--border-l);flex-shrink:0;}
+.hdr-page{font-size:15px;font-weight:600;color:var(--text);white-space:nowrap;flex:1;}
+.hdr-btn{padding:7px 14px;border:1px solid var(--border-l);border-radius:7px;
+  background:rgba(0,0,0,.04);color:var(--text);font-size:13px;cursor:pointer;
+  white-space:nowrap;flex-shrink:0;transition:background .15s;}
+.hdr-btn:hover{background:rgba(0,0,0,.09);}
+.hdr-btn.danger{border-color:rgba(220,38,38,.35);color:var(--danger);}
+.hdr-btn.danger:hover{background:rgba(220,38,38,.08);}
+
+/* ── MAIN ───────────────────────────────── */
+.main{max-width:1100px;margin:0 auto;padding:calc(var(--hdr) + 24px) 16px 48px;}
+
+/* ── PAGE TITLE ─────────────────────────── */
+.page-title{font-size:22px;font-weight:800;color:var(--text);margin-bottom:4px;}
+.page-sub{font-size:13px;color:var(--muted);margin-bottom:24px;}
+
+/* ── SECTION LABEL ─────────────────────── */
+.section-label{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;
+  color:var(--muted);margin-bottom:12px;margin-top:28px;}
+
+/* ── STATS ROW ──────────────────────────── */
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:6px;}
+@media(max-width:700px){.stats-row{grid-template-columns:repeat(2,1fr);}}
+@media(max-width:400px){.stats-row{grid-template-columns:1fr;}}
+.stat-card{background:var(--card);border:1.5px solid var(--border);border-radius:12px;
+  padding:16px 18px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.06);}
+.stat-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;
+  color:var(--muted);margin-bottom:6px;}
+.stat-value{font-size:26px;font-weight:800;color:var(--accent2);line-height:1;}
+.stat-value.ok{color:var(--ok);}
+.stat-value.warn{color:var(--warn);}
+.stat-value.danger{color:var(--danger);}
+
+/* ── BREAKDOWN GRID ─────────────────────── */
+.breakdown-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+@media(max-width:640px){.breakdown-grid{grid-template-columns:1fr;}}
+
+.breakdown-card{background:var(--card);border:1.5px solid var(--border);border-radius:12px;
+  padding:18px 20px;box-shadow:0 1px 3px rgba(0,0,0,.06);}
+.bc-title{font-size:13px;font-weight:700;color:var(--text);margin-bottom:14px;}
+
+/* reason bars */
+.reason-row{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
+.reason-label{font-size:13px;color:var(--text);min-width:110px;flex-shrink:0;}
+.reason-bar-wrap{flex:1;background:var(--bg);border-radius:6px;overflow:hidden;height:10px;}
+.reason-bar{height:100%;border-radius:6px;transition:width .4s;}
+.reason-bar.expired{background:var(--danger);}
+.reason-bar.manual{background:var(--accent);}
+.reason-bar.superseded{background:var(--warn);}
+.reason-count{font-size:13px;font-weight:700;color:var(--text);min-width:28px;text-align:right;}
+
+/* dept rows */
+.dept-row{display:flex;align-items:center;gap:8px;padding:8px 0;
+  border-bottom:1px solid var(--border);}
+.dept-row:last-child{border-bottom:none;}
+.dept-rank{font-size:11px;font-weight:700;color:var(--muted);min-width:22px;}
+.dept-name{font-size:13px;font-weight:600;color:var(--text);flex:1;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.dept-count{font-size:12px;font-weight:700;padding:2px 8px;border-radius:12px;
+  background:rgba(99,102,241,.1);color:var(--accent2);}
+.dept-overrun{font-size:12px;color:var(--muted);min-width:70px;text-align:right;}
+.dept-overrun.pos{color:var(--danger);}
+.dept-overrun.neg{color:var(--ok);}
+
+/* table rows */
+.table-row{display:flex;align-items:center;gap:8px;padding:8px 0;
+  border-bottom:1px solid var(--border);}
+.table-row:last-child{border-bottom:none;}
+.table-num{font-size:18px;font-weight:800;color:var(--text);min-width:44px;text-align:center;}
+.table-count{font-size:12px;color:var(--muted);flex:1;}
+.table-avg{font-size:13px;font-weight:600;color:var(--text);}
+
+/* ── HISTORY TABLE ──────────────────────── */
+.history-wrap{background:var(--card);border:1.5px solid var(--border);border-radius:12px;
+  overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06);}
+.history-controls{display:flex;align-items:center;gap:10px;padding:14px 16px;
+  border-bottom:1px solid var(--border);flex-wrap:wrap;}
+.hist-search{flex:1;min-width:160px;padding:8px 12px;
+  background:#fff;border:1.5px solid var(--border-l);
+  border-radius:8px;font-size:13px;color:var(--text);outline:none;}
+.hist-search:focus{border-color:var(--accent);}
+.hist-search::placeholder{color:var(--muted);}
+.hist-filter{padding:7px 14px;border:1.5px solid var(--border-l);border-radius:8px;
+  background:#fff;font-size:13px;color:var(--text);cursor:pointer;outline:none;}
+.hist-filter:focus{border-color:var(--accent);}
+.hist-count{font-size:12px;color:var(--muted);white-space:nowrap;}
+
+table{width:100%;border-collapse:collapse;}
+th{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;
+  color:var(--muted);padding:10px 14px;text-align:left;
+  background:var(--bg);border-bottom:1.5px solid var(--border);}
+td{font-size:13px;padding:10px 14px;border-bottom:1px solid var(--border);
+  color:var(--text);vertical-align:middle;}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:var(--card-h);}
+.td-table{font-size:16px;font-weight:800;}
+.td-depts{display:flex;gap:4px;flex-wrap:wrap;}
+.dept-chip{font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;
+  background:rgba(99,102,241,.1);color:var(--accent2);white-space:nowrap;}
+.td-time{font-variant-numeric:tabular-nums;font-weight:600;}
+.td-overrun{font-weight:700;}
+.td-overrun.pos{color:var(--danger);}
+.td-overrun.neg{color:var(--ok);}
+.td-overrun.zero{color:var(--muted);}
+.reason-badge{font-size:11px;font-weight:700;padding:3px 8px;border-radius:10px;white-space:nowrap;}
+.reason-badge.auto_expired{background:rgba(220,38,38,.1);color:var(--danger);}
+.reason-badge.manual_deleted{background:rgba(79,70,229,.1);color:var(--accent);}
+.reason-badge.superseded{background:rgba(217,119,6,.12);color:var(--warn);}
+
+/* ── EMPTY STATE ────────────────────────── */
+.empty-state{text-align:center;padding:60px 20px;color:var(--muted);}
+.empty-icon{font-size:48px;margin-bottom:14px;}
+.empty-text{font-size:15px;}
+
+/* ── LOADING ────────────────────────────── */
+.loading-state{text-align:center;padding:60px 20px;color:var(--muted);font-size:15px;}
+
+/* ── MOBILE TABLE ────────────────────────── */
+@media(max-width:600px){
+  th.col-depts,td.col-depts,
+  th.col-planned,td.col-planned{display:none;}
+}
+</style>
+</head>
+<body>
+
+<!-- ── HEADER ─────────────────────────── -->
+<header class="hdr">
+  <span id="hdr-company" class="hdr-brand">PlateTimer</span>
+  <span class="hdr-sep"></span>
+  <span class="hdr-page" data-i18n="history.title">📊 Storico Attese</span>
+  <span id="i18n-hist-sel"></span>
+  <button class="hdr-btn" onclick="window.location.href='home.html'" data-i18n="common.home">Home</button>
+  <button class="hdr-btn danger" onclick="window.location.href='index.html'" data-i18n="common.logout">Esci</button>
+</header>
+
+<!-- ── MAIN ───────────────────────────── -->
+<main class="main">
+
+  <div class="page-title" data-i18n="history.heading">Storico Attese Tavoli</div>
+  <div class="page-sub" data-i18n="history.sub">Analisi dei countdown completati per la tua azienda</div>
+
+  <!-- Summary stats -->
+  <div class="stats-row" id="stats-row">
+    <div class="stat-card">
+      <div class="stat-label" data-i18n="history.totalCompleted">Completati</div>
+      <div class="stat-value" id="stat-total">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label" data-i18n="history.avgPlanned">Durata Media</div>
+      <div class="stat-value" id="stat-planned">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label" data-i18n="history.avgActual">Tempo Effettivo</div>
+      <div class="stat-value" id="stat-actual">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label" data-i18n="history.avgOverrun">Sforamento Medio</div>
+      <div class="stat-value" id="stat-overrun">—</div>
+    </div>
+  </div>
+
+  <!-- Breakdowns -->
+  <p class="section-label" data-i18n="history.breakdownLabel">Analisi per categoria</p>
+  <div class="breakdown-grid">
+
+    <!-- By reason -->
+    <div class="breakdown-card">
+      <div class="bc-title" data-i18n="history.byReason">Per motivo di chiusura</div>
+      <div id="reason-breakdown">
+        <div class="loading-state" data-i18n="history.loading">Caricamento…</div>
+      </div>
+    </div>
+
+    <!-- By department -->
+    <div class="breakdown-card">
+      <div class="bc-title" data-i18n="history.byDept">Per reparto (top 5)</div>
+      <div id="dept-breakdown">
+        <div class="loading-state" data-i18n="history.loading">Caricamento…</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Busiest tables -->
+  <p class="section-label" data-i18n="history.busyTablesLabel">Tavoli più frequenti</p>
+  <div class="breakdown-card" id="tables-breakdown">
+    <div class="loading-state" data-i18n="history.loading">Caricamento…</div>
+  </div>
+
+  <!-- Recent history table -->
+  <p class="section-label" data-i18n="history.recentLabel">Storico recente</p>
+  <div class="history-wrap">
+    <div class="history-controls">
+      <input type="text" id="hist-search" class="hist-search" placeholder="🔍 Cerca tavolo…">
+      <select id="hist-reason-filter" class="hist-filter">
+        <option value="all" data-i18n="history.allReasons">Tutti i motivi</option>
+        <option value="auto_expired" data-i18n="history.reasonExpired">Scaduto</option>
+        <option value="manual_deleted" data-i18n="history.reasonManual">Eliminato</option>
+        <option value="superseded" data-i18n="history.reasonSuperseded">Sostituito</option>
+      </select>
+      <span id="hist-count" class="hist-count"></span>
+    </div>
+    <div id="history-table-wrap">
+      <div class="loading-state" data-i18n="history.loading">Caricamento…</div>
+    </div>
+  </div>
+
+</main>
+
+<script src="js/i18n.js"></script>
+<script>I18n.init({ selector: '#i18n-hist-sel' });</script>
+<script src="js/ws-auth.js"></script>
+<script>
+const _t = k => window.I18n ? window.I18n.t(k) : k;
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+function fmtSec(sec) {
+    if (sec == null || isNaN(sec)) return '—';
+    const abs = Math.abs(Math.round(sec));
+    const m = Math.floor(abs / 60);
+    const s = abs % 60;
+    return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+function fmtOverrun(sec) {
+    if (sec == null || isNaN(sec)) return { text: '—', cls: 'zero' };
+    const r = Math.round(sec);
+    if (r > 0)  return { text: '+' + fmtSec(r), cls: 'pos' };
+    if (r < 0)  return { text: '-' + fmtSec(-r), cls: 'neg' };
+    return { text: '±0:00', cls: 'zero' };
+}
+
+function fmtDate(ts) {
+    if (!ts) return '—';
+    return new Date(ts).toLocaleString('it-IT', {
+        day: '2-digit', month: '2-digit', year: '2-digit',
+        hour: '2-digit', minute: '2-digit'
+    });
+}
+
+function esc(s) {
+    return String(s)
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+        .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function reasonLabel(r) {
+    const map = {
+        auto_expired:   _t('history.reasonExpired'),
+        manual_deleted: _t('history.reasonManual'),
+        superseded:     _t('history.reasonSuperseded')
+    };
+    return map[r] || r;
+}
+
+// ── Data ─────────────────────────────────────────────────────────────────────
+let analyticsData = null;
+let deptNameMap   = {};  // deptId → name
+
+async function loadDeptNames() {
+    const token = WsAuth.getStoredToken();
+    if (!token) return;
+    try {
+        const res  = await fetch('/api/departments', { headers: { 'Authorization': `Bearer ${token}` } });
+        const data = await res.json();
+        if (data.success && data.departments) {
+            data.departments.forEach(d => { deptNameMap[d.id] = d.name; });
+        }
+    } catch (e) { console.warn('[history] dept load error:', e.message); }
+}
+
+async function loadAnalytics() {
+    const token = WsAuth.getStoredToken();
+    if (!token) {
+        window.location.href = 'index.html';
+        return;
+    }
+    try {
+        const res  = await fetch('/api/countdown-history/analytics?limit=200', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.status === 401) { window.location.href = 'index.html'; return; }
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'Unknown error');
+        analyticsData = data;
+        renderAll();
+    } catch (e) {
+        console.error('[history] analytics error:', e);
+        document.getElementById('history-table-wrap').innerHTML =
+            `<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-text">${_t('history.loadError')}</div></div>`;
+    }
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function renderStats(d) {
+    document.getElementById('stat-total').textContent   = d.totalCompleted;
+    document.getElementById('stat-planned').textContent = fmtSec(d.avgPlannedSec);
+    document.getElementById('stat-actual').textContent  = fmtSec(d.avgActualSec);
+
+    const overrunEl  = document.getElementById('stat-overrun');
+    const { text, cls } = fmtOverrun(d.avgOverrunSec);
+    overrunEl.textContent = text;
+    overrunEl.className = 'stat-value ' + cls;
+}
+
+function renderReasons(d) {
+    const el = document.getElementById('reason-breakdown');
+    const total = d.totalCompleted || 1;
+    const reasons = [
+        { key: 'auto_expired',   cls: 'expired',    label: _t('history.reasonExpired')     },
+        { key: 'manual_deleted', cls: 'manual',     label: _t('history.reasonManual')      },
+        { key: 'superseded',     cls: 'superseded', label: _t('history.reasonSuperseded')  }
+    ];
+    if (!total) {
+        el.innerHTML = `<div class="empty-state" style="padding:20px"><div class="empty-text">${_t('history.noData')}</div></div>`;
+        return;
+    }
+    el.innerHTML = reasons.map(r => {
+        const count = d.byReason[r.key] || 0;
+        const pct   = Math.round(count / total * 100);
+        return `
+        <div class="reason-row">
+          <span class="reason-label">${esc(r.label)}</span>
+          <div class="reason-bar-wrap">
+            <div class="reason-bar ${r.cls}" style="width:${pct}%"></div>
+          </div>
+          <span class="reason-count">${count}</span>
+        </div>`;
+    }).join('');
+}
+
+function renderDepts(d) {
+    const el = document.getElementById('dept-breakdown');
+    const top = d.byDepartment.slice(0, 5);
+    if (!top.length) {
+        el.innerHTML = `<div class="empty-state" style="padding:20px"><div class="empty-text">${_t('history.noData')}</div></div>`;
+        return;
+    }
+    el.innerHTML = top.map((dept, i) => {
+        const name = deptNameMap[dept.id] || dept.id;
+        const { text, cls } = fmtOverrun(dept.avgOverrunSec);
+        return `
+        <div class="dept-row">
+          <span class="dept-rank">#${i+1}</span>
+          <span class="dept-name" title="${esc(name)}">${esc(name)}</span>
+          <span class="dept-count">${dept.count}</span>
+          <span class="dept-overrun ${cls}" title="${_t('history.avgOverrun')}">${text}</span>
+        </div>`;
+    }).join('');
+}
+
+function renderTables(d) {
+    const el = document.getElementById('tables-breakdown');
+    const top = d.busyTables;
+    if (!top.length) {
+        el.innerHTML = `<div class="empty-state" style="padding:20px"><div class="empty-text">${_t('history.noData')}</div></div>`;
+        return;
+    }
+    el.innerHTML = top.map(t => `
+      <div class="table-row">
+        <span class="table-num">T${esc(t.table)}</span>
+        <span class="table-count">${t.count} ${_t('history.completions')}</span>
+        <span class="table-avg">${fmtSec(t.avgActualSec)} ${_t('history.avgEffective')}</span>
+      </div>`).join('');
+}
+
+function renderHistory() {
+    if (!analyticsData) return;
+    const search = (document.getElementById('hist-search').value || '').toLowerCase().trim();
+    const reasonFilter = (document.getElementById('hist-reason-filter').value || 'all');
+
+    let rows = analyticsData.recent.filter(r => {
+        if (search && !String(r.tableNumber).toLowerCase().includes(search)) return false;
+        if (reasonFilter !== 'all' && r.reason !== reasonFilter) return false;
+        return true;
+    });
+
+    document.getElementById('hist-count').textContent =
+        `${rows.length} ${_t('history.records')}`;
+
+    const wrap = document.getElementById('history-table-wrap');
+    if (!rows.length) {
+        wrap.innerHTML = `<div class="empty-state"><div class="empty-icon">🕓</div><div class="empty-text">${_t('history.noRecords')}</div></div>`;
+        return;
+    }
+
+    const thead = `
+    <thead>
+      <tr>
+        <th>${_t('history.colTable')}</th>
+        <th class="col-depts">${_t('history.colDepts')}</th>
+        <th class="col-planned">${_t('history.colPlanned')}</th>
+        <th>${_t('history.colActual')}</th>
+        <th>${_t('history.colOverrun')}</th>
+        <th>${_t('history.colReason')}</th>
+        <th>${_t('history.colCompleted')}</th>
+      </tr>
+    </thead>`;
+
+    const tbody = rows.map(r => {
+        const planned = r.initialDuration || 0;
+        const actual  = r.startTime && r.completedAt
+            ? Math.round((r.completedAt - r.startTime) / 1000) : planned;
+        const overrun = actual - planned;
+        const { text: ovText, cls: ovCls } = fmtOverrun(overrun);
+        const depts   = (r.destinations || []).map(id =>
+            `<span class="dept-chip">${esc(deptNameMap[id] || id)}</span>`
+        ).join('');
+
+        return `<tr>
+          <td class="td-table">T${esc(r.tableNumber)}</td>
+          <td class="col-depts"><div class="td-depts">${depts || '<span style="color:var(--muted)">—</span>'}</div></td>
+          <td class="td-time col-planned">${fmtSec(planned)}</td>
+          <td class="td-time">${fmtSec(actual)}</td>
+          <td class="td-overrun ${ovCls}">${esc(ovText)}</td>
+          <td><span class="reason-badge ${esc(r.reason || '')}">${esc(reasonLabel(r.reason))}</span></td>
+          <td style="color:var(--muted);font-size:12px;">${fmtDate(r.completedAt)}</td>
+        </tr>`;
+    }).join('');
+
+    wrap.innerHTML = `<table>${thead}<tbody>${tbody}</tbody></table>`;
+}
+
+function renderAll() {
+    if (!analyticsData) return;
+    renderStats(analyticsData);
+    renderReasons(analyticsData);
+    renderDepts(analyticsData);
+    renderTables(analyticsData);
+    renderHistory();
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+(async function init() {
+    // Auth guard
+    const token = WsAuth.getStoredToken();
+    if (!token) { window.location.href = 'index.html'; return; }
+
+    // Company display
+    const company = localStorage.getItem('userCompany');
+    if (company) document.getElementById('hdr-company').textContent = company;
+
+    // Wire up search + filter
+    document.getElementById('hist-search').addEventListener('input', renderHistory);
+    document.getElementById('hist-reason-filter').addEventListener('change', renderHistory);
+
+    // Load data in parallel
+    await Promise.all([loadDeptNames(), loadAnalytics()]);
+
+    // Re-render after dept names arrive (analytics may have run first)
+    if (analyticsData) renderAll();
+})();
+</script>
+</body>
+</html>
