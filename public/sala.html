@@ -727,6 +727,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
                         remainingTime:  tr,
                         startTime:      cd.startTime || Date.now(),
                         endsAt,
+                        graceMs:        cd.graceMs ?? 120000,
                         warnedAt60:     tr <= 60,
                         alarmedExpiry:  tr === 0,
                         expiredAt:      null  // updateAllCountdowns sets this to endsAt on first 0-tick
@@ -769,12 +770,14 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
         const now = Date.now();
 
         countdowns = countdowns.reduce((acc, cd) => {
-            // ── Expired phase: blink for 15 s then drop ──────────────────────
+            // ── Expired phase: blink for the server-delivered grace window ───
             // Measure elapsed time from cd.endsAt (server-authoritative), not from
-            // when this client first noticed the crossing.  This keeps the 15-second
+            // when this client first noticed the crossing.  This keeps the grace
             // window consistent across page refreshes and across different browsers.
+            // Normal removal comes from the server's countdownCompleted event; this
+            // local check is only a fallback for disconnected clients.
             if (cd.expiredAt !== null) {
-                if (now - cd.expiredAt >= 15000) return acc; // drop after 15 s
+                if (now - cd.expiredAt >= (cd.graceMs ?? 120000)) return acc; // fallback drop after grace
                 acc.push({ ...cd, remainingTime: 0, remainingTimeFormatted: '0:00' });
                 return acc;
             }
@@ -845,6 +848,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
                 // Fall back to approximation only for old payloads that lack the field.
                 existing.endsAt = data.endsAt ?? (Date.now() + tr * 1000);
             }
+            existing.graceMs = data.graceMs ?? existing.graceMs;
             existing.remainingTime = tr;
             // Preserve the original full duration so the progress bar stays correct.
             // Never replace it with the current remaining time.
@@ -858,6 +862,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
                 remainingTime:          tr,
                 initialDuration:        data.initialDuration ?? tr,
                 endsAt:                 data.endsAt ?? (Date.now() + tr * 1000),
+                graceMs:                data.graceMs ?? 120000,
                 destinations:           Array.isArray(data.destinations) ? data.destinations : (data.destination ? [data.destination] : []),
                 startedAt:              new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
                 startTime:              Date.now(),

@@ -138,9 +138,14 @@ const CountdownsModule = (() => {
                                 initialDuration:        data.initialDuration,
                                 destinations:           Array.isArray(data.destinations) ? data.destinations : (data.destination ? [data.destination] : []),
                                 destination:            data.destination,
+                                graceMs:                data.graceMs,
+                                countdownId:            data.countdownId,
                                 remainingTimeFormatted: formatTime(data.timeRemaining)
                             });
                         } else if (data.action === 'deleteCountdown' && onCountdownDeleteCallback) {
+                            onCountdownDeleteCallback(data.tableNumber);
+                        } else if (data.action === 'countdownCompleted' && onCountdownDeleteCallback) {
+                            // Server-authoritative lifecycle completion — remove card immediately.
                             onCountdownDeleteCallback(data.tableNumber);
                         } else if (data.action === 'voiceMessage' && onVoiceMessage) {
                             onVoiceMessage(data);

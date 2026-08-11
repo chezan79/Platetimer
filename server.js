@@ -135,6 +135,7 @@ if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 const DEPARTMENTS_FILE = path.join(DATA_DIR, 'departments.json');
 const PLANS_FILE = path.join(DATA_DIR, 'plans.json');
 const DEPARTMENT_ACCOUNTS_FILE = path.join(DATA_DIR, 'department-accounts.json');
+const COUNTDOWN_HISTORY_FILE = path.join(DATA_DIR, 'countdown-history.json');
 const PLAN_LIMITS = { base: 3, medium: 5, premium: 10 };
 
 function loadJSON(filePath) {
@@ -170,6 +171,8 @@ function saveJSON(filePath, data) {
 // (or local files in local-dev mode) BEFORE the HTTP server accepts connections.
 let departmentsStore = {};
 let plansStore = {};
+// Countdown history — persistent archive of completed countdowns, keyed by verified companyId.
+let countdownHistoryStore = {};
 
 function getCompanyDepts(companyId) { return departmentsStore[companyId] || []; }
 function getCompanyPlan(companyId) { return plansStore[companyId] || 'base'; }
@@ -1170,6 +1173,7 @@ app.get('/api/countdowns', (req, res) => {
             success: true,
             countdowns: result,
             count: result.length,
+            graceMs: POST_EXPIRY_GRACE_MS,
             timestamp: currentTime
         });
 
@@ -1181,6 +1185,17 @@ app.get('/api/countdowns', (req, res) => {
             details: error.message
         });
     }
+});
+
+// Minimal authenticated debug/read endpoint for countdown history.
+// [SECURITY] Company is derived solely from the verified session token —
+// tenant A can never read tenant B's history. Internal/verification use only.
+app.get('/api/countdown-history', (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const companyId = String(session.companyName).trim().toLowerCase();
+    const records = countdownHistoryStore[companyId] || [];
+    res.json({ success: true, count: records.length, records });
 });
 
 // =========================================================================
@@ -1201,6 +1216,7 @@ function getStoreNameForFile(filePath) {
     if (filePath === CALENDAR_EVENTS_FILE) return 'calendar_events';
     if (filePath === CALENDAR_NOTIF_FILE)  return 'calendar_notifs';
     if (filePath === DEPARTMENT_ACCOUNTS_FILE) return 'department_accounts';
+    if (filePath === COUNTDOWN_HISTORY_FILE)   return 'countdown_history';
     if (filePath === OPS_USERS_FILE)      return 'ops_users';
     if (filePath === OPS_TASKS_FILE)      return 'ops_tasks';
     if (filePath === OPS_TEMPLATES_FILE)  return 'ops_templates';
@@ -4013,6 +4029,82 @@ function broadcastOps(companyId, payload) {
 // Store per i countdown attivi per ogni azienda
 const activeCountdowns = new Map();
 
+// ── Post-expiry grace period ────────────────────────────────────────────────
+// After a countdown reaches 00:00 it stays visible (blinking, expired) for this
+// long on all screens, then the server removes it and broadcasts completion.
+// Single authoritative constant — delivered to clients in every countdown
+// payload (graceMs) so no file hardcodes its own value.
+// Overridable via env var so tests don't wait 120 real seconds.
+const POST_EXPIRY_GRACE_MS = parseInt(process.env.POST_EXPIRY_GRACE_MS, 10) || 120000;
+
+function genCountdownId() { return 'cd_' + Date.now() + '_' + crypto.randomBytes(4).toString('hex'); }
+
+// ── Countdown lifecycle completion (single archive-and-remove path) ─────────
+// Every way a countdown ends (auto-expiry sweep, lazy join cleanup, manual
+// delete, table-reuse supersession) routes through here so exactly ONE history
+// record is written per countdown (idempotent by countdown id) and removal is
+// server-authoritative.  reason: 'auto_expired' | 'manual_deleted' | 'superseded'
+// (reserved: 'manual_completed', 'cancelled').
+// When broadcast=true a 'countdownCompleted' event is sent to the company room,
+// destination-filtered like deleteCountdown.
+function completeCountdown(companyName, tableKey, reason, { broadcast = true } = {}) {
+    const companyCountdowns = activeCountdowns.get(companyName);
+    if (!companyCountdowns || !companyCountdowns.has(tableKey)) return null;
+    const cd = companyCountdowns.get(tableKey);
+    companyCountdowns.delete(tableKey);
+    if (companyCountdowns.size === 0) activeCountdowns.delete(companyName);
+
+    // ── Archive exactly once (idempotent by countdown id) ──────────────────
+    archiveCountdown(companyName, cd, reason);
+
+    // ── Broadcast server-authoritative completion ──────────────────────────
+    if (broadcast && companyRooms.has(companyName)) {
+        const msg = JSON.stringify({
+            action:      'countdownCompleted',
+            countdownId: cd.id,
+            tableNumber: cd.tableNumber,
+            reason
+        });
+        let sent = 0;
+        companyRooms.get(companyName).forEach(client => {
+            if (client.readyState === WebSocket.OPEN &&
+                wsSocketMatchesDest(client, cd.destinations)) {
+                client.send(msg);
+                sent++;
+            }
+        });
+        console.log(`🏁 countdownCompleted (${reason}) Tavolo ${cd.tableNumber} → room "${companyName}" (${sent} client)`);
+    }
+    return cd;
+}
+
+// Write one history record for a completed countdown. Idempotent by id.
+// companyId comes ONLY from the verified server-side room/session — never from a client.
+function archiveCountdown(companyId, cd, reason) {
+    try {
+        if (!countdownHistoryStore[companyId]) countdownHistoryStore[companyId] = [];
+        const list = countdownHistoryStore[companyId];
+        if (cd.id && list.some(r => r.id === cd.id)) return; // already archived
+        list.push({
+            id:              cd.id || genCountdownId(),
+            companyId,
+            tableNumber:     cd.tableNumber,
+            destinations:    cd.destinations || [],
+            initialDuration: cd.initialDuration,
+            startTime:       cd.startTime,
+            endsAt:          cd.endsAt,
+            completedAt:     Date.now(),
+            reason,
+            status:          'completed',
+            createdBy:       cd.createdBy || null,
+            events:          [] // reserved for the future communication-events timeline
+        });
+        saveJSON(COUNTDOWN_HISTORY_FILE, countdownHistoryStore);
+    } catch (e) {
+        console.error('❌ [HISTORY] archiveCountdown error:', e.message);
+    }
+}
+
 // Mappa per sessioni autenticate
 const authenticatedSessions = new Map();
 
@@ -4270,8 +4362,10 @@ wss.on('connection', (ws, req) => {
                 console.log(`✅ Client aggiunto alla room: ${companyName} (${companyRooms.get(companyName).size} client)`);
 
                 // Invia tutti i countdown attivi al nuovo client — un messaggio per tavolo.
-                // Criteri lifecycle: includi se Date.now() < endsAt + 15000 ms,
-                // allineato con duplicate-check e cleanup periodico.
+                // Criteri lifecycle: includi se Date.now() < endsAt + POST_EXPIRY_GRACE_MS,
+                // allineato con duplicate-check e sweep di completamento.
+                // Countdown scaduti ma ancora in grace vengono replayati con timeRemaining=0
+                // e l'endsAt originale, così la grace NON riparte sul reconnect.
                 if (activeCountdowns.has(companyName)) {
                     const companyCountdowns = activeCountdowns.get(companyName);
                     const countdownsToDelete = [];
@@ -4279,15 +4373,17 @@ wss.on('connection', (ws, req) => {
                     companyCountdowns.forEach((countdown, tableNumber) => {
                         const endsAt = countdown.endsAt || (countdown.startTime + countdown.initialDuration * 1000);
                         const nowMs  = Date.now();
-                        if (nowMs < endsAt + 15000) {
+                        if (nowMs < endsAt + POST_EXPIRY_GRACE_MS) {
                             const remaining = Math.max(0, Math.floor((endsAt - nowMs) / 1000));
                             const syncMessage = {
                                 action:          'startCountdown',
+                                countdownId:     countdown.id,
                                 tableNumber:     tableNumber,
                                 timeRemaining:   remaining,
                                 endsAt:          endsAt,
                                 initialDuration: countdown.initialDuration,
-                                destinations:    countdown.destinations
+                                destinations:    countdown.destinations,
+                                graceMs:         POST_EXPIRY_GRACE_MS
                             };
                             // [S1.5] Bound sockets only receive countdowns targeting their dept
                             if (wsSocketMatchesDest(ws, countdown.destinations)) {
@@ -4299,9 +4395,10 @@ wss.on('connection', (ws, req) => {
                         }
                     });
 
+                    // Past-grace entries: archive-and-remove via the single completion path
                     countdownsToDelete.forEach(tableNumber => {
-                        companyCountdowns.delete(tableNumber);
-                        console.log(`🗑️ Countdown rimosso in joinRoom (lifecycle scaduto): Tavolo ${tableNumber}`);
+                        completeCountdown(companyName, tableNumber, 'auto_expired');
+                        console.log(`🗑️ Countdown completato in joinRoom (lifecycle scaduto): Tavolo ${tableNumber}`);
                     });
                 }
 
@@ -4342,15 +4439,17 @@ wss.on('connection', (ws, req) => {
                         companyCountdowns.forEach((countdown, tableNumber) => {
                             const endsAt = countdown.endsAt || (countdown.startTime + countdown.initialDuration * 1000);
                             const nowMs  = Date.now();
-                            if (nowMs < endsAt + 15000) {
+                            if (nowMs < endsAt + POST_EXPIRY_GRACE_MS) {
                                 const remaining = Math.max(0, Math.floor((endsAt - nowMs) / 1000));
                                 const syncMessage = {
                                     action:          'startCountdown',
+                                    countdownId:     countdown.id,
                                     tableNumber:     tableNumber,
                                     timeRemaining:   remaining,
                                     endsAt:          endsAt,
                                     initialDuration: countdown.initialDuration,
-                                    destinations:    countdown.destinations
+                                    destinations:    countdown.destinations,
+                                    graceMs:         POST_EXPIRY_GRACE_MS
                                 };
                                 // [S1.5] Bound sockets only receive countdowns targeting their dept
                                 if (wsSocketMatchesDest(ws, countdown.destinations)) {
@@ -4364,8 +4463,8 @@ wss.on('connection', (ws, req) => {
                         });
 
                         countdownsToDelete.forEach(tableNumber => {
-                            companyCountdowns.delete(tableNumber);
-                            console.log(`🗑️ Countdown rimosso in joinPage (lifecycle scaduto): Tavolo ${tableNumber}`);
+                            completeCountdown(ws.companyRoom, tableNumber, 'auto_expired');
+                            console.log(`🗑️ Countdown completato in joinPage (lifecycle scaduto): Tavolo ${tableNumber}`);
                         });
 
                         console.log(`📊 Sincronizzazione joinPage (${effectivePageType}): ${syncedCount} countdown inviati, ${countdownsToDelete.length} rimossi`);
@@ -4461,17 +4560,17 @@ wss.on('connection', (ws, req) => {
                 const tableKey = normalizeTableNumber(data.tableNumber);
 
                 // ── Duplicate-table check ─────────────────────────────────────────────
-                // Authoritative lifecycle: a table is occupied until endsAt + 15000 ms —
-                // the same 15-second expired-display window the client shows at 00:00.
+                // Authoritative lifecycle: a table is occupied until endsAt + POST_EXPIRY_GRACE_MS —
+                // the same expired-display grace window the client shows at 00:00.
                 // After that exact moment the entry is stale and a new countdown may replace it.
                 // Node.js single-threaded event loop makes the check+set below atomic.
                 if (companyCountdowns.has(tableKey)) {
                     const existingCd     = companyCountdowns.get(tableKey);
                     const existingEndsAt = existingCd.endsAt || (existingCd.startTime + existingCd.initialDuration * 1000);
 
-                    if (Date.now() < existingEndsAt + 15000) {
+                    if (Date.now() < existingEndsAt + POST_EXPIRY_GRACE_MS) {
                         // Still within active + expired window — reject
-                        const msLeft = Math.ceil((existingEndsAt + 15000 - Date.now()) / 1000);
+                        const msLeft = Math.ceil((existingEndsAt + POST_EXPIRY_GRACE_MS - Date.now()) / 1000);
                         console.log(`⚠️ TABLE_ALREADY_ACTIVE tavolo "${tableKey}" (${msLeft}s rimanenti nel lifecycle) — rifiutato`);
                         ws.send(JSON.stringify({
                             action:      'countdownError',
@@ -4481,9 +4580,10 @@ wss.on('connection', (ws, req) => {
                         }));
                         return;
                     } else {
-                        // Lifecycle elapsed — remove stale entry; allow new creation
-                        companyCountdowns.delete(tableKey);
-                        console.log(`🗑️ Stale countdown rimosso per tavolo "${tableKey}" (lifecycle scaduto) — nuova creazione consentita`);
+                        // Lifecycle elapsed — archive as superseded via the single completion
+                        // path; no broadcast needed (a new startCountdown replaces the card).
+                        completeCountdown(ws.companyRoom, tableKey, 'superseded', { broadcast: false });
+                        console.log(`🗑️ Stale countdown archiviato (superseded) per tavolo "${tableKey}" — nuova creazione consentita`);
                     }
                 }
 
@@ -4492,12 +4592,16 @@ wss.on('connection', (ws, req) => {
                 // sync on join, periodic cleanup) shares the same authoritative source.
                 const startTime    = Date.now();
                 const serverEndsAt = startTime + data.timeRemaining * 1000;
+                const countdownId  = genCountdownId();
                 companyCountdowns.set(tableKey, {
+                    id:              countdownId,
                     startTime,
                     initialDuration: data.timeRemaining,
                     endsAt:          serverEndsAt,
                     tableNumber:     data.tableNumber,
-                    destinations
+                    destinations,
+                    // Verified uid from the authenticated WS session — never client-supplied
+                    createdBy:       ws.authenticatedUid || null
                 });
                 console.log(`💾 Countdown creato per azienda "${ws.companyRoom}": Tavolo ${tableKey}, endsAt +${data.timeRemaining}s, Destinazioni: [${destinations.join(', ')}]`);
 
@@ -4520,11 +4624,13 @@ wss.on('connection', (ws, req) => {
                     const roomClients = companyRooms.get(ws.companyRoom);
                     const msg = JSON.stringify({
                         action:          'startCountdown',
+                        countdownId,
                         tableNumber:     data.tableNumber,
                         timeRemaining:   data.timeRemaining,
                         endsAt:          serverEndsAt,
                         initialDuration: data.timeRemaining,
-                        destinations
+                        destinations,
+                        graceMs:         POST_EXPIRY_GRACE_MS
                     });
                     let sentCount = 0;
                     roomClients.forEach(client => {
@@ -4555,10 +4661,13 @@ wss.on('connection', (ws, req) => {
                     const tableKey = normalizeTableNumber(data.tableNumber);
                     
                     if (companyCountdowns.has(tableKey)) {
-                        const removedCountdown = companyCountdowns.get(tableKey);
-                        deletedDestinations = removedCountdown.destinations || null;
-                        companyCountdowns.delete(tableKey);
-                        
+                        const existingCd = companyCountdowns.get(tableKey);
+                        deletedDestinations = existingCd.destinations || null;
+                        // Archive-and-remove via the single completion path (idempotent by id).
+                        // No countdownCompleted broadcast: the deleteCountdown broadcast below
+                        // already tells every client to remove the card.
+                        completeCountdown(ws.companyRoom, tableKey, 'manual_deleted', { broadcast: false });
+
                         console.log(`🗑️ Countdown tavolo ${data.tableNumber} rimosso dalla memoria server`);
                         console.log(`📋 Destinazioni eliminate: [${(deletedDestinations || []).join(', ')}]`);
                         console.log(`📊 Countdown rimanenti per azienda "${ws.companyRoom}": ${companyCountdowns.size}`);
@@ -5122,30 +5231,29 @@ setInterval(() => {
         }
     }
 
-    // Pulisci countdown scaduti — criterio: endsAt + 15000 ms (allineato con duplicate-check e client)
-    // La vecchia regola "remainingTime <= -30" è stata rimossa: usava un calcolo indipendente
-    // che creava una finestra (15-30s) in cui il client vedeva il tavolo libero ma il server lo bloccava.
-    let totalActiveCountdowns = 0;
-    activeCountdowns.forEach((companyCountdowns, companyName) => {
-        companyCountdowns.forEach((countdown, tableNumber) => {
-            const endsAt = countdown.endsAt || (countdown.startTime + countdown.initialDuration * 1000);
-            if (now >= endsAt + 15000) {
-                companyCountdowns.delete(tableNumber);
-                console.log(`🗑️ Cleanup: Tavolo ${tableNumber} (${companyName}) rimosso — endsAt+15s scaduto`);
-            } else {
-                totalActiveCountdowns++;
-            }
-        });
-
-        if (companyCountdowns.size === 0) {
-            activeCountdowns.delete(companyName);
-        }
-    });
-
-    if (deadConnections > 0 || totalActiveCountdowns > 20) {
-        console.log(`🧹 Cleanup: ${deadConnections} conn. morte, ${rateLimiter.size} rate limits, ${totalActiveCountdowns} countdown, ${wss.clients.size} client`);
+    if (deadConnections > 0) {
+        console.log(`🧹 Cleanup: ${deadConnections} conn. morte, ${rateLimiter.size} rate limits, ${wss.clients.size} client`);
     }
 }, 60000); // Ogni 1 minuto
+
+// ── Countdown completion sweep ───────────────────────────────────────────────
+// Fast 2-second sweep (instead of per-countdown timers) so removal happens
+// within ~2s of endsAt + grace on all screens.  A sweep is the simplest
+// reliable option: it needs no timer bookkeeping on create/delete/supersede,
+// survives any code path that mutates the Map, and its cost is negligible
+// (a few Map iterations per tick).  Each expired entry routes through
+// completeCountdown → archive exactly once + countdownCompleted broadcast.
+setInterval(() => {
+    const now = Date.now();
+    activeCountdowns.forEach((companyCountdowns, companyName) => {
+        const toComplete = [];
+        companyCountdowns.forEach((countdown, tableNumber) => {
+            const endsAt = countdown.endsAt || (countdown.startTime + countdown.initialDuration * 1000);
+            if (now >= endsAt + POST_EXPIRY_GRACE_MS) toComplete.push(tableNumber);
+        });
+        toComplete.forEach(tableNumber => completeCountdown(companyName, tableNumber, 'auto_expired'));
+    });
+}, 2000);
 
 // Gestione errori globali per prevenire crash
 process.on('uncaughtException', (error) => {
@@ -5191,6 +5299,7 @@ async function initializeDataStores() {
         { name: 'departments',     file: DEPARTMENTS_FILE,     setter: v => { departmentsStore    = v; } },
         { name: 'plans',           file: PLANS_FILE,           setter: v => { plansStore          = v; } },
         { name: 'department_accounts', file: DEPARTMENT_ACCOUNTS_FILE, setter: v => { departmentAccounts.setStore(v); } },
+        { name: 'countdown_history', file: COUNTDOWN_HISTORY_FILE, setter: v => { countdownHistoryStore = v; } },
         { name: 'calendar_events', file: CALENDAR_EVENTS_FILE, setter: v => { calendarEventsStore = v; } },
         { name: 'calendar_notifs', file: CALENDAR_NOTIF_FILE,  setter: v => { calendarNotifStore  = v; } },
         { name: 'ops_users',       file: OPS_USERS_FILE,       setter: v => { opsUsersStore       = v; } },

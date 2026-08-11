@@ -1780,6 +1780,10 @@ function connectWS(){
     } else if(data.action === 'deleteCountdown'){
       countdowns.delete(String(data.tableNumber));
       renderCards();
+    } else if(data.action === 'countdownCompleted'){
+      // Server-authoritative lifecycle completion — remove immediately.
+      countdowns.delete(String(data.tableNumber));
+      renderCards();
     } else if(data.action === 'voiceMessage'){
       handleVoiceMessage(data);
     } else if(data.action === 'deleteVoiceMessage'){
@@ -1817,6 +1821,7 @@ function handleIncomingCountdown(data){
     if(!ex.expiredAt){
       ex.endsAt = data.endsAt ?? ex.endsAt ?? (Date.now() + tr * 1000);
     }
+    ex.graceMs = data.graceMs ?? ex.graceMs;
     ex.timeRemaining   = tr;
     ex.initialDuration = data.initialDuration ?? ex.initialDuration;
     // Merge any new destinations into the list (idempotent)
@@ -1831,6 +1836,8 @@ function handleIncomingCountdown(data){
       timeRemaining:   tr,
       initialDuration: data.initialDuration ?? tr,
       endsAt:          data.endsAt ?? (Date.now() + tr * 1000),
+      // Server-delivered grace window (fallback matches server default)
+      graceMs:         data.graceMs ?? 120000,
       startedAt:       nowTime(),
       destinations:    incomingDests,
       direction:       isSender ? 'sent' : 'received',
@@ -1909,12 +1916,14 @@ function tick(){
   const now = Date.now();
   let changed = false;
   for(const [key, cd] of countdowns){
-    // ── Expired phase: show 00:00 + blink for 15 s, then remove ──────────────
+    // ── Expired phase: show 00:00 + blink for the server-delivered grace window ─
     // The phase is measured from cd.endsAt (server-authoritative end time), not
     // from when this client first detected the crossing. This keeps the expired
     // window consistent across page refreshes and between different browsers.
+    // Normal removal comes from the server's countdownCompleted event; this local
+    // check is only a fallback for disconnected clients.
     if(cd.expiredAt !== null){
-      if(now - cd.expiredAt >= 15000){ countdowns.delete(key); changed = true; }
+      if(now - cd.expiredAt >= (cd.graceMs ?? 120000)){ countdowns.delete(key); changed = true; }
       // timeRemaining is already 0 — nothing else to update
       continue;
     }
@@ -1932,7 +1941,7 @@ function tick(){
 
     if(rem !== cd.timeRemaining){ cd.timeRemaining = rem; changed = true; }
 
-    // ── Expiry: transition into the 15-second expired phase ──────────────────
+    // ── Expiry: transition into the grace-window expired phase ───────────────
     if(rem === 0){
       // Anchor expiredAt to endsAt so the phase length is independent of local
       // clock drift and of when exactly the tick fires.
