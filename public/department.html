@@ -981,19 +981,21 @@ function showTab(tab){
 }
 
 // ── Voice dest list ───────────────────────────────────────────────────────────
+// SALA_ID is the shared virtual Floor destination — must match server.js ('__sala__').
+const SALA_ID = '__sala__';
 function buildVoiceDestList(){
   const others = Object.values(departmentMap).filter(d => d.active && d.id !== myDeptId);
   const el = document.getElementById('voice-dest-list');
-  if(!others.length){
-    el.innerHTML = '<div class="no-dests">Nessun altro reparto attivo.</div>';
-    return;
-  }
-  el.innerHTML = others.map(d => `
+  const salaLabel = (window.I18n && I18n.t('dept.floorDest') !== 'dept.floorDest') ? I18n.t('dept.floorDest') : 'Sala';
+  // Floor (Sala) virtual destination is always offered, plus other active departments.
+  const entries = others.map(d => ({ id: d.id, label: esc(d.name), i18n: '' }))
+    .concat([{ id: SALA_ID, label: esc(salaLabel), i18n: ' data-i18n="dept.floorDest"' }]);
+  el.innerHTML = entries.map(d => `
     <div class="di" id="vdi-${d.id}" onclick="toggleVoiceDest('${d.id}')">
       <input type="checkbox" id="vchk-${d.id}" onclick="event.stopPropagation()">
-      <label for="vchk-${d.id}">${esc(d.name)}</label>
+      <label for="vchk-${d.id}"${d.i18n}>${d.label}</label>
     </div>`).join('');
-  others.forEach(d => {
+  entries.forEach(d => {
     document.getElementById(`vchk-${d.id}`).addEventListener('change', e => {
       e.stopPropagation();
       toggleVoiceDestById(d.id, e.target.checked);

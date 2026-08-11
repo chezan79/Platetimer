@@ -14,7 +14,6 @@
   "common.home": "Home",
   "common.dashboard": "Dashboard",
   "common.annulla": "Cancel",
-
   "login.registerTitle": "Create account",
   "login.firstName": "First name",
   "login.lastName": "Last name",
@@ -43,7 +42,6 @@
   "login.deptAccessTitle": "Station access",
   "login.deptAccessDesc": "Sign in to your station's workstation",
   "login.deptAccessBtn": "ENTER STATION",
-
   "service.subtitle": "Station access",
   "service.loginLabel": "Login",
   "service.passwordLabel": "Password",
@@ -52,27 +50,22 @@
   "service.missingFields": "Login and password are required.",
   "service.loginError": "Sign-in failed.",
   "service.networkError": "Network error. Please try again.",
-
   "operations.loading": "Loading dashboard…",
   "operations.unknownRole": "Unrecognized role:",
-
   "ops.role.director": "Director",
   "ops.role.chef_cuisine": "Head Chef",
   "ops.role.adjoint": "Adjoint",
   "ops.role.sous_chef": "Sous Chef",
   "ops.role.chef_de_brigade": "Chef de Brigade",
-
   "ops.priority.low": "Low",
   "ops.priority.medium": "Medium",
   "ops.priority.high": "High",
   "ops.priority.urgent": "Urgent",
-
   "ops.status.open": "Open",
   "ops.status.in_progress": "In progress",
   "ops.status.completed": "Completed",
   "ops.status.overdue": "Overdue",
   "ops.status.cancelled": "Cancelled",
-
   "ops.history.task_created": "📝 Task created",
   "ops.history.task_started": "▶ Started",
   "ops.history.task_completed": "✅ Completed",
@@ -91,11 +84,9 @@
   "ops.history.field.description": "description",
   "ops.history.field.notes": "notes",
   "ops.history.field.department": "department",
-
   "ops.greeting.morning": "Good morning",
   "ops.greeting.afternoon": "Good afternoon",
   "ops.greeting.evening": "Good evening",
-
   "ops.role.DIRECTOR": "Director",
   "ops.nav.tasks": "Tasks",
   "ops.nav.team": "Team",
@@ -103,7 +94,6 @@
   "ops.nav.performance": "📊 Performance",
   "ops.nav.dashboard": "Dashboard",
   "ops.nav.profile": "📊 My profile",
-
   "ops.task.pageName": "Operations · Tasks",
   "ops.task.new": "+ New task",
   "ops.task.create": "Create task",
@@ -206,7 +196,6 @@
   "ops.task.completeBtn": "✓ Complete",
   "ops.task.startBtn": "▶ Start",
   "ops.task.viewAll": "📋 View all my tasks",
-
   "ops.team.heading": "Team management",
   "ops.team.subtitle": "Only the Director can create and manage team accounts.",
   "ops.team.invite": "Invite a member",
@@ -253,7 +242,6 @@
   "ops.team.archiveInsteadQ": "Do you want to archive instead?",
   "ops.team.placeholder.name": "e.g. John Smith",
   "ops.team.placeholder.email": "john@example.com",
-
   "ops.perf.period.today": "Today",
   "ops.perf.period.30d": "30 days",
   "ops.perf.period.7d": "7 days",
@@ -343,7 +331,6 @@
   "ops.perf.notAvailable": "Profile not available or not authorized.",
   "ops.perf.selectBothDates": "Please select both dates.",
   "ops.perf.selectTask": "Please select a task.",
-
   "ops.sc.heading": "My work",
   "ops.sc.nextTask": "⭐ NEXT TASK",
   "ops.sc.startNow": "▶ Start now",
@@ -356,7 +343,6 @@
   "ops.sc.completedStat": "Completed today",
   "ops.cdb.heading": "My next task",
   "ops.cdb.todo": "To do",
-
   "ops.sec.overdue": "🕐 Overdue",
   "ops.sec.noOverdue": "No overdue tasks. Great!",
   "ops.sec.urgent": "⚡ Urgent",
@@ -377,7 +363,6 @@
   "ops.sec.noRecurring": "No recurring tasks planned for today.",
   "ops.sec.escalation": "🚨 Escalations affecting you",
   "ops.sec.allTeam": "🕐 Overdue (entire team)",
-
   "ops.dir.heading": "Director Dashboard",
   "ops.dir.quickActions": "Quick actions",
   "ops.dir.createTask": "➕ Create task",
@@ -403,7 +388,6 @@
   "ops.dir.priorityQueue": "🎯 Priority queue",
   "ops.dir.riskWatch": "⚠️ Risk Watch",
   "ops.dir.vsYesterday": "📊 vs. yesterday",
-
   "ops.intel.alerts": "🔴 Alerts",
   "ops.intel.summary": "📊 Today's summary",
   "ops.intel.trends": "📈 Today's trends",
@@ -443,14 +427,12 @@
   "ops.intel.vsYesterdayShort": "vs yesterday:",
   "ops.intel.insufficientData": "Insufficient data",
   "ops.intel.days7": "📅 7 days:",
-
   "ops.nsv.firstVisit": "First visit",
   "ops.nsv.lastCheck": "Last check:",
   "ops.nsv.today": "today at",
   "ops.nsv.yesterday": "yesterday at",
   "ops.nsv.at": "at",
   "ops.nsv.noNew": "No new issues since your last visit.",
-
   "ops.rt.taskCreated": "📌 New task created",
   "ops.rt.taskCompleted": "✅ Task completed",
   "ops.rt.taskReassigned": "🔄 Task reassigned",
@@ -465,7 +447,6 @@
   "ops.rt.newAssignment": "📌 New task assigned",
   "ops.rt.inviteCreated": "👤 New invitation created",
   "ops.rt.memberActivated": "✅ Member activated!",
-
   "home.logout": "Log out",
   "home.subtitle": "Select station · Choose the department or function to open",
   "home.depts": "Departments",
@@ -499,7 +480,6 @@
   "home.deptErrorTitle": "Assigned department unavailable",
   "home.deptErrorSub": "The department linked to this account is not active or does not exist. Contact the administrator.",
   "home.backToLogin": "← Back to login",
-
   "admin.heading": "Department management",
   "admin.usage": "Department usage",
   "admin.createHeading": "Create new department",
@@ -551,7 +531,6 @@
   "admin.newPasswordPlaceholder": "leave empty to keep unchanged",
   "admin.loginPlaceholder": "e.g. kitchen1, dept2",
   "admin.passwordPlaceholder": "e.g. 1234, pizza",
-
   "dept.disconnectedBanner": "⚠️ WebSocket disconnected — changes will not be synced",
   "dept.loadingDept": "Loading...",
   "dept.disconnected": "Offline",
@@ -559,6 +538,7 @@
   "dept.logout": "Log out",
   "dept.tabCountdown": "Timer",
   "dept.tabVoice": "🎙️ Voice",
+  "dept.floorDest": "Floor",
   "dept.tabIntercom": "📞 Intercom",
   "dept.stepTable": "Table",
   "dept.stepMinutes": "Minutes",
@@ -583,7 +563,6 @@
   "dept.activeCountdowns": "Active timers",
   "dept.noActiveCountdowns": "No active timers.",
   "dept.receivedVoiceMsgs": "Voice messages received",
-
   "sala.title": "Floor service",
   "sala.activeCountdowns": "Active countdowns",
   "sala.avgWaitTime": "Average wait time",
@@ -635,519 +614,259 @@
   "ops.brief.adj.urgent": "{n} urgent tasks to handle.",
   "ops.brief.adj.noCrit": "✅ No critical issues.",
   "ops.sec.inEscalation": "In escalation",
-  "ops.team.emailReadonly": "Email cannot be changed: Firebase account already linked."
-}
-
+  "ops.team.emailReadonly": "Email cannot be changed: Firebase account already linked.",
   "ops.intel.inactive.title": "Task inactive for a long time",
-
   "ops.brief.cc.overdueN": "{n} activities are overdue.",
-
   "ops.dec.notStarted.fact.assignee": "Assigned to: {val}",
-
   "ops.dec.reassign.reason": "Based on current workload: {from} has a score of {fromScore} (OVERLOADED), {to} has a score of {toScore} ({toStatus}).",
-
   "ops.brief.dir.decisions1": "{n} decision requires your attention.",
-
-  "ops.brief.adj.overdueN": "{n} tasks require coordination (overdue).",
-
   "ops.exec.cc.urgent1": "{n} is urgent.",
-
   "ops.exec.cc.urgentN": "{n} are urgent.",
-
   "ops.dec.suspended.fact.status": "User status: SUSPENDED",
-
   "ops.history.TASK_COMPLETED": "✅ Completed",
-
   "ops.exec.cdb.noOverdue": "No delays.",
-
   "ops.ui.noNewItems": "No new critical items since your last visit.",
-
   "ops.dec.underused.fact.completed": "Completed today: 0",
-
   "ops.risk.lowBusy.title": "{name} is busy with overdue tasks",
-
   "ops.brief.sc.urgent1": "One is urgent.",
-
   "ops.history.ATTACHMENT_ADDED": "📎 Attachment added",
-
   "ops.nsv.urgentNew.desc": "Urgent task \"{title}\" created since your last visit.",
-
   "ops.brief.cdb.overdue1": "One task is overdue. Act immediately.",
-
   "ops.exec.sc.overdue": "{n} overdue — act immediately.",
-
-  "ops.brief.adj.urgent": "{n} urgent tasks to manage.",
-
   "ops.intel.sug.reassign.desc": "\"{task}\" is assigned to {name} who is suspended.",
-
   "ops.dec.recurring.title": "Recurring task overdue: \"{title}\"",
-
   "ops.brief.dir.totalOps": "Today there are {n} operational activities.",
-
   "ops.status.COMPLETED": "Completed",
-
   "ops.status.OPEN": "Open",
-
   "ops.intel.suspended.title": "Suspended user with assigned tasks",
-
   "ops.dec.notStarted.fact.nd": "N/A",
-
   "ops.exec.cdb.nextTask": "Next task: \"{title}\".",
-
   "ops.dec.urgentDept.title": "Department \"{dept}\" under pressure",
-
   "ops.dec.notStarted.timeDue": "expires in {min} minutes",
-
   "ops.dec.underused.fact.assigned": "Assigned tasks: 0",
-
   "ops.exec.adj.urgent": "{n} urgent tasks to manage.",
-
   "ops.dec.checkDept.fact.maxDelay": "Maximum delay: {min} min",
-
   "ops.ui.editedPriority": "priority",
-
   "ops.history.COMMENT_ADDED": "💬 Comment added",
-
   "ops.ui.firstVisit": "First visit",
-
   "ops.intel.sug.reviewDept.title": "Review department \"{dept}\"",
-
   "ops.dec.since": "{min} min ago",
-
   "ops.exec.adj.noOverdue": "No delays in your scope.",
-
   "ops.history.PRIORITY_CHANGED": "⚡ Priority changed",
-
   "ops.exec.sc.nextTask": "You have a task to complete.",
-
   "ops.exec.dir.urgent1": "{n} is urgent.",
-
   "ops.risk.highDeadline.title": "Imminent deadline — task not started",
-
   "ops.dec.reassign.fact.task": "Task: \"{title}\"",
-
-  "ops.brief.adj.overdue1": "{n} task requires coordination (overdue).",
-
   "ops.dec.checkDept.reason": "Based on overdue tasks: department \"{dept}\" has {n} overdue tasks. The most overdue is {maxMin} minutes late.",
-
   "ops.history.DUE_DATE_CHANGED": "📅 Deadline changed",
-
   "ops.dec.notStarted.action": "Start immediately or reassign to someone who can begin now.",
-
   "ops.brief.sc.nextTask": "You have a task to complete.",
-
   "ops.risk.lowStale.desc": "\"{title}\" was created {days} days ago and has not been started.",
-
   "ops.intel.deptUrgent.action": "Review and prioritise department \"{dept}\".",
-
   "ops.intel.sug.recurring.title": "Complete the overdue recurring task",
-
   "ops.risk.lowBusy.desc": "{name} (BUSY, score {score}) has {overdue} overdue tasks.",
-
   "ops.brief.cc.noOverdue": "No delays.",
-
   "ops.changes.workloadWorsening": "Overloaded users increased (from {prev} to {cur}).",
-
   "ops.intel.late.desc": "\"{title}\" is {min} minutes overdue.",
-
   "ops.dec.avg": "{min} min",
-
   "ops.status.CANCELLED": "Cancelled",
-
   "ops.exec.dir.overdue1": "{n} is overdue.",
-
   "ops.intel.late.action": "Complete or reassign immediately.",
-
   "ops.risk.highUrgentNotStarted.desc": "Urgent task \"{title}\" is still OPEN and has not been started.",
-
   "ops.priority.MEDIUM": "Medium",
-
   "ops.nsv.urgentNew.title": "New urgent task: \"{title}\"",
-
   "ops.dec.checkDept.fact.urgentOverdue": "Urgent overdue: {n}",
-
   "ops.risk.highUrgentNotStarted.title": "Urgent task not started: \"{title}\"",
-
   "ops.dec.underused.fact.teamOverdue": "Team overdue tasks: {n}",
-
   "ops.status.IN_PROGRESS": "In progress",
-
   "ops.role.CHEF_CUISINE": "Head Chef",
-
   "ops.dec.urgentDept.action": "Review and prioritise department \"{dept}\".",
-
   "ops.intel.urgent.action": "Start the task or reassign it to someone who can begin immediately.",
-
   "ops.exec.cc.priorities": "Priorities:",
-
   "ops.brief.cdb.completed": "You have already completed {n} tasks today.",
-
   "ops.brief.dir.overdueN": "{n} are overdue.",
-
   "ops.exec.dir.today": "Today there are {n} operational activities.",
-
   "ops.dec.reassign.title": "Move \"{task}\" from {from} to {to}",
-
   "ops.intel.deptUrgent.title": "Urgent tasks concentrated in department \"{dept}\"",
-
   "ops.exec.cc.overdue1": "One activity is overdue.",
-
   "ops.ui.editedNotes": "notes",
-
   "ops.dec.recurring.reason": "Recurring task \"{title}\" is {min} minutes overdue. Recurring tasks not completed on time disrupt the operational cycle.",
-
   "ops.dec.suspended.fact.assigned": "Assigned tasks: {n}",
-
   "ops.exec.cc.overdueN": "{n} activities are overdue.",
-
   "ops.dec.overloaded.fact.score": "Score: {val}",
-
   "ops.dec.qa.task": "Open Task",
-
   "ops.brief.cdb.overdueN": "{n} tasks are overdue. Act immediately.",
-
   "ops.nsv.escalation.title": "Escalation: \"{title}\"",
-
   "ops.dec.overloaded.title": "{name} is overloaded",
-
   "ops.dec.recurring.fact.type": "Type: recurring",
-
   "ops.ui.editedTitle": "title",
-
   "ops.exec.default": "Check your activities.",
-
   "ops.brief.sc.tasks": "You have {n} activities today.",
-
   "ops.brief.sc.nextDue": "The next one is due at {time}.",
-
   "ops.brief.cdb.noNextTask": "No upcoming tasks.",
-
   "ops.ui.editedDept": "department",
-
   "ops.dec.suspended.action": "Immediately reassign tasks to an active team member.",
-
   "ops.history.PROGRESS_CHANGED": "📊 Progress updated",
-
   "ops.intel.overloaded.action": "Redistribute some tasks to available team members.",
-
   "ops.dec.suspended.fact.urgent": "Urgent: {n}",
-
   "ops.dec.underused.reason1": "Based on current workload: {name} has no active tasks while the team has {n} overdue task.",
-
   "ops.exec.sc.urgentN": "{n} are urgent.",
-
   "ops.brief.cc.decisionsN": "{n} decisions require attention.",
-
   "ops.role.ADJOINT": "Adjoint",
-
   "ops.dec.notStarted.timeNone": "has no deadline set",
-
   "ops.risk.criticalOverloaded.desc": "\"{title}\" is urgent, {min} min overdue, and the assignee is overloaded.",
-
   "ops.risk.highUrgentOverdue.title": "Urgent task overdue: \"{title}\"",
-
   "ops.dec.suspended.reasonUrgent": ", of which {n} urgent",
-
   "ops.dec.reassign.fact.priority": "Priority: {val}",
-
   "ops.exec.adj.decisionsN": "{n} decisions require attention.",
-
   "ops.risk.lowDeptUrgent.desc": "Department \"{dept}\" has {n} open urgent tasks.",
-
   "ops.dec.overloaded.reason.urgent1": "{n} is urgent.",
-
   "ops.status.OVERDUE": "Overdue",
-
   "ops.brief.default": "Check your activities.",
-
   "ops.dec.overloaded.reason.tasks": "{name} has {n} active tasks.",
-
   "ops.ui.editedDeadline": "deadline changed",
-
   "ops.brief.dir.noOverdue": "No overdue activities.",
-
   "ops.brief.cc.overdue1": "One activity is overdue.",
-
   "ops.risk.mediumDeptOverdue.title": "Department \"{dept}\" under pressure",
-
   "ops.priority.LOW": "Low",
-
   "ops.risk.mediumDeptOverdue.desc": "Department \"{dept}\" has {n} overdue tasks.",
-
   "ops.dec.overloaded.reason.overdueN": "{n} are overdue.",
-
   "ops.dec.overloaded.fact.overdue": "Overdue: {n}",
-
   "ops.dec.suspended.reason1": "{name} has been suspended but still has {n} active task",
-
   "ops.exec.dir.vsYesterday": "Compared to yesterday:",
-
   "ops.dec.underused.action": "Consider assigning tasks to this available member.",
-
   "ops.dec.checkDept.title": "Review department \"{dept}\"",
-
   "ops.dec.urgentDept.fact.urgent": "Urgent in department: {n}",
-
   "ops.dec.checkDept.action": "Review department \"{dept}\" priorities and address overdue tasks.",
-
   "ops.exec.dir.noOverdue": "No overdue activities.",
-
   "ops.exec.sc.urgent1": "One is urgent.",
-
-  "ops.nsv.escalation.desc": "Task \"{title}\" triggered an escalation since your last visit."
-
+  "ops.nsv.escalation.desc": "Task \"{title}\" triggered an escalation since your last visit.",
   "ops.exec.dir.overdueN": "{n} are overdue.",
-
   "ops.intel.sug.reassign.title": "Reassign {name}'s task",
-
   "ops.dec.notStarted.reason": "Based on urgent tasks: \"{title}\" is urgent, has not been started and {timeDesc}.",
-
   "ops.risk.mediumInactive.desc": "\"{title}\" is IN_PROGRESS but has not been updated for {hours} hours.",
-
   "ops.exec.cdb.overdueN": "{n} tasks are overdue. Act immediately.",
-
   "ops.brief.adj.noOverdue": "No delays in your scope.",
-
   "ops.changes.urgentImproving": "Urgent tasks decreased from {prev} to {cur}.",
-
   "ops.brief.cc.urgentN": "{n} are urgent.",
-
   "ops.brief.cc.urgent1": "{n} is urgent.",
-
   "ops.dec.urgentDept.reason": "Department \"{dept}\" has {n} open urgent tasks.",
-
   "ops.exec.dir.decisions1": "{n} decision requires your action.",
-
   "ops.exec.sc.tasks": "You have {n} activities today.",
-
   "ops.dec.never": "never",
-
   "ops.dec.urgentDept.reasonWithOverdue": "Department \"{dept}\" has {n} open urgent tasks, of which {overdue} are overdue.",
-
   "ops.exec.adj.overdueN": "{n} tasks require coordination (overdue).",
-
   "ops.priority.URGENT": "Urgent",
-
   "ops.ui.networkError": "Network error: ",
-
   "ops.changes.completionRateImproving": "Completion rate improved by {delta} percentage points ({prev}% → {cur}%).",
-
   "ops.intel.late.title": "Task overdue",
-
   "ops.ui.editedDescription": "description",
-
   "ops.dec.overloaded.fact.last": "Last completion: {val}",
-
   "ops.brief.dir.trendWorsening": "The number of overdue activities has increased since yesterday.",
-
   "ops.ui.yesterdayAt": "yesterday at",
-
   "ops.dec.overloaded.reason.noCompMin": "No completions in the last {min} minutes.",
-
   "ops.brief.cdb.noOverdue": "No delays.",
-
   "ops.dec.reassign.action": "Move \"{task}\" to {to} to balance the workload.",
-
   "ops.dec.qa.team": "Open Team",
-
   "ops.risk.highOverloaded.desc": "Load score {score}: {assigned} tasks, {overdue} overdue, {urgent} urgent.",
-
   "ops.dec.overloaded.fact.urgent": "Urgent: {n}",
-
   "ops.dec.qa.ops": "Open Operations",
-
   "ops.dec.overloaded.reason.noCompToday": "No completions today.",
-
   "ops.exec.dir.critRisk1": "⚠️ 1 critical risk detected.",
-
   "ops.exec.dir.priorities": "Recommended priorities:",
-
   "ops.risk.mediumRecurring.desc": "\"{title}\" is a recurring task {min} min overdue. The operational cycle is at risk.",
-
   "ops.dec.reassign.fact.to": "To: {name} (score {score})",
-
   "ops.exec.cc.decisions1": "{n} decision requires attention.",
-
   "ops.risk.lowStale.title": "Task open for {days} days",
-
   "ops.brief.cc.total": "The kitchen has {n} activities.",
-
   "ops.history.ASSIGNEE_CHANGED": "👤 Reassigned",
-
   "ops.changes.overdueWorsening": "Overdue tasks increased from {prev} to {cur}.",
-
   "ops.ui.sessionExpired": "Session expired. Please sign in again.",
-
   "ops.exec.dir.critRiskN": "⚠️ {n} critical risks detected.",
-
   "ops.changes.workloadImproving": "Overloaded users decreased (from {prev} to {cur}).",
-
   "ops.ui.completeBtn": "✓ Complete",
-
   "ops.dec.overloaded.fact.avg": "Average completion: {val}",
-
   "ops.brief.dir.decisionsN": "{n} decisions require your attention.",
-
   "ops.priority.HIGH": "High",
-
   "ops.intel.sug.reviewDept.desc": "Many urgent tasks concentrated in department \"{dept}\".",
-
   "ops.dec.notStarted.fact.status": "Status: OPEN (not started)",
-
   "ops.dec.notStarted.fact.priority": "Priority: URGENT",
-
   "ops.risk.highDeadline.desc": "\"{title}\" is due in {min} minutes and has not been started yet.",
-
   "ops.dec.urgentDept.fact.overdue": "Overdue in department: {n}",
-
   "ops.ui.accessDenied": "Operations access not authorised.",
-
   "ops.intel.sug.recurring.desc": "\"{task}\" is a recurring task that is overdue.",
-
   "ops.risk.criticalSuspended.title": "Urgent task assigned to suspended user",
-
   "ops.exec.cdb.noNextTask": "No upcoming tasks.",
-
   "ops.ui.todayAt": "today at",
-
   "ops.history.TASK_STARTED": "▶ Started",
-
   "ops.changes.urgentWorsening": "Urgent tasks increased from {prev} to {cur}.",
-
   "ops.intel.suspended.descN": "{name} is suspended but still has {n} assigned tasks.",
-
   "ops.brief.dir.trendImproving": "The number of overdue activities has improved since yesterday.",
-
   "ops.exec.cc.decisionsN": "{n} decisions require attention.",
-
   "ops.history.STATUS_CHANGED": "🔄 Status changed",
-
   "ops.risk.criticalOverloaded.title": "Urgent overdue task on overloaded user",
-
   "ops.ui.myself": " — me",
-
   "ops.history.ATTACHMENT_DELETED": "🗑 Attachment deleted",
-
   "ops.exec.adj.overdue1": "{n} task requires coordination (overdue).",
-
   "ops.risk.mediumRecurring.title": "Recurring task overdue",
-
   "ops.exec.cdb.overdue1": "One task is overdue. Act immediately.",
-
   "ops.risk.mediumInactive.title": "Task in progress with no updates",
-
   "ops.changes.overdueImproving": "Overdue tasks decreased from {prev} to {cur}.",
-
   "ops.risk.highUrgentOverdue.desc": "\"{title}\" is urgent and {min} min overdue.",
-
   "ops.intel.inactive.action": "Check progress status and update the task.",
-
   "ops.ui.noTasks": "No tasks.",
-
   "ops.dec.overloaded.reason.urgentN": "{n} are urgent.",
-
   "ops.brief.cdb.nextTask": "Next task: \"{title}\".",
-
   "ops.brief.adj.decisions1": "{n} decision requires attention.",
-
   "ops.dec.overloaded.reason.score": "Load score = {score}.",
-
   "ops.exec.adj.decisions1": "{n} decision requires attention.",
-
   "ops.dec.checkDept.fact.overdue": "Overdue in department: {n}",
-
   "ops.ui.startBtn": "▶ Start",
-
   "ops.ui.noDeadline": "No deadline",
-
   "ops.dec.recurring.fact.overdue": "Overdue by: {min} min",
-
   "ops.exec.cdb.completed": "You have already completed {n} tasks today.",
-
   "ops.risk.highOverloaded.title": "{name} is overloaded",
-
   "ops.intel.sug.balance.title": "Move a task from {from} to {to}",
-
   "ops.brief.adj.decisionsN": "{n} decisions require attention.",
-
   "ops.history.TASK_EDITED": "✏️ Edited",
-
   "ops.dec.recurring.action": "Complete this recurring task as soon as possible.",
-
   "ops.dec.overloaded.action": "Redistribute some tasks to less loaded members.",
-
   "ops.intel.urgent.desc": "\"{title}\" is urgent but has not been started yet.",
-
   "ops.dec.notStarted.fact.deadline": "Deadline: {val}",
-
   "ops.dec.overloaded.fact.active": "Active tasks: {n}",
-
   "ops.dec.notStarted.title": "Urgent task not started: \"{title}\"",
-
   "ops.exec.cc.total": "The kitchen has {n} activities.",
-
   "ops.intel.deptUrgent.desc": "Department \"{dept}\" has {n} open urgent tasks.",
-
   "ops.intel.urgent.title": "Urgent task not started",
-
   "ops.role.CHEF_DE_BRIGADE": "Chef de Brigade",
-
   "ops.risk.lowDeptUrgent.title": "Department \"{dept}\" with multiple urgent tasks",
-
   "ops.history.TASK_CREATED": "📝 Task created",
-
   "ops.risk.criticalSuspended.desc": "\"{title}\" is urgent but assigned to a suspended user. Reassign immediately.",
-
   "ops.exec.dir.urgentN": "{n} are urgent.",
-
   "ops.intel.inactive.desc": "\"{title}\" is in progress but has not been updated for {hours} hours.",
-
   "ops.changes.completionRateWorsening": "Completion rate dropped by {delta} percentage points ({prev}% → {cur}%).",
-
   "ops.dec.overloaded.reason.overdue1": "{n} is overdue.",
-
   "ops.dec.recurring.fact.assignee": "Assigned to: {val}",
-
   "ops.role.SOUS_CHEF": "Sous Chef",
-
   "ops.exec.dir.decisionsN": "{n} decisions require your action.",
-
   "ops.dec.notStarted.timeOverdue": "is already {min} minutes overdue",
-
   "ops.dec.underused.title": "{name} has no assigned tasks",
-
   "ops.dec.avgNone": "n/a",
-
   "ops.intel.overloaded.desc": "{name} has a high workload: {assigned} open tasks, {overdue} overdue, {urgent} urgent (score: {score}).",
-
   "ops.brief.dir.trendStable": "The operational load is stable since yesterday.",
-
   "ops.brief.sc.urgentN": "{n} are urgent.",
-
   "ops.intel.suspended.desc1": "{name} is suspended but still has {n} assigned task.",
-
   "ops.brief.dir.overdue1": "{n} is overdue.",
-
   "ops.exec.adj.priorities": "Priorities:",
-
   "ops.exec.sc.nextDue": "Next deadline at {time}.",
-
   "ops.dec.reassign.fact.from": "From: {name} (score {score})",
-
   "ops.ui.lastCheck": "Last check:",
-
   "ops.dec.suspended.title": "{name} is suspended with assigned tasks",
-
   "ops.intel.suspended.action": "Reassign the tasks to an active team member.",
-
   "ops.dec.suspended.reasonN": "{name} has been suspended but still has {n} active tasks",
-
   "ops.brief.cc.decisions1": "{n} decision requires attention.",
-
   "ops.dec.underused.reasonN": "Based on current workload: {name} has no active tasks while the team has {n} overdue tasks.",
-
   "ops.intel.overloaded.title": "Overloaded team member",
-
   "ops.exec.cc.noOverdue": "No delays.",
-
-  "ops.intel.sug.balance.desc": "\"{task}\" can be moved to balance the workload.",
+  "ops.intel.sug.balance.desc": "\"{task}\" can be moved to balance the workload."
+}

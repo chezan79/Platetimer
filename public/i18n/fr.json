@@ -14,7 +14,6 @@
   "common.home": "Accueil",
   "common.dashboard": "Tableau de bord",
   "common.annulla": "Annuler",
-
   "login.registerTitle": "Créer un compte",
   "login.firstName": "Prénom",
   "login.lastName": "Nom",
@@ -43,7 +42,6 @@
   "login.deptAccessTitle": "Accès au poste",
   "login.deptAccessDesc": "Connectez-vous au poste de votre service",
   "login.deptAccessBtn": "ACCÉDER AU POSTE",
-
   "service.subtitle": "Accès au poste",
   "service.loginLabel": "Identifiant",
   "service.passwordLabel": "Mot de passe",
@@ -52,27 +50,22 @@
   "service.missingFields": "Identifiant et mot de passe sont requis.",
   "service.loginError": "Échec de la connexion.",
   "service.networkError": "Erreur réseau. Réessayez.",
-
   "operations.loading": "Chargement du tableau de bord…",
   "operations.unknownRole": "Rôle non reconnu :",
-
   "ops.role.director": "Directeur",
   "ops.role.chef_cuisine": "Chef de Cuisine",
   "ops.role.adjoint": "Adjoint",
   "ops.role.sous_chef": "Sous Chef",
   "ops.role.chef_de_brigade": "Chef de Brigade",
-
   "ops.priority.low": "Faible",
   "ops.priority.medium": "Moyenne",
   "ops.priority.high": "Haute",
   "ops.priority.urgent": "Urgent",
-
   "ops.status.open": "Ouvert",
   "ops.status.in_progress": "En cours",
   "ops.status.completed": "Terminé",
   "ops.status.overdue": "En retard",
   "ops.status.cancelled": "Annulé",
-
   "ops.history.task_created": "📝 Tâche créée",
   "ops.history.task_started": "▶ Démarrée",
   "ops.history.task_completed": "✅ Terminée",
@@ -91,11 +84,9 @@
   "ops.history.field.description": "description",
   "ops.history.field.notes": "notes",
   "ops.history.field.department": "service",
-
   "ops.greeting.morning": "Bonjour",
   "ops.greeting.afternoon": "Bon après-midi",
   "ops.greeting.evening": "Bonsoir",
-
   "ops.role.DIRECTOR": "Directeur",
   "ops.nav.tasks": "Tâches",
   "ops.nav.team": "Équipe",
@@ -103,7 +94,6 @@
   "ops.nav.performance": "📊 Performances",
   "ops.nav.dashboard": "Tableau de bord",
   "ops.nav.profile": "📊 Mon profil",
-
   "ops.task.pageName": "Operations · Tâches",
   "ops.task.new": "+ Nouvelle tâche",
   "ops.task.create": "Créer la tâche",
@@ -206,7 +196,6 @@
   "ops.task.completeBtn": "✓ Terminer",
   "ops.task.startBtn": "▶ Démarrer",
   "ops.task.viewAll": "📋 Voir toutes mes tâches",
-
   "ops.team.heading": "Gestion de l'équipe",
   "ops.team.subtitle": "Seul le Directeur peut créer et gérer les comptes de l'équipe.",
   "ops.team.invite": "Inviter un membre",
@@ -253,7 +242,6 @@
   "ops.team.archiveInsteadQ": "Voulez-vous l'archiver à la place ?",
   "ops.team.placeholder.name": "ex. Jean Dupont",
   "ops.team.placeholder.email": "jean@exemple.fr",
-
   "ops.perf.period.today": "Aujourd'hui",
   "ops.perf.period.30d": "30 jours",
   "ops.perf.period.7d": "7 jours",
@@ -343,7 +331,6 @@
   "ops.perf.notAvailable": "Profil non disponible ou non autorisé.",
   "ops.perf.selectBothDates": "Sélectionnez les deux dates.",
   "ops.perf.selectTask": "Sélectionnez une tâche.",
-
   "ops.sc.heading": "Mon travail",
   "ops.sc.nextTask": "⭐ PROCHAINE TÂCHE",
   "ops.sc.startNow": "▶ Démarrer maintenant",
@@ -356,7 +343,6 @@
   "ops.sc.completedStat": "Terminés aujourd'hui",
   "ops.cdb.heading": "Ma prochaine tâche",
   "ops.cdb.todo": "À faire",
-
   "ops.sec.overdue": "🕐 En retard",
   "ops.sec.noOverdue": "Aucune tâche en retard. Excellent !",
   "ops.sec.urgent": "⚡ Urgents",
@@ -377,7 +363,6 @@
   "ops.sec.noRecurring": "Aucune tâche récurrente prévue aujourd'hui.",
   "ops.sec.escalation": "🚨 Escalades vous concernant",
   "ops.sec.allTeam": "🕐 En retard (toute l'équipe)",
-
   "ops.dir.heading": "Tableau de bord Directeur",
   "ops.dir.quickActions": "Actions rapides",
   "ops.dir.createTask": "➕ Créer une tâche",
@@ -403,7 +388,6 @@
   "ops.dir.priorityQueue": "🎯 File de priorité",
   "ops.dir.riskWatch": "⚠️ Surveillance des risques",
   "ops.dir.vsYesterday": "📊 Par rapport à hier",
-
   "ops.intel.alerts": "🔴 Alertes",
   "ops.intel.summary": "📊 Résumé du jour",
   "ops.intel.trends": "📈 Tendances du jour",
@@ -443,14 +427,12 @@
   "ops.intel.vsYesterdayShort": "vs hier :",
   "ops.intel.insufficientData": "Données insuffisantes",
   "ops.intel.days7": "📅 7 jours :",
-
   "ops.nsv.firstVisit": "Première visite",
   "ops.nsv.lastCheck": "Dernier contrôle :",
   "ops.nsv.today": "aujourd'hui à",
   "ops.nsv.yesterday": "hier à",
   "ops.nsv.at": "à",
   "ops.nsv.noNew": "Aucune nouvelle criticité depuis votre dernière visite.",
-
   "ops.rt.taskCreated": "📌 Nouvelle tâche créée",
   "ops.rt.taskCompleted": "✅ Tâche terminée",
   "ops.rt.taskReassigned": "🔄 Tâche réassignée",
@@ -465,7 +447,6 @@
   "ops.rt.newAssignment": "📌 Nouvelle tâche assignée",
   "ops.rt.inviteCreated": "👤 Nouvelle invitation créée",
   "ops.rt.memberActivated": "✅ Membre activé !",
-
   "home.logout": "Quitter",
   "home.subtitle": "Sélectionnez un poste · Choisissez le service ou la fonction à ouvrir",
   "home.depts": "Services",
@@ -499,7 +480,6 @@
   "home.deptErrorTitle": "Service assigné non disponible",
   "home.deptErrorSub": "Le service associé à ce compte n'est pas actif ou n'existe pas. Contactez l'administrateur.",
   "home.backToLogin": "← Retour à la connexion",
-
   "admin.heading": "Gestion des Services",
   "admin.usage": "Utilisation des Services",
   "admin.createHeading": "Créer un nouveau service",
@@ -551,7 +531,6 @@
   "admin.newPasswordPlaceholder": "laisser vide pour ne pas changer",
   "admin.loginPlaceholder": "ex. cuisine1, service2",
   "admin.passwordPlaceholder": "ex. 1234, pizza",
-
   "dept.disconnectedBanner": "⚠️ WebSocket déconnecté — les modifications ne seront pas synchronisées",
   "dept.loadingDept": "Chargement...",
   "dept.disconnected": "Déconnecté",
@@ -559,6 +538,7 @@
   "dept.logout": "Quitter",
   "dept.tabCountdown": "Minuteur",
   "dept.tabVoice": "🎙️ Vocaux",
+  "dept.floorDest": "Salle",
   "dept.tabIntercom": "📞 Interphone",
   "dept.stepTable": "Table",
   "dept.stepMinutes": "Minutes",
@@ -583,7 +563,6 @@
   "dept.activeCountdowns": "Minuteurs actifs",
   "dept.noActiveCountdowns": "Aucun minuteur actif.",
   "dept.receivedVoiceMsgs": "Messages vocaux reçus",
-
   "sala.title": "Service de salle",
   "sala.activeCountdowns": "Minuteurs actifs",
   "sala.avgWaitTime": "Temps d'attente moyen",
@@ -635,519 +614,259 @@
   "ops.brief.adj.urgent": "{n} tâche(s) urgente(s) à gérer.",
   "ops.brief.adj.noCrit": "✅ Aucune criticité.",
   "ops.sec.inEscalation": "En escalade",
-  "ops.team.emailReadonly": "Email non modifiable : compte Firebase déjà lié."
-}
-
+  "ops.team.emailReadonly": "Email non modifiable : compte Firebase déjà lié.",
   "ops.ui.noTasks": "Aucune tâche.",
-
   "ops.risk.mediumInactive.title": "Tâche en cours sans mises à jour",
-
   "ops.role.CHEF_CUISINE": "Chef de Cuisine",
-
   "ops.brief.adj.noOverdue": "Aucun retard dans votre périmètre.",
-
   "ops.dec.suspended.fact.status": "Statut utilisateur : SUSPENDU",
-
   "ops.brief.cc.urgentN": "{n} sont urgentes.",
-
   "ops.dec.suspended.fact.urgent": "Urgentes : {n}",
-
   "ops.dec.notStarted.fact.priority": "Priorité : URGENTE",
-
   "ops.brief.cc.decisionsN": "{n} décisions requièrent attention.",
-
   "ops.intel.late.title": "Tâche en retard",
-
   "ops.dec.urgentDept.action": "Vérifier et prioriser le service \"{dept}\".",
-
   "ops.intel.overloaded.action": "Redistribuer certaines tâches aux autres membres disponibles.",
-
   "ops.intel.inactive.title": "Tâche inactive depuis longtemps",
-
   "ops.dec.urgentDept.reasonWithOverdue": "Le service \"{dept}\" a {n} tâches urgentes ouvertes, dont {overdue} en retard.",
-
   "ops.dec.urgentDept.fact.overdue": "En retard dans le service : {n}",
-
   "ops.exec.dir.decisionsN": "{n} décisions requièrent votre intervention.",
-
   "ops.changes.completionRateImproving": "Le taux de complétion s'est amélioré de {delta} points ({prev}% → {cur}%).",
-
   "ops.brief.cdb.overdue1": "Une tâche est en retard. Intervenez immédiatement.",
-
   "ops.dec.suspended.reasonUrgent": ", dont {n} urgentes",
-
   "ops.dec.checkDept.fact.overdue": "En retard dans le service : {n}",
-
   "ops.ui.completeBtn": "✓ Terminer",
-
   "ops.exec.dir.overdueN": "{n} sont en retard.",
-
   "ops.dec.suspended.action": "Réassigner immédiatement les tâches à un membre actif de l'équipe.",
-
   "ops.changes.urgentWorsening": "Les tâches urgentes ont augmenté de {prev} à {cur}.",
-
   "ops.dec.avgNone": "n/d",
-
   "ops.risk.criticalSuspended.desc": "\"{title}\" est urgente mais assignée à un utilisateur suspendu. Réassigner immédiatement.",
-
   "ops.dec.reassign.action": "Déplacer \"{task}\" à {to} pour équilibrer la charge.",
-
   "ops.status.COMPLETED": "Terminé",
-
   "ops.history.TASK_CREATED": "📝 Tâche créée",
-
   "ops.exec.default": "Vérifiez vos activités.",
-
   "ops.brief.sc.nextDue": "La prochaine expire à {time}.",
-
   "ops.dec.suspended.fact.assigned": "Tâches assignées : {n}",
-
   "ops.dec.urgentDept.fact.urgent": "Urgentes dans le service : {n}",
-
   "ops.dec.suspended.reason1": "{name} a été suspendu mais a encore {n} tâche active",
-
   "ops.exec.adj.decisionsN": "{n} décisions requièrent attention.",
-
   "ops.risk.mediumInactive.desc": "\"{title}\" est IN_PROGRESS mais n'a pas été mise à jour depuis {hours} heures.",
-
   "ops.dec.overloaded.reason.score": "Score de charge = {score}.",
-
   "ops.brief.adj.decisionsN": "{n} décisions requièrent attention.",
-
   "ops.brief.cc.overdue1": "Une activité est en retard.",
-
   "ops.ui.editedDeadline": "échéance modifiée",
-
   "ops.brief.dir.decisions1": "{n} décision requiert votre attention.",
-
   "ops.risk.criticalSuspended.title": "Tâche urgente assignée à un utilisateur suspendu",
-
   "ops.risk.highUrgentNotStarted.title": "Tâche urgente non démarrée : \"{title}\"",
-
   "ops.dec.checkDept.reason": "Basé sur les tâches en retard : le service \"{dept}\" a {n} tâches en retard. La plus en retard l'est de {maxMin} minutes.",
-
   "ops.risk.highOverloaded.title": "{name} est surchargé",
-
   "ops.changes.workloadImproving": "Le nombre d'utilisateurs surchargés a diminué (de {prev} à {cur}).",
-
   "ops.risk.criticalOverloaded.desc": "\"{title}\" est urgente, en retard de {min} min, et l'assignataire est surchargé.",
-
   "ops.exec.dir.urgentN": "{n} sont urgentes.",
-
   "ops.exec.adj.decisions1": "{n} décision requiert attention.",
-
   "ops.intel.suspended.title": "Utilisateur suspendu avec des tâches assignées",
-
   "ops.dec.notStarted.action": "Démarrer immédiatement ou réassigner à quelqu'un qui peut commencer maintenant.",
-
   "ops.dec.urgentDept.title": "Service \"{dept}\" sous pression",
-
   "ops.dec.qa.ops": "Voir les opérations",
-
   "ops.dec.underused.fact.teamOverdue": "Tâches en retard dans l'équipe : {n}",
-
   "ops.dec.checkDept.action": "Revoir les priorités du service \"{dept}\" et intervenir sur les tâches en retard.",
-
   "ops.exec.adj.urgent": "{n} urgentes à gérer.",
-
   "ops.ui.editedPriority": "priorité",
-
   "ops.brief.dir.trendStable": "La charge opérationnelle est stable par rapport à hier.",
-
   "ops.dec.never": "jamais",
-
   "ops.risk.lowBusy.title": "{name} est occupé avec des tâches en retard",
-
   "ops.risk.highUrgentOverdue.title": "Tâche urgente en retard : \"{title}\"",
-
   "ops.status.CANCELLED": "Annulé",
-
   "ops.dec.overloaded.fact.active": "Tâches actives : {n}",
-
   "ops.exec.cc.decisionsN": "{n} décisions requièrent attention.",
-
   "ops.dec.checkDept.title": "Vérifier le service \"{dept}\"",
-
   "ops.brief.sc.urgentN": "{n} sont urgentes.",
-
   "ops.brief.cc.urgent1": "{n} est urgente.",
-
   "ops.risk.highUrgentNotStarted.desc": "La tâche urgente \"{title}\" est encore à l'état OPEN et n'a pas été démarrée.",
-
   "ops.exec.dir.critRiskN": "⚠️ {n} risques critiques détectés.",
-
   "ops.intel.deptUrgent.title": "Concentration d'urgences dans le service \"{dept}\"",
-
   "ops.intel.late.action": "Terminer ou réassigner immédiatement.",
-
   "ops.brief.dir.overdueN": "{n} sont en retard.",
-
   "ops.dec.reassign.fact.priority": "Priorité : {val}",
-
   "ops.history.ATTACHMENT_ADDED": "📎 Pièce jointe ajoutée",
-
   "ops.dec.overloaded.fact.urgent": "Urgentes : {n}",
-
   "ops.intel.late.desc": "\"{title}\" est en retard de {min} minutes.",
-
   "ops.dec.notStarted.timeDue": "expire dans {min} minutes",
-
   "ops.dec.overloaded.fact.avg": "Complétion moyenne : {val}",
-
-  "ops.brief.adj.overdue1": "{n} tâche requiert coordination (en retard).",
-
   "ops.exec.sc.nextDue": "Prochaine échéance à {time}.",
-
   "ops.dec.since": "il y a {min} min",
-
   "ops.dec.overloaded.action": "Redistribuer certaines tâches aux membres moins chargés.",
-
   "ops.risk.lowStale.title": "Tâche ouverte depuis {days} jours",
-
   "ops.dec.suspended.reasonN": "{name} a été suspendu mais a encore {n} tâches actives",
-
   "ops.exec.sc.urgent1": "Une est urgente.",
-
   "ops.status.OVERDUE": "En retard",
-
   "ops.priority.LOW": "Faible",
-
   "ops.priority.MEDIUM": "Moyenne",
-
   "ops.brief.cdb.completed": "Vous avez déjà terminé {n} tâches aujourd'hui.",
-
   "ops.exec.sc.nextTask": "Vous avez une tâche à terminer.",
-
   "ops.ui.noNewItems": "Aucune nouvelle criticité depuis votre dernière visite.",
-
   "ops.history.STATUS_CHANGED": "🔄 Statut modifié",
-
   "ops.intel.urgent.action": "Démarrer la tâche ou la réassigner à quelqu'un qui peut commencer immédiatement.",
-
   "ops.history.PROGRESS_CHANGED": "📊 Progression mise à jour",
-
   "ops.dec.overloaded.fact.score": "Score : {val}",
-
   "ops.dec.notStarted.fact.assignee": "Assignée à : {val}",
-
   "ops.exec.dir.decisions1": "{n} décision requiert votre intervention.",
-
   "ops.dec.recurring.fact.assignee": "Assignée à : {val}",
-
   "ops.exec.cdb.overdue1": "Une tâche est en retard. Intervenez immédiatement.",
-
   "ops.intel.urgent.desc": "\"{title}\" est urgente mais n'a pas encore été démarrée.",
-
   "ops.intel.sug.balance.desc": "\"{task}\" peut être déplacée pour équilibrer la charge de travail.",
-
   "ops.dec.notStarted.timeOverdue": "est déjà en retard de {min} minutes",
-
   "ops.dec.reassign.fact.to": "À : {name} (score {score})",
-
   "ops.history.DUE_DATE_CHANGED": "📅 Échéance modifiée",
-
   "ops.brief.dir.trendImproving": "Le nombre d'activités en retard s'est amélioré par rapport à hier.",
-
   "ops.dec.overloaded.title": "{name} est surchargé",
-
   "ops.ui.yesterdayAt": "hier à",
-
   "ops.dec.notStarted.fact.deadline": "Échéance : {val}",
-
   "ops.dec.overloaded.reason.overdueN": "{n} sont en retard.",
-
   "ops.exec.cdb.overdueN": "{n} tâches sont en retard. Intervenez immédiatement.",
-
   "ops.exec.sc.tasks": "Vous avez {n} activités aujourd'hui.",
-
   "ops.exec.dir.today": "Aujourd'hui, il y a {n} activités opérationnelles.",
-
   "ops.changes.workloadWorsening": "Le nombre d'utilisateurs surchargés a augmenté (de {prev} à {cur}).",
-
   "ops.exec.dir.noOverdue": "Aucune activité en retard.",
-
   "ops.history.COMMENT_ADDED": "💬 Commentaire ajouté",
-
   "ops.dec.reassign.fact.task": "Tâche : \"{title}\"",
-
   "ops.brief.dir.decisionsN": "{n} décisions requièrent votre attention.",
-
   "ops.brief.dir.overdue1": "{n} est en retard.",
-
   "ops.brief.dir.totalOps": "Aujourd'hui, il y a {n} activités opérationnelles.",
-
   "ops.intel.overloaded.desc": "{name} a une charge élevée : {assigned} tâches ouvertes, {overdue} en retard, {urgent} urgentes (score : {score}).",
-
   "ops.exec.adj.overdueN": "{n} tâches requièrent coordination (en retard).",
-
   "ops.intel.urgent.title": "Tâche urgente non démarrée",
-
   "ops.ui.editedDescription": "description",
-
   "ops.ui.noDeadline": "Pas d'échéance",
-
   "ops.history.ASSIGNEE_CHANGED": "👤 Réassignée",
-
   "ops.role.SOUS_CHEF": "Sous Chef",
-
   "ops.dec.underused.reasonN": "Basé sur la charge actuelle : {name} n'a aucune tâche active alors que l'équipe a {n} tâches en retard.",
-
   "ops.history.TASK_EDITED": "✏️ Modifiée",
-
   "ops.intel.deptUrgent.action": "Vérifier et prioriser le service \"{dept}\".",
-
   "ops.ui.todayAt": "aujourd'hui à",
-
   "ops.intel.sug.reviewDept.desc": "De nombreuses tâches urgentes concentrées dans le service \"{dept}\".",
-
   "ops.dec.notStarted.timeNone": "n'a pas d'échéance définie",
-
   "ops.exec.cc.urgentN": "{n} sont urgentes.",
-
   "ops.exec.cdb.completed": "Vous avez déjà terminé {n} tâches aujourd'hui.",
-
   "ops.risk.mediumDeptOverdue.desc": "Le service \"{dept}\" a {n} tâches en retard.",
-
   "ops.status.OPEN": "Ouvert",
-
   "ops.ui.myself": " — moi",
-
   "ops.brief.sc.nextTask": "Vous avez une tâche à terminer.",
-
   "ops.changes.urgentImproving": "Les tâches urgentes ont diminué de {prev} à {cur}.",
-
   "ops.nsv.urgentNew.title": "Nouvelle tâche urgente : \"{title}\"",
-
   "ops.dec.overloaded.reason.tasks": "{name} a {n} tâches actives.",
-
   "ops.dec.notStarted.title": "Tâche urgente non démarrée : \"{title}\"",
-
   "ops.dec.qa.team": "Voir l'équipe",
-
   "ops.exec.adj.overdue1": "{n} tâche requiert coordination (en retard).",
-
   "ops.intel.sug.reassign.desc": "\"{task}\" est assignée à {name} qui est suspendu.",
-
   "ops.intel.deptUrgent.desc": "Le service \"{dept}\" a {n} tâches urgentes ouvertes.",
-
   "ops.intel.inactive.action": "Vérifier l'état d'avancement et mettre à jour la tâche.",
-
   "ops.dec.overloaded.reason.noCompToday": "Aucune complétion aujourd'hui.",
-
   "ops.dec.recurring.action": "Terminer cette tâche récurrente dès que possible.",
-
   "ops.dec.qa.task": "Voir la tâche",
-
   "ops.ui.lastCheck": "Dernier contrôle :",
-
   "ops.dec.underused.fact.assigned": "Tâches assignées : 0",
-
   "ops.brief.cdb.noNextTask": "Aucune tâche imminente.",
-
   "ops.history.TASK_STARTED": "▶ Démarrée",
-
   "ops.intel.sug.reviewDept.title": "Vérifier le service \"{dept}\"",
-
   "ops.exec.cc.urgent1": "{n} est urgente.",
-
   "ops.exec.cc.overdueN": "{n} activités sont en retard.",
-
   "ops.priority.HIGH": "Haute",
-
   "ops.risk.highDeadline.desc": "\"{title}\" expire dans {min} minutes et n'a pas encore été démarrée.",
-
   "ops.brief.cdb.overdueN": "{n} tâches sont en retard. Intervenez immédiatement.",
-
   "ops.exec.cc.noOverdue": "Aucun retard.",
-
   "ops.ui.startBtn": "▶ Démarrer",
-
   "ops.dec.overloaded.reason.urgent1": "{n} est urgente.",
-
   "ops.dec.recurring.fact.type": "Type : récurrente",
-
   "ops.exec.cc.decisions1": "{n} décision requiert attention.",
-
   "ops.risk.highUrgentOverdue.desc": "\"{title}\" est urgente et en retard de {min} min.",
-
   "ops.brief.cc.total": "La cuisine a {n} activités.",
-
   "ops.dec.reassign.reason": "Basé sur la charge actuelle : {from} a un score de {fromScore} (OVERLOADED), {to} a un score de {toScore} ({toStatus}).",
-
   "ops.dec.overloaded.fact.last": "Dernière complétion : {val}",
-
   "ops.exec.sc.urgentN": "{n} sont urgentes.",
-
   "ops.exec.cdb.noNextTask": "Aucune tâche imminente.",
-
   "ops.exec.cdb.nextTask": "Prochaine tâche : \"{title}\".",
-
   "ops.dec.overloaded.fact.overdue": "En retard : {n}",
-
   "ops.exec.cdb.noOverdue": "Aucun retard.",
-
   "ops.risk.lowBusy.desc": "{name} (BUSY, score {score}) a {overdue} tâches en retard.",
-
   "ops.dec.checkDept.fact.urgentOverdue": "Urgentes en retard : {n}",
-
   "ops.dec.reassign.fact.from": "De : {name} (score {score})",
-
   "ops.risk.lowDeptUrgent.desc": "Le service \"{dept}\" a {n} tâches urgentes ouvertes.",
-
   "ops.ui.sessionExpired": "Session expirée. Veuillez vous reconnecter.",
-
   "ops.role.ADJOINT": "Adjoint",
-
   "ops.dec.notStarted.fact.nd": "N/D",
-
   "ops.ui.firstVisit": "Première visite",
-
   "ops.dec.urgentDept.reason": "Le service \"{dept}\" a {n} tâches urgentes ouvertes.",
-
   "ops.dec.underused.fact.completed": "Terminées aujourd'hui : 0",
-
   "ops.intel.suspended.descN": "{name} est suspendu mais a encore {n} tâches assignées.",
-
   "ops.brief.dir.trendWorsening": "Le nombre d'activités en retard a augmenté par rapport à hier.",
-
   "ops.exec.dir.priorities": "Priorités recommandées :",
-
   "ops.dec.recurring.fact.overdue": "En retard de : {min} min",
-
   "ops.brief.cc.decisions1": "{n} décision requiert attention.",
-
   "ops.ui.networkError": "Erreur réseau : ",
-
   "ops.brief.cdb.noOverdue": "Aucun retard.",
-
   "ops.brief.cdb.nextTask": "Prochaine tâche : \"{title}\".",
-
   "ops.dec.suspended.title": "{name} est suspendu avec des tâches assignées",
-
   "ops.changes.completionRateWorsening": "Le taux de complétion a diminué de {delta} points ({prev}% → {cur}%).",
-
   "ops.nsv.urgentNew.desc": "Tâche urgente \"{title}\" créée depuis votre dernière visite.",
-
   "ops.dec.overloaded.reason.noCompMin": "Aucune complétion dans les {min} dernières minutes.",
-
   "ops.role.CHEF_DE_BRIGADE": "Chef de Brigade",
-
   "ops.brief.default": "Vérifiez vos activités.",
-
   "ops.nsv.escalation.title": "Escalade : \"{title}\"",
-
   "ops.dec.underused.title": "{name} n'a aucune tâche assignée",
-
   "ops.risk.lowStale.desc": "\"{title}\" a été créée il y a {days} jours et n'a pas encore commencé.",
-
   "ops.intel.suspended.desc1": "{name} est suspendu mais a encore {n} tâche assignée.",
-
   "ops.dec.avg": "{min} min",
-
   "ops.exec.cc.priorities": "Priorités :",
-
   "ops.risk.mediumDeptOverdue.title": "Service \"{dept}\" sous pression",
-
   "ops.changes.overdueWorsening": "Les tâches en retard ont augmenté de {prev} à {cur}.",
-
   "ops.dec.notStarted.reason": "Basé sur les tâches urgentes : \"{title}\" est urgente, n'a pas été démarrée et {timeDesc}.",
-
-  "ops.brief.adj.urgent": "{n} urgentes à gérer.",
-
   "ops.dec.overloaded.reason.overdue1": "{n} est en retard.",
-
   "ops.exec.dir.critRisk1": "⚠️ 1 risque critique détecté.",
-
   "ops.ui.editedDept": "service",
-
   "ops.exec.adj.priorities": "Priorités :",
-
   "ops.ui.editedNotes": "notes",
-
   "ops.risk.highOverloaded.desc": "Score de charge {score} : {assigned} tâches, {overdue} en retard, {urgent} urgentes.",
-
   "ops.brief.cc.noOverdue": "Aucun retard.",
-
   "ops.risk.highDeadline.title": "Échéance imminente — tâche non démarrée",
-
   "ops.dec.reassign.title": "Déplacer \"{task}\" de {from} à {to}",
-
   "ops.exec.dir.overdue1": "{n} est en retard.",
-
   "ops.exec.cc.total": "La cuisine a {n} activités.",
-
   "ops.risk.mediumRecurring.desc": "\"{title}\" est une tâche récurrente en retard de {min} min. Le cycle opérationnel est à risque.",
-
   "ops.priority.URGENT": "Urgent",
-
   "ops.exec.adj.noOverdue": "Aucun retard dans votre périmètre.",
-
   "ops.history.TASK_COMPLETED": "✅ Terminée",
-
   "ops.intel.overloaded.title": "Membre de l'équipe surchargé",
-
   "ops.brief.cc.overdueN": "{n} activités sont en retard.",
-
   "ops.risk.lowDeptUrgent.title": "Service \"{dept}\" avec plusieurs urgences",
-
   "ops.intel.sug.balance.title": "Déplacer une tâche de {from} à {to}",
-
   "ops.dec.notStarted.fact.status": "Statut : OPEN (non démarrée)",
-
   "ops.status.IN_PROGRESS": "En cours",
-
   "ops.dec.underused.action": "Envisager d'assigner des tâches à ce membre disponible.",
-
-  "ops.brief.adj.overdueN": "{n} tâches requièrent coordination (en retard).",
-
   "ops.brief.adj.decisions1": "{n} décision requiert attention.",
-
   "ops.history.ATTACHMENT_DELETED": "🗑 Pièce jointe supprimée",
-
   "ops.risk.mediumRecurring.title": "Tâche récurrente en retard",
-
   "ops.exec.sc.overdue": "{n} en retard — intervenez immédiatement.",
-
   "ops.exec.cc.overdue1": "Une activité est en retard.",
-
   "ops.brief.sc.tasks": "Vous avez {n} activités aujourd'hui.",
-
   "ops.dec.recurring.title": "Tâche récurrente en retard : \"{title}\"",
-
   "ops.intel.sug.reassign.title": "Réassigner la tâche de {name}",
-
   "ops.ui.editedTitle": "titre",
-
   "ops.brief.dir.noOverdue": "Aucune activité en retard.",
-
   "ops.brief.sc.urgent1": "Une est urgente.",
-
   "ops.dec.checkDept.fact.maxDelay": "Retard maximum : {min} min",
-
   "ops.dec.recurring.reason": "La tâche récurrente \"{title}\" est en retard de {min} minutes. Les tâches récurrentes non terminées à temps interrompent le cycle opérationnel.",
-
   "ops.intel.inactive.desc": "\"{title}\" est en cours mais n'a pas été mise à jour depuis {hours} heures.",
-
   "ops.intel.sug.recurring.title": "Terminer la tâche récurrente en retard",
-
   "ops.exec.dir.urgent1": "{n} est urgente.",
-
   "ops.dec.underused.reason1": "Basé sur la charge actuelle : {name} n'a aucune tâche active alors que l'équipe a {n} tâche en retard.",
-
   "ops.exec.dir.vsYesterday": "Par rapport à hier :",
-
   "ops.changes.overdueImproving": "Les tâches en retard ont diminué de {prev} à {cur}.",
-
   "ops.intel.sug.recurring.desc": "\"{task}\" est une tâche récurrente en retard.",
-
-  "ops.nsv.escalation.desc": "La tâche \"{title}\" a déclenché une escalade depuis votre dernière visite."
-
+  "ops.nsv.escalation.desc": "La tâche \"{title}\" a déclenché une escalade depuis votre dernière visite.",
   "ops.intel.suspended.action": "Réassigner les tâches à un membre actif de l'équipe.",
-
   "ops.risk.criticalOverloaded.title": "Tâche urgente en retard sur utilisateur surchargé",
-
   "ops.history.PRIORITY_CHANGED": "⚡ Priorité modifiée",
-
   "ops.dec.overloaded.reason.urgentN": "{n} sont urgentes.",
-
-  "ops.ui.accessDenied": "Accès Operations non autorisé.",
+  "ops.ui.accessDenied": "Accès Operations non autorisé."
+}
