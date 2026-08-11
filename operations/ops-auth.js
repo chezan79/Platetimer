@@ -141,6 +141,12 @@ function canCancelTask(actor) {
     return !!actor && actor.role === 'DIRECTOR';
 }
 
+// May `actor` permanently hard-delete a task? Director only.
+// This is a destructive, irreversible action — intentionally the same guard as cancel.
+function canDeleteTaskPermanently(actor) {
+    return !!actor && actor.role === 'DIRECTOR';
+}
+
 // ── Escalation chain ────────────────────────────────────────────────────────
 // Maps assignee role → ordered list of roles to notify on escalation.
 // Escalation never changes permissions — notification only.
@@ -168,6 +174,7 @@ module.exports = {
     canCompleteTask,
     canUpdateProgress,
     canCancelTask,
+    canDeleteTaskPermanently,
     canManageUsers,
     canManageOpsUser,
     canDeleteOpsUser,

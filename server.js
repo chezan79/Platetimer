@@ -3295,6 +3295,45 @@ app.delete('/api/operations/tasks/:id/attachments/:attId', async (req, res) => {
     res.json({ success: true, task: opsTaskWithComputedStatus(task) });
 });
 
+// ── DELETE /api/operations/tasks/:id — permanent hard delete (Director only) ──
+// [SECURITY] companyId always from verified session — never trusted from client.
+// Director-only: same guard as cancel, but irreversible. Cleans up Firebase Storage
+// attachments (non-fatal), removes task from company store, broadcasts deletion.
+// Recurring-generated tasks: only the individual task instance is removed.
+// The parent template and all other generated occurrences are preserved.
+app.delete('/api/operations/tasks/:id', async (req, res) => {
+    const ctx = requireOpsAuth(req, res);
+    if (!ctx) return;
+    const actor = ctx.opsUser;
+
+    if (!opsAuth.canDeleteTaskPermanently(actor))
+        return res.status(403).json({ error: 'Solo il Direttore può eliminare definitivamente i compiti.' });
+
+    const r = requireOpsTask(req, res, ctx);
+    if (!r) return;
+    const { task } = r;
+
+    // Clean up Firebase Storage attachments (non-fatal — metadata is removed regardless).
+    if (Array.isArray(task.attachments) && task.attachments.length > 0) {
+        const expectedPrefix = `operations/${actor.companyId}/tasks/${task.id}/`;
+        for (const att of task.attachments) {
+            if (att.storagePath && att.storagePath.startsWith(expectedPrefix)) {
+                await deleteAttachmentFromStorage(att.storagePath);
+            }
+        }
+    }
+
+    // Remove task from the company's task array.
+    const tasks = getOpsTasks(actor.companyId);
+    const idx = tasks.findIndex(t => t.id === task.id);
+    if (idx !== -1) tasks.splice(idx, 1);
+    saveOpsTasks();
+
+    console.log(`✅ [OPS] Task ${task.id} permanently deleted by Director ${actor.id}`);
+    broadcastOps(actor.companyId, { action: 'OPS_TASK_DELETED', taskId: task.id });
+    res.json({ success: true });
+});
+
 // ── GET /api/operations/stats — dashboard summary per actor ──
 app.get('/api/operations/stats', (req, res) => {
     const ctx = requireOpsAuth(req, res);

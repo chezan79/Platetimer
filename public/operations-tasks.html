@@ -82,6 +82,17 @@
 <!-- Panel overlay -->
 <div id="panel-overlay" class="panel-overlay" onclick="closePanel()"></div>
 
+<!-- Permanent-delete confirmation modal -->
+<div id="del-perm-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:600" onclick="closeDelPerm()"></div>
+<div id="del-perm-modal" role="dialog" aria-modal="true" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:601;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:28px 24px;max-width:420px;width:90%;box-shadow:0 8px 40px rgba(0,0,0,.22)">
+  <h3 style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:10px" data-i18n="ops.task.deleteConfirmTitle">Eliminare definitivamente questo compito?</h3>
+  <p style="font-size:13px;color:var(--muted);margin-bottom:22px" data-i18n="ops.task.deleteConfirmBody">Questa azione è permanente e non può essere annullata.</p>
+  <div style="display:flex;gap:10px;justify-content:flex-end">
+    <button class="btn btn-secondary" onclick="closeDelPerm()" data-i18n="common.cancel">Annulla</button>
+    <button class="btn btn-danger" onclick="confirmDeletePermanently()" data-i18n="ops.task.deletePermanently">Elimina definitivamente</button>
+  </div>
+</div>
+
 <!-- Side panel: detail + create share this element -->
 <div id="side-panel" class="detail-panel">
   <div id="panel-inner"></div>
@@ -203,6 +214,8 @@ async function openDetail(taskId) {
     actions += `<button class="btn btn-sm btn-neutral" onclick="openReassignMode('${task.id}')">👤 ${t('ops.task.reassign')}</button>`;
   if (isDirector && task.status !== 'CANCELLED')
     actions += `<button class="btn btn-sm btn-danger" onclick="doCancel('${task.id}')">${t('ops.task.cancel')}</button>`;
+  if (isDirector && task.status === 'CANCELLED')
+    actions += `<button class="btn btn-sm btn-danger" onclick="doDeletePermanently('${escHtml(task.id)}')" data-i18n="ops.task.deletePermanently">${t('ops.task.deletePermanently')}</button>`;
 
   // ─ Progress control ─
   let progressHtml = '';
@@ -783,6 +796,33 @@ async function doCancel(taskId) {
   else panelMsg((r && r.error) || t('common.error'));
 }
 
+// ── Permanent hard-delete ────────────────────────────────────────────
+let _delPermTaskId = null;
+function doDeletePermanently(taskId) {
+  _delPermTaskId = taskId;
+  // Apply current language to modal labels
+  I18n.apply(document.getElementById('del-perm-modal'));
+  document.getElementById('del-perm-overlay').style.display = '';
+  document.getElementById('del-perm-modal').style.display = '';
+}
+function closeDelPerm() {
+  _delPermTaskId = null;
+  document.getElementById('del-perm-overlay').style.display = 'none';
+  document.getElementById('del-perm-modal').style.display = 'none';
+}
+async function confirmDeletePermanently() {
+  if (!_delPermTaskId) return;
+  const taskId = _delPermTaskId;
+  closeDelPerm();
+  const r = await OpsCommon.api('/api/operations/tasks/' + taskId, { method: 'DELETE' });
+  if (r && r.success) {
+    closePanel();
+    await loadTasks();
+  } else {
+    panelMsg((r && r.error) || t('common.error'));
+  }
+}
+
 async function doComment(taskId) {
   const text = (document.getElementById('comment-text').value || '').trim();
   if (!text) { panelMsg(t('ops.task.commentRequired')); return; }
@@ -839,6 +879,7 @@ OpsRealtime.on('OPS_COMMENT_ADDED',   () => { rtReload(500); });
 OpsRealtime.on('OPS_USER_SUSPENDED',  () => { rtReload(600); });
 OpsRealtime.on('OPS_USER_ARCHIVED',   () => { rtReload(600); });
 OpsRealtime.on('OPS_USER_RESTORED',   () => { rtReload(600); });
+OpsRealtime.on('OPS_TASK_DELETED',    () => { closePanel(); rtReload(300); });
 </script>
 </body>
 </html>
