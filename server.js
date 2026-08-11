@@ -834,6 +834,35 @@ app.get('/api/service/identity', (req, res) => {
     res.json({ success: true, ...ctx });
 });
 
+// GET /api/voice-recipients — lightweight directory of active departments for messaging.
+// Returns only { id, name } of ACTIVE departments in the authenticated company so
+// bound Department Accounts can address voice messages to sibling departments,
+// WITHOUT weakening S1.4 department locking (GET /api/departments stays restricted).
+// Company always comes from the verified session — never from the client.
+//   Bound SUSPENDED account          → 403 (same as other locked endpoints)
+//   Bound account with inactive dept → 410 DEPARTMENT_INACTIVE
+app.get('/api/voice-recipients', (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const companyId = session.companyName;
+
+    const boundAcct = getBoundDepartmentContext(session);
+    if (boundAcct && boundAcct.status !== 'ACTIVE') {
+        const e = departmentAccessError(boundAcct);
+        return res.status(e.status).json(e.body);
+    }
+
+    const active = getCompanyDepts(companyId)
+        .filter(d => d.active)
+        .map(d => ({ id: d.id, name: d.name }));
+
+    if (boundAcct && !active.some(d => d.id === boundAcct.departmentId)) {
+        return res.status(410).json({ error: 'Assigned department inactive', code: 'DEPARTMENT_INACTIVE' });
+    }
+
+    res.json({ success: true, recipients: active });
+});
+
 // GET /api/service/department — dedicated endpoint for bound Department Accounts.
 // [S1.4.1] Returns the authenticated account's assigned department in a clean,
 // purpose-built shape. Replaces relying on GET /api/departments for bound users.

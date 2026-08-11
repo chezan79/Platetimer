@@ -983,10 +983,25 @@ function showTab(tab){
 // ── Voice dest list ───────────────────────────────────────────────────────────
 // SALA_ID is the shared virtual Floor destination — must match server.js ('__sala__').
 const SALA_ID = '__sala__';
-function buildVoiceDestList(){
-  const others = Object.values(departmentMap).filter(d => d.active && d.id !== myDeptId);
+async function buildVoiceDestList(){
+  // Bound department accounts only get their own dept from /api/departments (S1.4),
+  // so fetch the lightweight recipients directory to list sibling departments.
+  let others = [];
+  try {
+    const r = await fetch('/api/voice-recipients', { headers:{ Authorization:`Bearer ${token}` } });
+    const d = await r.json();
+    if (d.success && Array.isArray(d.recipients)) {
+      others = d.recipients.filter(x => x.id !== myDeptId);
+    }
+  } catch(e) {
+    console.error('voice-recipients:', e);
+  }
+  if (!others.length) {
+    // Fallback: legacy behaviour from the departments map (unbound sessions).
+    others = Object.values(departmentMap).filter(d => d.active && d.id !== myDeptId);
+  }
   const el = document.getElementById('voice-dest-list');
-  const salaLabel = (window.I18n && I18n.t('dept.floorDest') !== 'dept.floorDest') ? I18n.t('dept.floorDest') : 'Sala';
+  const salaLabel = (window.I18n && I18n.t('dept.floorDest') !== 'dept.floorDest') ? I18n.t('dept.floorDest') : 'Floor';
   // Floor (Sala) virtual destination is always offered, plus other active departments.
   const entries = others.map(d => ({ id: d.id, label: esc(d.name), i18n: '' }))
     .concat([{ id: SALA_ID, label: esc(salaLabel), i18n: ' data-i18n="dept.floorDest"' }]);
