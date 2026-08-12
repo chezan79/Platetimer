@@ -30,3 +30,4 @@
 - [Operations light redesign system](ops-light-redesign.md) — navy header (#101722) + light bg (#F5F7FA) + white cards; all 6 pages have body.operations-shell; redesign CSS overrides dark vars via body-level specificity beating :root.
 - [Countdown lifecycle & history](countdown-lifecycle.md) — 120s grace via POST_EXPIRY_GRACE_MS; all countdown endings must route through completeCountdown() (idempotent archive + countdownCompleted broadcast).
 - [Operations Sprint 6.4.1 Attachments](ops-sprint6-4-1.md) — multer proxy upload; MOCK_FIREBASE_STORAGE=1 for tests; storagePath server-generated; ?token= download auth; 37 new tests; 1441 total passing.
+- [Central Dept calendar access](central-calendar-access.md) — bound dept-account sessions hit calendar API only if their dept is ACTIVE+CENTRAL (requireCalendarAccess); unbound legacy sessions unchanged.

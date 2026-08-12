@@ -903,5 +903,6 @@
   "ops.dec.underused.reasonN": "Based on current workload: {name} has no active tasks while the team has {n} overdue tasks.",
   "ops.intel.overloaded.title": "Overloaded team member",
   "ops.exec.cc.noOverdue": "No delays.",
-  "ops.intel.sug.balance.desc": "\"{task}\" can be moved to balance the workload."
+  "ops.intel.sug.balance.desc": "\"{task}\" can be moved to balance the workload.",
+  "dept.calendar": "Calendar"
 }

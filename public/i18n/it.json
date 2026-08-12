@@ -903,5 +903,6 @@
   "ops.history.TASK_EDITED": "✏️ Modificato",
   "ops.brief.cc.urgent1": "{n} è urgente.",
   "ops.risk.mediumInactive.title": "Compito in corso senza aggiornamenti",
-  "ops.brief.adj.noOverdue": "Nessun ritardo nel tuo scope."
+  "ops.brief.adj.noOverdue": "Nessun ritardo nel tuo scope.",
+  "dept.calendar": "Calendario"
 }

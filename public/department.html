@@ -535,6 +535,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
   <div class="hdr-sep"></div>
   <span class="hdr-dept" id="hdr-dept" data-i18n="dept.loadingDept">Caricamento...</span>
   <span class="conn-badge" id="conn-badge">Disconnesso</span>
+  <button class="hdr-btn" id="btn-calendar" onclick="window.location.href='calendar.html'" style="display:none;">📅 <span data-i18n="dept.calendar">Calendario</span></button>
   <button class="hdr-btn" id="btn-home" onclick="window.location.href='home.html'" data-i18n="dept.home">Home</button>
   <button class="hdr-btn danger" onclick="doLogout()" data-i18n="dept.logout">Esci</button>
   <span id="i18n-dept-sel"></span>
@@ -771,6 +772,25 @@ function doLogout() {
         const btn = document.getElementById('btn-home');
         if (btn) btn.style.display = 'none';
     }
+})();
+
+// [T33] Central Department calendar access.
+// Show the Calendar button ONLY when the server-side department record of the
+// bound account resolves to departmentType CENTRAL. The type comes from
+// GET /api/service/department (verified session token) — never client data.
+// Unbound legacy sessions get 403 NOT_BOUND and keep the current UI unchanged.
+(async function revealCalendarForCentral() {
+    const t = WsAuth.getStoredToken();
+    if (!t) return;
+    try {
+        const r = await fetch('/api/service/department', { headers: { Authorization: `Bearer ${t}` } });
+        if (!r.ok) return; // NOT_BOUND / suspended / inactive — no calendar entry
+        const d = await r.json();
+        if (d.success && d.departmentType === 'CENTRAL') {
+            const btn = document.getElementById('btn-calendar');
+            if (btn) btn.style.display = '';
+        }
+    } catch { /* network error — leave hidden */ }
 })();
 
 // ── Bootstrap ───────────────────────────────────────────────────────────────

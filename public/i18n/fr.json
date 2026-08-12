@@ -903,5 +903,6 @@
   "ops.risk.criticalOverloaded.title": "Tâche urgente en retard sur utilisateur surchargé",
   "ops.history.PRIORITY_CHANGED": "⚡ Priorité modifiée",
   "ops.dec.overloaded.reason.urgentN": "{n} sont urgentes.",
-  "ops.ui.accessDenied": "Accès Operations non autorisé."
+  "ops.ui.accessDenied": "Accès Operations non autorisé.",
+  "dept.calendar": "Calendrier"
 }

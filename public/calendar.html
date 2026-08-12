@@ -374,8 +374,8 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
     <button class="notif-btn" onclick="toggleNotifDrawer()" title="Notifiche" aria-label="Notifiche">
       🔔<span id="notif-badge" class="notif-badge"></span>
     </button>
-    <a class="hdr-btn" href="home.html">← Home</a>
-    <button class="hdr-btn danger" onclick="window.location.href='index.html'">Esci</button>
+    <a class="hdr-btn" id="btn-back-home" href="home.html">← Home</a>
+    <button class="hdr-btn danger" onclick="calLogout()">Esci</button>
   </div>
 </header>
 
@@ -662,6 +662,35 @@ function apiHeaders() {
     return { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
 }
 
+// [T33] Logout works for both session types: Service sessions return to
+// service-login.html, Admin/legacy sessions to index.html.
+function calLogout() {
+    const dest = WsAuth.getLoginDestination(); // read before clearToken()
+    WsAuth.clearToken();
+    window.location.href = '/' + dest;
+}
+
+// [T33] Back-navigation for Department Account (service) sessions:
+// never send a bound account to home.html (department selector). Point the
+// Home button at the account's own department page, resolved from the
+// verified session via GET /api/service/department.
+(async function fixBackNavForServiceSession() {
+    if (!WsAuth.isServiceSession()) return;
+    // Operations nav links are meaningless for a Department Account session.
+    document.querySelectorAll('.ops-nav a.ops-nav-item').forEach(a => { a.style.display = 'none'; });
+    const back = document.getElementById('btn-back-home');
+    if (back) { back.style.display = 'none'; } // hidden until dept resolves
+    try {
+        const r = await fetch('/api/service/department', { headers: apiHeaders() });
+        const d = await r.json();
+        if (r.ok && d.success && d.departmentId && back) {
+            back.href = 'department.html?id=' + encodeURIComponent(d.departmentId);
+            back.textContent = '← ' + (d.departmentName || 'Reparto');
+            back.style.display = '';
+        }
+    } catch { /* keep hidden on failure */ }
+})();
+
 function showError(msg) {
     const el = document.getElementById('error-area');
     el.innerHTML = `<div class="error-state">⚠️ ${msg}</div>`;
@@ -713,7 +742,7 @@ async function loadDepartments() {
 async function loadUpcoming() {
     try {
         const res = await fetch('/api/calendar/events/upcoming', { headers: apiHeaders() });
-        if (res.status === 401) { window.location.href = '/index.html'; return; }
+        if (res.status === 401) { window.location.href = '/' + WsAuth.getLoginDestination(); return; }
         const data = await res.json();
         if (!data.success) { showError(data.error || 'Errore nel caricamento'); return; }
         upcomingData = data;
@@ -1751,7 +1780,7 @@ document.addEventListener('keydown', e => {
     onAuthStateChanged(auth, user => {
         if (!user) {
             const token = WsAuth.getStoredToken();
-            if (!token) window.location.href = '/index.html';
+            if (!token) window.location.href = '/' + WsAuth.getLoginDestination();
         }
     });
 </script>

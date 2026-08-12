@@ -390,6 +390,39 @@ function departmentAccessError(boundAcct) {
     return { status: 403, body: { error: 'Account reparto non autorizzato a gestire i reparti.', code: 'ACCOUNT_NOT_AUTHORIZED' } };
 }
 
+// [T33] Calendar access guard for Department Account sessions.
+// Company always comes from the verified session (requireAuth) — never from the client.
+//  • Unbound sessions (legacy admin/Firebase users): unchanged, full calendar access.
+//  • Bound Department Account sessions:
+//      – SUSPENDED account            → 403 ACCOUNT_SUSPENDED
+//      – assigned department inactive → 410 DEPARTMENT_INACTIVE
+//      – departmentType STANDARD      → 403 CALENDAR_NOT_ALLOWED
+//      – departmentType CENTRAL       → allowed (company-scoped by the session)
+// Returns the verified session, or null after writing the error response.
+function requireCalendarAccess(req, res) {
+    const session = requireAuth(req, res);
+    if (!session) return null;
+
+    const boundAcct = getBoundDepartmentContext(session);
+    if (!boundAcct) return session; // unbound legacy session — unchanged behaviour
+
+    if (boundAcct.status !== 'ACTIVE') {
+        const e = departmentAccessError(boundAcct);
+        res.status(e.status).json({ success: false, ...e.body });
+        return null;
+    }
+    const dept = getCompanyDepts(session.companyName).find(d => d.id === boundAcct.departmentId);
+    if (!dept || !dept.active) {
+        res.status(410).json({ success: false, error: 'Assigned department inactive', code: 'DEPARTMENT_INACTIVE' });
+        return null;
+    }
+    if (departmentAccounts.getDepartmentType(dept) !== 'CENTRAL') {
+        res.status(403).json({ success: false, error: 'Solo il reparto centrale può accedere al calendario.', code: 'CALENDAR_NOT_ALLOWED' });
+        return null;
+    }
+    return session;
+}
+
 // [S1.5] WebSocket delivery filter for Department Account locking.
 // Returns true if the given socket should receive a message with the given destinations array.
 // Bound sockets (Department Accounts) only receive messages that include their department.
@@ -1581,7 +1614,7 @@ function broadcastCalendarEvent(companyId, action, payload) {
 
 // GET /api/calendar/events?start=YYYY-MM-DD&end=YYYY-MM-DD
 app.get('/api/calendar/events', (req, res) => {
-    const session = requireAuth(req, res);
+    const session = requireCalendarAccess(req, res);
     if (!session) return;
     const companyId = session.companyName;
     const uid = session.uid;
@@ -1616,7 +1649,7 @@ app.get('/api/calendar/events', (req, res) => {
 
 // GET /api/calendar/events/upcoming — today + next 48h
 app.get('/api/calendar/events/upcoming', (req, res) => {
-    const session = requireAuth(req, res);
+    const session = requireCalendarAccess(req, res);
     if (!session) return;
     const companyId = session.companyName;
 
@@ -1679,7 +1712,7 @@ app.get('/api/calendar/events/upcoming', (req, res) => {
 
 // GET /api/calendar/events/:id
 app.get('/api/calendar/events/:id', (req, res) => {
-    const session = requireAuth(req, res);
+    const session = requireCalendarAccess(req, res);
     if (!session) return;
     const companyId = session.companyName;
     const events = getCompanyCalEvents(companyId);
@@ -1691,7 +1724,7 @@ app.get('/api/calendar/events/:id', (req, res) => {
 
 // POST /api/calendar/events
 app.post('/api/calendar/events', async (req, res) => {
-    const session = requireAuth(req, res);
+    const session = requireCalendarAccess(req, res);
     if (!session) return;
     const companyId = session.companyName;
     console.log(`[CALENDAR] Creating event for companyId ${companyId}`);
@@ -1732,7 +1765,7 @@ app.post('/api/calendar/events', async (req, res) => {
 
 // PUT /api/calendar/events/:id
 app.put('/api/calendar/events/:id', async (req, res) => {
-    const session = requireAuth(req, res);
+    const session = requireCalendarAccess(req, res);
     if (!session) return;
     const companyId = session.companyName;
     console.log(`[CALENDAR] Updating event ${req.params.id} for companyId ${companyId}`);
@@ -1785,7 +1818,7 @@ app.put('/api/calendar/events/:id', async (req, res) => {
 
 // PATCH /api/calendar/events/:id/status — mark completed / cancelled / other status
 app.patch('/api/calendar/events/:id/status', async (req, res) => {
-    const session = requireAuth(req, res);
+    const session = requireCalendarAccess(req, res);
     if (!session) return;
     const companyId = session.companyName;
 
@@ -1830,7 +1863,7 @@ app.patch('/api/calendar/events/:id/status', async (req, res) => {
 
 // POST /api/calendar/events/:id/duplicate
 app.post('/api/calendar/events/:id/duplicate', async (req, res) => {
-    const session = requireAuth(req, res);
+    const session = requireCalendarAccess(req, res);
     if (!session) return;
     const companyId = session.companyName;
 
@@ -1875,7 +1908,7 @@ app.post('/api/calendar/events/:id/duplicate', async (req, res) => {
 
 // DELETE /api/calendar/events/:id
 app.delete('/api/calendar/events/:id', async (req, res) => {
-    const session = requireAuth(req, res);
+    const session = requireCalendarAccess(req, res);
     if (!session) return;
     const companyId = session.companyName;
     const requestedId = req.params.id;
@@ -1941,7 +1974,7 @@ app.delete('/api/calendar/events/:id', async (req, res) => {
 
 // GET /api/calendar/notifications
 app.get('/api/calendar/notifications', (req, res) => {
-    const session = requireAuth(req, res);
+    const session = requireCalendarAccess(req, res);
     if (!session) return;
     const companyId = session.companyName;
     const uid = session.uid;
@@ -1972,7 +2005,7 @@ app.get('/api/calendar/notifications', (req, res) => {
 
 // PATCH /api/calendar/notifications/:id/read
 app.patch('/api/calendar/notifications/:id/read', (req, res) => {
-    const session = requireAuth(req, res);
+    const session = requireCalendarAccess(req, res);
     if (!session) return;
     const companyId = session.companyName;
     const uid = session.uid;
@@ -1988,7 +2021,7 @@ app.patch('/api/calendar/notifications/:id/read', (req, res) => {
 
 // PATCH /api/calendar/notifications/:id/dismiss
 app.patch('/api/calendar/notifications/:id/dismiss', (req, res) => {
-    const session = requireAuth(req, res);
+    const session = requireCalendarAccess(req, res);
     if (!session) return;
     const companyId = session.companyName;
     const uid = session.uid;
@@ -2005,7 +2038,7 @@ app.patch('/api/calendar/notifications/:id/dismiss', (req, res) => {
 
 // PATCH /api/calendar/notifications/read-all
 app.patch('/api/calendar/notifications/read-all', (req, res) => {
-    const session = requireAuth(req, res);
+    const session = requireCalendarAccess(req, res);
     if (!session) return;
     const companyId = session.companyName;
     const uid = session.uid;
