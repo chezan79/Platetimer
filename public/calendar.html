@@ -830,6 +830,15 @@ function initCalendarWs() {
 }
 
 function handleCalendarWsMessage(msg) {
+    // Keep-alive: respond to server heartbeat pings so ws.lastPong stays fresh
+    // and the server's dead-socket cleanup does not terminate this connection.
+    if (msg.action === 'ping') {
+        if (_calWs && _calWs.readyState === WebSocket.OPEN)
+            _calWs.send(JSON.stringify({ action: 'pong', timestamp: Date.now() }));
+        return;
+    }
+    if (msg.action === 'pong' || msg.action === 'connectionConfirmed') return;
+
     const refreshing = ['calendarEventCreated', 'calendarEventUpdated',
                         'calendarEventDeleted', 'calendarEventCompleted',
                         'calendarEventCancelled'];

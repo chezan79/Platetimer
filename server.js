@@ -13,6 +13,15 @@ const { getStorage: adminGetStorage } = require('firebase-admin/storage');
 const app = express();
 const server = http.createServer(app);
 
+// [WS-DIAG] Trap the raw HTTP upgrade event so we can confirm Railway's proxy
+// forwards WebSocket upgrade requests all the way to Node.js.
+// The 'ws' library registers its own upgrade handler; this listener runs first
+// and only logs — it does not consume the event.
+server.on('upgrade', (req, socket, head) => {
+    const fromIp = req.headers['x-forwarded-for'] || socket.remoteAddress || 'unknown';
+    console.log(`[WS-DIAG] HTTP upgrade received — url=${req.url} from=${fromIp}`);
+});
+
 // ===== SECURITY: Server-side Session Token (HMAC-SHA256) =====
 // Secret loaded from env var; if missing, a random key is generated.
 // WARNING: a random key means all tokens are invalidated on server restart.
@@ -20,6 +29,12 @@ const WS_SECRET = process.env.WS_SESSION_SECRET || crypto.randomBytes(32).toStri
 if (!process.env.WS_SESSION_SECRET) {
     console.warn('⚠️ [SECURITY] WS_SESSION_SECRET not set — random key generated. Tokens will be invalidated on server restart. Set WS_SESSION_SECRET in Secrets for production.');
 }
+
+// [WS-DIAG] Log presence (never value) of critical secrets at startup.
+// Filter Railway logs by "[WS-DIAG]" to monitor WebSocket diagnostics.
+console.log(`[WS-DIAG] startup — WS_SESSION_SECRET: ${process.env.WS_SESSION_SECRET ? 'PRESENT' : 'MISSING ⚠️'}`);
+console.log(`[WS-DIAG] startup — FIREBASE_ADMIN_SERVICE_ACCOUNT: ${process.env.FIREBASE_ADMIN_SERVICE_ACCOUNT ? 'PRESENT' : 'MISSING ⚠️'}`);
+console.log(`[WS-DIAG] startup — SESSION_SECRET: ${process.env.SESSION_SECRET ? 'PRESENT' : 'MISSING ⚠️'}`);
 
 // Firebase Web API key — technically public (same value appears in client-side config by design),
 // but kept server-side as an env var so it can be rotated without a code change.
@@ -4306,6 +4321,17 @@ wss.on('connection', (ws, req) => {
     const clientIp = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
     console.log(`🔗 Nuova connessione WebSocket da IP: ${clientIp}`);
 
+    // [WS-DIAG] Assign a short per-socket ID so every log line for this
+    // connection can be correlated in Railway's log stream.
+    ws._diagId = crypto.randomBytes(4).toString('hex');
+    console.log(`[WS-DIAG] connection opened wsId=${ws._diagId} ip=${clientIp}`);
+
+    // Protocol-level pong event: fired when the browser responds to ws.ping().
+    // Updates lastPong so the dead-socket cleanup does not terminate live connections.
+    ws.on('pong', () => {
+        ws.lastPong = Date.now();
+    });
+
     // Verifica modalità manutenzione
     if (MAINTENANCE_MODE) {
         console.log('🚫 Connessione WebSocket rifiutata - modalità manutenzione attiva');
@@ -4428,8 +4454,10 @@ wss.on('connection', (ws, req) => {
             if (data.action === 'joinRoom') {
                 // [SECURITY] Require a server-signed session token — reject bare companyName claims.
                 // The company is ALWAYS extracted from the verified token, never from data.companyName.
+                console.log(`[WS-DIAG] joinRoom received wsId=${ws._diagId} hasToken=${!!(data.token)}`);
                 if (!data.token || typeof data.token !== 'string') {
                     console.log(`⛔ [SECURITY] joinRoom rejected — no session token (IP: ${ws.clientIp})`);
+                    console.log(`[WS-DIAG] joinRoom result=TOKEN_MISSING wsId=${ws._diagId}`);
                     ws.send(JSON.stringify({
                         action: 'error',
                         code: 'TOKEN_REQUIRED',
@@ -4442,6 +4470,7 @@ wss.on('connection', (ws, req) => {
                 const session = verifySessionToken(data.token);
                 if (!session) {
                     console.log(`⛔ [SECURITY] joinRoom rejected — invalid or expired token (IP: ${ws.clientIp})`);
+                    console.log(`[WS-DIAG] joinRoom result=TOKEN_INVALID wsId=${ws._diagId} wsSecretPresent=${!!process.env.WS_SESSION_SECRET}`);
                     ws.send(JSON.stringify({
                         action: 'error',
                         code: 'TOKEN_INVALID',
@@ -4455,6 +4484,7 @@ wss.on('connection', (ws, req) => {
                 ws.isAuthenticated = true;
                 ws.authenticatedUid = session.uid;
                 console.log(`🔑 [SECURITY] joinRoom authenticated: uid=${session.uid}, company="${companyName}" (IP: ${ws.clientIp})`);
+                console.log(`[WS-DIAG] joinRoom result=TOKEN_VALID wsId=${ws._diagId} uid=${session.uid} company=${companyName}`);
 
                 // [S1.5] Resolve Department Account binding server-side.
                 // Never trust client-supplied department values — always derive from the
@@ -4469,12 +4499,13 @@ wss.on('connection', (ws, req) => {
                 if (wsBoundAcct) {
                     if (wsBoundAcct.status === 'SUSPENDED') {
                         console.log(`⛔ [S1.5] WS joinRoom rejected — SUSPENDED account: uid=${session.uid}, company="${companyName}"`);
+                        console.log(`[WS-DIAG] joinRoom result=SUSPENDED wsId=${ws._diagId}`);
                         ws.send(JSON.stringify({
                             action: 'error',
                             code:   'ACCOUNT_SUSPENDED',
                             message: 'Your department account is suspended. Contact your administrator.'
                         }));
-                        ws.close();
+                        ws.close(4003, 'ACCOUNT_SUSPENDED');
                         return;
                     }
                     // ACTIVE bound account — lock socket to server-verified department
@@ -4490,6 +4521,9 @@ wss.on('connection', (ws, req) => {
                     // Pre-lock pageType so joinPage cannot override it
                     ws.pageType = wsBoundAcct.departmentId;
                     console.log(`🔒 [S1.5] WS socket locked to dept "${ws.boundDepartmentId}" (${ws.boundDepartmentName}, type=${ws.boundDepartmentType}), company="${companyName}"`);
+                    console.log(`[WS-DIAG] joinRoom dept-bound wsId=${ws._diagId} deptId=${ws.boundDepartmentId} deptName=${ws.boundDepartmentName} found=${!!wsBoundDept}`);
+                } else {
+                    console.log(`[WS-DIAG] joinRoom unbound-admin wsId=${ws._diagId}`);
                 }
 
                 // Rimuovi il client dalla room precedente se esistente
@@ -4509,6 +4543,7 @@ wss.on('connection', (ws, req) => {
                 companyRooms.get(companyName).add(ws);
 
                 console.log(`✅ Client aggiunto alla room: ${companyName} (${companyRooms.get(companyName).size} client)`);
+                console.log(`[WS-DIAG] joinRoom complete wsId=${ws._diagId} company=${companyName} roomSize=${companyRooms.get(companyName).size}`);
 
                 // Invia tutti i countdown attivi al nuovo client — un messaggio per tavolo.
                 // Criteri lifecycle: includi se Date.now() < endsAt + POST_EXPIRY_GRACE_MS,
@@ -5269,6 +5304,7 @@ wss.on('connection', (ws, req) => {
 
     ws.on('close', (code, reason) => {
             try {
+                console.log(`[WS-DIAG] close wsId=${ws._diagId} code=${code} reason=${reason ? String(reason) : 'none'} auth=${ws.isAuthenticated} company=${ws.companyRoom || 'none'}`);
                 // Notifica gli altri utenti se qualcuno lascia la stessa pagina
                 if (ws.companyRoom && ws.pageType && companyRooms.has(ws.companyRoom)) {
                     const room = companyRooms.get(ws.companyRoom);
@@ -5319,6 +5355,7 @@ wss.on('connection', (ws, req) => {
 
         ws.on('error', (error) => {
             console.error('❌ Errore WebSocket:', error.message || error);
+            console.log(`[WS-DIAG] error wsId=${ws._diagId} msg=${error.message || error} auth=${ws.isAuthenticated}`);
 
             // Cleanup in caso di errore
             try {
@@ -5345,7 +5382,14 @@ setInterval(() => {
 
     wss.clients.forEach((ws) => {
         if (ws.readyState === WebSocket.OPEN) {
-            // Solo se non ha fatto pong negli ultimi 45 secondi
+            // Protocol-level ping: the browser WebSocket API responds automatically
+            // with a protocol-level pong (no onmessage on the client side), which
+            // updates ws.lastPong via the 'pong' event listener registered at
+            // connection time.  This also keeps Railway's reverse proxy from timing
+            // out the connection during idle periods.
+            try { ws.ping(); } catch (_) {}
+
+            // Application-level ping (for clients that also handle { action:'ping' })
             if (now - ws.lastPong > 45000) {
                 ws.send(JSON.stringify({ action: 'ping', timestamp: now }));
                 ws.lastPing = now;
@@ -5363,11 +5407,14 @@ setInterval(() => {
 setInterval(() => {
     const now = Date.now();
 
-    // Pulisci connessioni WebSocket morte (nessun pong per più di 60 secondi)
+    // Pulisci connessioni WebSocket morte (nessun pong per più di 90 secondi).
+    // Threshold is 90 s (3× the 30 s heartbeat interval) to ensure at least one
+    // protocol-level ping/pong cycle can complete before a socket is terminated.
     let deadConnections = 0;
     wss.clients.forEach((ws) => {
-        if (now - ws.lastPong > 60000) { // 60 secondi senza pong
+        if (now - ws.lastPong > 90000) { // 90 secondi senza pong
             console.log(`🗑️ Connessione morta rilevata, terminazione...`);
+            console.log(`[WS-DIAG] terminate wsId=${ws._diagId} lastPong=${Math.round((now - ws.lastPong)/1000)}s ago auth=${ws.isAuthenticated} company=${ws.companyRoom || 'none'}`);
             ws.terminate();
             deadConnections++;
         }

@@ -1809,6 +1809,15 @@ function connectWS(){
     try { data = JSON.parse(ev.data); } catch{ return; }
     if(WsAuth.handleServerError(data)) return;
 
+    // Keep-alive: respond to server heartbeat pings so ws.lastPong stays fresh
+    // and the server's dead-socket cleanup does not terminate this connection.
+    if(data.action === 'ping'){
+      if(ws.readyState === WebSocket.OPEN)
+        ws.send(JSON.stringify({ action: 'pong', timestamp: Date.now() }));
+      return;
+    }
+    if(data.action === 'pong' || data.action === 'connectionConfirmed'){ return; }
+
     if(data.action === 'startCountdown'){
       handleIncomingCountdown(data);
     } else if(data.action === 'countdownError'){
