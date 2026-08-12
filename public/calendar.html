@@ -367,27 +367,27 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
   <nav class="ops-nav">
     <a class="ops-nav-item" href="operations.html" data-i18n="ops.nav.dashboard">Dashboard</a>
     <a class="ops-nav-item" href="operations-tasks.html" data-i18n="ops.nav.tasks">Compiti</a>
-    <span class="ops-nav-item active">📅 Calendario</span>
+    <span class="ops-nav-item active" data-i18n="cal.nav.calendar">📅 Calendario</span>
   </nav>
   <div class="ops-hdr-util">
     <span id="hdr-company" class="hdr-company"></span>
-    <button class="notif-btn" onclick="toggleNotifDrawer()" title="Notifiche" aria-label="Notifiche">
+    <button class="notif-btn" onclick="toggleNotifDrawer()" data-i18n-title="cal.notif.title" title="Notifiche" aria-label="Notifiche">
       🔔<span id="notif-badge" class="notif-badge"></span>
     </button>
-    <a class="hdr-btn" id="btn-back-home" href="home.html">← Home</a>
-    <button class="hdr-btn danger" onclick="calLogout()">Esci</button>
+    <a class="hdr-btn" id="btn-back-home" href="home.html" data-i18n="cal.btn.home">← Home</a>
+    <button class="hdr-btn danger" onclick="calLogout()" data-i18n="cal.btn.logout">Esci</button>
   </div>
 </header>
 
 <!-- ── NOTIFICATION DRAWER ── -->
 <div id="notif-drawer" class="notif-drawer" role="complementary" aria-label="Notifiche">
   <div class="notif-drawer-hdr">
-    <span class="notif-drawer-title">🔔 Notifiche</span>
-    <button class="btn btn-secondary" style="padding:5px 10px;font-size:12px;" onclick="markAllRead()">Segna tutte lette</button>
+    <span class="notif-drawer-title" data-i18n="cal.notif.title">🔔 Notifiche</span>
+    <button class="btn btn-secondary" style="padding:5px 10px;font-size:12px;" onclick="markAllRead()" data-i18n="cal.notif.markAll">Segna tutte lette</button>
     <button class="modal-close" onclick="toggleNotifDrawer()">✕</button>
   </div>
   <div id="notif-list" class="notif-drawer-list">
-    <div class="loading-state">Caricamento…</div>
+    <div class="loading-state" data-i18n="cal.notif.loading">Caricamento…</div>
   </div>
 </div>
 
@@ -397,12 +397,12 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
   <!-- TTS toggle -->
   <div class="tts-bar" id="tts-bar" style="display:none;">
     <span>🔊</span>
-    <span style="flex:1;font-weight:600;">Promemoria vocali</span>
-    <label class="tts-toggle" title="Attiva/disattiva promemoria vocali">
+    <span style="flex:1;font-weight:600;" data-i18n="cal.tts.label">Promemoria vocali</span>
+    <label class="tts-toggle" data-i18n-title="cal.tts.label" title="Attiva/disattiva promemoria vocali">
       <input type="checkbox" id="tts-toggle-input" onchange="onTtsToggle(this.checked)">
       <span class="tts-slider"></span>
     </label>
-    <span id="tts-status" style="color:var(--muted);font-size:12px;">Disattivato</span>
+    <span id="tts-status" style="color:var(--muted);font-size:12px;" data-i18n="cal.tts.off">Disattivato</span>
   </div>
 
   <!-- Error area -->
@@ -411,33 +411,33 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
   <!-- Stats row -->
   <div class="stats-row">
     <div class="stat-card" onclick="setView('today')">
-      <div class="stat-label">Oggi</div>
+      <div class="stat-label" data-i18n="cal.stat.today">Oggi</div>
       <div class="stat-value" id="stat-today">–</div>
-      <div class="stat-sub">eventi</div>
+      <div class="stat-sub" data-i18n="cal.stat.events">eventi</div>
     </div>
     <div class="stat-card" onclick="setView('today')">
-      <div class="stat-label">Prossime 2h</div>
+      <div class="stat-label" data-i18n="cal.stat.next2h">Prossime 2h</div>
       <div class="stat-value" id="stat-2h">–</div>
-      <div class="stat-sub">in arrivo</div>
+      <div class="stat-sub" data-i18n="cal.stat.incoming">in arrivo</div>
     </div>
     <div class="stat-card urgent-card" onclick="setView('today')">
-      <div class="stat-label">Urgenti</div>
+      <div class="stat-label" data-i18n="cal.stat.urgent">Urgenti</div>
       <div class="stat-value" id="stat-urgent">–</div>
-      <div class="stat-sub">alta priorità</div>
+      <div class="stat-sub" data-i18n="cal.stat.highPriority">alta priorità</div>
     </div>
     <div class="stat-card" onclick="toggleNotifDrawer()">
-      <div class="stat-label">Notifiche</div>
+      <div class="stat-label" data-i18n="cal.stat.notif">Notifiche</div>
       <div class="stat-value" id="stat-notif">–</div>
-      <div class="stat-sub">non lette</div>
+      <div class="stat-sub" data-i18n="cal.stat.unread">non lette</div>
     </div>
   </div>
 
   <!-- View tabs -->
   <div class="view-tabs">
-    <button class="view-tab active" onclick="setView('today')" data-view="today">☀️ Oggi</button>
-    <button class="view-tab" onclick="setView('agenda')" data-view="agenda">📋 Agenda</button>
-    <button class="view-tab" onclick="setView('week')" data-view="week">📅 Settimana</button>
-    <button class="view-tab" onclick="setView('month')" data-view="month">🗓️ Mese</button>
+    <button class="view-tab active" onclick="setView('today')" data-view="today" data-i18n="cal.tab.today">☀️ Oggi</button>
+    <button class="view-tab" onclick="setView('agenda')" data-view="agenda" data-i18n="cal.tab.agenda">📋 Agenda</button>
+    <button class="view-tab" onclick="setView('week')" data-view="week" data-i18n="cal.tab.week">📅 Settimana</button>
+    <button class="view-tab" onclick="setView('month')" data-view="month" data-i18n="cal.tab.month">🗓️ Mese</button>
   </div>
 
   <!-- ── TODAY VIEW ── -->
@@ -448,15 +448,15 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 
     <div class="view-section">
       <div class="section-hdr">
-        <span class="section-title">⚡ Prossime 2 ore</span>
+        <span class="section-title" data-i18n="cal.sec.next2h">⚡ Prossime 2 ore</span>
         <span id="badge-2h" class="section-badge">0</span>
       </div>
-      <div id="list-2h"><div class="loading-state">Caricamento…</div></div>
+      <div id="list-2h"><div class="loading-state" data-i18n="cal.loading">Caricamento…</div></div>
     </div>
 
     <div class="view-section">
       <div class="section-hdr">
-        <span class="section-title">🚨 Urgenti / In ritardo</span>
+        <span class="section-title" data-i18n="cal.sec.urgent">🚨 Urgenti / In ritardo</span>
         <span id="badge-urgent" class="section-badge danger">0</span>
       </div>
       <div id="list-urgent"></div>
@@ -464,7 +464,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 
     <div class="view-section">
       <div class="section-hdr">
-        <span class="section-title">📆 Tutti gli eventi di oggi</span>
+        <span class="section-title" data-i18n="cal.sec.todayAll">📆 Tutti gli eventi di oggi</span>
         <span id="badge-today" class="section-badge">0</span>
       </div>
       <div id="list-today"></div>
@@ -472,7 +472,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 
     <div class="view-section">
       <div class="section-hdr">
-        <span class="section-title">✅ Completati oggi</span>
+        <span class="section-title" data-i18n="cal.sec.completed">✅ Completati oggi</span>
         <span id="badge-completed" class="section-badge">0</span>
       </div>
       <div id="list-completed"></div>
@@ -482,18 +482,18 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
   <!-- ── AGENDA VIEW ── -->
   <div id="view-agenda" class="view-content" style="display:none;">
     <div class="section-hdr" style="margin-bottom:14px;">
-      <span class="section-title">Prossimi 30 giorni</span>
+      <span class="section-title" data-i18n="cal.sec.next30">Prossimi 30 giorni</span>
       <span id="badge-agenda" class="section-badge">0</span>
     </div>
-    <div id="list-agenda"><div class="loading-state">Caricamento…</div></div>
+    <div id="list-agenda"><div class="loading-state" data-i18n="cal.loading">Caricamento…</div></div>
   </div>
 
   <!-- ── WEEK VIEW ── -->
   <div id="view-week" class="view-content" style="display:none;">
     <div class="week-nav">
-      <button class="week-nav-btn" onclick="shiftWeek(-1)">← Precedente</button>
+      <button class="week-nav-btn" onclick="shiftWeek(-1)" data-i18n="cal.week.prev">← Precedente</button>
       <span class="week-range-label" id="week-range-label"></span>
-      <button class="week-nav-btn" onclick="shiftWeek(1)">Successiva →</button>
+      <button class="week-nav-btn" onclick="shiftWeek(1)" data-i18n="cal.week.next">Successiva →</button>
     </div>
     <div id="week-grid" class="week-grid"></div>
   </div>
@@ -503,7 +503,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
     <div class="week-nav month-nav">
       <span class="week-range-label month-label" id="month-range-label"></span>
       <button class="week-nav-btn" onclick="shiftMonth(-1)" aria-label="Mese precedente">‹</button>
-      <button class="week-nav-btn" onclick="goToToday()">Oggi</button>
+      <button class="week-nav-btn" onclick="goToToday()" data-i18n="cal.btn.today">Oggi</button>
       <button class="week-nav-btn" onclick="shiftMonth(1)" aria-label="Mese successivo">›</button>
     </div>
     <div id="month-grid" class="month-grid"></div>
@@ -513,15 +513,15 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 </main>
 
 <!-- ── FAB ── -->
-<button class="fab" onclick="openCreateModal()" aria-label="Nuovo evento">+</button>
-<span class="fab-label">Nuovo evento</span>
+<button class="fab" onclick="openCreateModal()" data-i18n-title="cal.btn.newEvent" aria-label="Nuovo evento">+</button>
+<span class="fab-label" data-i18n="cal.btn.newEvent">Nuovo evento</span>
 
 <!-- ── EVENT MODAL ── -->
 <div id="event-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title">
   <div class="modal">
     <div class="modal-hdr">
-      <span id="modal-title" class="modal-title">Nuovo evento</span>
-      <button class="modal-close" onclick="closeModal()" aria-label="Chiudi">✕</button>
+      <span id="modal-title" class="modal-title" data-i18n="cal.form.title">Nuovo evento</span>
+      <button class="modal-close" onclick="closeModal()" data-i18n-aria-label="cal.detail.btn.close" aria-label="Chiudi">✕</button>
     </div>
     <div class="modal-body" id="modal-body">
       <!-- injected by JS -->
@@ -535,61 +535,90 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 <!-- ── CONFIRM DIALOG ── -->
 <div id="confirm-overlay" class="confirm-overlay" role="alertdialog">
   <div class="confirm-box">
-    <div class="confirm-title" id="confirm-title">Conferma</div>
+    <div class="confirm-title" id="confirm-title" data-i18n="cal.confirm.title">Conferma</div>
     <div class="confirm-msg" id="confirm-msg"></div>
     <div class="confirm-actions">
-      <button class="btn btn-secondary" onclick="closeConfirm()">Annulla</button>
-      <button class="btn btn-danger" id="confirm-ok-btn" onclick="doConfirm()">Conferma</button>
+      <button class="btn btn-secondary" onclick="closeConfirm()" data-i18n="cal.confirm.cancel">Annulla</button>
+      <button class="btn btn-danger" id="confirm-ok-btn" onclick="doConfirm()" data-i18n="cal.confirm.ok">Conferma</button>
     </div>
   </div>
 </div>
 
 <!-- ── SCRIPTS ── -->
+<script src="js/i18n.js"></script>
 <script src="js/ws-auth.js"></script>
 <script>
+// =========================================================================
+// I18N HELPERS
+// =========================================================================
+// _t() is available immediately (I18n loaded via synchronous script tag).
+// I18n.init() runs in DOMContentLoaded to load dictionaries and apply translations.
+const _t = k => (window.I18n?.t(k)) ?? k;
+
+// _tt(): translate a key and substitute {name} template variables.
+function _tt(k, vars) {
+    let s = _t(k);
+    for (const [key, val] of Object.entries(vars || {})) {
+        s = s.replace(new RegExp('\\{' + key + '\\}', 'g'), val);
+    }
+    return s;
+}
+
+// calLocale(): BCP-47 locale tag matching the active UI language.
+function calLocale() {
+    const lang = window.I18n?.getLanguage?.() || 'it';
+    if (lang === 'fr') return 'fr-FR';
+    if (lang === 'en') return 'en-GB';
+    return 'it-IT';
+}
+
 // =========================================================================
 // CONFIG & CONSTANTS
 // =========================================================================
 const CALENDAR_TZ = 'Europe/Zurich';
 
+// EVENT_TYPES: icon is stable; label is looked up via _t() at render time.
 const EVENT_TYPES = {
-    reservation:       { icon: '🪑', label: 'Prenotazione' },
-    group_reservation: { icon: '👥', label: 'Prenotazione gruppo' },
-    staff_meeting:     { icon: '💬', label: 'Riunione staff' },
-    staff_shift_note:  { icon: '📋', label: 'Nota turno' },
-    supplier_delivery: { icon: '🚚', label: 'Consegna fornitore' },
-    maintenance:       { icon: '🔧', label: 'Manutenzione' },
-    inventory:         { icon: '📦', label: 'Inventario' },
-    haccp_control:     { icon: '🌡️', label: 'Controllo HACCP' },
-    training:          { icon: '📚', label: 'Formazione' },
-    private_event:     { icon: '✨', label: 'Evento privato' },
-    birthday:          { icon: '🎂', label: 'Compleanno' },
-    anniversary:       { icon: '💐', label: 'Anniversario' },
-    payment_deadline:  { icon: '💳', label: 'Scadenza pagamento' },
-    reminder:          { icon: '🔔', label: 'Promemoria' },
-    other:             { icon: '📌', label: 'Altro' },
+    reservation:       { icon: '🪑', labelKey: 'cal.etype.reservation' },
+    group_reservation: { icon: '👥', labelKey: 'cal.etype.group_reservation' },
+    staff_meeting:     { icon: '💬', labelKey: 'cal.etype.staff_meeting' },
+    staff_shift_note:  { icon: '📋', labelKey: 'cal.etype.staff_shift_note' },
+    supplier_delivery: { icon: '🚚', labelKey: 'cal.etype.supplier_delivery' },
+    maintenance:       { icon: '🔧', labelKey: 'cal.etype.maintenance' },
+    inventory:         { icon: '📦', labelKey: 'cal.etype.inventory' },
+    haccp_control:     { icon: '🌡️', labelKey: 'cal.etype.haccp_control' },
+    training:          { icon: '📚', labelKey: 'cal.etype.training' },
+    private_event:     { icon: '✨', labelKey: 'cal.etype.private_event' },
+    birthday:          { icon: '🎂', labelKey: 'cal.etype.birthday' },
+    anniversary:       { icon: '💐', labelKey: 'cal.etype.anniversary' },
+    payment_deadline:  { icon: '💳', labelKey: 'cal.etype.payment_deadline' },
+    reminder:          { icon: '🔔', labelKey: 'cal.etype.reminder' },
+    other:             { icon: '📌', labelKey: 'cal.etype.other' },
 };
+function getEventLabel(key) {
+    const tc = EVENT_TYPES[key];
+    return tc ? _t(tc.labelKey) : (key || _t('cal.etype.other'));
+}
 
-const PRIORITY_LABELS = { low:'Bassa', normal:'Normale', high:'Alta', urgent:'Urgente' };
-const STATUS_LABELS   = { scheduled:'Pianificato', confirmed:'Confermato',
-                          in_progress:'In corso', completed:'Completato', cancelled:'Annullato' };
-const VISIBILITY_LABELS = { all_company:'Tutta l\'azienda',
-                            selected_departments:'Reparti selezionati',
-                            managers_only:'Solo manager' };
-const REMINDER_OPTIONS = [
-    { val:0,   label:'Al momento dell\'evento' },
-    { val:5,   label:'5 minuti prima' },
-    { val:15,  label:'15 minuti prima' },
-    { val:30,  label:'30 minuti prima' },
-    { val:60,  label:'1 ora prima' },
-    { val:120, label:'2 ore prima' },
-    { val:1440,label:'1 giorno prima' },
-];
+// Priority / status / visibility labels — resolved via _t() at render time.
+const PRIORITY_KEYS  = ['low', 'normal', 'high', 'urgent'];
+const STATUS_KEYS    = ['scheduled', 'confirmed', 'in_progress', 'completed', 'cancelled'];
+const VISIBILITY_KEYS = ['all_company', 'selected_departments', 'managers_only'];
+function getPriorityLabel(k)   { return _t('cal.priority.' + k) || k; }
+function getStatusLabel(k)     { return _t('cal.status.' + k)   || k; }
+function getVisibilityLabel(k) { return _t('cal.vis.' + k)      || k; }
 
-const IT_MONTHS = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
-                   'Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
-const IT_DAYS_SHORT = ['Dom','Lun','Mar','Mer','Gio','Ven','Sab'];
-const IT_DAYS_LONG  = ['Domenica','Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato'];
+// Reminder offsets — label resolved at render time.
+const REMINDER_VALS = [0, 5, 15, 30, 60, 120, 1440];
+function getReminderLabel(val) { return _t('cal.reminder.' + val) || (val + ' min'); }
+
+// Weekday / month name resolution — delegated to Intl.DateTimeFormat for locale accuracy.
+// Base reference dates (UTC noon to avoid DST shifts):
+//   Sunday = 2024-01-07, Monday = 2024-01-08 … Saturday = 2024-01-13
+function _intlDayShort(dowSunday0) {
+    const d = new Date(Date.UTC(2024, 0, 7 + dowSunday0, 12));
+    return d.toLocaleDateString(calLocale(), { timeZone: 'UTC', weekday: 'short' });
+}
 
 // =========================================================================
 // STATE
@@ -616,14 +645,20 @@ function todayStr() {
 function nowMs() { return Date.now(); }
 
 function formatDate(dateStr) {
-    const [y,m,d] = dateStr.split('-').map(Number);
-    const dow = new Date(Date.UTC(y,m-1,d,12,0,0)).getUTCDay();
-    return `${IT_DAYS_LONG[dow]}, ${d} ${IT_MONTHS[m-1]} ${y}`;
+    const d = new Date(dateStr + 'T12:00:00Z');
+    return d.toLocaleDateString(calLocale(), {
+        timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+    });
 }
 
 function formatDateShort(dateStr) {
-    const [y,m,d] = dateStr.split('-').map(Number);
-    return `${d} ${IT_MONTHS[m-1].slice(0,3)}`;
+    const d = new Date(dateStr + 'T12:00:00Z');
+    return d.toLocaleDateString(calLocale(), { timeZone: 'UTC', day: 'numeric', month: 'short' });
+}
+
+function formatMonthYear(y, m) {
+    const d = new Date(Date.UTC(y, m - 1, 1, 12));
+    return d.toLocaleDateString(calLocale(), { timeZone: 'UTC', month: 'long', year: 'numeric' });
 }
 
 function addDays(dateStr, n) {
@@ -685,7 +720,7 @@ function calLogout() {
         const d = await r.json();
         if (r.ok && d.success && d.departmentId && back) {
             back.href = 'department.html?id=' + encodeURIComponent(d.departmentId);
-            back.textContent = '← ' + (d.departmentName || 'Reparto');
+            back.textContent = '← ' + (d.departmentName || _t('cal.btn.back.dept').replace('← ', ''));
             back.style.display = '';
         }
     } catch { /* keep hidden on failure */ }
@@ -697,10 +732,36 @@ function showError(msg) {
     setTimeout(() => { el.innerHTML = ''; }, 6000);
 }
 
+// Show a permanent (non-dismissing) access-denied error that blocks the UI.
+// Used for CALENDAR_NOT_ALLOWED, ACCOUNT_SUSPENDED, DEPARTMENT_INACTIVE.
+function showAccessError(msg) {
+    const el = document.getElementById('error-area');
+    el.innerHTML = `<div class="error-state" style="font-size:15px;padding:20px 16px;">🚫 ${msg}</div>`;
+    // Hide interactive content so a suspended user cannot interact with stale data
+    document.querySelectorAll('.stats-row,.view-tabs,.view-content,.fab,.fab-label,.tts-bar')
+        .forEach(e => { e.style.display = 'none'; });
+}
+
+// Translate a structured API error response to a user-facing string.
+// Branches on error code first so the message is always in the UI language.
+function calErrorMessage(data) {
+    const code = data && data.code;
+    if (code === 'CALENDAR_NOT_ALLOWED') return _t('cal.error.CALENDAR_NOT_ALLOWED');
+    if (code === 'ACCOUNT_SUSPENDED')    return _t('cal.error.ACCOUNT_SUSPENDED');
+    if (code === 'DEPARTMENT_INACTIVE')  return _t('cal.error.DEPARTMENT_INACTIVE');
+    return (data && data.error) || _t('cal.error.loading');
+}
+
 // =========================================================================
 // INIT
 // =========================================================================
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+    // Initialise i18n: load dictionaries, detect language, apply data-i18n attributes.
+    await I18n.init({ selector: false });
+    // Re-apply after init so selector changes also pick up language switch.
+    // Language selector is not mounted on this page (no room in header); users
+    // change language from home.html and the preference is persisted in localStorage.
+
     const stored = localStorage.getItem('userCompany');
     if (stored) {
         document.getElementById('hdr-company').textContent = stored;
@@ -711,7 +772,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const ttsStored = localStorage.getItem('calendar_tts') === '1';
     document.getElementById('tts-toggle-input').checked = ttsStored;
     ttsEnabled = ttsStored;
-    document.getElementById('tts-status').textContent = ttsEnabled ? 'Attivato' : 'Disattivato';
+    document.getElementById('tts-status').textContent = ttsEnabled ? _t('cal.tts.on') : _t('cal.tts.off');
 
     const today = todayStr();
     monthYear = { y: parseInt(today.slice(0,4)), m: parseInt(today.slice(5,7)) };
@@ -801,12 +862,21 @@ async function loadUpcoming() {
         const res = await fetch('/api/calendar/events/upcoming', { headers: apiHeaders() });
         if (res.status === 401) { window.location.href = '/' + WsAuth.getLoginDestination(); return; }
         const data = await res.json();
-        if (!data.success) { showError(data.error || 'Errore nel caricamento'); return; }
+        if (!data.success) {
+            // Access-denied codes show a permanent block; other errors are transient
+            const code = data.code;
+            if (code === 'CALENDAR_NOT_ALLOWED' || code === 'ACCOUNT_SUSPENDED' || code === 'DEPARTMENT_INACTIVE') {
+                showAccessError(calErrorMessage(data));
+            } else {
+                showError(calErrorMessage(data));
+            }
+            return;
+        }
         upcomingData = data;
         renderStats(data);
         if (currentView === 'today') renderTodayView(data);
         checkTTS(data);
-    } catch(e) { showError('Errore di rete. Riprova.'); }
+    } catch(e) { showError(_t('cal.error.network')); }
 }
 
 async function loadAgenda() {
@@ -815,9 +885,9 @@ async function loadAgenda() {
     try {
         const res = await fetch(`/api/calendar/events?start=${today}&end=${end}`, { headers: apiHeaders() });
         const data = await res.json();
-        if (!data.success) { showError(data.error); return; }
+        if (!data.success) { showError(calErrorMessage(data)); return; }
         renderAgendaView(data.events || []);
-    } catch(e) { showError('Errore di rete.'); }
+    } catch(e) { showError(_t('cal.error.network')); }
 }
 
 async function loadWeek() {
@@ -827,9 +897,9 @@ async function loadWeek() {
     try {
         const res = await fetch(`/api/calendar/events?start=${monday}&end=${sunday}`, { headers: apiHeaders() });
         const data = await res.json();
-        if (!data.success) { showError(data.error); return; }
+        if (!data.success) { showError(calErrorMessage(data)); return; }
         renderWeekView(data.events || [], monday, sunday);
-    } catch(e) { showError('Errore di rete.'); }
+    } catch(e) { showError(_t('cal.error.network')); }
 }
 
 async function loadMonth() {
@@ -842,9 +912,9 @@ async function loadMonth() {
     try {
         const res = await fetch(`/api/calendar/events?start=${rangeStart}&end=${rangeEnd}`, { headers: apiHeaders() });
         const data = await res.json();
-        if (!data.success) { showError(data.error); return; }
+        if (!data.success) { showError(calErrorMessage(data)); return; }
         renderMonthView(data.events || [], firstDay, endStr);
-    } catch(e) { showError('Errore di rete.'); }
+    } catch(e) { showError(_t('cal.error.network')); }
 }
 
 // =========================================================================
@@ -887,22 +957,22 @@ function renderTodayView(data) {
 
     // Next 2h
     document.getElementById('badge-2h').textContent = next2h.length;
-    renderEventList('list-2h', next2h, 'Nessun evento nelle prossime 2 ore.');
+    renderEventList('list-2h', next2h, _t('cal.empty.next2h'));
 
     // Urgent / overdue
     const overdueEvents = todayEvents.filter(e => e._overdue);
     const urgentAll = [...overdueEvents, ...urgent.filter(e => !overdueEvents.find(o => o.id === e.id))];
     document.getElementById('badge-urgent').textContent = urgentAll.length;
-    renderEventList('list-urgent', urgentAll, 'Nessun evento urgente o in ritardo.');
+    renderEventList('list-urgent', urgentAll, _t('cal.empty.urgent'));
 
     // All today
     document.getElementById('badge-today').textContent = todayEvents.length;
-    renderEventList('list-today', todayEvents, 'Nessun evento programmato per oggi.',
+    renderEventList('list-today', todayEvents, _t('cal.empty.today'),
         e => e._overdue ? 'overdue' : '');
 
     // Completed
     document.getElementById('badge-completed').textContent = completed.length;
-    renderEventList('list-completed', completed, 'Nessun evento completato oggi.');
+    renderEventList('list-completed', completed, _t('cal.empty.completed'));
 }
 
 // =========================================================================
@@ -912,7 +982,7 @@ function renderAgendaView(events) {
     document.getElementById('badge-agenda').textContent = events.length;
     if (events.length === 0) {
         document.getElementById('list-agenda').innerHTML =
-            '<div class="empty-state"><div class="empty-icon">📅</div>Nessun evento nei prossimi 30 giorni.</div>';
+            `<div class="empty-state"><div class="empty-icon">📅</div>${_t('cal.empty.agenda')}</div>`;
         return;
     }
     // Group by date
@@ -950,10 +1020,12 @@ function renderWeekView(events, monday, sunday) {
         const [y,m,d] = dayStr.split('-').map(Number);
         const isToday = dayStr === today;
         const dayEvents = events.filter(e => e.date === dayStr);
+        // i: 0=Monday…6=Sunday; Sunday=0 in getDay(), so (i+1)%7 maps to Sun=0 system
+        const dayLabel = _intlDayShort((i + 1) % 7);
 
         html += `<div class="week-col${isToday?' today-col':''}">
           <div class="week-col-hdr">
-            <div class="week-day-label">${IT_DAYS_SHORT[(i+1)%7]}</div>
+            <div class="week-day-label">${dayLabel}</div>
             <div class="week-day-num${isToday?' today-num':''}">${d}</div>
           </div>
           <div class="week-col-events">`;
@@ -990,8 +1062,7 @@ function goToToday() {
 
 function renderMonthView(events, firstDay, lastDay) {
     monthEventsCache = events;
-    document.getElementById('month-range-label').textContent =
-        `${IT_MONTHS[monthYear.m - 1]} ${monthYear.y}`;
+    document.getElementById('month-range-label').textContent = formatMonthYear(monthYear.y, monthYear.m);
 
     const today = todayStr();
     // Guard: never keep a selection outside the displayed month
@@ -1001,10 +1072,8 @@ function renderMonthView(events, firstDay, lastDay) {
     const monday = getMondayOfWeek(firstDay);
     const grid = document.getElementById('month-grid');
 
-    let html = IT_DAYS_SHORT.map(d => `<div class="month-day-header">${d}</div>`).join('');
-    // Rearrange to start Monday
-    html = IT_DAYS_SHORT.slice(1).concat(IT_DAYS_SHORT[0])
-        .map(d => `<div class="month-day-header">${d}</div>`).join('');
+    // Month grid headers: Mon(1)…Sun(0) in Sun=0 system → indices [1,2,3,4,5,6,0]
+    let html = [1,2,3,4,5,6,0].map(i => `<div class="month-day-header">${_intlDayShort(i)}</div>`).join('');
 
     // Figure out how many cells
     const startDate = monday;
@@ -1025,7 +1094,7 @@ function renderMonthView(events, firstDay, lastDay) {
               title="${esc(ev.title)}">${tc?tc.icon:'📌'} ${esc(ev.title)}</div>`;
         }
         if (dayEvents.length > 3) {
-            html += `<div style="font-size:9px;color:var(--muted);">+${dayEvents.length-3} altri</div>`;
+            html += `<div style="font-size:9px;color:var(--muted);">${_tt('cal.month.others', { n: dayEvents.length - 3 })}</div>`;
         }
         if (dayEvents.length) {
             html += `<div class="month-dots">${dayEvents.slice(0,4).map(()=>'<i></i>').join('')}</div>`;
@@ -1054,11 +1123,11 @@ function renderDayAgenda() {
         .sort((a,b) => (a.startTime||'').localeCompare(b.startTime||''));
     let html = `<div class="day-agenda-hdr">
         <span class="day-agenda-title">${formatDate(selectedDay)}</span>
-        <button class="btn btn-primary" style="padding:7px 16px;font-size:13px;" onclick="openCreateModal('${selectedDay}')">+ Nuovo evento</button>
+        <button class="btn btn-primary" style="padding:7px 16px;font-size:13px;" onclick="openCreateModal('${selectedDay}')">${_t('cal.btn.newEvent')}</button>
       </div>`;
     html += dayEvents.length
         ? dayEvents.map(ev => renderEventCardHTML(ev)).join('')
-        : '<div class="empty-state" style="padding:16px;">Nessun evento per questo giorno.</div>';
+        : `<div class="empty-state" style="padding:16px;">${_t('cal.empty.day')}</div>`;
     box.innerHTML = html;
     box.style.display = '';
 }
@@ -1085,9 +1154,9 @@ function renderEventCardHTML(ev, extraClassFn) {
     if (ev.status === 'completed') extraClass += ' completed';
     if (ev.priority === 'urgent' || ev.priority === 'high') extraClass += ` priority-${ev.priority}`;
 
-    const timeStr = ev.allDay ? 'Tutto il giorno' : (ev.startTime ? ev.startTime + (ev.endTime ? '–'+ev.endTime : '') : '');
+    const timeStr = ev.allDay ? _t('cal.allDay') : (ev.startTime ? ev.startTime + (ev.endTime ? '–'+ev.endTime : '') : '');
     const guestStr = ev.guestCount ? `👥 ${ev.guestCount}` : '';
-    const tableStr = ev.tableNumber ? `🪑 Tavolo ${ev.tableNumber}` : '';
+    const tableStr = ev.tableNumber ? `🪑 ${_t('cal.card.table')} ${ev.tableNumber}` : '';
     const locStr   = ev.location ? `📍 ${ev.location}` : '';
     const custStr  = ev.customerName ? `👤 ${ev.customerName}` : '';
 
@@ -1095,11 +1164,11 @@ function renderEventCardHTML(ev, extraClassFn) {
     const deptStr   = deptNames.length ? `🏢 ${deptNames.join(', ')}` : '';
 
     const overdueTag = overdue && !['completed','cancelled'].includes(ev.status)
-        ? `<span class="event-badge badge-overdue">In ritardo</span>` : '';
+        ? `<span class="event-badge badge-overdue">${_t('cal.overdue')}</span>` : '';
 
     const canComplete = !['completed','cancelled'].includes(ev.status);
     const completeBtnHtml = canComplete
-        ? `<button class="ev-btn complete-btn" onclick="event.stopPropagation();quickComplete('${ev.id}','${ev.baseId||''}')" title="Segna completato">✓ Fatto</button>` : '';
+        ? `<button class="ev-btn complete-btn" onclick="event.stopPropagation();quickComplete('${ev.id}','${ev.baseId||''}')" title="${_t('cal.card.title.complete')}">${_t('cal.btn.done')}</button>` : '';
 
     const evJson = JSON.stringify(ev).replace(/'/g, '&#39;');
 
@@ -1108,8 +1177,8 @@ function renderEventCardHTML(ev, extraClassFn) {
       <div class="event-main">
         <div class="event-time-row">
           ${timeStr ? `<span class="event-time">${esc(timeStr)}</span>` : ''}
-          <span class="event-badge badge-priority-${ev.priority}">${PRIORITY_LABELS[ev.priority]||ev.priority}</span>
-          <span class="event-badge badge-status-${ev.status}">${STATUS_LABELS[ev.status]||ev.status}</span>
+          <span class="event-badge badge-priority-${ev.priority}">${getPriorityLabel(ev.priority)}</span>
+          <span class="event-badge badge-status-${ev.status}">${getStatusLabel(ev.status)}</span>
           ${overdueTag}
         </div>
         <div class="event-title">${esc(ev.title)}</div>
@@ -1145,29 +1214,25 @@ async function quickComplete(eventId, baseId) {
         if (!data.success) { showError(data.error); return; }
         await loadUpcoming();
         if (currentView === 'agenda') loadAgenda();
-    } catch(e) { showError('Errore di rete.'); }
+    } catch(e) { showError(_t('cal.error.network')); }
 }
 
 // =========================================================================
 // DETAIL MODAL
 // =========================================================================
 function openDetailModal(ev) {
-    document.getElementById('modal-title').textContent = 'Dettaglio evento';
-    const tc = EVENT_TYPES[ev.eventType] || { icon: '📌', label: ev.eventType };
+    document.getElementById('modal-title').textContent = _t('cal.detail.title');
+    const tc = EVENT_TYPES[ev.eventType] || { icon: '📌', labelKey: 'cal.etype.other' };
+    const evTypeLabel = getEventLabel(ev.eventType);
     const deptNames = departments.filter(d => (ev.departmentIds||[]).includes(d.id)).map(d => d.name);
     const overdue = isOverdue(ev);
     const canComplete = !['completed','cancelled'].includes(ev.status);
     const baseId = ev.baseId || ev.id;
-    const reminderStr = (ev.reminders||[]).map(r => {
-        const opt = REMINDER_OPTIONS.find(o => o.val === r.offsetMinutes);
-        return opt ? opt.label : `${r.offsetMinutes} min prima`;
-    }).join(', ');
+    const reminderStr = (ev.reminders||[]).map(r => getReminderLabel(r.offsetMinutes)).join(', ');
 
-    const recTypeLabels = { none:'Nessuna', daily:'Giornaliera', weekly:'Settimanale',
-        monthly:'Mensile', selected_weekdays:'Giorni selezionati' };
-    const recStr = ev.recurrence && ev.recurrence.type !== 'none'
-        ? recTypeLabels[ev.recurrence.type] || ev.recurrence.type
-        : 'Nessuna';
+    const recType = ev.recurrence ? ev.recurrence.type || 'none' : 'none';
+    const hasRecur = recType !== 'none';
+    const recStr   = hasRecur ? _t('cal.recur.' + recType) : '';
 
     let html = `
       <div class="detail-hdr">
@@ -1175,22 +1240,22 @@ function openDetailModal(ev) {
         <div>
           <div class="detail-title">${esc(ev.title)}</div>
           <div class="detail-badges">
-            <span class="event-badge badge-priority-${ev.priority}">${PRIORITY_LABELS[ev.priority]||ev.priority}</span>
-            <span class="event-badge badge-status-${ev.status}">${STATUS_LABELS[ev.status]||ev.status}</span>
-            ${overdue && !['completed','cancelled'].includes(ev.status) ? '<span class="event-badge badge-overdue">In ritardo</span>' : ''}
+            <span class="event-badge badge-priority-${ev.priority}">${getPriorityLabel(ev.priority)}</span>
+            <span class="event-badge badge-status-${ev.status}">${getStatusLabel(ev.status)}</span>
+            ${overdue && !['completed','cancelled'].includes(ev.status) ? `<span class="event-badge badge-overdue">${_t('cal.overdue')}</span>` : ''}
           </div>
         </div>
       </div>
       <div class="detail-grid">
-        <div class="detail-field"><div class="detail-field-label">Tipo</div><div class="detail-field-value">${tc.icon} ${tc.label}</div></div>
-        <div class="detail-field"><div class="detail-field-label">Data</div><div class="detail-field-value">${formatDate(ev.date)}</div></div>
-        <div class="detail-field"><div class="detail-field-label">Orario</div><div class="detail-field-value">${ev.allDay ? 'Tutto il giorno' : (ev.startTime||'–') + (ev.endTime ? ' → '+ev.endTime : '')}</div></div>
-        <div class="detail-field"><div class="detail-field-label">Visibilità</div><div class="detail-field-value">${VISIBILITY_LABELS[ev.visibility]||ev.visibility}</div></div>
+        <div class="detail-field"><div class="detail-field-label">${_t('cal.detail.type')}</div><div class="detail-field-value">${tc.icon} ${evTypeLabel}</div></div>
+        <div class="detail-field"><div class="detail-field-label">${_t('cal.detail.date')}</div><div class="detail-field-value">${formatDate(ev.date)}</div></div>
+        <div class="detail-field"><div class="detail-field-label">${_t('cal.detail.time')}</div><div class="detail-field-value">${ev.allDay ? _t('cal.allDay') : (ev.startTime||'–') + (ev.endTime ? ' → '+ev.endTime : '')}</div></div>
+        <div class="detail-field"><div class="detail-field-label">${_t('cal.detail.visibility')}</div><div class="detail-field-value">${getVisibilityLabel(ev.visibility)}</div></div>
       </div>`;
 
     if (ev.description) {
         html += `<div class="detail-section"><div class="detail-field">
-          <div class="detail-field-label">Note operative</div>
+          <div class="detail-field-label">${_t('cal.detail.notes')}</div>
           <div class="detail-field-value" style="white-space:pre-line;">${esc(ev.description)}</div>
         </div></div>`;
     }
@@ -1198,58 +1263,58 @@ function openDetailModal(ev) {
     const hasContact = ev.customerName||ev.contactName||ev.phone||ev.guestCount||ev.tableNumber||ev.location;
     if (hasContact) {
         html += `<div class="detail-section"><div class="detail-grid">
-          ${ev.customerName ? `<div class="detail-field"><div class="detail-field-label">Cliente/Azienda</div><div class="detail-field-value">${esc(ev.customerName)}</div></div>` : ''}
-          ${ev.contactName  ? `<div class="detail-field"><div class="detail-field-label">Referente</div><div class="detail-field-value">${esc(ev.contactName)}</div></div>` : ''}
-          ${ev.phone        ? `<div class="detail-field"><div class="detail-field-label">Telefono</div><div class="detail-field-value"><a href="tel:${esc(ev.phone)}" style="color:var(--accent2);">${esc(ev.phone)}</a></div></div>` : ''}
-          ${ev.guestCount   ? `<div class="detail-field"><div class="detail-field-label">Coperti</div><div class="detail-field-value">${ev.guestCount}</div></div>` : ''}
-          ${ev.tableNumber  ? `<div class="detail-field"><div class="detail-field-label">Tavolo</div><div class="detail-field-value">${esc(ev.tableNumber)}</div></div>` : ''}
-          ${ev.location     ? `<div class="detail-field"><div class="detail-field-label">Luogo</div><div class="detail-field-value">${esc(ev.location)}</div></div>` : ''}
+          ${ev.customerName ? `<div class="detail-field"><div class="detail-field-label">${_t('cal.detail.customer')}</div><div class="detail-field-value">${esc(ev.customerName)}</div></div>` : ''}
+          ${ev.contactName  ? `<div class="detail-field"><div class="detail-field-label">${_t('cal.detail.contact')}</div><div class="detail-field-value">${esc(ev.contactName)}</div></div>` : ''}
+          ${ev.phone        ? `<div class="detail-field"><div class="detail-field-label">${_t('cal.detail.phone')}</div><div class="detail-field-value"><a href="tel:${esc(ev.phone)}" style="color:var(--accent2);">${esc(ev.phone)}</a></div></div>` : ''}
+          ${ev.guestCount   ? `<div class="detail-field"><div class="detail-field-label">${_t('cal.detail.guests')}</div><div class="detail-field-value">${ev.guestCount}</div></div>` : ''}
+          ${ev.tableNumber  ? `<div class="detail-field"><div class="detail-field-label">${_t('cal.detail.table')}</div><div class="detail-field-value">${esc(ev.tableNumber)}</div></div>` : ''}
+          ${ev.location     ? `<div class="detail-field"><div class="detail-field-label">${_t('cal.detail.location')}</div><div class="detail-field-value">${esc(ev.location)}</div></div>` : ''}
         </div></div>`;
     }
 
     const hasNotes = ev.allergyNotes||ev.dietaryNotes||ev.preparationNotes;
     if (hasNotes) {
         html += `<div class="detail-section">
-          ${ev.allergyNotes     ? `<div class="detail-field"><div class="detail-field-label">⚠️ Allergie</div><div class="detail-field-value" style="color:var(--danger);">${esc(ev.allergyNotes)}</div></div>` : ''}
-          ${ev.dietaryNotes     ? `<div class="detail-field"><div class="detail-field-label">🥗 Diete</div><div class="detail-field-value">${esc(ev.dietaryNotes)}</div></div>` : ''}
-          ${ev.preparationNotes ? `<div class="detail-field"><div class="detail-field-label">👨‍🍳 Preparazione</div><div class="detail-field-value" style="white-space:pre-line;">${esc(ev.preparationNotes)}</div></div>` : ''}
+          ${ev.allergyNotes     ? `<div class="detail-field"><div class="detail-field-label">${_t('cal.detail.allergies')}</div><div class="detail-field-value" style="color:var(--danger);">${esc(ev.allergyNotes)}</div></div>` : ''}
+          ${ev.dietaryNotes     ? `<div class="detail-field"><div class="detail-field-label">${_t('cal.detail.dietary')}</div><div class="detail-field-value">${esc(ev.dietaryNotes)}</div></div>` : ''}
+          ${ev.preparationNotes ? `<div class="detail-field"><div class="detail-field-label">${_t('cal.detail.prep')}</div><div class="detail-field-value" style="white-space:pre-line;">${esc(ev.preparationNotes)}</div></div>` : ''}
         </div>`;
     }
 
     if (deptNames.length) {
         html += `<div class="detail-section"><div class="detail-field">
-          <div class="detail-field-label">Reparti</div>
+          <div class="detail-field-label">${_t('cal.detail.depts')}</div>
           <div class="detail-field-value">${deptNames.join(', ')}</div>
         </div></div>`;
     }
 
     if (reminderStr) {
         html += `<div class="detail-section"><div class="detail-field">
-          <div class="detail-field-label">🔔 Promemoria</div>
+          <div class="detail-field-label">${_t('cal.detail.reminders')}</div>
           <div class="detail-field-value">${esc(reminderStr)}</div>
         </div></div>`;
     }
 
-    if (recStr !== 'Nessuna') {
+    if (hasRecur) {
         html += `<div class="detail-section"><div class="detail-field">
-          <div class="detail-field-label">🔁 Ricorrenza</div>
-          <div class="detail-field-value">${esc(recStr)}${ev.recurrence.endDate ? ' fino al '+formatDateShort(ev.recurrence.endDate) : ''}</div>
+          <div class="detail-field-label">${_t('cal.detail.recurrence')}</div>
+          <div class="detail-field-value">${esc(recStr)}${ev.recurrence.endDate ? ' ' + _t('cal.detail.until') + ' ' + formatDateShort(ev.recurrence.endDate) : ''}</div>
         </div></div>`;
     }
 
     document.getElementById('modal-body').innerHTML = html;
 
-    let footerHtml = `<button class="btn btn-secondary" onclick="closeModal()">Chiudi</button>`;
+    let footerHtml = `<button class="btn btn-secondary" onclick="closeModal()">${_t('cal.detail.btn.close')}</button>`;
 
     if (canComplete) {
-        footerHtml += `<button class="btn btn-ok" onclick="completeFromDetail('${baseId}')">✓ Segna completato</button>`;
+        footerHtml += `<button class="btn btn-ok" onclick="completeFromDetail('${baseId}')">${_t('cal.detail.btn.complete')}</button>`;
     }
     if (!['completed','cancelled'].includes(ev.status)) {
-        footerHtml += `<button class="btn btn-warn" onclick="cancelFromDetail('${baseId}')">✕ Annulla evento</button>`;
+        footerHtml += `<button class="btn btn-warn" onclick="cancelFromDetail('${baseId}')">${_t('cal.detail.btn.cancel_event')}</button>`;
     }
-    footerHtml += `<button class="btn btn-secondary" onclick="duplicateEvent('${baseId}')">⧉ Duplica</button>`;
-    footerHtml += `<button class="btn btn-primary" onclick="openEditModal('${baseId}')">✏️ Modifica</button>`;
-    footerHtml += `<button class="btn btn-danger" onclick="askDeleteEvent('${baseId}')">🗑️ Elimina</button>`;
+    footerHtml += `<button class="btn btn-secondary" onclick="duplicateEvent('${baseId}')">${_t('cal.detail.btn.duplicate')}</button>`;
+    footerHtml += `<button class="btn btn-primary" onclick="openEditModal('${baseId}')">${_t('cal.detail.btn.edit')}</button>`;
+    footerHtml += `<button class="btn btn-danger" onclick="askDeleteEvent('${baseId}')">${_t('cal.detail.btn.delete')}</button>`;
 
     document.getElementById('modal-footer').innerHTML = footerHtml;
     document.getElementById('event-modal').classList.add('open');
@@ -1267,7 +1332,7 @@ async function cancelFromDetail(id) {
         const data = await res.json();
         if (!data.success) { showError(data.error); return; }
         closeModal(); await loadUpcoming();
-    } catch(e) { showError('Errore di rete.'); }
+    } catch(e) { showError(_t('cal.error.network')); }
 }
 async function duplicateEvent(id) {
     try {
@@ -1276,10 +1341,10 @@ async function duplicateEvent(id) {
         if (!data.success) { showError(data.error); return; }
         closeModal(); await loadUpcoming();
         if (currentView !== 'today') setView(currentView);
-    } catch(e) { showError('Errore di rete.'); }
+    } catch(e) { showError(_t('cal.error.network')); }
 }
 function askDeleteEvent(id) {
-    showConfirm('Elimina evento', 'Sei sicuro di voler eliminare questo evento? L\'operazione non può essere annullata.', async () => {
+    showConfirm(_t('cal.confirm.delete.title'), _t('cal.confirm.delete.msg'), async () => {
         console.log(`[CALENDAR DELETE] Clicked eventId=${id}`);
         const url = `/api/calendar/events/${encodeURIComponent(id)}`;
         console.log(`[CALENDAR DELETE] Request DELETE ${url}`);
@@ -1290,7 +1355,7 @@ function askDeleteEvent(id) {
             if (!res.ok || !data.success) {
                 const reason = data.error || `HTTP ${res.status}`;
                 console.warn(`[CALENDAR DELETE] Failed status=${res.status} reason=${reason}`);
-                showError(data.error || 'Errore durante l\'eliminazione.');
+                showError(data.error || _t('cal.form.err.save'));
                 return;
             }
             console.log(`[CALENDAR DELETE] Response ${res.status} — success`);
@@ -1299,9 +1364,9 @@ function askDeleteEvent(id) {
             if (currentView !== 'today') setView(currentView);
         } catch (e) {
             console.error(`[CALENDAR DELETE] Network error: ${e.message}`);
-            showError('Errore di rete durante l\'eliminazione.');
+            showError(_t('cal.error.network'));
         }
-    }, 'Elimina');
+    }, _t('cal.confirm.delete.ok'));
 }
 
 // =========================================================================
@@ -1314,7 +1379,7 @@ async function openEditModal(id) {
         const data = await res.json();
         if (!data.success) { showError(data.error); currentEventId = null; return; }
         renderEventForm(data.event);
-    } catch(e) { showError('Errore di rete.'); currentEventId = null; }
+    } catch(e) { showError(_t('cal.error.network')); currentEventId = null; }
 }
 
 // =========================================================================
@@ -1333,7 +1398,7 @@ function openCreateModal(prefillDate) {
 // =========================================================================
 function renderEventForm(ev) {
     const isEdit = !!currentEventId;
-    document.getElementById('modal-title').textContent = isEdit ? 'Modifica evento' : 'Nuovo evento';
+    document.getElementById('modal-title').textContent = isEdit ? _t('cal.form.title.edit') : _t('cal.form.title');
 
     // Build department checkboxes
     const deptChecks = departments.map(d => {
@@ -1349,78 +1414,84 @@ function renderEventForm(ev) {
 
     // Event type options
     const etOpts = Object.entries(EVENT_TYPES).map(([k,v]) =>
-        `<option value="${k}"${ev.eventType===k?' selected':''}>${v.icon} ${v.label}</option>`).join('');
+        `<option value="${k}"${ev.eventType===k?' selected':''}>${v.icon} ${_t(v.labelKey)}</option>`).join('');
 
-    const prioOpts = Object.entries(PRIORITY_LABELS).map(([k,v]) =>
-        `<option value="${k}"${ev.priority===k?' selected':''}>${v}</option>`).join('');
-    const statOpts = Object.entries(STATUS_LABELS).map(([k,v]) =>
-        `<option value="${k}"${ev.status===k?' selected':''}>${v}</option>`).join('');
-    const visOpts  = Object.entries(VISIBILITY_LABELS).map(([k,v]) =>
-        `<option value="${k}"${ev.visibility===k?' selected':''}>${v}</option>`).join('');
+    const prioOpts = PRIORITY_KEYS.map(k =>
+        `<option value="${k}"${ev.priority===k?' selected':''}>${getPriorityLabel(k)}</option>`).join('');
+    const statOpts = STATUS_KEYS.map(k =>
+        `<option value="${k}"${ev.status===k?' selected':''}>${getStatusLabel(k)}</option>`).join('');
+    const visOpts  = VISIBILITY_KEYS.map(k =>
+        `<option value="${k}"${ev.visibility===k?' selected':''}>${getVisibilityLabel(k)}</option>`).join('');
 
     const recurType = ev.recurrence ? ev.recurrence.type || 'none' : 'none';
     const recurEndDate = ev.recurrence ? ev.recurrence.endDate || '' : '';
 
+    // Weekday keys in Mon(1)…Sun(0) order, matching the Sun=0 system
+    const weekdayKeys = [
+        ['1','cal.weekday.mon'],['2','cal.weekday.tue'],['3','cal.weekday.wed'],
+        ['4','cal.weekday.thu'],['5','cal.weekday.fri'],['6','cal.weekday.sat'],['0','cal.weekday.sun']
+    ];
+
     const html = `
     <div class="form-tabs">
-      <button type="button" class="form-tab active" onclick="switchFormTab(this,'tab-base')">Principale</button>
-      <button type="button" class="form-tab" onclick="switchFormTab(this,'tab-contact')">Contatto</button>
-      <button type="button" class="form-tab" onclick="switchFormTab(this,'tab-ops')">Operativo</button>
-      <button type="button" class="form-tab" onclick="switchFormTab(this,'tab-remind')">Promemoria</button>
+      <button type="button" class="form-tab active" onclick="switchFormTab(this,'tab-base')">${_t('cal.form.tab.main')}</button>
+      <button type="button" class="form-tab" onclick="switchFormTab(this,'tab-contact')">${_t('cal.form.tab.contact')}</button>
+      <button type="button" class="form-tab" onclick="switchFormTab(this,'tab-ops')">${_t('cal.form.tab.ops')}</button>
+      <button type="button" class="form-tab" onclick="switchFormTab(this,'tab-remind')">${_t('cal.form.tab.remind')}</button>
     </div>
 
     <!-- TAB: Base -->
     <div id="tab-base" class="form-panel active">
       <div class="field">
-        <label>Titolo <span class="req">*</span></label>
-        <input type="text" id="f-title" value="${esc(ev.title||'')}" placeholder="Es. Prenotazione Rossi" required>
+        <label>${_t('cal.form.field.title')} <span class="req">*</span></label>
+        <input type="text" id="f-title" value="${esc(ev.title||'')}" placeholder="${_t('cal.form.ph.title')}" required>
       </div>
       <div class="field-row">
         <div class="field">
-          <label>Tipo evento <span class="req">*</span></label>
+          <label>${_t('cal.form.field.type')} <span class="req">*</span></label>
           <select id="f-type">${etOpts}</select>
         </div>
         <div class="field">
-          <label>Priorità</label>
+          <label>${_t('cal.form.field.priority')}</label>
           <select id="f-priority">${prioOpts}</select>
         </div>
       </div>
       <div class="field-row">
         <div class="field">
-          <label>Data <span class="req">*</span></label>
+          <label>${_t('cal.form.field.date')} <span class="req">*</span></label>
           <input type="date" id="f-date" value="${esc(ev.date||'')}" required>
         </div>
         <div class="field">
-          <label>Stato</label>
+          <label>${_t('cal.form.field.status')}</label>
           <select id="f-status">${statOpts}</select>
         </div>
       </div>
       <div class="field-check">
         <input type="checkbox" id="f-allday"${ev.allDay?' checked':''} onchange="toggleAllDay(this.checked)">
-        <label for="f-allday">Tutto il giorno</label>
+        <label for="f-allday">${_t('cal.form.field.allday')}</label>
       </div>
       <div id="time-fields" class="field-row"${ev.allDay?' style="display:none;"':''}>
         <div class="field">
-          <label>Ora inizio</label>
+          <label>${_t('cal.form.field.start_time')}</label>
           <input type="time" id="f-start-time" value="${esc(ev.startTime||'12:00')}">
         </div>
         <div class="field">
-          <label>Ora fine (opz.)</label>
+          <label>${_t('cal.form.field.end_time')}</label>
           <input type="time" id="f-end-time" value="${esc(ev.endTime||'')}">
         </div>
       </div>
       <div class="field">
-        <label>Luogo (opz.)</label>
-        <input type="text" id="f-location" value="${esc(ev.location||'')}" placeholder="Es. Sala privata, Cucina...">
+        <label>${_t('cal.form.field.location')}</label>
+        <input type="text" id="f-location" value="${esc(ev.location||'')}" placeholder="${_t('cal.form.ph.location')}">
       </div>
       <div class="field">
-        <label>Visibilità</label>
+        <label>${_t('cal.form.field.visibility')}</label>
         <select id="f-visibility">${visOpts}</select>
       </div>
-      ${departments.length ? `<div class="field"><label>Reparti coinvolti</label><div class="dept-checks">${deptChecks}</div></div>` : ''}
+      ${departments.length ? `<div class="field"><label>${_t('cal.form.field.depts')}</label><div class="dept-checks">${deptChecks}</div></div>` : ''}
       <div class="field">
-        <label>Note operative</label>
-        <textarea id="f-desc" placeholder="Istruzioni, dettagli, preparazioni…">${esc(ev.description||'')}</textarea>
+        <label>${_t('cal.form.field.notes')}</label>
+        <textarea id="f-desc" placeholder="${_t('cal.form.ph.notes')}">${esc(ev.description||'')}</textarea>
       </div>
     </div>
 
@@ -1428,25 +1499,25 @@ function renderEventForm(ev) {
     <div id="tab-contact" class="form-panel">
       <div class="field-row">
         <div class="field">
-          <label>Coperti / Ospiti</label>
-          <input type="number" id="f-guests" value="${ev.guestCount||''}" min="1" max="9999" placeholder="Numero coperti">
+          <label>${_t('cal.form.field.guests')}</label>
+          <input type="number" id="f-guests" value="${ev.guestCount||''}" min="1" max="9999" placeholder="${_t('cal.form.ph.guests')}">
         </div>
         <div class="field">
-          <label>Numero tavolo</label>
-          <input type="text" id="f-table" value="${esc(ev.tableNumber||'')}" placeholder="Es. 12, A3...">
+          <label>${_t('cal.form.field.table')}</label>
+          <input type="text" id="f-table" value="${esc(ev.tableNumber||'')}" placeholder="${_t('cal.form.ph.table')}">
         </div>
       </div>
       <div class="field">
-        <label>Nome cliente / azienda</label>
-        <input type="text" id="f-customer" value="${esc(ev.customerName||'')}" placeholder="Cognome o nome azienda">
+        <label>${_t('cal.form.field.customer')}</label>
+        <input type="text" id="f-customer" value="${esc(ev.customerName||'')}" placeholder="${_t('cal.form.ph.customer')}">
       </div>
       <div class="field-row">
         <div class="field">
-          <label>Referente</label>
-          <input type="text" id="f-contact" value="${esc(ev.contactName||'')}" placeholder="Nome contatto">
+          <label>${_t('cal.form.field.contact')}</label>
+          <input type="text" id="f-contact" value="${esc(ev.contactName||'')}" placeholder="${_t('cal.form.ph.contact')}">
         </div>
         <div class="field">
-          <label>Telefono</label>
+          <label>${_t('cal.form.field.phone')}</label>
           <input type="tel" id="f-phone" value="${esc(ev.phone||'')}" placeholder="+39 ...">
         </div>
       </div>
@@ -1455,56 +1526,56 @@ function renderEventForm(ev) {
     <!-- TAB: Operativo -->
     <div id="tab-ops" class="form-panel">
       <div class="field">
-        <label>⚠️ Allergie / Intolleranze</label>
-        <textarea id="f-allergy" placeholder="Es. glutine, lattosio, frutta secca…">${esc(ev.allergyNotes||'')}</textarea>
+        <label>${_t('cal.form.field.allergies')}</label>
+        <textarea id="f-allergy" placeholder="${_t('cal.form.ph.allergy')}">${esc(ev.allergyNotes||'')}</textarea>
       </div>
       <div class="field">
-        <label>🥗 Diete / Preferenze alimentari</label>
-        <textarea id="f-dietary" placeholder="Es. vegano, kosher, halal…">${esc(ev.dietaryNotes||'')}</textarea>
+        <label>${_t('cal.form.field.dietary')}</label>
+        <textarea id="f-dietary" placeholder="${_t('cal.form.ph.dietary')}">${esc(ev.dietaryNotes||'')}</textarea>
       </div>
       <div class="field">
-        <label>👨‍🍳 Note di preparazione</label>
-        <textarea id="f-prep" placeholder="Dettagli per la cucina…">${esc(ev.preparationNotes||'')}</textarea>
+        <label>${_t('cal.form.field.prep')}</label>
+        <textarea id="f-prep" placeholder="${_t('cal.form.ph.prep')}">${esc(ev.preparationNotes||'')}</textarea>
       </div>
     </div>
 
     <!-- TAB: Promemoria & Ricorrenza -->
     <div id="tab-remind" class="form-panel">
       <div class="field">
-        <label>🔔 Promemoria</label>
+        <label>${_t('cal.form.field.reminders')}</label>
         <div id="reminder-list" class="reminder-list">${remHtml}</div>
-        <button type="button" class="add-reminder-btn" onclick="addReminder()">+ Aggiungi promemoria</button>
+        <button type="button" class="add-reminder-btn" onclick="addReminder()">${_t('cal.form.field.add_reminder')}</button>
       </div>
       <div class="field" style="margin-top:20px;">
-        <label>🔁 Ricorrenza</label>
+        <label>${_t('cal.form.field.recurrence')}</label>
         <select id="f-recur-type" onchange="onRecurTypeChange(this.value)">
-          <option value="none"${recurType==='none'?' selected':''}>Nessuna</option>
-          <option value="daily"${recurType==='daily'?' selected':''}>Giornaliera</option>
-          <option value="weekly"${recurType==='weekly'?' selected':''}>Settimanale</option>
-          <option value="monthly"${recurType==='monthly'?' selected':''}>Mensile</option>
-          <option value="selected_weekdays"${recurType==='selected_weekdays'?' selected':''}>Giorni selezionati</option>
+          <option value="none"${recurType==='none'?' selected':''}>${_t('cal.recur.none')}</option>
+          <option value="daily"${recurType==='daily'?' selected':''}>${_t('cal.recur.daily')}</option>
+          <option value="weekly"${recurType==='weekly'?' selected':''}>${_t('cal.recur.weekly')}</option>
+          <option value="monthly"${recurType==='monthly'?' selected':''}>${_t('cal.recur.monthly')}</option>
+          <option value="selected_weekdays"${recurType==='selected_weekdays'?' selected':''}>${_t('cal.recur.selected_weekdays')}</option>
         </select>
       </div>
       <div id="recur-extra" style="${recurType==='none'?'display:none':''}">
         <div id="weekday-picker" class="field" style="${recurType==='selected_weekdays'?'':'display:none'}">
-          <label>Giorni della settimana</label>
+          <label>${_t('cal.form.field.recur_days')}</label>
           <div style="display:flex;gap:6px;flex-wrap:wrap;">
-            ${[['1','Lun'],['2','Mar'],['3','Mer'],['4','Gio'],['5','Ven'],['6','Sab'],['0','Dom']].map(([v,l]) => {
+            ${weekdayKeys.map(([v,lk]) => {
               const wds = ev.recurrence ? ev.recurrence.weekdays || [] : [];
               return `<label class="dept-check-pill${wds.includes(parseInt(v))?' checked':''}" onclick="toggleDeptPill(this)">
                 <input type="checkbox" name="weekday" value="${v}"${wds.includes(parseInt(v))?' checked':''} style="display:none;">
-                ${l}
+                ${_t(lk)}
               </label>`;
             }).join('')}
           </div>
         </div>
         <div class="field-row">
           <div class="field">
-            <label>Ripeti ogni</label>
+            <label>${_t('cal.form.field.recur_interval')}</label>
             <input type="number" id="f-recur-interval" value="${ev.recurrence?ev.recurrence.interval||1:1}" min="1" max="52">
           </div>
           <div class="field">
-            <label>Fine ricorrenza (opz.)</label>
+            <label>${_t('cal.form.field.recur_end')}</label>
             <input type="date" id="f-recur-end" value="${recurEndDate}">
           </div>
         </div>
@@ -1513,9 +1584,9 @@ function renderEventForm(ev) {
 
     document.getElementById('modal-body').innerHTML = html;
     document.getElementById('modal-footer').innerHTML = `
-      <button class="btn btn-secondary" onclick="closeModal()">Annulla</button>
-      ${isEdit ? `<button class="btn btn-danger" onclick="askDeleteEvent('${currentEventId}')">🗑️ Elimina</button>` : ''}
-      <button class="btn btn-primary" onclick="submitEventForm()">${isEdit ? '💾 Salva modifiche' : '＋ Crea evento'}</button>`;
+      <button class="btn btn-secondary" onclick="closeModal()">${_t('cal.form.btn.cancel')}</button>
+      ${isEdit ? `<button class="btn btn-danger" onclick="askDeleteEvent('${currentEventId}')">${_t('cal.form.btn.delete')}</button>` : ''}
+      <button class="btn btn-primary" onclick="submitEventForm()">${isEdit ? _t('cal.form.btn.save_edit') : _t('cal.form.btn.save_new')}</button>`;
 
     document.getElementById('event-modal').classList.add('open');
     onRecurTypeChange(recurType);
@@ -1550,9 +1621,9 @@ function onRecurTypeChange(val) {
 }
 
 function buildReminderRows(reminders) {
-    return reminders.map((r, i) => {
-        const opts = REMINDER_OPTIONS.map(o =>
-            `<option value="${o.val}"${r.offsetMinutes===o.val?' selected':''}>${o.label}</option>`
+    return reminders.map((r) => {
+        const opts = REMINDER_VALS.map(val =>
+            `<option value="${val}"${r.offsetMinutes===val?' selected':''}>${getReminderLabel(val)}</option>`
         ).join('');
         return `<div class="reminder-row">
           <select class="reminder-select">${opts}</select>
@@ -1563,7 +1634,7 @@ function buildReminderRows(reminders) {
 
 function addReminder() {
     const list = document.getElementById('reminder-list');
-    const opts = REMINDER_OPTIONS.map(o => `<option value="${o.val}">${o.label}</option>`).join('');
+    const opts = REMINDER_VALS.map(val => `<option value="${val}">${getReminderLabel(val)}</option>`).join('');
     const row = document.createElement('div');
     row.className = 'reminder-row';
     row.innerHTML = `<select class="reminder-select">${opts}</select>
@@ -1579,8 +1650,8 @@ async function submitEventForm() {
     const date  = document.getElementById('f-date').value;
     const eventType = document.getElementById('f-type').value;
 
-    if (!title) { alert('Il titolo è obbligatorio.'); return; }
-    if (!date)  { alert('La data è obbligatoria.'); return; }
+    if (!title) { alert(_t('cal.form.val.title')); return; }
+    if (!date)  { alert(_t('cal.form.val.date')); return; }
 
     const allDay = document.getElementById('f-allday').checked;
     const startTime = allDay ? '00:00' : (document.getElementById('f-start-time').value || '00:00');
@@ -1632,14 +1703,14 @@ async function submitEventForm() {
 
     try {
         const btn = document.querySelector('#modal-footer .btn-primary');
-        if (btn) { btn.disabled = true; btn.textContent = 'Salvataggio…'; }
+        if (btn) { btn.disabled = true; btn.textContent = _t('cal.form.btn.saving'); }
         const res = await fetch(url, { method, headers: apiHeaders(), body: JSON.stringify(payload) });
         const data = await res.json();
-        if (!data.success) { showError(data.error || 'Errore nel salvataggio.'); if(btn){btn.disabled=false;btn.textContent=currentEventId?'💾 Salva modifiche':'＋ Crea evento';} return; }
+        if (!data.success) { showError(data.error || _t('cal.form.err.save')); if(btn){btn.disabled=false;btn.textContent=currentEventId?_t('cal.form.btn.save_edit'):_t('cal.form.btn.save_new');} return; }
         closeModal();
         await loadUpcoming();
         if (currentView !== 'today') setView(currentView);
-    } catch(e) { showError('Errore di rete.'); }
+    } catch(e) { showError(_t('cal.error.network')); }
 }
 
 // =========================================================================
@@ -1659,7 +1730,7 @@ document.getElementById('event-modal').addEventListener('click', e => {
 function showConfirm(title, msg, cb, okLabel) {
     document.getElementById('confirm-title').textContent = title;
     document.getElementById('confirm-msg').textContent = msg;
-    document.getElementById('confirm-ok-btn').textContent = okLabel || 'Conferma';
+    document.getElementById('confirm-ok-btn').textContent = okLabel || _t('cal.confirm.ok');
     confirmCallback = cb;
     document.getElementById('confirm-overlay').classList.add('open');
 }
@@ -1699,7 +1770,7 @@ async function loadNotifications() {
 function renderNotifList(notifs) {
     const el = document.getElementById('notif-list');
     if (notifs.length === 0) {
-        el.innerHTML = '<div class="empty-state"><div class="empty-icon">🔔</div>Nessuna notifica recente.</div>';
+        el.innerHTML = `<div class="empty-state"><div class="empty-icon">🔔</div>${_t('cal.notif.empty')}</div>`;
         return;
     }
     el.innerHTML = notifs.map(n => {
@@ -1710,8 +1781,8 @@ function renderNotifList(notifs) {
           <div class="notif-item-msg">${esc(msg)}</div>
           <div class="notif-item-time">${ago}</div>
           <div class="notif-item-actions">
-            ${!n.read ? `<button class="notif-item-btn" onclick="markRead('${n.id}')">Segna letta</button>` : ''}
-            <button class="notif-item-btn" onclick="dismissNotif('${n.id}')">Ignora</button>
+            ${!n.read ? `<button class="notif-item-btn" onclick="markRead('${n.id}')">${_t('cal.notif.markRead')}</button>` : ''}
+            <button class="notif-item-btn" onclick="dismissNotif('${n.id}')">${_t('cal.notif.dismiss')}</button>
           </div>
         </div>`;
     }).join('');
@@ -1719,19 +1790,26 @@ function renderNotifList(notifs) {
 
 function buildNotifMessage(n) {
     const tc = EVENT_TYPES[n.eventType] || { icon: '📌' };
-    const when = n.eventStartTime ? `alle ${n.eventStartTime}` : '';
-    if (n.offsetMinutes === 0) return `${tc.icon} ${n.eventTitle} inizia ora ${when}`;
-    if (n.offsetMinutes < 60)  return `${tc.icon} ${n.eventTitle} inizia in ${n.offsetMinutes} min ${when}`;
-    if (n.offsetMinutes < 1440) return `${tc.icon} ${n.eventTitle} inizia in ${Math.round(n.offsetMinutes/60)}h ${when}`;
-    return `${tc.icon} ${n.eventTitle} domani ${when}`;
+    const when = n.eventStartTime ? ` ${_t('cal.notif.msg.at')} ${n.eventStartTime}` : '';
+    let phrase;
+    if (n.offsetMinutes === 0) {
+        phrase = _t('cal.notif.msg.now');
+    } else if (n.offsetMinutes < 60) {
+        phrase = _tt('cal.notif.msg.minutes', { n: n.offsetMinutes });
+    } else if (n.offsetMinutes < 1440) {
+        phrase = _tt('cal.notif.msg.hours', { n: Math.round(n.offsetMinutes / 60) });
+    } else {
+        phrase = _t('cal.notif.msg.tomorrow');
+    }
+    return `${tc.icon} ${n.eventTitle} ${phrase}${when}`;
 }
 
 function formatTimeAgo(ms) {
     const diff = Math.floor((Date.now() - ms) / 60000);
-    if (diff < 1) return 'Adesso';
-    if (diff < 60) return `${diff} min fa`;
-    if (diff < 1440) return `${Math.floor(diff/60)}h fa`;
-    return `${Math.floor(diff/1440)} giorni fa`;
+    if (diff < 1)    return _t('cal.timeago.now');
+    if (diff < 60)   return _tt('cal.timeago.min', { n: diff });
+    if (diff < 1440) return _tt('cal.timeago.h', { n: Math.floor(diff / 60) });
+    return _tt('cal.timeago.days', { n: Math.floor(diff / 1440) });
 }
 
 async function markRead(id) {
@@ -1765,7 +1843,7 @@ function toggleNotifDrawer() {
 function onTtsToggle(enabled) {
     ttsEnabled = enabled;
     localStorage.setItem('calendar_tts', enabled ? '1' : '0');
-    document.getElementById('tts-status').textContent = enabled ? 'Attivato' : 'Disattivato';
+    document.getElementById('tts-status').textContent = enabled ? _t('cal.tts.on') : _t('cal.tts.off');
     if (!enabled) { speechSynthesis.cancel(); }
 }
 
@@ -1778,7 +1856,7 @@ function speakNotifications(notifs) {
         ttsSpoken.add(key);
         const msg = buildNotifMessage(n);
         const utt = new SpeechSynthesisUtterance(msg);
-        utt.lang = 'it-IT';
+        utt.lang = calLocale();
         utt.rate = 1.0;
         speechSynthesis.speak(utt);
     }
@@ -1791,17 +1869,17 @@ function checkTTS(data) {
     [...upcoming, ...urgent].forEach(ev => {
         const key = `tts_${ev.id}_${ev.date}`;
         if (ttsSpoken.has(key)) return;
-        const tc = EVENT_TYPES[ev.eventType] || { label: 'Evento' };
+        const tc = EVENT_TYPES[ev.eventType] || { labelKey: 'cal.etype.other' };
         const startMs = localToUTCMs(ev.date, ev.startTime || '00:00');
         const diffMin = Math.round((startMs - nowMs()) / 60000);
         if (diffMin <= 0 || diffMin > 120) return;
         ttsSpoken.add(key);
         const msg = diffMin <= 5
-            ? `Attenzione: ${ev.title} inizia tra pochi minuti.`
-            : `Promemoria: ${ev.title} inizia tra ${diffMin} minuti.`;
+            ? _tt('cal.tts.msg.imminent', { title: ev.title })
+            : _tt('cal.tts.msg.upcoming', { title: ev.title, n: diffMin });
         if (window.speechSynthesis) {
             const utt = new SpeechSynthesisUtterance(msg);
-            utt.lang = 'it-IT';
+            utt.lang = calLocale();
             speechSynthesis.speak(utt);
         }
     });
