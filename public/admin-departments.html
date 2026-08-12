@@ -157,6 +157,16 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 .form-inline-err{font-size:12px;color:var(--danger);margin-top:6px;
   display:none;background:rgba(220,38,38,.06);border:1px solid rgba(220,38,38,.15);
   border-radius:6px;padding:6px 10px;}
+
+/* ── DEPARTMENT TYPE SELECTOR ───────────── */
+.type-radios{display:flex;gap:18px;align-items:center;padding:4px 0 2px;}
+.type-radio-opt{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;
+  cursor:pointer;color:var(--text);user-select:none;}
+.type-radio-opt input[type=radio]{accent-color:var(--accent);width:15px;height:15px;
+  cursor:pointer;flex-shrink:0;}
+.type-help{font-size:12px;color:var(--muted);margin-top:8px;padding:8px 11px;
+  background:rgba(79,70,229,.05);border:1px solid rgba(79,70,229,.18);
+  border-radius:7px;line-height:1.5;}
 </style>
 </head>
 <body>
@@ -362,11 +372,12 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
                 acctBtns   = `<button class="btn btn-sm btn-primary" onclick="openCreate('${d.id}')">${_t('admin.createAccount')}</button>`;
             }
 
-            // Department active/inactive + delete
+            // Department active/inactive + type + delete
             const canDelete = !d.usedInCountdowns;
             const deptBtns = `
                 <button class="btn btn-sm btn-neutral"
                     onclick="toggleDept('${d.id}',${!d.active})">${d.active ? _t('admin.deactivate') : _t('admin.activate')}</button>
+                <button class="btn btn-sm btn-neutral" onclick="openTypeChange('${d.id}')" title="${_t('admin.typeLabel')}">${_t('admin.typeChange')}</button>
                 ${canDelete
                     ? `<button class="btn btn-sm btn-danger" onclick="deleteDept('${d.id}')">${_t('admin.delete')}</button>`
                     : `<button class="btn btn-sm btn-danger" disabled title="${_t('admin.alreadyInUse')}">${_t('admin.delete')}</button>`}`;
@@ -532,6 +543,99 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
             await loadAll();
         } else {
             showError(data.error || 'Errore.');
+        }
+    }
+
+    // ── Department type change ────────────────────────────────────────
+    function openTypeChange(deptId) {
+        const dept = departments.find(d => d.id === deptId);
+        if (!dept) return;
+        if (editingId === deptId) { closeForm(); return; }
+        closeForm();
+        editingId = deptId;
+        const currentType = dept.departmentType === 'CENTRAL' ? 'CENTRAL' : 'STANDARD';
+        document.getElementById(`form-cell-${deptId}`).innerHTML = `
+            <div class="acct-form" style="align-items:flex-start">
+              <div class="acct-form-group" style="flex:2">
+                <label>${_t('admin.typeLabel')}</label>
+                <div class="type-radios">
+                  <label class="type-radio-opt">
+                    <input type="radio" name="dtype-${deptId}" value="STANDARD"
+                           ${currentType === 'STANDARD' ? 'checked' : ''}
+                           onchange="onTypeRadioChange('${deptId}')"> ${_t('admin.typeStandard')}
+                  </label>
+                  <label class="type-radio-opt">
+                    <input type="radio" name="dtype-${deptId}" value="CENTRAL"
+                           ${currentType === 'CENTRAL' ? 'checked' : ''}
+                           onchange="onTypeRadioChange('${deptId}')"> ${_t('admin.typeCentral')}
+                  </label>
+                </div>
+                <div id="type-help-${deptId}" class="type-help"
+                     style="display:${currentType === 'CENTRAL' ? 'block' : 'none'}">${_t('admin.typeHelp')}</div>
+              </div>
+              <div class="acct-form-btns">
+                <button class="btn btn-sm btn-primary" onclick="submitTypeChange('${deptId}')">${_t('admin.save')}</button>
+                <button class="btn btn-sm btn-neutral" onclick="closeForm()">${_t('common.cancel')}</button>
+              </div>
+            </div>
+            <div id="form-err-${deptId}" class="form-inline-err"></div>`;
+        document.getElementById(`form-row-${deptId}`).style.display = '';
+    }
+
+    function onTypeRadioChange(deptId) {
+        const sel = document.querySelector(`input[name="dtype-${deptId}"]:checked`);
+        const help = document.getElementById(`type-help-${deptId}`);
+        if (help) help.style.display = (sel && sel.value === 'CENTRAL') ? 'block' : 'none';
+    }
+
+    async function submitTypeChange(deptId) {
+        const dept = departments.find(d => d.id === deptId);
+        if (!dept) return;
+        const sel = document.querySelector(`input[name="dtype-${deptId}"]:checked`);
+        if (!sel) return;
+        const newType = sel.value;
+        hideFormErr(deptId);
+
+        // Nothing to do if type didn't change
+        const currentType = dept.departmentType === 'CENTRAL' ? 'CENTRAL' : 'STANDARD';
+        if (newType === currentType) { closeForm(); return; }
+
+        // Helper: PUT with status returned
+        const doSetType = async (targetId, type) => {
+            const res = await fetch(`/api/departments/${targetId}/type`, {
+                method: 'PUT',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ departmentType: type })
+            });
+            return { status: res.status, data: await res.json() };
+        };
+
+        let result = await doSetType(deptId, newType);
+
+        if (result.status === 409) {
+            // Another CENTRAL exists — offer to replace it
+            const existing = departments.find(d => d.id !== deptId && d.departmentType === 'CENTRAL');
+            const existingName = existing ? existing.name : '?';
+            const confirmMsg = _t('admin.typeReplaceConfirm')
+                .replace('{existing}', existingName)
+                .replace('{new}', dept.name);
+            if (!confirm(confirmMsg)) return;
+            // Step 1: demote the existing CENTRAL to STANDARD
+            const demote = await doSetType(existing.id, 'STANDARD');
+            if (!demote.data.success) {
+                showFormErr(deptId, demote.data.error || 'Errore.');
+                return;
+            }
+            // Step 2: promote the target to CENTRAL
+            result = await doSetType(deptId, 'CENTRAL');
+        }
+
+        if (result.data && result.data.success) {
+            editingId = null;
+            showSuccess(_t('admin.typeSaved'));
+            await loadAll();
+        } else {
+            showFormErr(deptId, (result.data && result.data.error) || 'Errore.');
         }
     }
 
