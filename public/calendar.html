@@ -723,7 +723,64 @@ document.addEventListener('DOMContentLoaded', () => {
     // Auto-refresh upcoming every 2 minutes
     setInterval(loadUpcoming, 120000);
     setInterval(loadNotifications, 60000);
+
+    // [T35] Live calendar updates via WebSocket.
+    // Connects using the stored session token (works for both legacy and
+    // service/department-account sessions).  CENTRAL dept-account sockets are
+    // delivered calendar broadcasts by the server; this handler refreshes the
+    // current view so the user sees changes without a manual page reload.
+    initCalendarWs();
 });
+
+// =========================================================================
+// WEBSOCKET — live calendar updates
+// =========================================================================
+let _calWs = null;
+let _calWsReconnectTimer = null;
+
+function initCalendarWs() {
+    const token = WsAuth.getStoredToken();
+    if (!token) return; // no session — skip (page will redirect on next fetch)
+
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const ws = new WebSocket(`${proto}//${location.host}/ws`);
+    _calWs = ws;
+
+    ws.addEventListener('open', () => {
+        ws.send(JSON.stringify({ action: 'joinRoom', token }));
+    });
+
+    ws.addEventListener('message', evt => {
+        let msg;
+        try { msg = JSON.parse(evt.data); } catch { return; }
+        handleCalendarWsMessage(msg);
+    });
+
+    ws.addEventListener('close', () => {
+        _calWs = null;
+        // Reconnect after 5 s — keeps the view live after transient disconnects
+        clearTimeout(_calWsReconnectTimer);
+        _calWsReconnectTimer = setTimeout(initCalendarWs, 5000);
+    });
+
+    ws.addEventListener('error', () => {
+        // 'close' fires after 'error'; reconnect is handled there
+    });
+}
+
+function handleCalendarWsMessage(msg) {
+    const refreshing = ['calendarEventCreated', 'calendarEventUpdated',
+                        'calendarEventDeleted', 'calendarEventCompleted',
+                        'calendarEventCancelled'];
+    if (!refreshing.includes(msg.action)) return;
+
+    // Refresh whichever view is currently active
+    loadUpcoming(); // always refresh stats + today view
+    loadNotifications();
+    if (currentView === 'agenda') loadAgenda();
+    if (currentView === 'week')   loadWeek();
+    if (currentView === 'month')  loadMonth();
+}
 
 // =========================================================================
 // DEPARTMENTS

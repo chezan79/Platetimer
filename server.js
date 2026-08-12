@@ -1605,8 +1605,28 @@ function broadcastCalendarEvent(companyId, action, payload) {
     if (!companyRooms || !companyRooms.has(companyId)) return;
     const room = companyRooms.get(companyId);
     const msg = JSON.stringify({ action, ...payload });
+    // [T35] Calendar access is restricted to CENTRAL department accounts (requireCalendarAccess).
+    // WS delivery must mirror that guard with a **live** authorization check so that
+    // an account whose status or department changes after joinRoom is immediately excluded:
+    //
+    //   • Unbound (legacy) sockets — always receive (backward-compatible).
+    //   • Bound sockets            — re-evaluated against the current store at each broadcast:
+    //       – account must still exist and be ACTIVE
+    //       – assigned department must exist, still be active, and be type CENTRAL
+    //       Any of these failing means the socket is no longer authorized and is skipped.
     room.forEach(client => {
-        if (client.readyState === 1) client.send(msg);
+        if (client.readyState !== 1) return;
+        if (!client.boundDepartmentId) { client.send(msg); return; } // unbound legacy: always deliver
+
+        // Live authorization check — do not trust values cached at joinRoom time
+        const liveAcct = departmentAccounts.findDepartmentAccountById(client.departmentAccountId);
+        if (!liveAcct || liveAcct.status !== 'ACTIVE') return; // account gone or suspended
+
+        const liveDept = getCompanyDepts(companyId).find(d => d.id === client.boundDepartmentId);
+        if (!liveDept || !liveDept.active) return;                   // dept deactivated
+        if (departmentAccounts.getDepartmentType(liveDept) !== 'CENTRAL') return; // demoted to STANDARD
+
+        client.send(msg);
     });
 }
 
@@ -4463,9 +4483,13 @@ wss.on('connection', (ws, req) => {
                     ws.departmentAccountStatus = wsBoundAcct.status;
                     const wsBoundDept = getCompanyDepts(companyName).find(d => d.id === wsBoundAcct.departmentId);
                     ws.boundDepartmentName = wsBoundDept ? wsBoundDept.name : null;
+                    // [T35] Store the department type so broadcast filters can use it
+                    // without a separate lookup. Derived from the department record
+                    // (never from the account) — same source as requireCalendarAccess.
+                    ws.boundDepartmentType = departmentAccounts.getDepartmentType(wsBoundDept || null);
                     // Pre-lock pageType so joinPage cannot override it
                     ws.pageType = wsBoundAcct.departmentId;
-                    console.log(`🔒 [S1.5] WS socket locked to dept "${ws.boundDepartmentId}" (${ws.boundDepartmentName}), company="${companyName}"`);
+                    console.log(`🔒 [S1.5] WS socket locked to dept "${ws.boundDepartmentId}" (${ws.boundDepartmentName}, type=${ws.boundDepartmentType}), company="${companyName}"`);
                 }
 
                 // Rimuovi il client dalla room precedente se esistente
