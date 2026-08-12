@@ -968,8 +968,24 @@ async function loadDepts(){
   }
 }
 
-function buildDestList(){
-  const others = Object.values(departmentMap).filter(d => d.active && d.id !== myDeptId);
+async function buildDestList(){
+  // Bound department accounts only get their own dept from /api/departments (S1.4),
+  // so fetch the lightweight recipients directory (active depts of the session's
+  // company, server-resolved) to list sibling departments as countdown destinations.
+  let others = [];
+  try {
+    const r = await fetch('/api/voice-recipients', { headers:{ Authorization:`Bearer ${token}` } });
+    const d = await r.json();
+    if (d.success && Array.isArray(d.recipients)) {
+      others = d.recipients.filter(x => x.id !== myDeptId);
+    }
+  } catch(e) {
+    console.error('countdown destinations:', e);
+  }
+  if (!others.length) {
+    // Fallback: legacy behaviour from the departments map (unbound sessions).
+    others = Object.values(departmentMap).filter(d => d.active && d.id !== myDeptId);
+  }
   const el = document.getElementById('dest-list');
   if(!others.length){
     el.innerHTML = '<div class="no-dests">Nessun altro reparto attivo.</div>';
