@@ -2440,26 +2440,43 @@ app.post('/api/operations/users', async (req, res) => {
             toName: name,
             role,
             invitedByName: ctx.opsUser.name,
-            activationUrl
+            activationUrl,
+            userId: user.id
         });
     } catch (e) {
         console.error('📧 [OPS-EMAIL] invite email unexpected error (non-fatal):', e.message);
     }
-    console.log(`📧 [OPS] Invitation email result: ${emailResult.result} (transport: ${emailResult.transport}) for ${email}`);
+    console.log(`📧 [OPS] Invitation email result: ${emailResult.result} (transport: ${emailResult.transport}) for ${email} (userId: ${user.id})`);
 
+    const emailStatus = opsInviteEmailStatus(emailResult);
     broadcastOps(companyId, { action: 'OPS_USER_CREATED', user: publicOpsUser(user) });
     res.status(201).json({
         success: true,
         user: { ...publicOpsUser(user), inviteCode: user.inviteCode },
         activationUrl: activationPath,       // relative path — always safe to return to Director
         emailResult: emailResult.result,     // SENT | FAILED
-        emailNote: emailResult.result === opsEmail.RESULT.SENT
-            ? 'Email di invito inviata.'
-            : (opsEmail.TRANSPORT === 'logging'
-                ? 'Nessun provider email configurato: condividi manualmente il link di attivazione.'
-                : 'Invio email non riuscito: condividi manualmente il link di attivazione.')
+        emailStatus,                         // SENT | MISSING_EMAIL_CONFIG | PROVIDER_ERROR | SEND_FAILED
+        emailNote: opsInviteEmailNote(emailStatus)
     });
 });
+
+// ── Invitation email outcome mapping ─────────────────────────────────────────
+// Distinguishes: sent / missing configuration / provider error / generic failure.
+// (Duplicate invitation and already-active cases are rejected before any send.)
+function opsInviteEmailStatus(emailResult) {
+    if (emailResult.result === opsEmail.RESULT.SENT) return 'SENT';
+    if (emailResult.transport === 'logging') return 'MISSING_EMAIL_CONFIG';
+    if (emailResult.transport === 'resend' && emailResult.statusCode) return 'PROVIDER_ERROR';
+    return 'SEND_FAILED';
+}
+function opsInviteEmailNote(emailStatus) {
+    switch (emailStatus) {
+        case 'SENT': return 'Email di invito inviata.';
+        case 'MISSING_EMAIL_CONFIG': return 'Nessun provider email configurato: condividi manualmente il link di attivazione.';
+        case 'PROVIDER_ERROR': return 'Errore del provider email: condividi manualmente il link di attivazione.';
+        default: return 'Invio email non riuscito: condividi manualmente il link di attivazione.';
+    }
+}
 
 // ── POST /api/operations/users/:id/resend-invite — Director only: resend invitation email ──
 // Rules: Director only, same company, invitation still INVITED status, no new user, no role/company change.
@@ -2488,19 +2505,22 @@ app.post('/api/operations/users/:id/resend-invite', async (req, res) => {
             toName: target.name,
             role: target.role,
             invitedByName: ctx.opsUser.name,
-            activationUrl
+            activationUrl,
+            userId: target.id
         });
     } catch (e) {
         console.error('📧 [OPS-EMAIL] resend invite unexpected error (non-fatal):', e.message);
     }
-    console.log(`📧 [OPS] Resend invite result: ${emailResult.result} → ${target.email} by Director ${ctx.opsUser.id}`);
+    console.log(`📧 [OPS] Resend invite result: ${emailResult.result} → ${target.email} (userId: ${target.id}) by Director ${ctx.opsUser.id}`);
 
+    const emailStatus = opsInviteEmailStatus(emailResult);
     res.json({
         success: true,
         emailResult: emailResult.result,
-        emailNote: emailResult.result === opsEmail.RESULT.SENT
+        emailStatus,
+        emailNote: emailStatus === 'SENT'
             ? 'Email di invito reinviata.'
-            : 'Reinvio email non riuscito. Condividi il link manualmente.',
+            : opsInviteEmailNote(emailStatus),
         activationUrl: activationPath
     });
 });
