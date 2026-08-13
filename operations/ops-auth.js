@@ -110,18 +110,22 @@ function allowedAssignees(actor, companyUsers) {
 // Validate that a Firebase account may activate an invitation.
 // fbUser: record from Firebase accounts:lookup ({ localId, email, emailVerified }).
 // invitation: server-side ops user record with status INVITED.
-// [SECURITY] Requires a VERIFIED email that matches the invitation exactly —
-// anyone can create an unverified Firebase account for any address, so an
-// unverified match must never grant the invited role (account-takeover risk).
+// [SECURITY] The invite code (single-use, Director-generated, 32-byte random hex)
+// is the primary security proof. The email match (Firebase account email ===
+// invitation email) is the secondary check that prevents a code-holder from
+// binding a different Firebase account to the slot.
+// emailVerified is NOT required for activation: in the Director-link onboarding
+// flow the Director manually entered the email address, so ownership is already
+// vetted out-of-band. Requiring Firebase email verification blocked the intended
+// workflow without meaningful security gain (an attacker still needs the invite
+// code, which is already unforgeable and single-use).
+// The repair-binding endpoint retains its emailVerified requirement separately.
 function validateActivationAccount(fbUser, invitation) {
     if (!fbUser || !fbUser.localId) return { ok: false, code: 401, error: 'Token Firebase non valido.' };
     if (!invitation || invitation.status !== 'INVITED') return { ok: false, code: 404, error: 'Invito non valido o già utilizzato.' };
     const fbEmail = (fbUser.email || '').toLowerCase();
     if (!fbEmail || fbEmail !== invitation.email) {
         return { ok: false, code: 403, error: 'L\'email dell\'account non corrisponde all\'invito.' };
-    }
-    if (fbUser.emailVerified !== true) {
-        return { ok: false, code: 403, error: 'Devi prima verificare la tua email: controlla la casella di posta e clicca il link di verifica, poi riprova.' };
     }
     return { ok: true };
 }

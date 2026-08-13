@@ -78,14 +78,14 @@ async function loadInvitation() {
 
 // After Firebase auth: write users/{uid} profile (company FIXED by the server-side
 // invitation — the invitee never chooses it), then bind uid to the invitation.
-// [SECURITY] The server requires a VERIFIED email — if not verified yet, we send
-// the verification email and let the user retry after clicking the link.
+// emailVerified is NOT required to complete activation: the invite code (single-use,
+// Director-generated) is the security proof. A verification email is sent as
+// background hygiene but activation proceeds immediately without waiting for it.
 async function finishActivation(user) {
   await user.reload();
   if (!user.emailVerified) {
-    try { await sendEmailVerification(user); } catch (e) { /* rate-limited resend is fine */ }
-    showVerifyStep(user);
-    return;
+    // Fire-and-forget: good hygiene, does not block the activation flow.
+    try { sendEmailVerification(user).catch(() => {}); } catch (_) {}
   }
   const idToken = await user.getIdToken(true);
 

@@ -2821,11 +2821,12 @@ app.post('/api/operations/activate', async (req, res) => {
         }
 
         // [IDEMPOTENCY] If this uid is already bound to an ACTIVE ops record for the
-        // same (verified) email, a retry after a partially-failed activation must
-        // succeed instead of erroring with "invito già utilizzato".
+        // same email, a retry after a partially-failed activation must succeed instead
+        // of erroring with "invito già utilizzato". emailVerified is NOT required here
+        // (consistent with validateActivationAccount — the invite code is the proof).
         const alreadyBound = findOpsUserByUid(uid);
         if (!invited && alreadyBound && alreadyBound.status === 'ACTIVE'
-            && alreadyBound.email && fbUser.emailVerified === true
+            && alreadyBound.email
             && alreadyBound.email === (fbUser.email || '').toLowerCase()) {
             console.log(`✅ [OPS] Activation retry — uid=${uid} already ACTIVE in "${alreadyBound.companyId}" (idempotent success)`);
             return res.json({ success: true, companyId: alreadyBound.companyId, role: alreadyBound.role, alreadyActive: true });
