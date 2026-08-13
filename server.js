@@ -2763,12 +2763,19 @@ app.delete('/api/operations/users/:id', (req, res) => {
     if (!opsAuth.canDeleteOpsUser(ctx.opsUser, user)) {
         return res.status(403).json({ error: 'Non puoi eliminare questo utente.' });
     }
-    const hasDeps = opsAuth.hasUserDependencies(user.id, getOpsTasks(companyId), getOpsTemplates(companyId));
-    if (hasDeps) {
-        return res.status(409).json({
-            error: 'Questo utente possiede dati storici. Archivialo invece di eliminarlo.',
-            suggestArchive: true
-        });
+    // Dependency check only applies to non-ARCHIVED users.
+    // An ARCHIVED user has already been committed for removal by the Director;
+    // historical task references (assigneeId, createdBy, comments, history) become
+    // orphaned — the standard "deleted user" pattern. Suggesting "archive him instead"
+    // is semantically wrong when the user is already ARCHIVED and creates a UI dead-end.
+    if (user.status !== 'ARCHIVED') {
+        const hasDeps = opsAuth.hasUserDependencies(user.id, getOpsTasks(companyId), getOpsTemplates(companyId));
+        if (hasDeps) {
+            return res.status(409).json({
+                error: 'Questo utente possiede dati storici. Archivialo invece di eliminarlo.',
+                suggestArchive: true
+            });
+        }
     }
     const hadFirebaseAccount = !!user.uid;
     opsUsersStore[companyId].splice(idx, 1);
