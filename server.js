@@ -231,9 +231,24 @@ function verifySessionToken(token) {
     }
 }
 
-// Verify a Firebase ID token via Firebase REST API (no Admin SDK required).
-// Returns the Firebase uid or null on failure.
-async function verifyFirebaseIdToken(idToken) {
+// ── Firebase account lookup ──────────────────────────────────────────────
+// Resolve a Firebase ID token to the full account record ({ localId, email,
+// emailVerified, ... }) via the Firebase REST API. Returns null on failure.
+//
+// [TEST ONLY] When TEST_FIREBASE_AUTH_MOCK=1 (never set in production), a
+// token of the form "mockfb.<base64 JSON>" is decoded locally so the test
+// suite can exercise auth flows without real Firebase accounts.
+const TEST_FIREBASE_AUTH_MOCK = process.env.TEST_FIREBASE_AUTH_MOCK === '1';
+if (TEST_FIREBASE_AUTH_MOCK) console.warn('🧪 [TEST] TEST_FIREBASE_AUTH_MOCK enabled — mock Firebase tokens accepted. NEVER use in production.');
+
+async function lookupFirebaseAccount(idToken) {
+    if (TEST_FIREBASE_AUTH_MOCK && typeof idToken === 'string' && idToken.startsWith('mockfb.')) {
+        try {
+            const u = JSON.parse(Buffer.from(idToken.slice(7), 'base64').toString('utf8'));
+            if (!u || !u.localId) return null;
+            return { localId: u.localId, email: u.email || null, emailVerified: u.emailVerified === true, _mockCompany: u.company };
+        } catch { return null; }
+    }
     try {
         const response = await fetch(
             `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${FIREBASE_API_KEY}`,
@@ -246,16 +261,28 @@ async function verifyFirebaseIdToken(idToken) {
         if (!response.ok) return null;
         const data = await response.json();
         if (!data.users || data.users.length === 0) return null;
-        return data.users[0].localId; // Firebase uid
+        return data.users[0];
     } catch (err) {
-        console.error('❌ [SECURITY] Firebase ID token verification error:', err.message);
+        console.error('❌ [SECURITY] Firebase account lookup error:', err.message);
         return null;
     }
+}
+
+// Verify a Firebase ID token via Firebase REST API (no Admin SDK required).
+// Returns the Firebase uid or null on failure.
+async function verifyFirebaseIdToken(idToken) {
+    const fbUser = await lookupFirebaseAccount(idToken);
+    return fbUser ? fbUser.localId : null;
 }
 
 // Fetch the user's company name from Firestore using their own ID token.
 // This is authoritative — the company comes from the database, not from the client.
 async function getCompanyFromFirestore(uid, idToken) {
+    // [TEST ONLY] Mock company lookup for the test suite (see lookupFirebaseAccount).
+    if (TEST_FIREBASE_AUTH_MOCK && typeof idToken === 'string' && idToken.startsWith('mockfb.')) {
+        const fbUser = await lookupFirebaseAccount(idToken);
+        return (fbUser && fbUser._mockCompany) || null;
+    }
     try {
         const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/users/${uid}`;
         const response = await fetch(url, {
@@ -484,7 +511,16 @@ app.post('/api/auth/session', async (req, res) => {
             const opsCompany = String(opsRecord.companyId).trim().toLowerCase();
             const opsToken = signSessionToken(uid, opsCompany);
             console.log(`✅ [SECURITY] Session token issued from Operations record: uid=${uid}, company="${opsCompany}"`);
-            return res.json({ success: true, token: opsToken, companyName: opsCompany });
+            // isOperations lets the client route Operations-only accounts (which may
+            // have no Firestore users/{uid} document) to the Operations role router.
+            return res.json({
+                success: true,
+                token: opsToken,
+                companyName: opsCompany,
+                isOperations: true,
+                opsRole: opsRecord.role,
+                opsStatus: opsRecord.status
+            });
         }
 
         // [SECURITY] Step 2b: Otherwise fetch company name from Firestore using the
@@ -2469,6 +2505,97 @@ app.post('/api/operations/users/:id/resend-invite', async (req, res) => {
     });
 });
 
+// ── Firebase Auth admin lookup by email (repair path) ─────────────────────
+// Uses the Admin SDK when FIREBASE_ADMIN_SERVICE_ACCOUNT is configured.
+// [TEST ONLY] When TEST_FIREBASE_AUTH_MOCK=1, reads DATA_DIR/mock-firebase-users.json
+// (array of { localId, email, emailVerified }) so tests can exercise repair.
+async function adminFindFirebaseUserByEmail(email) {
+    if (TEST_FIREBASE_AUTH_MOCK) {
+        try {
+            const list = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'mock-firebase-users.json'), 'utf8'));
+            const u = (list || []).find(x => (x.email || '').toLowerCase() === email);
+            return u ? { uid: u.localId, email: u.email, emailVerified: u.emailVerified === true } : null;
+        } catch { return null; }
+    }
+    if (!adminGetApps().length) {
+        const err = new Error('Firebase Admin non configurato (FIREBASE_ADMIN_SERVICE_ACCOUNT mancante).');
+        err.adminUnavailable = true;
+        throw err;
+    }
+    const { getAuth: adminGetAuth } = require('firebase-admin/auth');
+    try {
+        const rec = await adminGetAuth().getUserByEmail(email);
+        return { uid: rec.uid, email: rec.email, emailVerified: rec.emailVerified === true };
+    } catch (e) {
+        if (e && (e.code === 'auth/user-not-found')) return null;
+        throw e;
+    }
+}
+
+// ── POST /api/operations/users/:id/repair-binding — Director only ──
+// Safe, idempotent, NON-destructive repair for accounts stuck INVITED/uid=null:
+// matches the invitation email to an existing Firebase Auth user with the exact
+// same VERIFIED email, binds the uid and activates the record.
+// Body: { dryRun: true } reports what would happen without writing anything.
+// Never runs automatically; refuses ambiguous or unverified matches.
+app.post('/api/operations/users/:id/repair-binding', async (req, res) => {
+    const ctx = requireOpsAuth(req, res);
+    if (!ctx) return;
+    if (!opsAuth.canManageUsers(ctx.opsUser)) {
+        return res.status(403).json({ error: 'Solo il Direttore può riparare gli account.' });
+    }
+    const companyId = ctx.opsUser.companyId;
+    const target = getOpsUsers(companyId).find(u => u.id === req.params.id);
+    if (!target) return res.status(404).json({ error: 'Utente non trovato.' });
+
+    // Idempotency: already bound and active → nothing to do.
+    if (target.status === 'ACTIVE' && target.uid) {
+        return res.json({ success: true, repaired: false, alreadyBound: true, message: 'Account già attivo e collegato — nessuna riparazione necessaria.' });
+    }
+    if (target.status !== 'INVITED' || target.uid) {
+        return res.status(400).json({ error: `Riparazione possibile solo per account INVITED senza uid (stato attuale: ${target.status}).` });
+    }
+    if (!target.email) return res.status(400).json({ error: 'L\'invito non ha un indirizzo email.' });
+
+    let fbMatch;
+    try {
+        fbMatch = await adminFindFirebaseUserByEmail(target.email);
+    } catch (e) {
+        console.error('❌ [OPS-REPAIR] Firebase lookup error:', e.message);
+        return res.status(e.adminUnavailable ? 503 : 500).json({ error: e.adminUnavailable ? e.message : 'Errore durante la ricerca dell\'account Firebase.' });
+    }
+    if (!fbMatch) {
+        return res.status(404).json({ error: 'Nessun account Firebase trovato con questa email. L\'utente deve prima registrarsi o usare il link di attivazione.', repairNeeded: false });
+    }
+    if (fbMatch.emailVerified !== true) {
+        return res.status(403).json({ error: 'L\'account Firebase esiste ma l\'email non è verificata. L\'utente deve verificare l\'email prima della riparazione.' });
+    }
+    // Refuse ambiguous match: uid already bound to another ops record (any company).
+    const existing = findOpsUserByUid(fbMatch.uid);
+    if (existing) {
+        return res.status(409).json({ error: 'Questo account Firebase è già collegato a un altro utente Operations — riparazione rifiutata (match ambiguo).' });
+    }
+
+    if (req.body && req.body.dryRun) {
+        return res.json({
+            success: true, dryRun: true, repaired: false, repairNeeded: true,
+            match: { email: target.email, emailVerified: true },
+            message: 'Match trovato: account Firebase con email verificata. Eseguire senza dryRun per collegare e attivare.'
+        });
+    }
+
+    target.uid = fbMatch.uid;
+    target.status = 'ACTIVE';
+    delete target.inviteCode;
+    target.activatedAt = Date.now();
+    target.repairedAt = Date.now();
+    target.repairedBy = ctx.opsUser.id;
+    saveOpsUsers();
+    console.log(`🔧 [OPS-REPAIR] Binding repaired: ${target.email} → uid bound, ACTIVE (company "${companyId}", by ${ctx.opsUser.id})`);
+    broadcastOps(companyId, { action: 'OPS_INVITATION_ACCEPTED', userId: target.id, role: target.role });
+    res.json({ success: true, repaired: true, user: publicOpsUser(target) });
+});
+
 // ── PUT /api/operations/users/:id — Director only: edit user fields ──
 // Editable: name (all statuses), role (all, not self), email (INVITED only — no Firebase uid yet).
 // Legacy: {active: boolean} still accepted for backwards compat with older clients.
@@ -2682,13 +2809,7 @@ app.post('/api/operations/activate', async (req, res) => {
         if (!code) return res.status(400).json({ error: 'Codice invito mancante.' });
 
         // Verify Firebase token and get uid + email
-        const lookupResp = await fetch(
-            `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${FIREBASE_API_KEY}`,
-            { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ idToken }) }
-        );
-        if (!lookupResp.ok) return res.status(401).json({ error: 'Token Firebase non valido.' });
-        const lookupData = await lookupResp.json();
-        const fbUser = lookupData.users && lookupData.users[0];
+        const fbUser = await lookupFirebaseAccount(idToken);
         if (!fbUser) return res.status(401).json({ error: 'Token Firebase non valido.' });
         const uid = fbUser.localId;
 
@@ -2698,6 +2819,18 @@ app.post('/api/operations/activate', async (req, res) => {
             const u = (opsUsersStore[companyId] || []).find(x => x.inviteCode === code && x.status === 'INVITED');
             if (u) { invited = u; invitedCompany = companyId; break; }
         }
+
+        // [IDEMPOTENCY] If this uid is already bound to an ACTIVE ops record for the
+        // same (verified) email, a retry after a partially-failed activation must
+        // succeed instead of erroring with "invito già utilizzato".
+        const alreadyBound = findOpsUserByUid(uid);
+        if (!invited && alreadyBound && alreadyBound.status === 'ACTIVE'
+            && alreadyBound.email && fbUser.emailVerified === true
+            && alreadyBound.email === (fbUser.email || '').toLowerCase()) {
+            console.log(`✅ [OPS] Activation retry — uid=${uid} already ACTIVE in "${alreadyBound.companyId}" (idempotent success)`);
+            return res.json({ success: true, companyId: alreadyBound.companyId, role: alreadyBound.role, alreadyActive: true });
+        }
+
         // [SECURITY] Centralized activation validation: invitation must exist,
         // token email must match AND be VERIFIED (prevents account takeover via
         // unverified Firebase accounts created for someone else's address).

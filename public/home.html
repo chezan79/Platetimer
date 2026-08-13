@@ -333,7 +333,40 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 
             authCheckComplete = true;
             console.log('✅ Utente autenticato confermato:', user.email);
-            
+
+            // [TASK44] Resolve identity via the trusted server session exchange FIRST.
+            // The server decides from its own records whether this uid is an
+            // Operations member — never from client data or Firestore doc presence.
+            let sessData = null;
+            try {
+                const idToken = await user.getIdToken();
+                const sessResp = await fetch('/api/auth/session', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${idToken}` }
+                });
+                const parsed = await sessResp.json().catch(() => ({}));
+                if (sessResp.ok && parsed.success && parsed.token) {
+                    sessData = parsed;
+                    sessionStorage.setItem('ws_session_token', sessData.token);
+                    // For Operations members the server-resolved company is authoritative.
+                    if (sessData.companyName && (sessData.isOperations || !localStorage.getItem('userCompany'))) {
+                        localStorage.setItem('userCompany', sessData.companyName);
+                        const cn = document.getElementById('company-name');
+                        if (cn) cn.textContent = sessData.companyName;
+                    }
+                    // Operations staff (any role except DIRECTOR, who keeps the Service
+                    // home) → route straight to the Operations role router.
+                    if (sessData.isOperations && sessData.opsRole !== 'DIRECTOR') {
+                        console.log('✅ Account Operations riconosciuto dal server — reindirizzamento a Operations');
+                        if (loadingIndicator && loadingIndicator.parentNode) loadingIndicator.remove();
+                        window.location.href = 'operations.html';
+                        return;
+                    }
+                }
+            } catch (e) {
+                console.warn('⚠️ Scambio sessione server non riuscito (continuo con il flusso legacy):', e.message);
+            }
+
             const userDocRef = doc(db, "users", user.uid);
             try {
                 const userDoc = await getDoc(userDocRef);
@@ -381,9 +414,16 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
                         // [S1.3] Route via identity first — bound accounts redirect directly.
                         resolveIdentityAndRoute();
                     }, 100);
+                } else if (sessData) {
+                    // No Service users/{uid} document but the server issued a valid
+                    // session (e.g. Operations DIRECTOR without a Service profile).
+                    // NOT fatal — continue with normal server-verified routing.
+                    console.warn('⚠️ Documento utente Service non trovato — identità risolta dal server, continuo');
+                    if (loadingIndicator && loadingIndicator.parentNode) loadingIndicator.remove();
+                    resolveIdentityAndRoute();
                 } else {
-                    console.error('❌ Documento utente non trovato');
-                    loadingIndicator.remove();
+                    console.error('❌ Documento utente non trovato e nessuna identità server valida');
+                    if (loadingIndicator && loadingIndicator.parentNode) loadingIndicator.remove();
                     alert('Errore: profilo utente non trovato. Contatta il supporto.');
                     setTimeout(() => {
                         window.location.href = 'index.html';

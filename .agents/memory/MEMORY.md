@@ -31,4 +31,5 @@
 - [Countdown lifecycle & history](countdown-lifecycle.md) — 120s grace via POST_EXPIRY_GRACE_MS; all countdown endings must route through completeCountdown() (idempotent archive + countdownCompleted broadcast).
 - [Operations Sprint 6.4.1 Attachments](ops-sprint6-4-1.md) — multer proxy upload; MOCK_FIREBASE_STORAGE=1 for tests; storagePath server-generated; ?token= download auth; 37 new tests; 1441 total passing.
 - [Central Dept calendar access](central-calendar-access.md) — bound dept-account sessions hit calendar API only if their dept is ACTIVE+CENTRAL (requireCalendarAccess); unbound legacy sessions unchanged.
+- [Operations login & activation](ops-login-activation.md) — session exchange flags isOperations; missing users/{uid} doc is non-fatal; idempotent activate; Director repair-binding; TEST_FIREBASE_AUTH_MOCK hook.
 - [Sibling-dept directory](sibling-dept-directory.md) — /api/voice-recipients is the safe company-wide active-dept directory; both voice AND countdown destination lists build from it (never from S1.4-locked /api/departments).

@@ -439,9 +439,10 @@
                             console.log('✅ Usato nome utente come fallback:', fallbackName);
                         }
                     } else {
-                        console.error('❌ Documento utente non trovato in Firestore');
-                        // Fallback: usa l'email come nome azienda
-                        localStorage.setItem('userCompany', user.email.split('@')[0]);
+                        // No Service users/{uid} document — likely an Operations-only
+                        // account. Non-fatal: the trusted session exchange below resolves
+                        // the real company (and routing) server-side.
+                        console.warn('⚠️ Documento utente Service non trovato — identità risolta dal server');
                     }
 
                     showMessage('login-message', 'Accesso effettuato con successo!', false);
@@ -470,6 +471,7 @@
                     // [SECURITY] Exchange Firebase ID token for a server-signed session token.
                     // This token is stored in sessionStorage and used for all WebSocket joinRoom calls.
                     // The server verifies identity and company from Firestore — the client cannot forge it.
+                    let redirectTarget = '/home.html';
                     try {
                         const idToken = await user.getIdToken();
                         const sessionResp = await fetch('/api/auth/session', {
@@ -480,6 +482,17 @@
                             const sessionData = await sessionResp.json();
                             sessionStorage.setItem('ws_session_token', sessionData.token);
                             console.log('✅ [SECURITY] Server session token obtained and stored');
+                            // For Operations members (and users without a Service profile)
+                            // the server-resolved company is authoritative.
+                            if (sessionData.companyName && (sessionData.isOperations || !userDoc.exists())) {
+                                localStorage.setItem('userCompany', sessionData.companyName);
+                            }
+                            // Operations staff → role router. Server-authoritative flag:
+                            // does NOT depend on whether a Service users/{uid} doc exists.
+                            // Directors keep the Service home (Operations card available).
+                            if (sessionData.isOperations && sessionData.opsRole !== 'DIRECTOR') {
+                                redirectTarget = '/operations.html';
+                            }
                         } else {
                             console.warn('⚠️ [SECURITY] Could not obtain server session token — login will proceed but WebSocket auth may fail');
                         }
@@ -487,8 +500,8 @@
                         console.warn('⚠️ [SECURITY] Session token exchange error:', sessionErr.message);
                     }
 
-                    // Login riuscito - reindirizza alla home
-                    window.location.href = '/home.html';
+                    // Login riuscito - reindirizza (home o Operations per account solo-Operations)
+                    window.location.href = redirectTarget;
 
                 } catch (error) {
                     console.error('Errore durante il login:', error);
