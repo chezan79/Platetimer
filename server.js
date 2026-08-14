@@ -2492,6 +2492,8 @@ function opsInviteEmailNote(emailStatus) {
 // ── POST /api/operations/users/:id/resend-invite — Director only: resend invitation email ──
 // Rules: Director only, same company, invitation still INVITED status, no new user, no role/company change.
 app.post('/api/operations/users/:id/resend-invite', async (req, res) => {
+    console.log('[OPS-RUNTIME] resend-invite route reached | runtime=task47-7b2dad6');
+    res.setHeader('X-PlateTimer-Runtime', 'task47-7b2dad6');
     const ctx = requireOpsAuth(req, res);
     if (!ctx) return;
     if (!opsAuth.canManageUsers(ctx.opsUser)) {
@@ -2527,6 +2529,7 @@ app.post('/api/operations/users/:id/resend-invite', async (req, res) => {
     const emailStatus = opsInviteEmailStatus(emailResult);
     res.json({
         success: true,
+        runtimeVersion: 'task47-7b2dad6',
         emailResult: emailResult.result,
         emailStatus,
         emailNote: emailStatus === 'SENT'
