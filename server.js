@@ -35,6 +35,8 @@ if (!process.env.WS_SESSION_SECRET) {
 console.log(`[WS-DIAG] startup — WS_SESSION_SECRET: ${process.env.WS_SESSION_SECRET ? 'PRESENT' : 'MISSING ⚠️'}`);
 console.log(`[WS-DIAG] startup — FIREBASE_ADMIN_SERVICE_ACCOUNT: ${process.env.FIREBASE_ADMIN_SERVICE_ACCOUNT ? 'PRESENT' : 'MISSING ⚠️'}`);
 console.log(`[WS-DIAG] startup — SESSION_SECRET: ${process.env.SESSION_SECRET ? 'PRESENT' : 'MISSING ⚠️'}`);
+console.log(`[MAIL-DIAG] startup — RESEND_API_KEY: ${process.env.RESEND_API_KEY ? 'PRESENT' : 'MISSING ⚠️'}`);
+console.log(`[MAIL-DIAG] startup — OPERATIONS_MAIL_FROM: ${process.env.OPERATIONS_MAIL_FROM ? 'PRESENT' : 'MISSING ⚠️'}`);
 
 // Firebase Web API key — technically public (same value appears in client-side config by design),
 // but kept server-side as an env var so it can be rotated without a code change.
