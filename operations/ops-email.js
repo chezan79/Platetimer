@@ -240,14 +240,21 @@ ${btn(activationUrl, 'Attiva il mio account')}
 <p style="font-size:13px;color:#64748b;text-align:center;">Accedi con l'indirizzo <strong>${to}</strong> per completare l'attivazione.</p>
 <p style="font-size:12px;color:#94a3b8;text-align:center;margin-top:12px;">🔒 Questo link di attivazione è personale: non condividerlo con altri.</p>`);
 
+    // Determine intended transport NOW (before try) so the catch block can
+    // report the correct transport even if an unexpected exception fires.
+    const intendedTransport = hasResend() ? 'resend' : TRANSPORT;
     try {
         // Invitation flow prefers Resend when configured; SMTP/logging otherwise.
-        console.log(`[MAIL-DIAG] invitation runtime — Resend: ${hasResend() ? 'AVAILABLE' : 'MISSING'} | legacy transport: ${TRANSPORT}`);
-        if (hasResend()) return await _sendViaResend({ to, subject, text, html, userId });
+        console.log(`[MAIL-DIAG] invitation runtime — Resend: ${hasResend() ? 'AVAILABLE' : 'MISSING'} | intendedTransport: ${intendedTransport} | legacyTransport: ${TRANSPORT}`);
+        if (intendedTransport === 'resend') return await _sendViaResend({ to, subject, text, html, userId });
         return await _send({ to, subject, text, html });
     } catch (e) {
-        console.error('📧 [OPS-EMAIL] sendInvitationEmail unexpected error (non-fatal):', sanitizeError(e.message));
-        return { result: RESULT.FAILED, transport: TRANSPORT, reason: sanitizeError(e.message) };
+        // Transport is intentionally the INTENDED one, not the legacy TRANSPORT constant.
+        // Using TRANSPORT here would incorrectly report MISSING_EMAIL_CONFIG when Resend
+        // is configured but an unexpected exception fires.
+        const safe = sanitizeError(e.message);
+        console.error(`📧 [OPS-EMAIL] sendInvitationEmail unexpected error (non-fatal) | intendedTransport: ${intendedTransport} | ${safe}`);
+        return { result: RESULT.FAILED, transport: intendedTransport, reason: safe };
     }
 }
 

@@ -2435,7 +2435,9 @@ app.post('/api/operations/users', async (req, res) => {
     const activationUrl = baseUrl ? `${baseUrl}${activationPath}` : activationPath;
 
     // Attempt invitation email AFTER persist. Failure is non-fatal and logged.
-    let emailResult = { result: opsEmail.RESULT.FAILED, transport: opsEmail.TRANSPORT, reason: 'not attempted' };
+    // Use 'pending' (not opsEmail.TRANSPORT) so that if sendInvitationEmail() itself
+    // throws unexpectedly, the status maps to SEND_FAILED rather than MISSING_EMAIL_CONFIG.
+    let emailResult = { result: opsEmail.RESULT.FAILED, transport: 'pending', reason: 'not attempted' };
     try {
         emailResult = await opsEmail.sendInvitationEmail({
             to: email,
@@ -2467,7 +2469,14 @@ app.post('/api/operations/users', async (req, res) => {
 // (Duplicate invitation and already-active cases are rejected before any send.)
 function opsInviteEmailStatus(emailResult) {
     if (emailResult.result === opsEmail.RESULT.SENT) return 'SENT';
+    // 'logging' = no email provider configured at all.
+    // 'pending' = sendInvitationEmail() threw before returning (should not happen, but safe).
+    // Both map to MISSING_EMAIL_CONFIG only when no Resend key is available.
     if (emailResult.transport === 'logging') return 'MISSING_EMAIL_CONFIG';
+    if (emailResult.transport === 'pending') {
+        // sendInvitationEmail threw before it could even attempt a send.
+        return process.env.RESEND_API_KEY ? 'SEND_FAILED' : 'MISSING_EMAIL_CONFIG';
+    }
     if (emailResult.transport === 'resend' && emailResult.statusCode) return 'PROVIDER_ERROR';
     return 'SEND_FAILED';
 }
@@ -2500,7 +2509,7 @@ app.post('/api/operations/users/:id/resend-invite', async (req, res) => {
     const activationPath = `/operations-activate.html?code=${target.inviteCode}`;
     const activationUrl = baseUrl ? `${baseUrl}${activationPath}` : activationPath;
 
-    let emailResult = { result: opsEmail.RESULT.FAILED, transport: opsEmail.TRANSPORT };
+    let emailResult = { result: opsEmail.RESULT.FAILED, transport: 'pending' };
     try {
         emailResult = await opsEmail.sendInvitationEmail({
             to: target.email,
