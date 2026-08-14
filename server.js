@@ -35,6 +35,8 @@ if (!process.env.WS_SESSION_SECRET) {
 console.log(`[WS-DIAG] startup — WS_SESSION_SECRET: ${process.env.WS_SESSION_SECRET ? 'PRESENT' : 'MISSING ⚠️'}`);
 console.log(`[WS-DIAG] startup — FIREBASE_ADMIN_SERVICE_ACCOUNT: ${process.env.FIREBASE_ADMIN_SERVICE_ACCOUNT ? 'PRESENT' : 'MISSING ⚠️'}`);
 console.log(`[WS-DIAG] startup — SESSION_SECRET: ${process.env.SESSION_SECRET ? 'PRESENT' : 'MISSING ⚠️'}`);
+console.log(`[MAIL-DIAG] startup — RESEND_API_KEY: ${process.env.RESEND_API_KEY ? 'PRESENT' : 'MISSING ⚠️'}`);
+console.log(`[MAIL-DIAG] startup — OPERATIONS_MAIL_FROM: ${process.env.OPERATIONS_MAIL_FROM ? 'PRESENT' : 'MISSING ⚠️'}`);
 
 // Firebase Web API key — technically public (same value appears in client-side config by design),
 // but kept server-side as an env var so it can be rotated without a code change.
@@ -2433,33 +2435,59 @@ app.post('/api/operations/users', async (req, res) => {
     const activationUrl = baseUrl ? `${baseUrl}${activationPath}` : activationPath;
 
     // Attempt invitation email AFTER persist. Failure is non-fatal and logged.
-    let emailResult = { result: opsEmail.RESULT.FAILED, transport: opsEmail.TRANSPORT, reason: 'not attempted' };
+    // Use 'pending' (not opsEmail.TRANSPORT) so that if sendInvitationEmail() itself
+    // throws unexpectedly, the status maps to SEND_FAILED rather than MISSING_EMAIL_CONFIG.
+    let emailResult = { result: opsEmail.RESULT.FAILED, transport: 'pending', reason: 'not attempted' };
     try {
         emailResult = await opsEmail.sendInvitationEmail({
             to: email,
             toName: name,
             role,
             invitedByName: ctx.opsUser.name,
-            activationUrl
+            activationUrl,
+            userId: user.id
         });
     } catch (e) {
         console.error('📧 [OPS-EMAIL] invite email unexpected error (non-fatal):', e.message);
     }
-    console.log(`📧 [OPS] Invitation email result: ${emailResult.result} (transport: ${emailResult.transport}) for ${email}`);
+    console.log(`📧 [OPS] Invitation email result: ${emailResult.result} (transport: ${emailResult.transport}) for ${email} (userId: ${user.id})`);
 
+    const emailStatus = opsInviteEmailStatus(emailResult);
     broadcastOps(companyId, { action: 'OPS_USER_CREATED', user: publicOpsUser(user) });
     res.status(201).json({
         success: true,
         user: { ...publicOpsUser(user), inviteCode: user.inviteCode },
         activationUrl: activationPath,       // relative path — always safe to return to Director
         emailResult: emailResult.result,     // SENT | FAILED
-        emailNote: emailResult.result === opsEmail.RESULT.SENT
-            ? 'Email di invito inviata.'
-            : (opsEmail.TRANSPORT === 'logging'
-                ? 'Nessun provider email configurato: condividi manualmente il link di attivazione.'
-                : 'Invio email non riuscito: condividi manualmente il link di attivazione.')
+        emailStatus,                         // SENT | MISSING_EMAIL_CONFIG | PROVIDER_ERROR | SEND_FAILED
+        emailNote: opsInviteEmailNote(emailStatus)
     });
 });
+
+// ── Invitation email outcome mapping ─────────────────────────────────────────
+// Distinguishes: sent / missing configuration / provider error / generic failure.
+// (Duplicate invitation and already-active cases are rejected before any send.)
+function opsInviteEmailStatus(emailResult) {
+    if (emailResult.result === opsEmail.RESULT.SENT) return 'SENT';
+    // 'logging' = no email provider configured at all.
+    // 'pending' = sendInvitationEmail() threw before returning (should not happen, but safe).
+    // Both map to MISSING_EMAIL_CONFIG only when no Resend key is available.
+    if (emailResult.transport === 'logging') return 'MISSING_EMAIL_CONFIG';
+    if (emailResult.transport === 'pending') {
+        // sendInvitationEmail threw before it could even attempt a send.
+        return process.env.RESEND_API_KEY ? 'SEND_FAILED' : 'MISSING_EMAIL_CONFIG';
+    }
+    if (emailResult.transport === 'resend' && emailResult.statusCode) return 'PROVIDER_ERROR';
+    return 'SEND_FAILED';
+}
+function opsInviteEmailNote(emailStatus) {
+    switch (emailStatus) {
+        case 'SENT': return 'Email di invito inviata.';
+        case 'MISSING_EMAIL_CONFIG': return 'Nessun provider email configurato: condividi manualmente il link di attivazione.';
+        case 'PROVIDER_ERROR': return 'Errore del provider email: condividi manualmente il link di attivazione.';
+        default: return 'Invio email non riuscito: condividi manualmente il link di attivazione.';
+    }
+}
 
 // ── POST /api/operations/users/:id/resend-invite — Director only: resend invitation email ──
 // Rules: Director only, same company, invitation still INVITED status, no new user, no role/company change.
@@ -2481,26 +2509,29 @@ app.post('/api/operations/users/:id/resend-invite', async (req, res) => {
     const activationPath = `/operations-activate.html?code=${target.inviteCode}`;
     const activationUrl = baseUrl ? `${baseUrl}${activationPath}` : activationPath;
 
-    let emailResult = { result: opsEmail.RESULT.FAILED, transport: opsEmail.TRANSPORT };
+    let emailResult = { result: opsEmail.RESULT.FAILED, transport: 'pending' };
     try {
         emailResult = await opsEmail.sendInvitationEmail({
             to: target.email,
             toName: target.name,
             role: target.role,
             invitedByName: ctx.opsUser.name,
-            activationUrl
+            activationUrl,
+            userId: target.id
         });
     } catch (e) {
         console.error('📧 [OPS-EMAIL] resend invite unexpected error (non-fatal):', e.message);
     }
-    console.log(`📧 [OPS] Resend invite result: ${emailResult.result} → ${target.email} by Director ${ctx.opsUser.id}`);
+    console.log(`📧 [OPS] Resend invite result: ${emailResult.result} → ${target.email} (userId: ${target.id}) by Director ${ctx.opsUser.id}`);
 
+    const emailStatus = opsInviteEmailStatus(emailResult);
     res.json({
         success: true,
         emailResult: emailResult.result,
-        emailNote: emailResult.result === opsEmail.RESULT.SENT
+        emailStatus,
+        emailNote: emailStatus === 'SENT'
             ? 'Email di invito reinviata.'
-            : 'Reinvio email non riuscito. Condividi il link manualmente.',
+            : opsInviteEmailNote(emailStatus),
         activationUrl: activationPath
     });
 });

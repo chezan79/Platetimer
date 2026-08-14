@@ -41,6 +41,46 @@ function getTransporter() {
     return _transporter;
 }
 
+// ── Resend transport (invitation emails only) ────────────────────────────────
+// RESEND_API_KEY selects Resend for the invitation flow. Other email types
+// (task assignment, reminders, escalations, digest) keep SMTP/logging.
+// RESEND_API_BASE is a TEST-ONLY override so tests can point to a local mock;
+// production always uses the real Resend API.
+const RESEND_API_BASE = () => process.env.RESEND_API_BASE || 'https://api.resend.com';
+const hasResend = () => !!process.env.RESEND_API_KEY;
+
+// Sender for Operations invitations — verified domain notifications.platetimer.com.
+const INVITE_FROM = () =>
+    process.env.OPERATIONS_MAIL_FROM ||
+    'PlateTimer Operations <operations@notifications.platetimer.com>';
+
+// Send one email through the Resend REST API.
+// Never throws; returns { result, transport:'resend', statusCode?, reason? }.
+// Logs: provider, masked recipient, userId, HTTP status — never API keys or tokens.
+async function _sendViaResend({ to, subject, text, html, userId }) {
+    try {
+        const resp = await fetch(RESEND_API_BASE() + '/emails', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ from: INVITE_FROM(), to: [to], subject, text, html })
+        });
+        if (resp.ok) {
+            console.log(`📧 [OPS-EMAIL] SENT via resend | To: ${maskEmail(to)} | userId: ${userId || '—'} | status: ${resp.status} | ts: ${new Date().toISOString()}`);
+            return { result: RESULT.SENT, transport: 'resend', statusCode: resp.status };
+        }
+        // Provider error — log status code only, never response secrets/keys.
+        console.error(`📧 [OPS-EMAIL] FAILED via resend | provider: resend | To: ${maskEmail(to)} | userId: ${userId || '—'} | status: ${resp.status}`);
+        return { result: RESULT.FAILED, transport: 'resend', statusCode: resp.status, reason: `Resend API error (HTTP ${resp.status})` };
+    } catch (err) {
+        const safe = sanitizeError(err.message);
+        console.error(`📧 [OPS-EMAIL] FAILED via resend (network) | provider: resend | To: ${maskEmail(to)} | userId: ${userId || '—'} | ${safe}`);
+        return { result: RESULT.FAILED, transport: 'resend', reason: safe };
+    }
+}
+
 const FROM = () =>
     process.env.EMAIL_FROM ||
     process.env.SMTP_FROM  ||
@@ -174,7 +214,7 @@ ${btn(taskUrl, 'Apri i miei compiti')}`);
  * activationUrl must be an absolute URL built server-side from APP_BASE_URL.
  * Never throws; always returns { result, transport }.
  */
-async function sendInvitationEmail({ to, toName, role, invitedByName, activationUrl }) {
+async function sendInvitationEmail({ to, toName, role, invitedByName, activationUrl, userId }) {
     const subject = `[PlateTimer Operations] Sei stato invitato`;
 
     const text = [
@@ -187,21 +227,34 @@ async function sendInvitationEmail({ to, toName, role, invitedByName, activation
         ``,
         `Usa l'indirizzo email ${to} per accedere.`,
         ``,
+        `Questo link di attivazione è personale: non condividerlo con altri.`,
+        ``,
         `PlateTimer Operations`
     ].join('\n');
 
     const html = htmlWrapper(`
 <p style="margin:0 0 16px;">Ciao <strong>${toName || ''}</strong>,</p>
-<p style="margin:0 0 8px;"><strong>${invitedByName}</strong> ti ha invitato a PlateTimer Operations nel ruolo di <strong>${role}</strong>.</p>
+<p style="margin:0 0 8px;"><strong>${invitedByName}</strong> ti ha invitato a <strong>PlateTimer Operations</strong> nel ruolo di <strong>${role}</strong>.</p>
 <p style="margin:0 0 20px;color:#475569;font-size:14px;">Clicca il pulsante per creare o collegare il tuo account e iniziare.</p>
 ${btn(activationUrl, 'Attiva il mio account')}
-<p style="font-size:13px;color:#64748b;text-align:center;">Accedi con l'indirizzo <strong>${to}</strong> per completare l'attivazione.</p>`);
+<p style="font-size:13px;color:#64748b;text-align:center;">Accedi con l'indirizzo <strong>${to}</strong> per completare l'attivazione.</p>
+<p style="font-size:12px;color:#94a3b8;text-align:center;margin-top:12px;">🔒 Questo link di attivazione è personale: non condividerlo con altri.</p>`);
 
+    // Determine intended transport NOW (before try) so the catch block can
+    // report the correct transport even if an unexpected exception fires.
+    const intendedTransport = hasResend() ? 'resend' : TRANSPORT;
     try {
+        // Invitation flow prefers Resend when configured; SMTP/logging otherwise.
+        console.log(`[MAIL-DIAG] invitation runtime — Resend: ${hasResend() ? 'AVAILABLE' : 'MISSING'} | intendedTransport: ${intendedTransport} | legacyTransport: ${TRANSPORT}`);
+        if (intendedTransport === 'resend') return await _sendViaResend({ to, subject, text, html, userId });
         return await _send({ to, subject, text, html });
     } catch (e) {
-        console.error('📧 [OPS-EMAIL] sendInvitationEmail unexpected error (non-fatal):', sanitizeError(e.message));
-        return { result: RESULT.FAILED, transport: TRANSPORT, reason: sanitizeError(e.message) };
+        // Transport is intentionally the INTENDED one, not the legacy TRANSPORT constant.
+        // Using TRANSPORT here would incorrectly report MISSING_EMAIL_CONFIG when Resend
+        // is configured but an unexpected exception fires.
+        const safe = sanitizeError(e.message);
+        console.error(`📧 [OPS-EMAIL] sendInvitationEmail unexpected error (non-fatal) | intendedTransport: ${intendedTransport} | ${safe}`);
+        return { result: RESULT.FAILED, transport: intendedTransport, reason: safe };
     }
 }
 
