@@ -242,6 +242,7 @@ ${btn(activationUrl, 'Attiva il mio account')}
 
     try {
         // Invitation flow prefers Resend when configured; SMTP/logging otherwise.
+        console.log(`[MAIL-DIAG] invitation runtime — Resend: ${hasResend() ? 'AVAILABLE' : 'MISSING'} | legacy transport: ${TRANSPORT}`);
         if (hasResend()) return await _sendViaResend({ to, subject, text, html, userId });
         return await _send({ to, subject, text, html });
     } catch (e) {
