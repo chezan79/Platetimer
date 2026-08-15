@@ -75,7 +75,7 @@
 const esc = OpsCommon.escHtml;
 const t = (key) => (typeof I18n !== 'undefined' && I18n.t) ? I18n.t(key) : key;
 
-async function load() {
+async function load(isRealtime) {
   await I18n.init({ selector: false });
   const me = await OpsCommon.loadMe();
   if (!me) return;
@@ -137,7 +137,7 @@ async function load() {
   OpsCommon.renderSection(container, '✅ ' + t('ops.sec.completedToday'), done,                                               users, t('ops.sec.noCompletedToday'));
 
   // Sprint 6.2+: personal intelligence (intentional load — updates lastVisitAt)
-  const intelRes = await OpsCommon.api(OpsCommon.intelligenceUrl());
+  const intelRes = await OpsCommon.api(OpsCommon.intelligenceUrl(isRealtime ? 'isRealtime=1' : ''));
   renderRoleIntel(intelRes);
 }
 
@@ -180,7 +180,7 @@ I18n.init({ selector: '#i18n-sel' }).then(() => load());
 // Sprint 5: real-time live updates
 OpsRealtime.init();
 let _rtTimer = null;
-function rtReload(d) { clearTimeout(_rtTimer); _rtTimer = setTimeout(load, d || 700); }
+function rtReload(d) { clearTimeout(_rtTimer); _rtTimer = setTimeout(() => load(true), d || 700); }
 OpsRealtime.on('OPS_TASK_CREATED',    () => { rtReload(400); OpsRealtime.toast(t('ops.rt.newTask'), 'info'); });
 OpsRealtime.on('OPS_TASK_UPDATED',    () => { rtReload(500); });
 OpsRealtime.on('OPS_TASK_COMPLETED',  () => { rtReload(400); OpsRealtime.toast(t('ops.rt.completed'), 'ok'); });

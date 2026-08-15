@@ -4735,6 +4735,13 @@ wss.on('connection', (ws, req) => {
                 console.log(`✅ Client aggiunto alla room: ${companyName} (${companyRooms.get(companyName).size} client)`);
                 console.log(`[WS-DIAG] joinRoom complete wsId=${ws._diagId} company=${companyName} roomSize=${companyRooms.get(companyName).size}`);
 
+                // [T51] Explicit join confirmation — lets realtime clients distinguish
+                // a successful (but quiet) room join from a silently rejected one.
+                // Existing clients ignore unknown actions, so this is backward-compatible.
+                try {
+                    ws.send(JSON.stringify({ action: 'joinedRoom', success: true }));
+                } catch (_) { /* best-effort */ }
+
                 // Invia tutti i countdown attivi al nuovo client — un messaggio per tavolo.
                 // Criteri lifecycle: includi se Date.now() < endsAt + POST_EXPIRY_GRACE_MS,
                 // allineato con duplicate-check e sweep di completamento.

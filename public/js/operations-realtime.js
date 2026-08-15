@@ -16,6 +16,15 @@
     const handlers = {};
     let toastRoot = null;
 
+    // [T51] Join-confirmation state. The server replies { action: 'joinedRoom' }
+    // on a successful joinRoom; auth failures arrive as { action: 'error', code }.
+    // Without tracking these, a rejected join is indistinguishable from a quiet room.
+    let joined = false;
+    let joinConfirmTimer = null;
+    let authFailures = 0;
+    const MAX_AUTH_FAILURES = 3;
+    const JOIN_CONFIRM_TIMEOUT_MS = 5000;
+
     // ── Toast notifications ───────────────────────────────────────────────────
     function ensureToastRoot() {
         if (toastRoot) return;
@@ -92,20 +101,70 @@
 
         ws.addEventListener('open', () => {
             // Join the authenticated company room using the stored server-issued token.
+            joined = false;
             ws.send(JSON.stringify({ action: 'joinRoom', token }));
             ws.send(JSON.stringify({ action: 'joinPage', pageType: 'operations' }));
+            // [T51] If the server never confirms the join, the socket is useless
+            // (silent rejection or lost message) — close it and let the reconnect
+            // path retry with a fresh joinRoom.
+            clearTimeout(joinConfirmTimer);
+            joinConfirmTimer = setTimeout(() => {
+                if (!joined && ws) {
+                    console.warn('[OPS-RT] joinRoom not confirmed within '
+                        + JOIN_CONFIRM_TIMEOUT_MS + 'ms — reconnecting');
+                    try { ws.close(); } catch (_) {}
+                }
+            }, JOIN_CONFIRM_TIMEOUT_MS);
         });
 
         ws.addEventListener('message', evt => {
             let msg;
             try { msg = JSON.parse(evt.data); } catch { return; }
+            if (typeof msg.action !== 'string') return;
+
+            // [T51] Join confirmation — realtime channel is live.
+            if (msg.action === 'joinedRoom') {
+                joined = true;
+                authFailures = 0;
+                clearTimeout(joinConfirmTimer);
+                console.log('[OPS-RT] company room joined — realtime channel active');
+                return;
+            }
+
+            // [T51] Surface auth errors instead of silently ignoring them.
+            if (msg.action === 'error' &&
+                (msg.code === 'TOKEN_REQUIRED' || msg.code === 'TOKEN_INVALID' || msg.code === 'UNAUTHENTICATED')) {
+                clearTimeout(joinConfirmTimer);
+                authFailures++;
+                console.error('[OPS-RT] joinRoom rejected by server:', msg.code, msg.message || '');
+                if (authFailures >= MAX_AUTH_FAILURES) {
+                    // Token is genuinely invalid (expired or server secret rotated).
+                    // The same token backs all HTTP calls, so the session is dead —
+                    // route the user through the standard re-auth flow.
+                    console.error('[OPS-RT] session token invalid after '
+                        + authFailures + ' attempts — re-authentication required');
+                    if (window.WsAuth && WsAuth.handleServerError) {
+                        WsAuth.handleServerError(msg); // clears token + redirects to login
+                    } else {
+                        showToast('Sessione scaduta. Ricarica la pagina ed effettua il login.', 'danger');
+                    }
+                } else {
+                    // Transient (e.g. token refreshed by another tab moments ago):
+                    // retry with the freshly-read token after a short delay.
+                    try { ws && ws.close(); } catch (_) {}
+                }
+                return;
+            }
+
             // Only handle OPS_* actions — all other PlateTimer messages are ignored.
-            if (typeof msg.action !== 'string' || !msg.action.startsWith('OPS_')) return;
+            if (!msg.action.startsWith('OPS_')) return;
             dispatch(msg);
         });
 
         ws.addEventListener('close', () => {
             ws = null;
+            joined = false;
+            clearTimeout(joinConfirmTimer);
             // Exponential-like back-off capped at 5 s
             const delay = Math.min(3500 + initAttempts * 300, 5000);
             initAttempts++;
