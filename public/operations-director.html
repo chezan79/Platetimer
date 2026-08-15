@@ -415,15 +415,21 @@ function renderIntelligence(r) {
   // — Attention —
   const attDiv = document.getElementById('intel-attention');
   if (r.attention && r.attention.length) {
-    attDiv.innerHTML = r.attention.slice(0, 12).map(a => `
-      <div class="intel-alert" style="border-left-color:${SEV_COLOR[a.severity]};background:${SEV_BG[a.severity]}">
+    attDiv.innerHTML = r.attention.slice(0, 12).map(a => {
+      // Make task-linked alerts clickable; generic alerts (no linkedTask) stay static.
+      const linked = a.linkedTask ? encodeURIComponent(a.linkedTask) : null;
+      const clickStyle = linked ? `cursor:pointer;` : '';
+      const clickAttr  = linked ? `onclick="location.href='operations-tasks.html?taskId=${linked}'"` : '';
+      return `
+      <div class="intel-alert" style="${clickStyle}border-left-color:${SEV_COLOR[a.severity]};background:${SEV_BG[a.severity]}" ${clickAttr}>
         <div class="intel-alert-top">
           <span class="intel-sev-badge" style="background:${SEV_COLOR[a.severity]}">${sevLabel(a.severity)}</span>
           <span class="intel-alert-title">${esc(a.title)}</span>
         </div>
         <div class="intel-alert-desc">${esc(a.description)}</div>
         <div class="intel-alert-action">→ ${esc(a.recommendedAction)}</div>
-      </div>`).join('');
+      </div>`;
+    }).join('');
   } else {
     attDiv.innerHTML = `<div class="intel-empty">✅ ${t('ops.intel.noAlerts')}</div>`;
   }
@@ -493,7 +499,11 @@ function renderIntelligence(r) {
 
 function renderAttentionCard(tk, users, label, color='#dc2626') {
   const assignee = users[tk.assigneeId];
-  return `<div class="task-card attention-card" style="cursor:pointer;margin-bottom:8px" onclick="location.href='operations-tasks.html#${esc(tk.id)}'">
+  // Navigate via ?taskId= so operations-tasks.html auto-opens the detail panel
+  // for this specific task. Silent mode on the receiving page handles deleted or
+  // invisible tasks gracefully without exposing errors.
+  const taskUrl = 'operations-tasks.html?taskId=' + encodeURIComponent(tk.id);
+  return `<div class="task-card attention-card" style="cursor:pointer;margin-bottom:8px" onclick="location.href='${taskUrl}'">
     <div style="font-size:11px;font-weight:800;letter-spacing:.5px;color:${color};margin-bottom:6px">${esc(label)}</div>
     <div class="task-title">${esc(tk.title)}</div>
     <div style="font-size:12px;color:var(--muted);margin-top:4px">
