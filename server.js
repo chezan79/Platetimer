@@ -2527,6 +2527,20 @@ app.post('/api/operations/users/:id/resend-invite', async (req, res) => {
     console.log(`📧 [OPS] Resend invite result: ${emailResult.result} → ${target.email} (userId: ${target.id}) by Director ${ctx.opsUser.id}`);
 
     const emailStatus = opsInviteEmailStatus(emailResult);
+
+    // ── TEMPORARY diagnostic — safe fields only, no secrets or credentials ────
+    const mailDiagnostic = {
+        resendConfigured:    Boolean(process.env.RESEND_API_KEY),
+        intendedTransport:   emailResult.intendedTransport   || null,
+        resendAttempted:     emailResult.resendAttempted === true,
+        returnedTransport:   emailResult.transport           || null,
+        returnedResult:      emailResult.result              || null,
+        providerStatusCode:  emailResult.statusCode          || null,
+        safeReason:          emailResult.reason != null
+                                 ? opsEmail.sanitizeReason(String(emailResult.reason))
+                                 : null
+    };
+
     res.json({
         success: true,
         runtimeVersion: 'task47-7b2dad6',
@@ -2535,7 +2549,8 @@ app.post('/api/operations/users/:id/resend-invite', async (req, res) => {
         emailNote: emailStatus === 'SENT'
             ? 'Email di invito reinviata.'
             : opsInviteEmailNote(emailStatus),
-        activationUrl: activationPath
+        activationUrl: activationPath,
+        mailDiagnostic
     });
 });
 

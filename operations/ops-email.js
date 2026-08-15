@@ -243,18 +243,26 @@ ${btn(activationUrl, 'Attiva il mio account')}
     // Determine intended transport NOW (before try) so the catch block can
     // report the correct transport even if an unexpected exception fires.
     const intendedTransport = hasResend() ? 'resend' : TRANSPORT;
+    // resendAttempted is set to true immediately before the _sendViaResend() call
+    // so the route can distinguish "Resend was never called" from "Resend was called but failed".
+    let resendAttempted = false;
     try {
         // Invitation flow prefers Resend when configured; SMTP/logging otherwise.
         console.log(`[MAIL-DIAG] invitation runtime — Resend: ${hasResend() ? 'AVAILABLE' : 'MISSING'} | intendedTransport: ${intendedTransport} | legacyTransport: ${TRANSPORT}`);
-        if (intendedTransport === 'resend') return await _sendViaResend({ to, subject, text, html, userId });
-        return await _send({ to, subject, text, html });
+        if (intendedTransport === 'resend') {
+            resendAttempted = true;
+            const r = await _sendViaResend({ to, subject, text, html, userId });
+            return { ...r, intendedTransport, resendAttempted };
+        }
+        const r = await _send({ to, subject, text, html });
+        return { ...r, intendedTransport, resendAttempted };
     } catch (e) {
         // Transport is intentionally the INTENDED one, not the legacy TRANSPORT constant.
         // Using TRANSPORT here would incorrectly report MISSING_EMAIL_CONFIG when Resend
         // is configured but an unexpected exception fires.
         const safe = sanitizeError(e.message);
         console.error(`📧 [OPS-EMAIL] sendInvitationEmail unexpected error (non-fatal) | intendedTransport: ${intendedTransport} | ${safe}`);
-        return { result: RESULT.FAILED, transport: intendedTransport, reason: safe };
+        return { result: RESULT.FAILED, transport: intendedTransport, reason: safe, intendedTransport, resendAttempted };
     }
 }
 
@@ -418,4 +426,7 @@ ${btn(taskUrl, 'Apri i miei compiti')}`);
     }
 }
 
-module.exports = { sendTaskAssignmentEmail, sendInvitationEmail, sendReminderEmail, sendEscalationEmail, sendDailyDigestEmail, RESULT, TRANSPORT };
+// sanitizeReason is exported so callers (e.g. the route layer) can safely redact
+// any reason string before surfacing it in a response — without re-importing the
+// internal sanitizeError helper.
+module.exports = { sendTaskAssignmentEmail, sendInvitationEmail, sendReminderEmail, sendEscalationEmail, sendDailyDigestEmail, RESULT, TRANSPORT, sanitizeReason: sanitizeError };
