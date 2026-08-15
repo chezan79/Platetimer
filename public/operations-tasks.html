@@ -75,6 +75,12 @@
     <label class="flt-check"><input type="checkbox" id="flt-my" onchange="applyFilters()"> <span data-i18n="ops.task.filterMine">Solo i miei</span></label>
   </div>
 
+  <!-- Today filter banner — visible when ?filter=today is active -->
+  <div id="today-banner" style="display:none;align-items:center;justify-content:space-between;gap:12px;background:#1e3a5f;color:#fff;border-radius:8px;padding:10px 16px;margin-bottom:12px">
+    <span style="font-size:14px;font-weight:600">📋 <span data-i18n="ops.task.todayBanner">Compiti della giornata</span></span>
+    <button onclick="clearTodayFilter()" style="background:rgba(255,255,255,.18);border:none;color:#fff;cursor:pointer;font-size:13px;padding:4px 10px;border-radius:6px" data-i18n="ops.task.todayClear">Mostra tutti</button>
+  </div>
+
   <div id="ops-error" class="msg msg-error" style="display:none"></div>
   <div id="task-list" class="task-list"><div class="empty-state" data-i18n="ops.task.loading">Caricamento…</div></div>
 </main>
@@ -110,6 +116,8 @@ const t = (key) => (typeof I18n !== 'undefined' && I18n.t) ? I18n.t(key) : key;
 let allTasks = [], allUsers = {}, meData = null;
 let assignableUsers = [];
 let filterTimer = null;
+// true when page was opened with ?filter=today (Director quick-action)
+let todayFilterActive = false;
 
 // [S6.4.1] Files staged for upload during task creation.
 let _pendingAttachments = [];
@@ -128,6 +136,14 @@ async function load() {
   const aData = await OpsCommon.api('/api/operations/assignees');
   assignableUsers = (aData && aData.assignees) || [];
 
+  // Detect ?filter=today — set by Director dashboard "Compiti della giornata" quick-action.
+  // Must be read before loadTasks() so the initial render applies the filter.
+  const urlFilter = new URLSearchParams(location.search).get('filter');
+  if (urlFilter === 'today') {
+    todayFilterActive = true;
+    document.getElementById('flt-sort').value = 'dueDate'; // overdue first
+  }
+
   await loadTasks();
 
   // Auto-open detail panel when a ?taskId= query param is present.
@@ -144,6 +160,31 @@ function scheduleFilter() {
 
 function applyFilters() {
   clearTimeout(filterTimer);
+  loadTasks();
+}
+
+// ── Today filter ──────────────────────────────────────────────────────────────
+// Pure function: keeps only tasks due today or overdue that are still active.
+// nowMs is optional — pass Date.now() substitute for unit tests (no DOM needed).
+function applyTodayFilter(tasks, nowMs) {
+  const now = nowMs !== undefined ? new Date(nowMs) : new Date();
+  // End of today in the browser's local timezone (23:59:59.999)
+  const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+  const cutoff = endOfToday.getTime();
+  return tasks.filter(task => {
+    if (!task.dueDate) return false;                                   // no due date → skip
+    if (task.status === 'COMPLETED' || task.status === 'CANCELLED') return false; // inactive → skip
+    const due = new Date(task.dueDate).getTime();
+    return !isNaN(due) && due <= cutoff;                               // due today or overdue → include
+  });
+}
+
+// Dismiss the today filter and reload the full unfiltered task list.
+function clearTodayFilter() {
+  todayFilterActive = false;
+  document.getElementById('today-banner').style.display = 'none';
+  document.getElementById('flt-sort').value = '';
+  history.replaceState(null, '', location.pathname);
   loadTasks();
 }
 
@@ -177,8 +218,23 @@ async function loadTasks() {
 
 // ── Task list rendering ──
 function renderList() {
+  // When today-filter is active, apply client-side date boundary on top of whatever
+  // the API returned. This keeps the existing status/priority/sort controls working
+  // while additionally restricting the view to today + overdue active tasks.
+  const tasks = todayFilterActive ? applyTodayFilter(allTasks) : allTasks;
+
+  // Keep the banner in sync — show it whenever the today filter is active.
+  const banner = document.getElementById('today-banner');
+  if (banner) banner.style.display = todayFilterActive ? 'flex' : 'none';
+
   const container = document.getElementById('task-list');
-  OpsCommon.renderTaskList(container, allTasks, allUsers, meData && meData.user.id, loadTasks, {
+
+  if (todayFilterActive && tasks.length === 0) {
+    container.innerHTML = `<div class="empty-state">${t('ops.task.todayEmpty')}</div>`;
+    return;
+  }
+
+  OpsCommon.renderTaskList(container, tasks, allUsers, meData && meData.user.id, loadTasks, {
     onTaskClick: openDetail,
     showComplete: false,
     showStart: false
