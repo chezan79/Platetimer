@@ -293,6 +293,122 @@ console.log('\n  — deduplicateRisks unit tests —\n');
     check('S631-45. PQ items have rank', pq.every(p => typeof p.rank === 'number'));
 }
 
+// ── Cross-source deduplication in buildNewSinceLastVisit ─────────────────────
+// These tests exercise the fix for the bug where a single URGENT+OPEN task
+// produced duplicate identical HIGH entries from three independent sources
+// (riskWatch RISK, decisions DECISION, urgentTasks URGENT_TASK).
+
+console.log('\n  — cross-source NSV deduplication —\n');
+
+// T19: URGENT+OPEN task → only one entry even when all three sources fire
+{
+    const prevVisit = NOW - HOUR;
+    const urgTask = mkTask({
+        id: 'tUrgent1',
+        priority: 'URGENT',
+        status:   'OPEN',
+        createdAt:  NOW - 30 * 60_000,   // created AFTER prevVisit
+        updatedAt:  NOW - 30 * 60_000,
+        dueDate:    new Date(NOW + DAY).toISOString(),
+    });
+    // Source 1: riskWatch — same task
+    const rk = {
+        riskId: 'rk1', level: 'HIGH',
+        title: 'Urgent task not started', description: 'Urgent open',
+        linkedTask: urgTask.id, linkedUser: null, linkedDept: null,
+        dedupKey: `task:${urgTask.id}`,
+    };
+    // Source 2: decisions — same task
+    const dec = {
+        id: 'dec1', type: 'OPENING_NOT_STARTED', severity: 'HIGH',
+        title: 'Not started', reason: 'Urgent task open',
+        linkedTask: urgTask.id, linkedUser: null, department: null,
+    };
+    const r = opsAssistant.buildNewSinceLastVisit({
+        riskWatch: [rk], decisions: [dec], tasks: [urgTask],
+        previousVisitAt: prevVisit, now: NOW,
+    });
+    check('S631-46. URGENT+OPEN task: single entry despite RISK+DECISION+URGENT_TASK',
+        r.items.filter(i => i.linkedTask === urgTask.id).length === 1,
+        r.items.map(i => ({ type: i.type, linkedTask: i.linkedTask })));
+    check('S631-47. newCount=1 for one underlying task', r.newCount === 1, r.newCount);
+    check('S631-48. RISK preferred over DECISION and URGENT_TASK',
+        r.items[0] && r.items[0].type === 'RISK',
+        r.items[0] && r.items[0].type);
+}
+
+// T20: RISK wins over DECISION when both link the same task
+{
+    const prevVisit = NOW - HOUR;
+    const t1 = mkTask({ id: 'tX', updatedAt: NOW - 20 * 60_000 });
+    const rk  = { riskId:'rX', level:'HIGH', title:'Risk title', description:'Risk desc', linkedTask:'tX', linkedUser:null, linkedDept:null, dedupKey:'task:tX' };
+    const dec = { id:'dX', type:'SOME_TYPE', severity:'HIGH', title:'Dec title', reason:'Dec reason', linkedTask:'tX', linkedUser:null, department:null };
+    const r = opsAssistant.buildNewSinceLastVisit({ riskWatch:[rk], decisions:[dec], tasks:[t1], previousVisitAt:prevVisit, now:NOW });
+    check('S631-49. one task, RISK+DECISION → one entry', r.items.length === 1, r.items.length);
+    check('S631-50. RISK wins over DECISION', r.items[0].type === 'RISK', r.items[0].type);
+}
+
+// T21: DECISION wins over URGENT_TASK when no RISK present
+{
+    const prevVisit = NOW - HOUR;
+    const t2 = mkTask({ id: 'tY', priority: 'URGENT', createdAt: NOW - 30 * 60_000, updatedAt: NOW - 30 * 60_000 });
+    const dec = { id:'dY', type:'OPENING_NOT_STARTED', severity:'HIGH', title:'Dec', reason:'Not started', linkedTask:'tY', linkedUser:null, department:null };
+    // No riskWatch item — only DECISION (source 2) and URGENT_TASK (source 3)
+    const r = opsAssistant.buildNewSinceLastVisit({ riskWatch:[], decisions:[dec], tasks:[t2], previousVisitAt:prevVisit, now:NOW });
+    check('S631-51. DECISION+URGENT_TASK for same task → one entry', r.items.filter(i => i.linkedTask === t2.id).length === 1, r.items.length);
+    check('S631-52. DECISION wins over URGENT_TASK', r.items.find(i => i.linkedTask === t2.id)?.type === 'DECISION');
+}
+
+// T22: ESCALATION always kept alongside RISK for the same task
+{
+    const prevVisit = NOW - HOUR;
+    const t3 = mkTask({ id: 'tZ', priority: 'URGENT', updatedAt: NOW - 30 * 60_000, escalationSentAt: NOW - 20 * 60_000 });
+    const rk3 = { riskId:'rZ', level:'HIGH', title:'Risk Z', description:'Urgent', linkedTask:'tZ', linkedUser:null, linkedDept:null, dedupKey:'task:tZ' };
+    const r = opsAssistant.buildNewSinceLastVisit({ riskWatch:[rk3], decisions:[], tasks:[t3], previousVisitAt:prevVisit, now:NOW });
+    const forTask = r.items.filter(i => i.linkedTask === t3.id);
+    check('S631-53. RISK + ESCALATION for same task → two entries', forTask.length === 2, forTask.map(i=>i.type));
+    check('S631-54. one entry is RISK', forTask.some(i => i.type === 'RISK'));
+    check('S631-55. one entry is ESCALATION', forTask.some(i => i.type === 'ESCALATION'));
+}
+
+// T23: Two different tasks each fire all three sources → two total entries
+{
+    const prevVisit = NOW - HOUR;
+    const tA = mkTask({ id:'tTaskA', priority:'URGENT', createdAt: NOW - 30*60_000, updatedAt: NOW - 30*60_000 });
+    const tB = mkTask({ id:'tTaskB', priority:'URGENT', createdAt: NOW - 20*60_000, updatedAt: NOW - 20*60_000 });
+    const rkA  = { riskId:'rkA',  level:'HIGH', title:'Risk A',  description:'A', linkedTask:'tTaskA', linkedUser:null, linkedDept:null, dedupKey:'task:tTaskA' };
+    const rkB  = { riskId:'rkB',  level:'HIGH', title:'Risk B',  description:'B', linkedTask:'tTaskB', linkedUser:null, linkedDept:null, dedupKey:'task:tTaskB' };
+    const decA = { id:'decA', type:'T', severity:'HIGH', title:'Dec A', reason:'A', linkedTask:'tTaskA', linkedUser:null, department:null };
+    const decB = { id:'decB', type:'T', severity:'HIGH', title:'Dec B', reason:'B', linkedTask:'tTaskB', linkedUser:null, department:null };
+    const r = opsAssistant.buildNewSinceLastVisit({ riskWatch:[rkA,rkB], decisions:[decA,decB], tasks:[tA,tB], previousVisitAt:prevVisit, now:NOW });
+    check('S631-56. two tasks → exactly two entries', r.items.length === 2, r.items.length);
+    check('S631-57. one entry per task', r.items.some(i=>i.linkedTask==='tTaskA') && r.items.some(i=>i.linkedTask==='tTaskB'));
+}
+
+// T24: CRITICAL from riskWatch beats HIGH from decisions for same task
+{
+    const prevVisit = NOW - HOUR;
+    const tCrit = mkTask({ id:'tCrit', updatedAt: NOW - 10*60_000 });
+    const rkC   = { riskId:'rkC', level:'CRITICAL', title:'Critical!', description:'C', linkedTask:'tCrit', linkedUser:null, linkedDept:null, dedupKey:'task:tCrit' };
+    const decC  = { id:'decC', type:'T', severity:'HIGH', title:'Dec Crit', reason:'C', linkedTask:'tCrit', linkedUser:null, department:null };
+    const r = opsAssistant.buildNewSinceLastVisit({ riskWatch:[rkC], decisions:[decC], tasks:[tCrit], previousVisitAt:prevVisit, now:NOW });
+    check('S631-58. CRITICAL beats HIGH for same task', r.items.length === 1, r.items.length);
+    check('S631-59. surviving item has CRITICAL severity', r.items[0]?.severity === 'CRITICAL', r.items[0]?.severity);
+    check('S631-60. newCritical=1', r.newCritical === 1, r.newCritical);
+    check('S631-61. newHigh=0 (absorbed into CRITICAL)', r.newHigh === 0, r.newHigh);
+}
+
+// T25: User-linked items cross-source (RISK + DECISION for same user, no task)
+{
+    const prevVisit = NOW - HOUR;
+    // No tasks needed — user-linked risks use `now` as eventTime
+    const rkU  = { riskId:'rkU', level:'HIGH', title:'User overloaded', description:'Score 12', linkedTask:null, linkedUser:'uOver', linkedDept:null, dedupKey:'user:uOver:overload' };
+    const decU = { id:'decU', type:'OVERLOADED_USER', severity:'HIGH', title:'Overloaded decision', reason:'Score 12', linkedTask:null, linkedUser:'uOver', department:null };
+    const r = opsAssistant.buildNewSinceLastVisit({ riskWatch:[rkU], decisions:[decU], tasks:[], previousVisitAt:prevVisit, now:NOW });
+    check('S631-62. user RISK + DECISION → one entry', r.items.length === 1, r.items.length);
+    check('S631-63. RISK wins for user entity', r.items[0]?.type === 'RISK', r.items[0]?.type);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // HTTP integration tests
 // ─────────────────────────────────────────────────────────────────────────────

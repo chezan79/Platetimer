@@ -443,22 +443,84 @@ function buildNewSinceLastVisit({ riskWatch, decisions, tasks, previousVisitAt, 
         });
     }
 
+    // ── Cross-source deduplication ─────────────────────────────────────────
+    // The four sources above use disjoint ID namespaces so within-source
+    // deduplication (seenIds) cannot prevent the same underlying condition
+    // from appearing multiple times across sources.
+    //
+    // Example: a single newly-created URGENT+OPEN task produces:
+    //   Source 1 → RISK "urgent task not started"   (key rw:task:{id})
+    //   Source 2 → DECISION "OPENING_NOT_STARTED"   (key dec:OPENING_NOT_STARTED:{id})
+    //   Source 3 → URGENT_TASK "new urgent task"    (key urgent:{id})
+    // All three keys are distinct → all three pass seenIds → three identical
+    // HIGH entries for one underlying condition.
+    //
+    // Rule: group items by their underlying entity.  Within each group keep:
+    //   • all ESCALATION items (each is a distinct timed event)
+    //   • at most ONE non-ESCALATION item (best severity; tie-break by type
+    //     priority RISK > DECISION > URGENT_TASK)
+    const deduped = crossSourceDeduplicate(newItems);
+
     // Sort: CRITICAL first, then HIGH; within same severity by createdAt desc
-    newItems.sort((a, b) => {
+    deduped.sort((a, b) => {
         const sv = RISK_ORDER[a.severity] - RISK_ORDER[b.severity];
         return sv !== 0 ? sv : b.createdAt - a.createdAt;
     });
 
-    const newCritical = newItems.filter(i => i.severity === 'CRITICAL').length;
-    const newHigh     = newItems.filter(i => i.severity === 'HIGH').length;
+    const newCritical = deduped.filter(i => i.severity === 'CRITICAL').length;
+    const newHigh     = deduped.filter(i => i.severity === 'HIGH').length;
 
     return {
         previousVisitAt: prev,
-        newCount:    newItems.length,
+        newCount:    deduped.length,
         newCritical,
         newHigh,
-        items: newItems,
+        items: deduped,
     };
+}
+
+// ── Cross-source deduplication for buildNewSinceLastVisit ─────────────────────
+// Groups NSV items by their underlying entity and collapses non-ESCALATION
+// items within each group to a single best representative.
+//
+// Entity key priority: linkedTask > linkedUser > linkedDept > id (misc)
+// Type priority for tie-breaking: RISK(0) > DECISION(1) > URGENT_TASK(2)
+// ESCALATION items are always kept separately (distinct timed events).
+const NSV_TYPE_PRIORITY = { RISK: 0, DECISION: 1, URGENT_TASK: 2 };
+
+function crossSourceDeduplicate(items) {
+    function entityKey(item) {
+        if (item.linkedTask)  return `task:${item.linkedTask}`;
+        if (item.linkedUser)  return `user:${item.linkedUser}`;
+        if (item.linkedDept)  return `dept:${item.linkedDept}`;
+        return `misc:${item.id}`;
+    }
+
+    // Separate escalations (always kept) from current-state items (dedup needed)
+    const escalations   = items.filter(i => i.type === 'ESCALATION');
+    const currentState  = items.filter(i => i.type !== 'ESCALATION');
+
+    // Within current-state items, keep one per entity (best severity + type)
+    const bestByEntity = new Map();
+    for (const item of currentState) {
+        const key = entityKey(item);
+        if (!bestByEntity.has(key)) {
+            bestByEntity.set(key, item);
+        } else {
+            const winner = bestByEntity.get(key);
+            const severityDiff = RISK_ORDER[item.severity] - RISK_ORDER[winner.severity];
+            if (severityDiff < 0) {
+                // item has higher severity (lower RISK_ORDER value)
+                bestByEntity.set(key, item);
+            } else if (severityDiff === 0) {
+                // same severity — prefer by type priority
+                const typeDiff = (NSV_TYPE_PRIORITY[item.type] ?? 99) - (NSV_TYPE_PRIORITY[winner.type] ?? 99);
+                if (typeDiff < 0) bestByEntity.set(key, item);
+            }
+        }
+    }
+
+    return [...bestByEntity.values(), ...escalations];
 }
 
 // ── 3. Changes Since Yesterday ────────────────────────────────────────────────
