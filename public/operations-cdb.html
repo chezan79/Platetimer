@@ -75,36 +75,21 @@
 const esc = OpsCommon.escHtml;
 const t = (key) => (typeof I18n !== 'undefined' && I18n.t) ? I18n.t(key) : key;
 
-async function load(isRealtime) {
-  await I18n.init({ selector: false });
-  const me = await OpsCommon.loadMe();
-  if (!me) return;
-  if (me.user.role !== 'CHEF_DE_BRIGADE') { location.replace('operations.html'); return; }
-  document.getElementById('me-name').textContent = me.user.name || '';
-  document.getElementById('me-role').textContent = OpsCommon.roleLabel(me.user.role);
-  const myId = me.user.id;
+// Module-level state shared between load() and optimistic updates
+let _tasks = [], _myId = null, _loadInFlight = false, _pendingReload = false;
 
-  const data = await OpsCommon.api('/api/operations/tasks');
-  if (!data || !data.success) { OpsCommon.showError(data && data.error); return; }
-  const tasks = data.tasks, users = data.users;
-  const now = new Date();
+// Render (or clear) the next-task card from a given task array + user id.
+// Called both from load() and immediately after optimistic local mutations
+// so the card stays in sync without waiting for a server round-trip.
+function renderNextTaskCard(tasks, myId) {
+  const secEl = document.getElementById('next-task-section');
+  const noEl  = document.getElementById('no-next-task');
+  secEl.style.display = 'none';
+  noEl.style.display  = 'none';
 
-  const mine    = tasks.filter(t => t.assigneeId === myId);
-  const active  = mine.filter(t => t.status !== 'COMPLETED' && t.status !== 'CANCELLED');
-  const urgent  = active.filter(t => t.priority === 'URGENT');
-  const overdue = active.filter(t => (t.effectiveStatus||t.status)==='OVERDUE' || (t.dueDate && new Date(t.dueDate) < now));
-  const today   = active.filter(t => OpsCommon.isToday(t.dueDate));
-  const done    = mine.filter(t => OpsCommon.isCompletedToday(t));
-
-  document.getElementById('stat-open').textContent   = active.length;
-  document.getElementById('stat-urgent').textContent = urgent.length;
-  document.getElementById('stat-today').textContent  = today.length;
-  document.getElementById('stat-done').textContent   = done.length;
-
-  // Next task
   const next = OpsCommon.nextTask(tasks, myId);
   if (next) {
-    document.getElementById('next-task-section').style.display = '';
+    secEl.style.display = '';
     document.getElementById('nt-title').textContent = next.title;
     document.getElementById('nt-meta').textContent  = '📅 ' + OpsCommon.fmtDue(next.dueDate) +
       (next.department ? '  ·  🏠 ' + next.department : '') +
@@ -113,32 +98,95 @@ async function load(isRealtime) {
     const startBtn    = document.getElementById('nt-start-btn');
     const completeBtn = document.getElementById('nt-complete-btn');
 
-    if (next.status !== 'OPEN') startBtn.style.display = 'none';
+    // Always reset disabled state: the card reuses persistent DOM buttons, so
+    // after completing task A (which set completeBtn.disabled=true), the card
+    // must re-enable the buttons before binding handlers for the next task B.
+    startBtn.disabled    = false;
+    completeBtn.disabled = false;
+
+    startBtn.style.display = next.status !== 'OPEN' ? 'none' : '';
     startBtn.onclick = async () => {
       startBtn.disabled = true;
       const r = await OpsCommon.api('/api/operations/tasks/' + next.id + '/start', { method: 'POST' });
-      if (r && r.success) load(); else { OpsCommon.showError(r && r.error); startBtn.disabled = false; }
+      if (r && r.success) load();
+      else { OpsCommon.showError(r && r.error); startBtn.disabled = false; }
     };
     completeBtn.onclick = async () => {
       completeBtn.disabled = true;
       const r = await OpsCommon.api('/api/operations/tasks/' + next.id + '/complete', { method: 'POST' });
-      if (r && r.success) load(); else { OpsCommon.showError(r && r.error); completeBtn.disabled = false; }
+      if (r && r.success) {
+        // Optimistic update: mark the task locally so the card re-renders
+        // immediately without waiting for the WS broadcast + debounced reload.
+        const idx = _tasks.findIndex(tk => tk.id === next.id);
+        if (idx !== -1) { _tasks[idx] = { ..._tasks[idx], status: 'COMPLETED' }; }
+        renderNextTaskCard(_tasks, _myId);
+        load(); // full refresh in background (in-flight guard prevents overlap)
+      } else { OpsCommon.showError(r && r.error); completeBtn.disabled = false; }
     };
-    document.getElementById('nt-view-btn').onclick = () => { location.href = 'operations-tasks.html#' + next.id; };
+    // Fix: use ?taskId= query param so operations-tasks.html can auto-open the panel
+    document.getElementById('nt-view-btn').onclick = () => {
+      location.href = 'operations-tasks.html?taskId=' + encodeURIComponent(next.id);
+    };
   } else {
-    document.getElementById('no-next-task').style.display = '';
+    noEl.style.display = '';
   }
+}
 
-  const container = document.getElementById('main-content');
-  container.innerHTML = '';
-  OpsCommon.renderSection(container, '🕐 ' + t('ops.sec.overdue'),        overdue,                                            users, t('ops.sec.noOverdue'));
-  OpsCommon.renderSection(container, '⚡ ' + t('ops.sec.urgent'),         urgent.filter(tk=>!overdue.find(o=>o.id===tk.id)), users, t('ops.sec.noUrgent'));
-  OpsCommon.renderSection(container, '📅 ' + t('ops.sec.todayDue'),      today.filter(tk=>!overdue.find(o=>o.id===tk.id)),  users, t('ops.sec.noTodayDue'));
-  OpsCommon.renderSection(container, '✅ ' + t('ops.sec.completedToday'), done,                                               users, t('ops.sec.noCompletedToday'));
+async function load(isRealtime) {
+  // In-flight guard with pending-reload: if a load is already running, mark
+  // it as pending so a trailing reload fires in the finally block after the
+  // current one completes. This ensures no WS event / user action is silently
+  // dropped — the last mutation always produces a fresh fetch.
+  if (_loadInFlight) { _pendingReload = true; return; }
+  _loadInFlight = true;
+  _pendingReload = false;
+  try {
+    await I18n.init({ selector: false });
+    const me = await OpsCommon.loadMe();
+    if (!me) return;
+    if (me.user.role !== 'CHEF_DE_BRIGADE') { location.replace('operations.html'); return; }
+    document.getElementById('me-name').textContent = me.user.name || '';
+    document.getElementById('me-role').textContent = OpsCommon.roleLabel(me.user.role);
+    _myId = me.user.id;
 
-  // Sprint 6.2+: personal intelligence (intentional load — updates lastVisitAt)
-  const intelRes = await OpsCommon.api(OpsCommon.intelligenceUrl(isRealtime ? 'isRealtime=1' : ''));
-  renderRoleIntel(intelRes);
+    const data = await OpsCommon.api('/api/operations/tasks');
+    if (!data || !data.success) { OpsCommon.showError(data && data.error); return; }
+    _tasks = data.tasks;
+    const users = data.users;
+    const now = new Date();
+
+    const mine    = _tasks.filter(tk => tk.assigneeId === _myId);
+    const active  = mine.filter(tk => tk.status !== 'COMPLETED' && tk.status !== 'CANCELLED');
+    const urgent  = active.filter(tk => tk.priority === 'URGENT');
+    const overdue = active.filter(tk => (tk.effectiveStatus||tk.status)==='OVERDUE' || (tk.dueDate && new Date(tk.dueDate) < now));
+    const today   = active.filter(tk => OpsCommon.isToday(tk.dueDate));
+    const done    = mine.filter(tk => OpsCommon.isCompletedToday(tk));
+
+    document.getElementById('stat-open').textContent   = active.length;
+    document.getElementById('stat-urgent').textContent = urgent.length;
+    document.getElementById('stat-today').textContent  = today.length;
+    document.getElementById('stat-done').textContent   = done.length;
+
+    // Render next-task card from the freshly-fetched task array
+    renderNextTaskCard(_tasks, _myId);
+
+    const container = document.getElementById('main-content');
+    container.innerHTML = '';
+    OpsCommon.renderSection(container, '🕐 ' + t('ops.sec.overdue'),        overdue,                                              users, t('ops.sec.noOverdue'));
+    OpsCommon.renderSection(container, '⚡ ' + t('ops.sec.urgent'),         urgent.filter(tk=>!overdue.find(o=>o.id===tk.id)),   users, t('ops.sec.noUrgent'));
+    OpsCommon.renderSection(container, '📅 ' + t('ops.sec.todayDue'),      today.filter(tk=>!overdue.find(o=>o.id===tk.id)),    users, t('ops.sec.noTodayDue'));
+    OpsCommon.renderSection(container, '✅ ' + t('ops.sec.completedToday'), done,                                                 users, t('ops.sec.noCompletedToday'));
+
+    // Sprint 6.2+: personal intelligence (intentional load — updates lastVisitAt)
+    const intelRes = await OpsCommon.api(OpsCommon.intelligenceUrl(isRealtime ? 'isRealtime=1' : ''));
+    renderRoleIntel(intelRes);
+  } finally {
+    _loadInFlight = false;
+    // If any load request arrived while we were fetching, do one trailing reload
+    // so the card reflects the latest server state (covers the race where a WS
+    // event fires during the in-flight intelligence request at the end of load).
+    if (_pendingReload) { _pendingReload = false; setTimeout(() => load(true), 100); }
+  }
 }
 
 function renderRoleIntel(r) {
@@ -180,7 +228,16 @@ I18n.init({ selector: '#i18n-sel' }).then(() => load());
 // Sprint 5: real-time live updates
 OpsRealtime.init();
 let _rtTimer = null;
-function rtReload(d) { clearTimeout(_rtTimer); _rtTimer = setTimeout(() => load(true), d || 700); }
+// rtReload debounces rapid WS events into a single load() call. It always
+// calls load() — the pending-reload flag inside load() handles the case where
+// a previous load is still in-flight, guaranteeing a trailing refresh so the
+// card reflects the latest mutation. The 400 ms delay for COMPLETED events is
+// intentional: the server broadcasts after persisting, so 400 ms is enough for
+// the HTTP fetch to also see the committed state.
+function rtReload(d) {
+  clearTimeout(_rtTimer);
+  _rtTimer = setTimeout(() => load(true), d || 700);
+}
 OpsRealtime.on('OPS_TASK_CREATED',    () => { rtReload(400); OpsRealtime.toast(t('ops.rt.newTask'), 'info'); });
 OpsRealtime.on('OPS_TASK_UPDATED',    () => { rtReload(500); });
 OpsRealtime.on('OPS_TASK_COMPLETED',  () => { rtReload(400); OpsRealtime.toast(t('ops.rt.completed'), 'ok'); });

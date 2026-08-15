@@ -338,7 +338,7 @@ const OpsCommon = (() => {
         const extraClass = isOverdue ? ' overdue-card' : isUrgent ? ' urgent-card' : isCompleted ? ' completed-card' : '';
         const dotColor = isOverdue ? 'var(--danger)' : isUrgent ? 'var(--warn)' : isCompleted ? 'var(--ok)' : 'var(--border-l)';
         return `<div class="task-card${extraClass}" style="cursor:pointer;border-left:3px solid ${dotColor}"
-                     onclick="location.href='operations-tasks.html#${escHtml(t.id)}'">
+                     onclick="location.href='operations-tasks.html?taskId=${escHtml(encodeURIComponent(t.id))}'">
           <div class="task-card-header">
             <div style="flex:1;min-width:0">
               <div class="task-title" style="margin-bottom:3px">${escHtml(t.title)}</div>

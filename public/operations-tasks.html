@@ -129,6 +129,11 @@ async function load() {
   assignableUsers = (aData && aData.assignees) || [];
 
   await loadTasks();
+
+  // Auto-open detail panel when a ?taskId= query param is present.
+  // Uses silent mode so invalid / cross-company IDs are silently ignored.
+  const taskIdParam = new URLSearchParams(location.search).get('taskId');
+  if (taskIdParam) { openDetail(taskIdParam, { silent: true }); }
 }
 
 // ── Filter helpers ──
@@ -181,9 +186,14 @@ function renderList() {
 }
 
 // ── Detail panel ──
-async function openDetail(taskId) {
+// opts.silent — if true, silently ignore non-200 responses (used for URL-param auto-open
+// so invalid / cross-company IDs do not surface error banners to the user).
+async function openDetail(taskId, opts = {}) {
   const data = await OpsCommon.api('/api/operations/tasks/' + taskId);
-  if (!data || !data.success) { OpsCommon.showError(data && data.error); return; }
+  if (!data || !data.success) {
+    if (!opts.silent) OpsCommon.showError(data && data.error);
+    return; // leave list visible; panel stays closed
+  }
   const task = data.task;
   allUsers = { ...allUsers, ...(data.users || {}) };
   const me = meData && meData.user;
