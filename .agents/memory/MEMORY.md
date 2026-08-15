@@ -33,4 +33,5 @@
 - [Central Dept calendar access](central-calendar-access.md) — bound dept-account sessions hit calendar API only if their dept is ACTIVE+CENTRAL (requireCalendarAccess); unbound legacy sessions unchanged.
 - [Operations login & activation](ops-login-activation.md) — session exchange flags isOperations; missing users/{uid} doc is non-fatal; idempotent activate; Director repair-binding; TEST_FIREBASE_AUTH_MOCK hook.
 - [Sibling-dept directory](sibling-dept-directory.md) — /api/voice-recipients is the safe company-wide active-dept directory; both voice AND countdown destination lists build from it (never from S1.4-locked /api/departments).
+- [Ops planning calendar](ops-calendar.md) — shared OpsCalCore window logic; query with ISO instants, never bare dates (UTC parse bug); DST-safe calendar math; NZ-vs-UTC test pattern.
 - [WS join confirmation](ws-join-confirmation.md) — server sends {action:'joinedRoom'} after joinRoom; ops realtime client requires it within 5s or reconnects; auth errors surfaced, not silently ignored.

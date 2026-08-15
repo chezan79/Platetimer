@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Operations — Calendario — PlateTimer</title>
+<link rel="stylesheet" href="css/operations.css">
+<link rel="stylesheet" href="css/operations-redesign.css">
+<script src="js/i18n.js"></script>
+<style>
+/* ── Calendar-specific layout (light redesign system) ─────────────────────── */
+.cal-toolbar { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:16px; }
+.cal-tabs { display:flex; gap:4px; background:#fff; border:1px solid var(--border-l,#e2e8f0); border-radius:9px; padding:3px; }
+.cal-tab { border:none; background:transparent; padding:7px 16px; border-radius:7px; font-size:13px; font-weight:700; color:var(--muted,#64748b); cursor:pointer; }
+.cal-tab.active { background:#101722; color:#fff; }
+.cal-nav { display:flex; align-items:center; gap:6px; }
+.cal-nav-btn { border:1px solid var(--border-l,#e2e8f0); background:#fff; padding:7px 14px; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; color:var(--text,#0f172a); }
+.cal-nav-btn:hover { background:#f1f5f9; }
+.cal-period { font-size:16px; font-weight:800; color:var(--text,#0f172a); min-width:180px; text-align:center; text-transform:capitalize; }
+.cal-grid-week { display:grid; grid-template-columns:repeat(7,1fr); gap:8px; }
+.cal-grid-month { display:grid; grid-template-columns:repeat(7,1fr); gap:6px; }
+.cal-dow { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.6px; color:var(--muted,#64748b); text-align:center; padding:4px 0; }
+.cal-cell { background:#fff; border:1px solid var(--border-l,#e2e8f0); border-radius:10px; padding:8px; min-height:90px; }
+.cal-cell.cal-other { opacity:.45; }
+.cal-cell.cal-today { border-color:#101722; box-shadow:0 0 0 1px #101722; }
+.cal-cell-date { font-size:12px; font-weight:800; color:var(--text,#0f172a); margin-bottom:6px; }
+.cal-cell.cal-today .cal-cell-date { color:#101722; }
+.cal-task { display:block; width:100%; text-align:left; background:#f8fafc; border:1px solid var(--border-l,#e2e8f0); border-left:3px solid #64748b; border-radius:7px; padding:6px 8px; margin-bottom:5px; cursor:pointer; font:inherit; }
+.cal-task:hover { background:#eef2f7; }
+.cal-task.prio-urgent { border-left-color:#dc2626; }
+.cal-task.prio-high   { border-left-color:#d97706; }
+.cal-task.prio-medium { border-left-color:#2563eb; }
+.cal-task.prio-low    { border-left-color:#64748b; }
+.cal-task-title { font-size:12px; font-weight:700; color:var(--text,#0f172a); line-height:1.3; overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+.cal-task-meta { display:flex; align-items:center; gap:5px; flex-wrap:wrap; margin-top:4px; font-size:11px; color:var(--muted,#64748b); }
+.cal-task .badge { font-size:9px; padding:1px 6px; }
+.cal-more { font-size:11px; font-weight:700; color:var(--muted,#64748b); padding:2px 4px; }
+.cal-day-list .cal-task { padding:10px 12px; }
+.cal-day-list .cal-task-title { font-size:14px; -webkit-line-clamp:3; }
+.cal-day-list .cal-task-meta { font-size:12px; }
+.cal-day-list .cal-task .badge { font-size:10px; }
+.cal-empty { background:#fff; border:1px dashed var(--border-l,#e2e8f0); border-radius:10px; padding:32px; text-align:center; color:var(--muted,#64748b); font-size:14px; }
+@media (max-width: 760px) {
+  .cal-grid-week, .cal-grid-month { grid-template-columns:repeat(7,minmax(0,1fr)); gap:3px; }
+  .cal-cell { min-height:64px; padding:4px; }
+  .cal-task-meta { display:none; }
+}
+</style>
+</head>
+<body class="operations-shell">
+
+<header class="hdr">
+  <a class="ops-brand" href="operations.html">
+    <span class="ob-pt">PLATETIMER</span><span class="ob-sep"> / </span><span class="ob-ops">OPERATIONS</span>
+  </a>
+  <nav class="ops-nav">
+    <a class="ops-nav-item" href="operations.html" data-i18n="ops.nav.dashboard">Dashboard</a>
+    <a class="ops-nav-item" href="operations-tasks.html" data-i18n="ops.nav.tasks">Compiti</a>
+    <span class="ops-nav-item active" data-i18n="ops.cal.navLink">📅 Calendario</span>
+    <a id="team-btn" class="ops-nav-item" href="operations-team.html" style="display:none" data-i18n="ops.nav.team">Team</a>
+    <a id="tpl-btn" class="ops-nav-item" href="operations-templates.html" style="display:none" data-i18n="ops.nav.templates">Template</a>
+  </nav>
+  <div class="ops-hdr-util">
+    <span id="hdr-company" class="hdr-company"></span>
+    <span id="i18n-sel"></span>
+    <a class="hdr-btn" href="home.html" data-i18n="common.home">Home</a>
+    <button class="hdr-btn danger" onclick="OpsCommon.logout()" data-i18n="common.logout">Esci</button>
+  </div>
+</header>
+
+<main class="main">
+  <div class="pg-heading">
+    <h1 class="pg-title" data-i18n="ops.cal.heading">Calendario di pianificazione</h1>
+    <p class="pg-sub"><span id="me-name"></span> · <span id="me-role" class="role-badge"></span></p>
+  </div>
+
+  <div id="ops-error" class="msg msg-error" style="display:none"></div>
+
+  <div class="cal-toolbar">
+    <div class="cal-tabs" role="tablist">
+      <button type="button" class="cal-tab" data-view="day" onclick="setView('day')" data-i18n="ops.cal.tab.day">Giorno</button>
+      <button type="button" class="cal-tab active" data-view="week" onclick="setView('week')" data-i18n="ops.cal.tab.week">Settimana</button>
+      <button type="button" class="cal-tab" data-view="month" onclick="setView('month')" data-i18n="ops.cal.tab.month">Mese</button>
+    </div>
+    <div class="cal-nav">
+      <button class="cal-nav-btn" onclick="navigate(-1)" data-i18n="ops.cal.nav.prev">← Precedente</button>
+      <button class="cal-nav-btn" onclick="goToday()" data-i18n="ops.cal.nav.today">Oggi</button>
+      <button class="cal-nav-btn" onclick="navigate(1)" data-i18n="ops.cal.nav.next">Successivo →</button>
+    </div>
+    <div class="cal-period" id="cal-period"></div>
+  </div>
+
+  <div id="cal-content"><div class="cal-empty" data-i18n="ops.cal.loading">Caricamento…</div></div>
+</main>
+
+<script src="js/ws-auth.js"></script>
+<script src="js/operations-calendar-core.js"></script>
+<script src="js/operations-common.js"></script>
+<script src="js/operations-realtime.js"></script>
+<script>
+const esc = OpsCommon.escHtml;
+const t = (key) => (typeof I18n !== 'undefined' && I18n.t) ? I18n.t(key) : key;
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let view = 'week';                 // 'day' | 'week' | 'month'
+let anchor = new Date();           // any date inside the visible window
+let meData = null;
+
+// ── Pure window/grouping helpers — shared with tests via operations-calendar-core.js ──
+// DST-safe calendar math + offset-bearing ISO instants for the API.
+const { startOfDay, addDays, calWindow, dateKey, groupTasksByDate, taskDetailUrl, windowQuery } = OpsCalCore;
+
+// ── Rendering ─────────────────────────────────────────────────────────────────
+function localeCode() {
+  const l = (typeof I18n !== 'undefined' && I18n.locale) ? I18n.locale : 'it';
+  return { it: 'it-IT', fr: 'fr-FR', en: 'en-GB' }[l] || 'it-IT';
+}
+
+function taskCardHtml(tk, users) {
+  const assignee = (users || {})[tk.assigneeId] || {};
+  const st = tk.effectiveStatus || tk.status;
+  const due = tk.dueDate ? new Date(tk.dueDate) : null;
+  const hasTime = due && tk.dueDate.length > 10 && !(due.getHours() === 0 && due.getMinutes() === 0);
+  const timeStr = hasTime ? due.toLocaleTimeString(localeCode(), { hour: '2-digit', minute: '2-digit' }) : '';
+  return `<button type="button" class="cal-task prio-${(tk.priority || 'medium').toLowerCase()}"
+      onclick="location.href=taskDetailUrl('${esc(tk.id)}')">
+    <div class="cal-task-title">${timeStr ? '🕐 ' + esc(timeStr) + ' · ' : ''}${esc(tk.title)}</div>
+    <div class="cal-task-meta">
+      ${assignee.name ? '👤 ' + esc(assignee.name) : ''}
+      <span class="badge badge-${(tk.priority || 'medium').toLowerCase()}">${esc(OpsCommon.priorityLabel(tk.priority))}</span>
+      <span class="badge badge-status-${(st || 'open').toLowerCase()}">${esc(OpsCommon.statusLabel(st))}</span>
+    </div>
+  </button>`;
+}
+
+function renderDay(byDate, users) {
+  const k = dateKey(startOfDay(anchor));
+  const tasks = byDate[k] || [];
+  if (!tasks.length) return `<div class="cal-empty">${t('ops.cal.empty.day')}</div>`;
+  return `<div class="cal-day-list card" style="padding:14px">${tasks.map(tk => taskCardHtml(tk, users)).join('')}</div>`;
+}
+
+function renderWeek(byDate, users, win) {
+  const todayK = dateKey(new Date());
+  let cells = '', dows = '';
+  for (let i = 0; i < 7; i++) {
+    const d = addDays(win.start, i);
+    const k = dateKey(d);
+    dows += `<div class="cal-dow">${esc(d.toLocaleDateString(localeCode(), { weekday: 'short' }))}</div>`;
+    const tasks = byDate[k] || [];
+    cells += `<div class="cal-cell${k === todayK ? ' cal-today' : ''}">
+      <div class="cal-cell-date">${d.getDate()}</div>
+      ${tasks.map(tk => taskCardHtml(tk, users)).join('')}
+    </div>`;
+  }
+  const any = Object.keys(byDate).some(k => (byDate[k] || []).length);
+  return (any ? '' : `<div class="cal-empty" style="margin-bottom:10px">${t('ops.cal.empty.week')}</div>`)
+    + `<div class="cal-grid-week" style="margin-bottom:4px">${dows}</div><div class="cal-grid-week">${cells}</div>`;
+}
+
+function renderMonth(byDate, users, win) {
+  const todayK = dateKey(new Date());
+  const firstDow = (win.start.getDay() + 6) % 7; // Monday-based offset
+  const gridStart = addDays(win.start, -firstDow);
+  let dows = '';
+  for (let i = 0; i < 7; i++) {
+    const d = addDays(gridStart, i);
+    dows += `<div class="cal-dow">${esc(d.toLocaleDateString(localeCode(), { weekday: 'short' }))}</div>`;
+  }
+  let cells = '';
+  const month = win.start.getMonth();
+  for (let i = 0; i < 42; i++) {
+    const d = addDays(gridStart, i);
+    if (i >= 35 && d.getMonth() !== month) break; // skip fully-out-of-month 6th row
+    const k = dateKey(d);
+    const tasks = byDate[k] || [];
+    const shown = tasks.slice(0, 3);
+    const extra = tasks.length - shown.length;
+    cells += `<div class="cal-cell${d.getMonth() !== month ? ' cal-other' : ''}${k === todayK ? ' cal-today' : ''}">
+      <div class="cal-cell-date">${d.getDate()}</div>
+      ${shown.map(tk => taskCardHtml(tk, users)).join('')}
+      ${extra > 0 ? `<div class="cal-more">+${extra} ${t('ops.cal.more')}</div>` : ''}
+    </div>`;
+  }
+  const any = Object.keys(byDate).some(k => (byDate[k] || []).length);
+  return (any ? '' : `<div class="cal-empty" style="margin-bottom:10px">${t('ops.cal.empty.month')}</div>`)
+    + `<div class="cal-grid-month" style="margin-bottom:4px">${dows}</div><div class="cal-grid-month">${cells}</div>`;
+}
+
+function periodLabel(win) {
+  const lc = localeCode();
+  if (view === 'day')   return anchor.toLocaleDateString(lc, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  if (view === 'month') return anchor.toLocaleDateString(lc, { month: 'long', year: 'numeric' });
+  const opts = { day: 'numeric', month: 'short' };
+  return win.start.toLocaleDateString(lc, opts) + ' – ' + new Date(win.end).toLocaleDateString(lc, opts) +
+    ' ' + win.start.getFullYear();
+}
+
+// ── Data loading ──────────────────────────────────────────────────────────────
+async function refresh() {
+  const win = calWindow(view, anchor);
+  document.getElementById('cal-period').textContent = periodLabel(win);
+  const wq = windowQuery(win);
+  const params = new URLSearchParams({ start: wq.start, end: wq.end, sort: 'dueDate' });
+  const data = await OpsCommon.api('/api/operations/tasks?' + params);
+  if (!data || !data.success) {
+    if (!data) document.getElementById('cal-content').innerHTML = `<div class="cal-empty">${t('ops.cal.error.network')}</div>`;
+    else OpsCommon.showError(data.error);
+    return;
+  }
+  const byDate = groupTasksByDate(data.tasks);
+  const content = document.getElementById('cal-content');
+  if (view === 'day')       content.innerHTML = renderDay(byDate, data.users);
+  else if (view === 'week') content.innerHTML = renderWeek(byDate, data.users, win);
+  else                      content.innerHTML = renderMonth(byDate, data.users, win);
+}
+
+// ── View / navigation ─────────────────────────────────────────────────────────
+function setView(v) {
+  view = v;
+  document.querySelectorAll('.cal-tab').forEach(b => b.classList.toggle('active', b.dataset.view === v));
+  refresh();
+}
+function navigate(dir) {
+  if (view === 'day')        anchor = addDays(anchor, dir);
+  else if (view === 'week')  anchor = addDays(anchor, dir * 7);
+  else                       anchor = new Date(anchor.getFullYear(), anchor.getMonth() + dir, 1);
+  refresh();
+}
+function goToday() { anchor = new Date(); refresh(); }
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+async function load() {
+  meData = await OpsCommon.loadMe();
+  if (!meData) return;
+  document.getElementById('me-name').textContent = meData.user.name || '';
+  document.getElementById('me-role').textContent = OpsCommon.roleLabel(meData.user.role);
+  if (meData.user.role === 'DIRECTOR') {
+    document.getElementById('team-btn').style.display = '';
+    document.getElementById('tpl-btn').style.display = '';
+  }
+  await refresh();
+}
+
+I18n.init({ selector: '#i18n-sel' }).then(() => {
+  load();
+  document.addEventListener('click', function (e) {
+    if (e.target && e.target.classList.contains('i18n-lang-btn')) setTimeout(refresh, 30);
+  });
+});
+
+// ── Real-time updates (existing OpsRealtime channel — no second WS) ──────────
+OpsRealtime.init();
+let _rtTimer = null;
+function rtReload(d) { clearTimeout(_rtTimer); _rtTimer = setTimeout(refresh, d || 600); }
+OpsRealtime.on('OPS_TASK_CREATED',    () => rtReload(400));
+OpsRealtime.on('OPS_TASK_UPDATED',    () => rtReload(500));
+OpsRealtime.on('OPS_TASK_COMPLETED',  () => rtReload(400));
+OpsRealtime.on('OPS_TASK_REASSIGNED', () => rtReload(400));
+OpsRealtime.on('OPS_TASK_DELETED',    () => rtReload(400));
+OpsRealtime.on('OPS_TASK_PROGRESS',   () => rtReload(700));
+</script>
+</body>
+</html>

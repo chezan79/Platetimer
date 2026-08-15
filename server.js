@@ -3076,8 +3076,27 @@ app.get('/api/operations/tasks', (req, res) => {
         .filter(t => opsAuth.canViewTask(actor, t, byId))
         .map(opsTaskWithComputedStatus);
 
-    const { status, priority, assigneeId, department, q, sort, my: myOnly } = req.query;
+    const { status, priority, assigneeId, department, q, sort, my: myOnly, start, end } = req.query;
     if (myOnly === '1') tasks = tasks.filter(t => t.assigneeId === actor.id);
+    // [Calendar] Optional inclusive date-range filter on dueDate. Applied AFTER
+    // visibility, so it can never expose unauthorized data. `start`/`end` are
+    // ISO dates (YYYY-MM-DD) or full ISO datetimes; a bare end date is extended
+    // to the end of that day so the range is inclusive.
+    if (start || end) {
+        const startMs = start ? Date.parse(start) : null;
+        let endMs = end ? Date.parse(end) : null;
+        if (endMs !== null && !isNaN(endMs) && /^\d{4}-\d{2}-\d{2}$/.test(end)) {
+            endMs += 24 * 3600 * 1000 - 1; // inclusive end-of-day for bare dates
+        }
+        tasks = tasks.filter(t => {
+            if (!t.dueDate) return false;
+            const due = new Date(t.dueDate).getTime();
+            if (isNaN(due)) return false;
+            if (startMs !== null && !isNaN(startMs) && due < startMs) return false;
+            if (endMs !== null && !isNaN(endMs) && due > endMs) return false;
+            return true;
+        });
+    }
     if (status) {
         const s = status.toUpperCase();
         tasks = tasks.filter(t => s === 'OVERDUE' ? t.effectiveStatus === 'OVERDUE' : t.status === s);
