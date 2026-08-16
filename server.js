@@ -1046,22 +1046,28 @@ app.post('/api/service/ops-tasks/:taskId/acknowledge', (req, res) => {
     const session = requireAuth(req, res);
     if (!session) return;
 
+    const { taskId } = req.params;
+    console.log(`[OPS-ACK-DIAG] POST acknowledge taskId=${taskId} uid=${session.uid} company=${session.companyName}`);
+
     const boundAcct = getBoundDepartmentContext(session);
     if (!boundAcct) {
+        console.log(`[OPS-ACK-DIAG] 403 NOT_BOUND uid=${session.uid}`);
         return res.status(403).json({ error: 'No department account binding.', code: 'NOT_BOUND' });
     }
     if (boundAcct.status !== 'ACTIVE') {
+        console.log(`[OPS-ACK-DIAG] 403/410 account status=${boundAcct.status}`);
         const e = departmentAccessError(boundAcct);
         return res.status(e.status).json(e.body);
     }
 
     const companyId    = boundAcct.companyId;    // server-side only
     const departmentId = boundAcct.departmentId; // server-side only
-    const { taskId }   = req.params;
+    console.log(`[OPS-ACK-DIAG] companyId=${companyId} departmentId=${departmentId}`);
 
     // Live department-activity guard (mirrors GET)
     const liveDept = getCompanyDepts(companyId).find(d => d.id === departmentId);
     if (!liveDept || !liveDept.active) {
+        console.log(`[OPS-ACK-DIAG] 410 DEPARTMENT_INACTIVE departmentId=${departmentId}`);
         return res.status(410).json({ error: 'Assigned department inactive', code: 'DEPARTMENT_INACTIVE' });
     }
 
@@ -1075,6 +1081,11 @@ app.post('/api/service/ops-tasks/:taskId/acknowledge', (req, res) => {
         (t.status === 'OPEN' || t.status === 'IN_PROGRESS')
     );
     if (!task) {
+        const rawTask = getOpsTasks(companyId).find(t => t.id === taskId);
+        console.log(`[OPS-ACK-DIAG] 404 TASK_NOT_FOUND taskId=${taskId} rawFound=${!!rawTask}`,
+            rawTask
+                ? `pub=${rawTask.publishToService} svcDept=${rawTask.serviceDepartmentId} status=${rawTask.status} companyMatch=${rawTask.companyId === companyId} deptMatch=${rawTask.serviceDepartmentId === departmentId}`
+                : '(not in store)');
         return res.status(404).json({ error: 'Task not found or not published to this department.', code: 'TASK_NOT_FOUND' });
     }
 
@@ -1089,6 +1100,7 @@ app.post('/api/service/ops-tasks/:taskId/acknowledge', (req, res) => {
         saveOpsAcks();
     }
 
+    console.log(`[OPS-ACK-DIAG] 200 OK taskId=${taskId} companyId=${companyId} deptId=${departmentId}`);
     res.json({ success: true });
 });
 
