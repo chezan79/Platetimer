@@ -1898,6 +1898,9 @@ app.put('/api/calendar/events/:id', async (req, res) => {
         console.warn(`[CALENDAR] PUT 404: event "${req.params.id}" not found for company "${companyId}" (${(calendarEventsStore[companyId]||[]).length} events in store)`);
         return res.status(404).json({ success: false, error: 'Event not found' });
     }
+    // [Task 66 Rework] Operations calendar mirrors are read-only from Service
+    if (events[idx].source === 'OPERATIONS')
+        return res.status(403).json({ success: false, error: 'Operations calendar mirrors are read-only.' });
 
     let cleaned;
     try { cleaned = sanitizeEventInput({ ...events[idx], ...req.body }); }
@@ -1946,6 +1949,9 @@ app.patch('/api/calendar/events/:id/status', async (req, res) => {
     };
     const idx = resolveIdx(req.params.id);
     if (idx === -1) return res.status(404).json({ success: false, error: 'Event not found' });
+    // [Task 66 Rework] Operations mirrors are read-only from Service
+    if (events[idx].source === 'OPERATIONS')
+        return res.status(403).json({ success: false, error: 'Operations calendar mirrors are read-only.' });
 
     const newStatus = req.body.status;
     if (!VALID_STATUSES.includes(newStatus)) {
@@ -1991,6 +1997,9 @@ app.post('/api/calendar/events/:id/duplicate', async (req, res) => {
     };
     const source = resolveEvent(req.params.id);
     if (!source) return res.status(404).json({ success: false, error: 'Event not found' });
+    // [Task 66 Rework] Operations mirrors cannot be duplicated
+    if (source.source === 'OPERATIONS')
+        return res.status(403).json({ success: false, error: 'Operations calendar mirrors are read-only.' });
 
     const now = Date.now();
     const copy = {
@@ -2046,6 +2055,9 @@ app.delete('/api/calendar/events/:id', async (req, res) => {
 
     const event = events[idx];
     const resolvedId = event.id;
+    // [Task 66 Rework] Operations mirrors are read-only from Service
+    if (event.source === 'OPERATIONS')
+        return res.status(403).json({ success: false, error: 'Operations calendar mirrors are read-only.' });
     console.log(`[CALENDAR DELETE] Event found resolvedId=${resolvedId}`);
 
     // Step 1 — build the updated array WITHOUT mutating the live store yet
@@ -3095,6 +3107,98 @@ function opsServiceEntitlementLost(task, prevPublish, prevDeptId) {
            (task.status !== 'OPEN' && task.status !== 'IN_PROGRESS');
 }
 
+// ── [Task 66 Rework] Service calendar mirror ────────────────────────────────
+// Map Operations priority labels → Service calendar priority scale.
+function mapOpsPriorityToCalendar(p) {
+    if (p === 'URGENT') return 'urgent';
+    if (p === 'HIGH')   return 'high';
+    if (p === 'LOW')    return 'low';
+    return 'normal'; // MEDIUM → normal
+}
+
+// Upsert or remove the Service calendar mirror for an Operations task.
+// Mirror ID = 'opsmirror_' + task.id  (deterministic — never duplicated).
+// Reuses the existing calendar store/broadcast architecture; the mirror is
+// enforced read-only from Service (PUT/PATCH status/DELETE calendar endpoints
+// check event.source === 'OPERATIONS' and return 403).
+// Called fire-and-forget after every ops task mutation (failures non-fatal).
+async function syncOpsTaskToCalendar(companyId, task) {
+    const mirrorId = 'opsmirror_' + task.id;
+    if (!calendarEventsStore[companyId]) calendarEventsStore[companyId] = [];
+    const events = calendarEventsStore[companyId];
+    const existingIdx = events.findIndex(e => e.id === mirrorId);
+
+    const entitled = task.publishToService === true &&
+                     !!task.serviceDepartmentId &&
+                     (task.status === 'OPEN' || task.status === 'IN_PROGRESS');
+
+    if (!entitled) {
+        if (existingIdx === -1) return; // nothing to remove
+        const removed = events.splice(existingIdx, 1)[0];
+        try {
+            await saveCalEventsAsync(companyId);
+            broadcastCalendarEvent(companyId, 'calendarEventDeleted', { eventId: mirrorId });
+            console.log(`[CAL-SYNC] Removed mirror ${mirrorId} for "${companyId}"`);
+        } catch (e) {
+            events.splice(existingIdx, 0, removed); // rollback in-memory
+            console.error(`[CAL-SYNC] Failed to remove mirror ${mirrorId}: ${e.message}`);
+        }
+        return;
+    }
+
+    // Build the mirror event (all fields server-controlled; bypasses sanitizer
+    // because source/operationsTaskId are not part of the public schema).
+    const mirror = {
+        id:               mirrorId,
+        companyId,
+        source:           'OPERATIONS',
+        operationsTaskId: task.id,
+        title:            task.title,
+        date:             task.dueDate ? task.dueDate.slice(0, 10) : todayZurich(),
+        eventType:        'other',
+        startTime:        '00:00',
+        endTime:          null,
+        allDay:           true,
+        priority:         mapOpsPriorityToCalendar(task.priority),
+        status:           'scheduled',
+        description:      task.description || '',
+        departmentIds:    [task.serviceDepartmentId],
+        assigneeName:     task.assigneeName || '',
+        visibility:       'all_company',
+        recurrence:       { type: 'none', interval: 1, weekdays: [], endDate: null },
+        reminders:        [],
+        assignedUserIds:  [],
+        guestCount:       null,
+        tableNumber:      null,
+        customerName:     '',
+        contactName:      '',
+        phone:            '',
+        location:         '',
+        allergyNotes:     '',
+        dietaryNotes:     '',
+        preparationNotes: '',
+        createdBy:        'OPERATIONS',
+        createdAt:        task.createdAt,
+        updatedAt:        task.updatedAt
+    };
+
+    const isNew = existingIdx === -1;
+    if (isNew) events.push(mirror);
+    else       events[existingIdx] = mirror;
+
+    try {
+        await saveCalEventsAsync(companyId);
+        broadcastCalendarEvent(companyId,
+            isNew ? 'calendarEventCreated' : 'calendarEventUpdated',
+            { event: mirror });
+        console.log(`[CAL-SYNC] ${isNew ? 'Created' : 'Updated'} mirror ${mirrorId} for "${companyId}"`);
+    } catch (e) {
+        // Rollback in-memory so the store stays consistent
+        if (isNew) events.pop(); else events[existingIdx] = null;
+        console.error(`[CAL-SYNC] Failed to upsert mirror ${mirrorId}: ${e.message}`);
+    }
+}
+
 // ── POST /api/operations/tasks — create (hierarchy-enforced assignment) ──
 // [SECURITY] companyId + createdBy from the server-side ops record; forged
 // companyId/createdBy/status/completedAt in the payload are ignored.
@@ -3198,6 +3302,8 @@ app.post('/api/operations/tasks', async (req, res) => {
     }
 
     broadcastOps(companyId, { action: 'OPS_TASK_CREATED', task: opsTaskWithComputedStatus(task) });
+    // [Task 66 Rework] Sync to Service calendar mirror (fire-and-forget — non-fatal)
+    syncOpsTaskToCalendar(companyId, task).catch(e => console.error('[CAL-SYNC]', e.message));
     res.status(201).json({ success: true, task: opsTaskWithComputedStatus(task), notificationResult });
 });
 
@@ -3391,6 +3497,8 @@ app.put('/api/operations/tasks/:id', (req, res) => {
     // [Task 66] Explicit removal signal to the previously-entitled department
     if (opsServiceEntitlementLost(task, prevPublish, prevServiceDepartmentId))
         broadcastOpsServiceRemoved(companyId, task.id, prevServiceDepartmentId);
+    // [Task 66 Rework] Sync to Service calendar mirror (fire-and-forget — non-fatal)
+    syncOpsTaskToCalendar(companyId, task).catch(e => console.error('[CAL-SYNC]', e.message));
     res.json({ success: true, task: opsTaskWithComputedStatus(task) });
 });
 
@@ -3481,6 +3589,8 @@ app.patch('/api/operations/tasks/:id', (req, res) => {
     // [Task 66] Explicit removal signal to the previously-entitled department
     if (opsServiceEntitlementLost(task, prevPublish, prevServiceDepartmentId))
         broadcastOpsServiceRemoved(actor.companyId, task.id, prevServiceDepartmentId);
+    // [Task 66 Rework] Sync to Service calendar mirror (fire-and-forget — non-fatal)
+    syncOpsTaskToCalendar(actor.companyId, task).catch(e => console.error('[CAL-SYNC]', e.message));
     res.json({ success: true, task: opsTaskWithComputedStatus(task) });
 });
 
@@ -3564,6 +3674,8 @@ app.post('/api/operations/tasks/:id/progress', (req, res) => {
     // [Task 66] Auto-completion via 100% removes the task from the Service view
     if (prevPublish && task.status === 'COMPLETED')
         broadcastOpsServiceRemoved(actor.companyId, task.id, prevServiceDepartmentId);
+    // [Task 66 Rework] Sync to Service calendar mirror (fire-and-forget — non-fatal)
+    syncOpsTaskToCalendar(actor.companyId, task).catch(e => console.error('[CAL-SYNC]', e.message));
     res.json({ success: true, task: opsTaskWithComputedStatus(task) });
 });
 
@@ -3601,6 +3713,8 @@ app.post('/api/operations/tasks/:id/complete', (req, res) => {
     // [Task 66] Completed tasks leave the Service view — explicit removal signal
     if (prevPublish)
         broadcastOpsServiceRemoved(actor.companyId, task.id, prevServiceDepartmentId);
+    // [Task 66 Rework] Sync to Service calendar mirror (fire-and-forget — non-fatal)
+    syncOpsTaskToCalendar(actor.companyId, task).catch(e => console.error('[CAL-SYNC]', e.message));
     res.json({ success: true, task: opsTaskWithComputedStatus(task) });
 });
 
@@ -3678,6 +3792,8 @@ app.post('/api/operations/tasks/:id/reassign', async (req, res) => {
     if (prevPublish)
         broadcastOpsServiceRemoved(actor.companyId, task.id, prevServiceDepartmentId);
     broadcastOps(actor.companyId, { action: 'OPS_TASK_REASSIGNED', task: opsTaskWithComputedStatus(task), prevAssigneeId: oldAssigneeId });
+    // [Task 66 Rework] Sync to Service calendar mirror — reassign updates assigneeName (fire-and-forget)
+    syncOpsTaskToCalendar(actor.companyId, task).catch(e => console.error('[CAL-SYNC]', e.message));
     res.json({ success: true, task: opsTaskWithComputedStatus(task), notificationResult });
 });
 
@@ -3710,6 +3826,8 @@ app.post('/api/operations/tasks/:id/cancel', (req, res) => {
     // [Task 66] Cancelled tasks leave the Service view — explicit removal signal
     if (prevPublish)
         broadcastOpsServiceRemoved(actor.companyId, task.id, prevServiceDepartmentId);
+    // [Task 66 Rework] Sync to Service calendar mirror (fire-and-forget — non-fatal)
+    syncOpsTaskToCalendar(actor.companyId, task).catch(e => console.error('[CAL-SYNC]', e.message));
     res.json({ success: true, task: opsTaskWithComputedStatus(task) });
 });
 
@@ -3933,6 +4051,19 @@ app.delete('/api/operations/tasks/:id', async (req, res) => {
     // [Task 66] Deleted tasks leave the Service view — explicit removal signal
     if (prevPublish)
         broadcastOpsServiceRemoved(actor.companyId, task.id, prevServiceDepartmentId);
+    // [Task 66 Rework] Remove calendar mirror for deleted task (force status to removed)
+    {
+        const _deletedMirrorId = 'opsmirror_' + task.id;
+        if (calendarEventsStore[actor.companyId]) {
+            const _idx = calendarEventsStore[actor.companyId].findIndex(e => e.id === _deletedMirrorId);
+            if (_idx !== -1) {
+                calendarEventsStore[actor.companyId].splice(_idx, 1);
+                saveCalEventsAsync(actor.companyId)
+                    .then(() => broadcastCalendarEvent(actor.companyId, 'calendarEventDeleted', { eventId: _deletedMirrorId }))
+                    .catch(e => console.error('[CAL-SYNC] delete mirror failed:', e.message));
+            }
+        }
+    }
     res.json({ success: true });
 });
 

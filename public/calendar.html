@@ -354,6 +354,16 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 .detail-section{border-top:1px solid var(--border);padding-top:14px;margin-top:14px;}
 .detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
 @media(max-width:400px){.detail-grid{grid-template-columns:1fr;}}
+
+/* ── OPERATIONS source badge (Task 66 Rework) ── */
+.ops-source-badge{display:inline-flex;align-items:center;gap:4px;
+  padding:2px 8px;border-radius:5px;font-size:10px;font-weight:800;
+  letter-spacing:.06em;text-transform:uppercase;
+  background:rgba(79,184,216,.15);color:var(--accent);border:1px solid rgba(79,184,216,.3);}
+.ops-source-banner{display:flex;align-items:center;gap:8px;
+  padding:8px 12px;border-radius:8px;margin-bottom:14px;
+  background:rgba(79,184,216,.07);border:1px solid rgba(79,184,216,.2);
+  font-size:12px;color:var(--accent);}
 </style>
 <link rel="stylesheet" href="css/operations-redesign.css">
 </head>
@@ -1163,6 +1173,8 @@ function renderEventCardHTML(ev, extraClassFn) {
     if (ev.status === 'completed') extraClass += ' completed';
     if (ev.priority === 'urgent' || ev.priority === 'high') extraClass += ` priority-${ev.priority}`;
 
+    const isOpsSource = ev.source === 'OPERATIONS';
+
     const timeStr = ev.allDay ? _t('cal.allDay') : (ev.startTime ? ev.startTime + (ev.endTime ? '–'+ev.endTime : '') : '');
     const guestStr = ev.guestCount ? `👥 ${ev.guestCount}` : '';
     const tableStr = ev.tableNumber ? `🪑 ${_t('cal.card.table')} ${ev.tableNumber}` : '';
@@ -1175,9 +1187,14 @@ function renderEventCardHTML(ev, extraClassFn) {
     const overdueTag = overdue && !['completed','cancelled'].includes(ev.status)
         ? `<span class="event-badge badge-overdue">${_t('cal.overdue')}</span>` : '';
 
-    const canComplete = !['completed','cancelled'].includes(ev.status);
+    // [Task 66 Rework] Operations-origin events: read-only in Service — no complete button
+    const canComplete = !isOpsSource && !['completed','cancelled'].includes(ev.status);
     const completeBtnHtml = canComplete
         ? `<button class="ev-btn complete-btn" onclick="event.stopPropagation();quickComplete('${ev.id}','${ev.baseId||''}')" title="${_t('cal.card.title.complete')}">${_t('cal.btn.done')}</button>` : '';
+
+    // Operations badge shown on card
+    const opsBadgeHtml = isOpsSource
+        ? `<span class="ops-source-badge" title="${_t('cal.ops.readonly')}">⚙ ${_t('cal.ops.badge')}</span>` : '';
 
     const evJson = JSON.stringify(ev).replace(/'/g, '&#39;');
 
@@ -1189,6 +1206,7 @@ function renderEventCardHTML(ev, extraClassFn) {
           <span class="event-badge badge-priority-${ev.priority}">${getPriorityLabel(ev.priority)}</span>
           <span class="event-badge badge-status-${ev.status}">${getStatusLabel(ev.status)}</span>
           ${overdueTag}
+          ${opsBadgeHtml}
         </div>
         <div class="event-title">${esc(ev.title)}</div>
         <div class="event-meta">
@@ -1235,7 +1253,9 @@ function openDetailModal(ev) {
     const evTypeLabel = getEventLabel(ev.eventType);
     const deptNames = departments.filter(d => (ev.departmentIds||[]).includes(d.id)).map(d => d.name);
     const overdue = isOverdue(ev);
-    const canComplete = !['completed','cancelled'].includes(ev.status);
+    // [Task 66 Rework] Operations-origin events are read-only in the calendar UI
+    const isOpsSource = ev.source === 'OPERATIONS';
+    const canComplete = !isOpsSource && !['completed','cancelled'].includes(ev.status);
     const baseId = ev.baseId || ev.id;
     const reminderStr = (ev.reminders||[]).map(r => getReminderLabel(r.offsetMinutes)).join(', ');
 
@@ -1243,7 +1263,14 @@ function openDetailModal(ev) {
     const hasRecur = recType !== 'none';
     const recStr   = hasRecur ? _t('cal.recur.' + recType) : '';
 
-    let html = `
+    // Operations read-only banner shown at the top of the detail body
+    const opsBanner = isOpsSource ? `
+      <div class="ops-source-banner">
+        <span class="ops-source-badge">⚙ ${_t('cal.ops.badge')}</span>
+        <span>${_t('cal.ops.readonly')}</span>
+      </div>` : '';
+
+    let html = `${opsBanner}
       <div class="detail-hdr">
         <div class="detail-icon">${tc.icon}</div>
         <div>
@@ -1311,19 +1338,30 @@ function openDetailModal(ev) {
         </div></div>`;
     }
 
+    // [Task 66 Rework] Show assignee for Operations-origin events
+    if (isOpsSource && ev.assigneeName) {
+        html += `<div class="detail-section"><div class="detail-field">
+          <div class="detail-field-label">${_t('cal.ops.assignee')}</div>
+          <div class="detail-field-value">${esc(ev.assigneeName)}</div>
+        </div></div>`;
+    }
+
     document.getElementById('modal-body').innerHTML = html;
 
     let footerHtml = `<button class="btn btn-secondary" onclick="closeModal()">${_t('cal.detail.btn.close')}</button>`;
 
-    if (canComplete) {
-        footerHtml += `<button class="btn btn-ok" onclick="completeFromDetail('${baseId}')">${_t('cal.detail.btn.complete')}</button>`;
+    // [Task 66 Rework] Operations mirrors are read-only — no edit/delete/complete/cancel/duplicate
+    if (!isOpsSource) {
+        if (canComplete) {
+            footerHtml += `<button class="btn btn-ok" onclick="completeFromDetail('${baseId}')">${_t('cal.detail.btn.complete')}</button>`;
+        }
+        if (!['completed','cancelled'].includes(ev.status)) {
+            footerHtml += `<button class="btn btn-warn" onclick="cancelFromDetail('${baseId}')">${_t('cal.detail.btn.cancel_event')}</button>`;
+        }
+        footerHtml += `<button class="btn btn-secondary" onclick="duplicateEvent('${baseId}')">${_t('cal.detail.btn.duplicate')}</button>`;
+        footerHtml += `<button class="btn btn-primary" onclick="openEditModal('${baseId}')">${_t('cal.detail.btn.edit')}</button>`;
+        footerHtml += `<button class="btn btn-danger" onclick="askDeleteEvent('${baseId}')">${_t('cal.detail.btn.delete')}</button>`;
     }
-    if (!['completed','cancelled'].includes(ev.status)) {
-        footerHtml += `<button class="btn btn-warn" onclick="cancelFromDetail('${baseId}')">${_t('cal.detail.btn.cancel_event')}</button>`;
-    }
-    footerHtml += `<button class="btn btn-secondary" onclick="duplicateEvent('${baseId}')">${_t('cal.detail.btn.duplicate')}</button>`;
-    footerHtml += `<button class="btn btn-primary" onclick="openEditModal('${baseId}')">${_t('cal.detail.btn.edit')}</button>`;
-    footerHtml += `<button class="btn btn-danger" onclick="askDeleteEvent('${baseId}')">${_t('cal.detail.btn.delete')}</button>`;
 
     document.getElementById('modal-footer').innerHTML = footerHtml;
     document.getElementById('event-modal').classList.add('open');

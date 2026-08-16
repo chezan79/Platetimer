@@ -1129,5 +1129,8 @@
  "service.opsTasksEmpty": "Aucune tâche Operations pour ce département",
  "service.opsSource": "Operations",
  "service.opsTaskDue": "Échéance",
- "service.opsTaskAssignee": "Assigné à"
+ "service.opsTaskAssignee": "Assigné à",
+ "cal.ops.badge": "Opérations",
+ "cal.ops.readonly": "Cet événement est géré par Opérations et ne peut pas être modifié ici.",
+ "cal.ops.assignee": "Assigné à"
 }
