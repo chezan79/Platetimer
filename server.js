@@ -6027,6 +6027,59 @@ wss.on('connection', (ws, req) => {
                     console.error(`[MEX-REPLY] Error (${code}): ${e && (e.message || JSON.stringify(e))}`);
                 });
 
+            } else if (data.action === 'mexClose') {
+                // ── [MEX Step 8] Close / resolve a Mex conversation ────────────────────────
+                // [SECURITY] Caller identity derived from verified socket state only.
+                const MEX_SALA_ID_C = '__sala__';
+                const closeSender = ws.boundDepartmentId
+                    || (ws.isFloorPrincipal ? MEX_SALA_ID_C : null);
+                if (!closeSender || !ws.companyRoom) {
+                    if (ws.readyState === WebSocket.OPEN)
+                        ws.send(JSON.stringify({ action: 'mexCloseAck', success: false, code: 'MEX_NOT_BOUND' }));
+                    return;
+                }
+                const closeConvId    = data.conversationId;
+                const closeCompanyId = ws.companyRoom;
+                if (!closeConvId || typeof closeConvId !== 'string') {
+                    ws.send(JSON.stringify({ action: 'mexCloseAck', success: false, code: 'MEX_MISSING_CONV_ID' }));
+                    return;
+                }
+                mexStoreModule.closeConversation(closeCompanyId, closeConvId, closeSender)
+                    .then(({ conversation: conv, alreadyClosed }) => {
+                        if (ws.readyState === WebSocket.OPEN) {
+                            ws.send(JSON.stringify({
+                                action:         'mexCloseAck',
+                                success:        true,
+                                conversationId: closeConvId,
+                                alreadyClosed
+                            }));
+                        }
+                        // Notify the other participant (server-side fanout)
+                        const otherParticipant = conv.participants.find(p => p !== closeSender);
+                        if (otherParticipant) {
+                            for (const client of wss.clients) {
+                                if (client === ws) continue;
+                                if (client.readyState !== WebSocket.OPEN) continue;
+                                if (client.companyRoom !== closeCompanyId) continue;
+                                const isOther = otherParticipant === MEX_SALA_ID_C
+                                    ? client.isFloorPrincipal
+                                    : client.boundDepartmentId === otherParticipant;
+                                if (!isOther) continue;
+                                client.send(JSON.stringify({
+                                    action:         'mexClosed',
+                                    conversationId: closeConvId,
+                                    closedBy:       closeSender
+                                }));
+                            }
+                        }
+                        console.log(`[MEX-CLOSE] conv=${closeConvId} by="${closeSender}" company="${closeCompanyId}" alreadyClosed=${alreadyClosed}`);
+                    }).catch(e => {
+                        const code = (e && e.code) || 'MEX_CLOSE_ERROR';
+                        if (ws.readyState === WebSocket.OPEN)
+                            ws.send(JSON.stringify({ action: 'mexCloseAck', success: false, code }));
+                        console.error(`[MEX-CLOSE] Error (${code}): ${e && (e.message || JSON.stringify(e))}`);
+                    });
+
             } else if (data.action === 'pausaCucina') {
                 // Validazione richiesta pausa cucina
                 if (!data.durataMinuti || typeof data.durataMinuti !== 'number') {

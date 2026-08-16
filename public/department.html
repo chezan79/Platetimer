@@ -281,6 +281,15 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 .mex-cd-reply-status{font-size:11px;min-height:14px;margin-top:3px;color:#94a3b8;}
 .mex-cd-reply-status.ok{color:#4ade80;}
 .mex-cd-reply-status.err{color:#f87171;}
+/* ── Close button (Step 8) ─────────────────────────────────────────────────── */
+.mex-close-bar{margin-top:8px;}
+.mex-close-btn{width:100%;padding:9px;background:rgba(74,222,128,.1);
+  border:1px solid rgba(74,222,128,.25);border-radius:8px;font-size:13px;
+  font-weight:700;color:#4ade80;cursor:pointer;transition:all .15s;}
+.mex-close-btn:hover:not(:disabled){background:rgba(74,222,128,.25);border-color:rgba(74,222,128,.5);}
+.mex-close-btn:disabled{opacity:.45;cursor:not-allowed;}
+.mex-close-status{font-size:11px;min-height:14px;margin-top:3px;color:#94a3b8;text-align:center;}
+.mex-close-status.err{color:#f87171;}
 
 /* ── DISCONNECTED OVERLAY ───────────────────── */
 .dc-bar{position:fixed;top:var(--hdr);left:0;right:0;background:rgba(239,68,68,.95);
@@ -2039,6 +2048,10 @@ function connectWS(){
       if(WsAuth.isServiceSession()) handleMexReplyAck(data);
     } else if(data.action === 'mexReplyIncoming'){
       if(WsAuth.isServiceSession()) handleMexReplyIncoming(data);
+    } else if(data.action === 'mexCloseAck'){
+      if(WsAuth.isServiceSession()) handleMexCloseAck(data);
+    } else if(data.action === 'mexClosed'){
+      if(WsAuth.isServiceSession()) handleMexClosed(data);
     }
   };
 }
@@ -2690,7 +2703,13 @@ function insertMexCdCard(msg, isNew){
         `<button class="mex-cd-reply-cancel-btn" onclick="mexToggleCustomReply('${convIdSafe}')">✕</button>` +
       `</div>` +
     `</div>` +
-    `<div class="mex-cd-reply-status" id="mex-reply-status-${convIdSafe}"></div>`;
+    `<div class="mex-cd-reply-status" id="mex-reply-status-${convIdSafe}"></div>` +
+    // Close button
+    `<div class="mex-close-bar">` +
+    `<button class="mex-close-btn" id="mex-close-btn-${convIdSafe}" ` +
+    `onclick="closeMexConv('${convIdSafe}')" data-convid="${convIdSafe}">${_esc(_mt('mex.close.btn'))}</button>` +
+    `<div class="mex-close-status" id="mex-close-status-${convIdSafe}"></div>` +
+    `</div>`;
 
   list.appendChild(el);
   mexCdCards.set(cardKey, el);
@@ -2832,6 +2851,52 @@ function handleMexReplyIncoming(data) {
       { id: replyId, from, replyType, body, createdAt }, fromName, true);
   }
   playMexSound();
+}
+
+// ── [Step 8] Close helpers (Department) ─────────────────────────────────────
+
+/** Remove a Mex card from DOM + mexCdCards, then restore empty state if needed. */
+function removeMexCdCard(convId) {
+  const card = mexCdCards.get(convId);
+  if (card) { card.remove(); mexCdCards.delete(convId); }
+  // renderCards() handles the empty-state check (skip if no countdowns)
+  renderCards();
+}
+
+/** Send mexClose WS message. Disables button while in-flight. */
+function closeMexConv(convId) {
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    mexSetCloseStatus(convId, _mt('dept.mexErrorSend'), 'err'); return;
+  }
+  const btn = document.getElementById('mex-close-btn-' + convId);
+  if (btn) { btn.disabled = true; btn.textContent = _mt('mex.close.closing'); }
+  mexSetCloseStatus(convId, '');
+  ws.send(JSON.stringify({ action: 'mexClose', conversationId: convId }));
+}
+
+/** Set/clear the per-card close status line. */
+function mexSetCloseStatus(convId, msg, cls) {
+  const el = document.getElementById('mex-close-status-' + convId);
+  if (!el) return;
+  el.textContent = msg || '';
+  el.className = 'mex-close-status' + (cls ? ' ' + cls : '');
+}
+
+/** Handle mexCloseAck from server. */
+function handleMexCloseAck(data) {
+  if (data.success) {
+    removeMexCdCard(data.conversationId);
+  } else {
+    const convId = data.conversationId;
+    const btn = document.getElementById('mex-close-btn-' + convId);
+    if (btn) { btn.disabled = false; btn.textContent = _mt('mex.close.btn'); }
+    mexSetCloseStatus(convId, _mt('mex.close.error'), 'err');
+  }
+}
+
+/** Handle mexClosed from server (other participant closed). */
+function handleMexClosed(data) {
+  removeMexCdCard(data.conversationId);
 }
 
 /** Re-render the inbox list from mexInboxMessages (newest first). */

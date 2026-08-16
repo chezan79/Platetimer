@@ -197,7 +197,7 @@ function evictForBytesCap(companyId) {
  */
 async function createAndSend({ companyId, senderDeptId, recipientDeptId, body, templateType, tableNumber }) {
     // Enqueue so concurrent sends for the same company are serialised
-    return (queues[companyId] = getQueue(companyId).then(async () => {
+    return (queues[companyId] = getQueue(companyId).catch(() => {}).then(async () => {
         await loadMexCompany(companyId);
 
         const convs      = mexStore[companyId].conversations;
@@ -318,6 +318,32 @@ async function addReply(companyId, conversationId, { from, replyType, body }) {
     }));
 }
 
+// ── Close Conversation (Step 8) ──────────────────────────────────────────────
+
+/**
+ * Mark a conversation CLOSED.
+ * closedBy must be one of the conversation's participants (server-derived).
+ * Idempotent: duplicate closes return { alreadyClosed: true } without error.
+ */
+async function closeConversation(companyId, conversationId, closedBy) {
+    const prev = (queues[companyId] || Promise.resolve()).catch(() => {});
+    return (queues[companyId] = prev.then(async () => {
+        await loadMexCompany(companyId);
+        const co   = mexStore[companyId];
+        const conv = co && co.conversations[conversationId];
+        if (!conv) throw { code: 'MEX_CONVERSATION_NOT_FOUND' };
+        if (!conv.participants.includes(closedBy)) throw { code: 'MEX_NOT_PARTICIPANT' };
+        // Idempotent: already closed — surface success so duplicate clicks don't error
+        if (conv.closedAt) return { conversation: conv, alreadyClosed: true };
+
+        conv.closedAt = new Date().toISOString();
+        conv.closedBy = closedBy;
+
+        await saveMexCompany(companyId);
+        return { conversation: conv, alreadyClosed: false };
+    }));
+}
+
 // ── Startup ───────────────────────────────────────────────────────────────────
 /**
  * Called once at server startup (after initializeDataStores resolves).
@@ -353,6 +379,7 @@ module.exports = {
     loadMexCompany,
     createAndSend,
     addReply,
+    closeConversation,
     getInboxForDept,
 
     // Constants (used by server.js for validation)

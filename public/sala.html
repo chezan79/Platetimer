@@ -288,6 +288,15 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 .mex-cd-reply-status{font-size:11px;min-height:14px;margin-top:3px;color:var(--muted);}
 .mex-cd-reply-status.ok{color:var(--ok);}
 .mex-cd-reply-status.err{color:var(--danger);}
+/* ── Close button (Step 8) ─────────────────────────────────────────────────── */
+.mex-close-bar{margin-top:8px;}
+.mex-close-btn{width:100%;padding:9px;background:rgba(74,222,128,.1);
+  border:1px solid rgba(74,222,128,.3);border-radius:8px;font-size:13px;
+  font-weight:700;color:#4ade80;cursor:pointer;transition:all .15s;}
+.mex-close-btn:hover:not(:disabled){background:rgba(74,222,128,.25);border-color:rgba(74,222,128,.5);}
+.mex-close-btn:disabled{opacity:.45;cursor:not-allowed;}
+.mex-close-status{font-size:11px;min-height:14px;margin-top:3px;color:var(--muted);text-align:center;}
+.mex-close-status.err{color:var(--danger);}
 
 /* ── MEX MESSAGES SECTION ───────────────────────────────────────────────────── */
 .mex-msgs-section{margin-top:24px;}
@@ -823,6 +832,13 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
                 '</div>' +
               '</div>' +
               '<div class="mex-cd-reply-status" id="mex-reply-status-' + convIdSafe + '"></div>' +
+              // Close button
+              '<div class="mex-close-bar">' +
+                '<button class="mex-close-btn" id="mex-close-btn-' + convIdSafe + '" ' +
+                  'onclick="closeMexConv(\'' + convIdSafe + '\')" data-convid="' + convIdSafe + '">' +
+                  esc(_t('mex.close.btn')) + '</button>' +
+                '<div class="mex-close-status" id="mex-close-status-' + convIdSafe + '"></div>' +
+              '</div>' +
             '</div>';
 
         // Mex cards appear AFTER all countdown cards (append at end)
@@ -967,6 +983,53 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
             updateMexCdCardWithReply(conversationId, { id: replyId, from, replyType, body, createdAt }, fromName, true);
         }
         playMexSound();
+    }
+
+    // ── [Step 8] Close helpers (Floor) ───────────────────────────────────────────
+
+    /** Remove a Mex card from DOM + mexCdCards, then restore empty state if needed. */
+    function removeMexCdCard(convId) {
+        const card = mexCdCards.get(convId);
+        if (card) { card.remove(); mexCdCards.delete(convId); }
+        // renderCountdowns() handles empty state correctly for sala
+        renderCountdowns();
+    }
+
+    /** Send mexClose WS message. Disables button while in-flight. */
+    function closeMexConv(convId) {
+        const wsObj = CountdownsModule.getWebSocket();
+        if (!wsObj || wsObj.readyState !== WebSocket.OPEN) {
+            mexFloorSetCloseStatus(convId, _t('dept.mexErrorSend'), 'err'); return;
+        }
+        const btn = document.getElementById('mex-close-btn-' + convId);
+        if (btn) { btn.disabled = true; btn.textContent = _t('mex.close.closing'); }
+        mexFloorSetCloseStatus(convId, '');
+        wsObj.send(JSON.stringify({ action: 'mexClose', conversationId: convId }));
+    }
+
+    /** Set/clear the per-card close status line. */
+    function mexFloorSetCloseStatus(convId, msg, cls) {
+        const el = document.getElementById('mex-close-status-' + convId);
+        if (!el) return;
+        el.textContent = msg || '';
+        el.className = 'mex-close-status' + (cls ? ' ' + cls : '');
+    }
+
+    /** Handle mexCloseAck from server. */
+    function handleMexFloorCloseAck(data) {
+        if (data.success) {
+            removeMexCdCard(data.conversationId);
+        } else {
+            const convId = data.conversationId;
+            const btn = document.getElementById('mex-close-btn-' + convId);
+            if (btn) { btn.disabled = false; btn.textContent = _t('mex.close.btn'); }
+            mexFloorSetCloseStatus(convId, _t('mex.close.error'), 'err');
+        }
+    }
+
+    /** Handle mexClosed from server (other participant closed). */
+    function handleMexFloorClosed(data) {
+        removeMexCdCard(data.conversationId);
     }
 
     /** Handle mexSendAck from server (response to our mexSend). */
@@ -1458,6 +1521,13 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
             },
             onMexReplyIncoming: (data) => {
                 handleMexFloorReplyIncoming(data);
+            },
+            // [Step 8] Close callbacks
+            onMexCloseAck: (data) => {
+                handleMexFloorCloseAck(data);
+            },
+            onMexClosed: (data) => {
+                handleMexFloorClosed(data);
             }
         });
     }

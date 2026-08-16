@@ -82,6 +82,8 @@ const CountdownsModule = (() => {
             onMexSendAck,
             onMexReplyAck,        // [Step 7] mexReplyAck callback
             onMexReplyIncoming,   // [Step 7] mexReplyIncoming callback
+            onMexCloseAck,        // [Step 8] mexCloseAck callback
+            onMexClosed,          // [Step 8] mexClosed callback
             pageType,
             reconnectDelay = 3000
         } = config;
@@ -164,6 +166,12 @@ const CountdownsModule = (() => {
                         } else if (data.action === 'mexReplyIncoming' && onMexReplyIncoming) {
                             // [Step 7] Incoming reply on a conversation we participate in
                             onMexReplyIncoming(data);
+                        } else if (data.action === 'mexCloseAck' && onMexCloseAck) {
+                            // [Step 8] Server ack for our mexClose
+                            onMexCloseAck(data);
+                        } else if (data.action === 'mexClosed' && onMexClosed) {
+                            // [Step 8] Other participant closed the conversation
+                            onMexClosed(data);
                         }
                     } catch (error) {
                         console.error('Error parsing WebSocket message:', error);

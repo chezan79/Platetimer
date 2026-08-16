@@ -1234,5 +1234,9 @@
   "mex.qr.repliedBy": "Réponse :",
   "mex.qr.sending": "Envoi de la réponse…",
   "mex.qr.sent": "Réponse envoyée.",
-  "mex.qr.error": "Erreur lors de l'envoi de la réponse."
+  "mex.qr.error": "Erreur lors de l'envoi de la réponse.",
+  "mex.close.btn": "✓ Fermer",
+  "mex.close.closing": "Fermeture…",
+  "mex.close.done": "Fermé",
+  "mex.close.error": "Erreur, réessayer"
 }
