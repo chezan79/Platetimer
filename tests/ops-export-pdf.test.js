@@ -324,7 +324,7 @@ console.log('\n  — PDF integration (real jsPDF) —\n');
     const fs = require('fs');
     const html = fs.readFileSync(require('path').join(__dirname, '../public/operations-tasks.html'), 'utf8');
     check('HTML footer loop iterates getNumberOfPages after content',
-        /const totalPages = doc\.getNumberOfPages\(\);[\s\S]*doc\.setPage\(p\);[\s\S]*'Page ' \+ p \+ ' \/ ' \+ totalPages/.test(html));
+        /const totalPages = doc\.getNumberOfPages\(\);[\s\S]*doc\.setPage\(p\);[\s\S]*t\('ops\.pdf\.page'\) \+ ' ' \+ p \+ ' \/ ' \+ totalPages/.test(html));
     check('HTML no longer relies on didDrawPage for footers', !html.includes('didDrawPage'));
 }
 

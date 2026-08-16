@@ -37,7 +37,7 @@
     </div>
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       <span id="pdf-msg" style="font-size:13px;color:var(--muted)"></span>
-      <button id="export-pdf-btn" class="btn btn-secondary" onclick="exportToPDF()">📄 Export PDF</button>
+      <button id="export-pdf-btn" class="btn btn-secondary" onclick="exportToPDF()" data-i18n="ops.pdf.exportBtn">📄 Esporta PDF</button>
       <button class="btn btn-primary" id="new-task-btn" onclick="openCreatePanel()" data-i18n="ops.task.new">+ Nuovo compito</button>
     </div>
   </div>
@@ -238,12 +238,12 @@ function getExportDataset() {
 // Pure over an explicit state object so it is unit-testable without a DOM.
 function buildFilterSummaryFrom(state) {
   const parts = [];
-  if (state.status)   parts.push('Status = ' + state.statusLabel);
-  if (state.priority) parts.push('Priority = ' + state.priorityLabel);
-  if (state.my)       parts.push('Only my tasks');
-  if (state.today)    parts.push('Due today / overdue');
+  if (state.status)   parts.push(t('ops.pdf.filterStatus') + state.statusLabel);
+  if (state.priority) parts.push(t('ops.pdf.filterPriority') + state.priorityLabel);
+  if (state.my)       parts.push(t('ops.pdf.filterMine'));
+  if (state.today)    parts.push(t('ops.pdf.filterToday'));
   if (state.q)        parts.push('"' + state.q + '"');
-  return parts.length ? 'Filters: ' + parts.join(' | ') : 'Filters: All visible tasks';
+  return parts.length ? t('ops.pdf.filterPrefix') + parts.join(' | ') : t('ops.pdf.filterPrefix') + t('ops.pdf.filterAll');
 }
 
 function buildFilterSummary() {
@@ -310,13 +310,13 @@ function _pdfMsg(text) {
 function exportToPDF() {
   const tasks = getExportDataset();
   if (!tasks || tasks.length === 0) {
-    _pdfMsg('No tasks to export with the current filters.');
+    _pdfMsg(t('ops.pdf.noTasks'));
     return;
   }
   const btn = document.getElementById('export-pdf-btn');
   const prevLabel = btn.textContent;
   btn.disabled = true;
-  btn.textContent = 'Generating PDF…';
+  btn.textContent = t('ops.pdf.generating');
   try {
     const NAVY = '#101722';
     const doc = new jspdf.jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
@@ -330,19 +330,19 @@ function exportToPDF() {
     doc.setFontSize(16);
     doc.text('PlateTimer Operations', 14, 16);
     doc.setFontSize(13);
-    doc.text('Tasks Report', 14, 23);
+    doc.text(t('ops.pdf.title'), 14, 23);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
     doc.setTextColor(90);
-    doc.text('Generated: ' + now.toLocaleString('it-IT'), 14, 29);
+    doc.text(t('ops.pdf.generated') + now.toLocaleString(), 14, 29);
     const userName = (meData && meData.user && meData.user.name) || '';
-    if (userName) doc.text('User: ' + userName, 14, 34);
+    if (userName) doc.text(t('ops.pdf.user') + userName, 14, 34);
     doc.text(buildFilterSummary(), 14, userName ? 39 : 34, { maxWidth: pageW - 28 });
 
     // Column set — omit Completed when every value is blank
     const anyCompleted = tasks.some(t => t.completedAt);
-    const head = ['Title / Description', 'Priority', 'Status', 'Due Date', 'Created'];
-    if (anyCompleted) head.push('Completed');
+    const head = [t('ops.pdf.colTitle'), t('ops.pdf.colPriority'), t('ops.pdf.colStatus'), t('ops.pdf.colDue'), t('ops.pdf.colCreated')];
+    if (anyCompleted) head.push(t('ops.pdf.colCompleted'));
 
     const fmtD = ts => ts ? OpsCommon.fmtDatetime(ts) : '—';
 
@@ -395,13 +395,13 @@ function exportToPDF() {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(11);
     doc.setTextColor(NAVY);
-    doc.text('Summary', 14, y);
+    doc.text(t('ops.pdf.summary'), 14, y);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
     doc.setTextColor(40);
     doc.text(
-      'Total: ' + sum.total + '   |   Completed: ' + sum.completed +
-      '   |   Open / In Progress: ' + sum.openInProgress + '   |   Overdue: ' + sum.overdue,
+      t('ops.pdf.total') + ': ' + sum.total + '   |   ' + t('ops.pdf.completed') + ': ' + sum.completed +
+      '   |   ' + t('ops.pdf.openInProgress') + ': ' + sum.openInProgress + '   |   ' + t('ops.pdf.overdue') + ': ' + sum.overdue,
       14, y + 6
     );
 
@@ -413,13 +413,13 @@ function exportToPDF() {
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(8);
       doc.setTextColor(120);
-      doc.text('Page ' + p + ' / ' + totalPages, pageW - 14, pageH - 8, { align: 'right' });
+      doc.text(t('ops.pdf.page') + ' ' + p + ' / ' + totalPages, pageW - 14, pageH - 8, { align: 'right' });
     }
 
     const myOnly = document.getElementById('flt-my').checked;
     doc.save(buildExportFilename(myOnly, userName, now));
   } catch (e) {
-    _pdfMsg('PDF export failed: ' + (e && e.message ? e.message : e));
+    _pdfMsg(t('ops.pdf.failed') + (e && e.message ? e.message : e));
   } finally {
     btn.disabled = false;
     btn.textContent = prevLabel;
