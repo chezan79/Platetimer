@@ -260,13 +260,25 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 .mex-cd-reply-sep{border-top:1px solid rgba(255,255,255,.12);margin:6px 0 4px;}
 .mex-cd-reply-from{font-size:11px;color:#93c5fd;font-weight:700;letter-spacing:.3px;margin-bottom:2px;}
 .mex-cd-reply-body{font-size:13px;color:#cbd5e1;word-break:break-word;margin-bottom:2px;}
-.mex-cd-qr-btns{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-top:6px;}
-.mex-qr-btn{padding:5px 4px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);
-  border-radius:6px;font-size:11px;font-weight:600;color:#e8f0fe;cursor:pointer;
-  text-align:center;transition:all .12s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.mex-qr-btn:hover:not(:disabled){background:rgba(99,102,241,.5);border-color:rgba(99,102,241,.8);}
-.mex-qr-btn.mex-qr-custom-btn{grid-column:1/-1;font-style:italic;}
+.mex-cd-qr-btns{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px;}
+.mex-qr-btn{min-height:54px;padding:10px 8px;background:rgba(255,255,255,.08);
+  border:1px solid rgba(255,255,255,.2);border-radius:8px;font-size:17px;font-weight:600;
+  color:#e8f0fe;cursor:pointer;text-align:center;transition:all .12s;
+  display:flex;align-items:center;justify-content:center;line-height:1.2;word-break:break-word;}
+.mex-qr-btn:hover:not(:disabled){background:rgba(99,102,241,.35);border-color:rgba(99,102,241,.7);}
+.mex-qr-btn:active:not(:disabled){transform:scale(.97);}
+/* Positive — ✅ Pronto */
+.mex-qr-btn.mex-qr-ok{background:rgba(74,222,128,.08);border-color:rgba(74,222,128,.3);color:#86efac;}
+.mex-qr-btn.mex-qr-ok:hover:not(:disabled){background:rgba(74,222,128,.22);border-color:rgba(74,222,128,.6);}
+/* Attention — ⚠️ Problema */
+.mex-qr-btn.mex-qr-warn{background:rgba(251,191,36,.08);border-color:rgba(251,191,36,.3);color:#fcd34d;}
+.mex-qr-btn.mex-qr-warn:hover:not(:disabled){background:rgba(251,191,36,.22);border-color:rgba(251,191,36,.6);}
+/* Custom reply — ✍️ Rispondi */
+.mex-qr-btn.mex-qr-custom-btn{background:rgba(99,102,241,.1);border-color:rgba(99,102,241,.35);color:#a5b4fc;}
+.mex-qr-btn.mex-qr-custom-btn:hover:not(:disabled){background:rgba(99,102,241,.28);border-color:rgba(99,102,241,.65);}
 .mex-qr-btn:disabled{opacity:.4;cursor:not-allowed;}
+@media(max-width:420px){.mex-cd-qr-btns{grid-template-columns:repeat(2,1fr);}}
+@media(max-width:260px){.mex-cd-qr-btns{grid-template-columns:1fr;}}
 .mex-cd-custom-reply{margin-top:6px;}
 .mex-cd-custom-ta{width:100%;padding:6px 8px;background:rgba(255,255,255,.06);
   border:1px solid rgba(255,255,255,.2);border-radius:6px;font-size:13px;
@@ -282,11 +294,13 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 .mex-cd-reply-status.ok{color:#4ade80;}
 .mex-cd-reply-status.err{color:#f87171;}
 /* ── Close button (Step 8) ─────────────────────────────────────────────────── */
-.mex-close-bar{margin-top:8px;}
-.mex-close-btn{width:100%;padding:9px;background:rgba(74,222,128,.1);
-  border:1px solid rgba(74,222,128,.25);border-radius:8px;font-size:13px;
-  font-weight:700;color:#4ade80;cursor:pointer;transition:all .15s;}
-.mex-close-btn:hover:not(:disabled){background:rgba(74,222,128,.25);border-color:rgba(74,222,128,.5);}
+.mex-close-bar{margin-top:10px;}
+.mex-close-btn{width:100%;min-height:60px;padding:12px 16px;background:rgba(74,222,128,.12);
+  border:2px solid rgba(74,222,128,.35);border-radius:10px;font-size:19px;
+  font-weight:700;color:#4ade80;cursor:pointer;transition:all .15s;
+  display:flex;align-items:center;justify-content:center;}
+.mex-close-btn:hover:not(:disabled){background:rgba(74,222,128,.28);border-color:rgba(74,222,128,.6);}
+.mex-close-btn:active:not(:disabled){transform:scale(.98);}
 .mex-close-btn:disabled{opacity:.45;cursor:not-allowed;}
 .mex-close-status{font-size:11px;min-height:14px;margin-top:3px;color:#94a3b8;text-align:center;}
 .mex-close-status.err{color:#f87171;}
@@ -2702,10 +2716,13 @@ function insertMexCdCard(msg, isNew){
   const convIdSafe = _esc(cardKey);
 
   // Build QR button grid using MexQR module (i18n-resolved labels)
-  const qrBtns = (typeof MexQR !== 'undefined' ? MexQR.TYPES : []).map(({ key }) =>
-    `<button class="mex-qr-btn${key==='CUSTOM'?' mex-qr-custom-btn':''}" ` +
-    `onclick="sendMexReply('${convIdSafe}','${key}')">${_esc(MexQR.buttonLabel(key, k=>_mt(k)))}</button>`
-  ).join('');
+  // Semantic accent classes — CSS only, no logic change
+  const _mexQrClass = { READY:'mex-qr-ok', PROBLEM:'mex-qr-warn', CUSTOM:'mex-qr-custom-btn' };
+  const qrBtns = (typeof MexQR !== 'undefined' ? MexQR.TYPES : []).map(({ key }) => {
+    const extra = _mexQrClass[key] ? ' ' + _mexQrClass[key] : '';
+    return `<button class="mex-qr-btn${extra}" ` +
+      `onclick="sendMexReply('${convIdSafe}','${key}')">${_esc(MexQR.buttonLabel(key, k=>_mt(k)))}</button>`;
+  }).join('');
 
   const el = document.createElement('div');
   el.className = 'mex-cd-card' + (isNew ? ' new-arrival' : '');
