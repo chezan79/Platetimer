@@ -45,6 +45,29 @@
     <div class="exec-brief-text" id="brief-text"></div>
   </div>
 
+  <!-- Quick Actions -->
+  <p class="section-title" style="margin-top:0" data-i18n="ops.dir.quickActions">Azioni rapide</p>
+  <div class="qa-grid">
+    <button class="qa-btn qa-primary" onclick="location.href='operations-tasks.html?action=create'">
+      <span class="qa-icon">➕</span><span data-i18n="ops.dir.createTask">Crea compito</span>
+    </button>
+    <button class="qa-btn" onclick="location.href='operations-team.html?action=create'">
+      <span class="qa-icon">👤</span><span data-i18n="ops.dir.createUser">Crea utente</span>
+    </button>
+    <button class="qa-btn" onclick="location.href='operations-templates.html?action=create'">
+      <span class="qa-icon">🔁</span><span data-i18n="ops.dir.createTemplate">Crea template</span>
+    </button>
+    <button class="qa-btn qa-danger" id="qa-esc-btn" onclick="scrollTo(0,document.getElementById('attention-section').offsetTop - 80)">
+      <span class="qa-icon">🚨</span><span data-i18n="ops.dir.escalation">Escalation</span>
+    </button>
+    <button class="qa-btn" onclick="location.href='operations-tasks.html?filter=today'">
+      <span class="qa-icon">📋</span><span data-i18n="ops.dir.todayTasks">Compiti della giornata</span>
+    </button>
+    <button class="qa-btn" onclick="location.href='operations-calendar.html'">
+      <span class="qa-icon">📅</span><span data-i18n="ops.cal.quickAction">Calendario</span>
+    </button>
+  </div>
+
   <!-- New Since Last Visit (Sprint 6.3.1) -->
   <div id="nsv-section" style="display:none;margin-bottom:24px">
     <p class="section-title" data-i18n="ops.dir.newSinceVisit">🔔 Nuovo dalla tua ultima visita</p>
@@ -67,29 +90,6 @@
   <div id="cs-section" style="display:none;margin-bottom:24px">
     <p class="section-title" data-i18n="ops.dir.vsYesterday">📊 Rispetto a ieri</p>
     <div class="card" id="cs-content"></div>
-  </div>
-
-  <!-- Quick Actions -->
-  <p class="section-title" style="margin-top:0" data-i18n="ops.dir.quickActions">Azioni rapide</p>
-  <div class="qa-grid">
-    <button class="qa-btn qa-primary" onclick="location.href='operations-tasks.html?action=create'">
-      <span class="qa-icon">➕</span><span data-i18n="ops.dir.createTask">Crea compito</span>
-    </button>
-    <button class="qa-btn" onclick="location.href='operations-team.html?action=create'">
-      <span class="qa-icon">👤</span><span data-i18n="ops.dir.createUser">Crea utente</span>
-    </button>
-    <button class="qa-btn" onclick="location.href='operations-templates.html?action=create'">
-      <span class="qa-icon">🔁</span><span data-i18n="ops.dir.createTemplate">Crea template</span>
-    </button>
-    <button class="qa-btn qa-danger" id="qa-esc-btn" onclick="scrollTo(0,document.getElementById('attention-section').offsetTop - 80)">
-      <span class="qa-icon">🚨</span><span data-i18n="ops.dir.escalation">Escalation</span>
-    </button>
-    <button class="qa-btn" onclick="location.href='operations-tasks.html?filter=today'">
-      <span class="qa-icon">📋</span><span data-i18n="ops.dir.todayTasks">Compiti della giornata</span>
-    </button>
-    <button class="qa-btn" onclick="location.href='operations-calendar.html'">
-      <span class="qa-icon">📅</span><span data-i18n="ops.cal.quickAction">Calendario</span>
-    </button>
   </div>
 
   <!-- Requires Attention -->
