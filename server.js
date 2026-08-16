@@ -1029,10 +1029,67 @@ app.get('/api/service/ops-tasks', (req, res) => {
             t.companyId === companyId &&
             t.publishToService === true &&
             t.serviceDepartmentId === departmentId &&
-            (t.status === 'OPEN' || t.status === 'IN_PROGRESS'))
+            (t.status === 'OPEN' || t.status === 'IN_PROGRESS') &&
+            !isTaskAcknowledgedBy(companyId, t.id, departmentId))
         .map(projectOpsTaskForService);
 
     res.json({ success: true, tasks });
+});
+
+// ── [Task 66 Ack] POST /api/service/ops-tasks/:taskId/acknowledge ─────────────
+// Records a Service-department-level acknowledgement for an Operations task.
+// The canonical Operations task is NOT modified — Operations remains the source
+// of truth. After acknowledgement the task is hidden from this department only.
+// [SECURITY] companyId and serviceDepartmentId derived from the authenticated
+// Service session only; no client-supplied IDs are trusted.
+app.post('/api/service/ops-tasks/:taskId/acknowledge', (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+
+    const boundAcct = getBoundDepartmentContext(session);
+    if (!boundAcct) {
+        return res.status(403).json({ error: 'No department account binding.', code: 'NOT_BOUND' });
+    }
+    if (boundAcct.status !== 'ACTIVE') {
+        const e = departmentAccessError(boundAcct);
+        return res.status(e.status).json(e.body);
+    }
+
+    const companyId    = boundAcct.companyId;    // server-side only
+    const departmentId = boundAcct.departmentId; // server-side only
+    const { taskId }   = req.params;
+
+    // Live department-activity guard (mirrors GET)
+    const liveDept = getCompanyDepts(companyId).find(d => d.id === departmentId);
+    if (!liveDept || !liveDept.active) {
+        return res.status(410).json({ error: 'Assigned department inactive', code: 'DEPARTMENT_INACTIVE' });
+    }
+
+    // Validate task exists, is currently published to this department, and is still active.
+    // Completed/cancelled tasks are no longer actionable from the Service side.
+    const task = getOpsTasks(companyId).find(t =>
+        t.id === taskId &&
+        t.companyId === companyId &&
+        t.publishToService === true &&
+        t.serviceDepartmentId === departmentId &&
+        (t.status === 'OPEN' || t.status === 'IN_PROGRESS')
+    );
+    if (!task) {
+        return res.status(404).json({ error: 'Task not found or not published to this department.', code: 'TASK_NOT_FOUND' });
+    }
+
+    // Idempotent — record only if not already acknowledged
+    if (!isTaskAcknowledgedBy(companyId, taskId, departmentId)) {
+        if (!opsAckStore[companyId]) opsAckStore[companyId] = [];
+        opsAckStore[companyId].push({
+            taskId,
+            serviceDepartmentId: departmentId,
+            acknowledgedAt: new Date().toISOString()
+        });
+        saveOpsAcks();
+    }
+
+    res.json({ success: true });
 });
 
 // ── [S2.2] In-memory rate limiter for POST /api/service/login ────────────────
@@ -1439,6 +1496,7 @@ function getStoreNameForFile(filePath) {
     if (filePath === OPS_TASKS_FILE)      return 'ops_tasks';
     if (filePath === OPS_TEMPLATES_FILE)  return 'ops_templates';
     if (filePath === OPS_PREFS_FILE)      return 'ops_prefs';
+    if (filePath === OPS_ACK_FILE)        return 'ops_ack';
     return null;
 }
 
@@ -2202,11 +2260,15 @@ const opsVisits       = require('./operations/ops-visits');
 
 const OPS_USERS_FILE = path.join(DATA_DIR, 'ops-users.json');
 const OPS_TASKS_FILE = path.join(DATA_DIR, 'ops-tasks.json');
+const OPS_ACK_FILE   = path.join(DATA_DIR, 'ops-ack.json');
 
 // Populated by initializeDataStores() at startup.
 // Shape: { [companyId]: [ user, ... ] } / { [companyId]: [ task, ... ] }
 let opsUsersStore = {};
 let opsTasksStore = {};
+// Acknowledgement store — tracks which Service department acknowledged which task.
+// Shape: { [companyId]: [ { taskId, serviceDepartmentId, acknowledgedAt }, ... ] }
+let opsAckStore = {};
 
 const OPS_PRIORITIES = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'];
 // OVERDUE is computed dynamically (never stored). CANCELLED = soft-deleted.
@@ -2290,10 +2352,19 @@ function genTemplateId()    { return opsRecurring.genTemplateId(); }
 function getOpsTemplates(companyId) { return opsTemplatesStore[companyId] || []; }
 function getOpsUsers(companyId)     { return opsUsersStore[companyId]     || []; }
 function getOpsTasks(companyId)     { return opsTasksStore[companyId]     || []; }
+function getOpsAcks(companyId)      { return opsAckStore[companyId]       || []; }
 function saveOpsUsers()     { saveJSON(OPS_USERS_FILE,     opsUsersStore);     }
 function saveOpsTasks()     { saveJSON(OPS_TASKS_FILE,     opsTasksStore);     }
 function saveOpsTemplates() { saveJSON(OPS_TEMPLATES_FILE, opsTemplatesStore); }
 function saveOpsPrefs()     { saveJSON(OPS_PREFS_FILE,     opsPrefsStore);     }
+function saveOpsAcks()      { saveJSON(OPS_ACK_FILE,       opsAckStore);       }
+
+// Returns true when the given Service department has already acknowledged this task.
+function isTaskAcknowledgedBy(companyId, taskId, serviceDepartmentId) {
+    return getOpsAcks(companyId).some(
+        a => a.taskId === taskId && a.serviceDepartmentId === serviceDepartmentId
+    );
+}
 
 // Find the ops user record bound to a Firebase uid (across all companies —
 // invited users may belong to a company different from their session company).
@@ -6114,6 +6185,7 @@ async function initializeDataStores() {
         { name: 'ops_tasks',       file: OPS_TASKS_FILE,       setter: v => { opsTasksStore       = v; } },
         { name: 'ops_templates',   file: OPS_TEMPLATES_FILE,   setter: v => { opsTemplatesStore   = v; } },
         { name: 'ops_prefs',       file: OPS_PREFS_FILE,       setter: v => { opsPrefsStore       = v; } },
+        { name: 'ops_ack',         file: OPS_ACK_FILE,         setter: v => { opsAckStore         = v; } },
     ];
 
     if (!db) {

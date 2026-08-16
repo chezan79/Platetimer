@@ -565,12 +565,17 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 .ops-overdue-tag{font-size:11px;font-weight:700;padding:2px 7px;border-radius:5px;
   background:rgba(220,38,38,.1);color:var(--danger);border:1px solid rgba(220,38,38,.25);}
 
-/* Details button */
-.ops-task-footer{display:flex;justify-content:flex-end;margin-top:10px;}
+/* Details + Acknowledge buttons */
+.ops-task-footer{display:flex;justify-content:flex-end;gap:8px;margin-top:10px;}
 .ops-detail-btn{padding:5px 14px;border:1.5px solid var(--border-l);border-radius:7px;
   background:rgba(0,0,0,.03);color:var(--text);font-size:12px;font-weight:600;
   cursor:pointer;transition:all .15s;}
 .ops-detail-btn:hover{background:var(--card-h);border-color:var(--accent);color:var(--accent);}
+.ops-ack-btn{padding:5px 14px;border:1.5px solid rgba(22,163,74,.35);border-radius:7px;
+  background:rgba(22,163,74,.07);color:#15803d;font-size:12px;font-weight:600;
+  cursor:pointer;transition:all .15s;}
+.ops-ack-btn:hover{background:rgba(22,163,74,.15);border-color:rgba(22,163,74,.6);}
+.ops-ack-btn:disabled{opacity:.5;cursor:default;}
 
 /* ── OPERATIONS TASK DETAIL MODAL ─────────────────────────────────────────── */
 .ops-modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);
@@ -2176,6 +2181,7 @@ function renderOpsTasks(){
         ${tk.assigneeName ? `<span>👤 ${esc(tk.assigneeName)}</span>` : ''}
       </div>
       <div class="ops-task-footer">
+        <button class="ops-ack-btn" onclick="acknowledgeOpsTask('${esc(tk.id)}')">${esc(_ot('service.opsTaskAck'))}</button>
         <button class="ops-detail-btn" onclick="openOpsDetailModal('${esc(tk.id)}')">${esc(_ot('service.opsTaskDetails'))}</button>
       </div>
     </div>`;
@@ -2238,6 +2244,30 @@ function closeOpsDetailModal(){
 document.addEventListener('keydown', e => {
   if(e.key === 'Escape') closeOpsDetailModal();
 });
+
+async function acknowledgeOpsTask(taskId){
+  // Disable the button immediately for double-click safety
+  const card = document.querySelector(`.ops-task-card[data-task-id="${CSS.escape(taskId)}"]`);
+  if(card){
+    const btn = card.querySelector('.ops-ack-btn');
+    if(btn) btn.disabled = true;
+  }
+  try{
+    const r = await fetch(`/api/service/ops-tasks/${encodeURIComponent(taskId)}/acknowledge`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if(!r.ok){ // restore button on error so the user can retry
+      if(card){ const btn = card.querySelector('.ops-ack-btn'); if(btn) btn.disabled = false; }
+      return;
+    }
+    // Immediately remove from the local Map and re-render
+    opsTasks.delete(taskId);
+    renderOpsTasks();
+  }catch{
+    if(card){ const btn = card.querySelector('.ops-ack-btn'); if(btn) btn.disabled = false; }
+  }
+}
 
 async function loadOpsTasks(){
   try{
