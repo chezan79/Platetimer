@@ -182,31 +182,6 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 .vc-result.err .vc-result-title{color:var(--danger);}
 .vc-result-body{font-size:13px;color:var(--text);line-height:1.6;}
 
-/* ── PTT VOICE (INTERFONO) ──────────────────── */
-.ptt-status{font-size:13px;color:var(--muted);text-align:center;padding:5px 0 2px;min-height:20px;}
-.ptt-status.connected{color:var(--ok);}
-.ptt-status.talking{color:var(--danger);font-weight:700;}
-.ptt-status.remote-talking{color:var(--warn);font-weight:700;}
-.ptt-status.error{color:var(--danger);}
-.ptt-join-btn{width:100%;padding:12px;border:1.5px solid rgba(34,197,94,.3);
-  background:rgba(34,197,94,.1);border-radius:10px;color:var(--ok);
-  font-size:14px;font-weight:700;cursor:pointer;transition:all .2s;}
-.ptt-join-btn:hover:not(:disabled){background:rgba(34,197,94,.2);}
-.ptt-join-btn.leave{border-color:rgba(239,68,68,.35);background:rgba(239,68,68,.09);color:var(--danger);}
-.ptt-join-btn.leave:hover{background:rgba(239,68,68,.18);}
-.ptt-btn{width:100%;padding:18px 14px;border:none;border-radius:12px;color:#fff;
-  font-size:16px;font-weight:700;cursor:pointer;
-  background:linear-gradient(135deg,#7c3aed,#6366f1);
-  user-select:none;-webkit-user-select:none;touch-action:none;
-  transition:all .12s;letter-spacing:.3px;}
-.ptt-btn:not(:disabled):active,.ptt-btn.pressing{
-  background:linear-gradient(135deg,#ef4444,#dc2626);
-  transform:scale(.97);box-shadow:0 0 22px rgba(239,68,68,.45);}
-.ptt-btn:disabled{opacity:.28;cursor:not-allowed;}
-.ptt-talking-ind{text-align:center;font-size:18px;font-weight:600;
-  min-height:32px;padding:4px 0;color:var(--warn);
-  transition:opacity .2s;}
-.ptt-talking-ind:empty{opacity:0;}
 
 /* ── DISCONNECTED OVERLAY ───────────────────── */
 .dc-bar{position:fixed;top:var(--hdr);left:0;right:0;background:rgba(239,68,68,.95);
@@ -631,7 +606,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
   <div class="lp-tabs">
     <button class="lp-tab active" id="tab-cd" onclick="showTab('cd')" data-i18n="dept.tabCountdown">Countdown</button>
     <button class="lp-tab" id="tab-vm" onclick="showTab('vm')" data-i18n="dept.tabVoice">🎙️ Vocali</button>
-    <button class="lp-tab" id="tab-ptt" onclick="showTab('ptt')" data-i18n="dept.tabIntercom">📞 Interfono</button>
+    <button class="lp-tab" id="tab-mex" onclick="showTab('mex')" data-i18n="dept.tabMex">💬 Mex</button>
   </div>
 
   <!-- ── COUNTDOWN SECTION ──────────────────────── -->
@@ -759,28 +734,10 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
     </div>
   </div>
 
-  <!-- ── PTT / INTERFONO SECTION ──────────────── -->
-  <div id="section-ptt" class="lp-section" style="display:none;">
-    <div class="lp-title" data-i18n="dept.intercom">Interfono Live</div>
-
-    <div id="ptt-status" class="ptt-status" data-i18n="dept.notConnected">Non connesso</div>
-
-    <div id="ptt-talking-ind" class="ptt-talking-ind"></div>
-
-    <button id="ptt-join-btn" class="ptt-join-btn" onclick="pttToggleCall()" data-i18n="dept.joinCall">
-      📞 Entra nella chiamata
-    </button>
-
-    <button id="ptt-btn" class="ptt-btn" disabled
-      onmousedown="pttPress()" onmouseup="pttRelease()" onmouseleave="pttRelease()"
-      ontouchstart="pttPress(event)" ontouchend="pttRelease(event)" data-i18n="dept.holdToTalk">
-      🎙️ Tieni premuto per parlare
-    </button>
-
-    <div style="font-size:11px;color:var(--muted);text-align:center;line-height:1.5;">
-      Tieni premuto il tasto per trasmettere la tua voce ai colleghi in tempo reale.
-      Nessun audio viene registrato.
-    </div>
+  <!-- ── MEX SECTION ────────────────────────────── -->
+  <div id="section-mex" class="lp-section" style="display:none;">
+    <div class="lp-title" data-i18n="dept.mexTitle">Messaggi</div>
+    <p style="font-size:13px;color:var(--muted);line-height:1.6;" data-i18n="dept.mexPlaceholder">I messaggi operativi di testo appariranno qui in un prossimo aggiornamento.</p>
   </div>
 
   <!-- ── VOICE SECTION ──────────────────────────── -->
@@ -846,7 +803,6 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 <script src="js/ws-auth.js"></script>
 <script src="js/i18n.js"></script>
 <script>I18n.init({ selector: '#i18n-dept-sel' });</script>
-<script src="js/ptt-voice.js"></script>
 <script>
 'use strict';
 
@@ -1106,7 +1062,7 @@ async function buildDestList(){
 
 // ── Tab switcher ──────────────────────────────────────────────────────────────
 function showTab(tab){
-  const tabs = ['cd','vm','ptt'];
+  const tabs = ['cd','vm','mex'];
   tabs.forEach(t => {
     const sec = document.getElementById(`section-${t}`);
     const btn = document.getElementById(`tab-${t}`);
@@ -1403,58 +1359,6 @@ function renderVoiceMessages(){
       </div>
       <div class="cdc-meta"><div></div><div class="cdc-started">${esc(vm.timestamp)}</div></div>
     </div>`).join('');
-}
-
-// ── PTT / Interfono ──────────────────────────────────────────────────────────
-function pttSetStatus(text, cssClass) {
-  const el = document.getElementById('ptt-status');
-  if(!el) return;
-  el.textContent = text;
-  el.className = 'ptt-status' + (cssClass ? ' ' + cssClass : '');
-}
-
-function pttSetTalkingInd(deptName, isTalking) {
-  const el = document.getElementById('ptt-talking-ind');
-  if(!el) return;
-  el.textContent = isTalking ? `🎙️ ${esc(deptName)} sta parlando...` : '';
-}
-
-async function pttToggleCall() {
-  const joinBtn = document.getElementById('ptt-join-btn');
-  const pttBtn  = document.getElementById('ptt-btn');
-
-  if(PttVoice.inCall) {
-    PttVoice.leave();
-    joinBtn.textContent = '📞 Entra nella chiamata';
-    joinBtn.className   = 'ptt-join-btn';
-    pttBtn.disabled     = true;
-  } else {
-    if(!wsConnected){ alert('WebSocket non connesso. Riprova.'); return; }
-    joinBtn.disabled = true;
-    const ok = await PttVoice.join(() => ws, myDeptName, pttSetStatus, pttSetTalkingInd);
-    joinBtn.disabled = false;
-    if(ok){
-      joinBtn.textContent = '📵 Abbandona la chiamata';
-      joinBtn.className   = 'ptt-join-btn leave';
-      pttBtn.disabled     = false;
-    }
-  }
-}
-
-function pttPress(ev) {
-  if(ev) ev.preventDefault();
-  if(!PttVoice.inCall) return;
-  const btn = document.getElementById('ptt-btn');
-  if(btn) btn.classList.add('pressing');
-  PttVoice.startTalking();
-}
-
-function pttRelease(ev) {
-  if(ev) ev.preventDefault();
-  if(!PttVoice.inCall) return;
-  const btn = document.getElementById('ptt-btn');
-  if(btn) btn.classList.remove('pressing');
-  PttVoice.stopTalking();
 }
 
 // ── Step wizard ───────────────────────────────────────────────────────────────
@@ -1891,7 +1795,6 @@ function connectWS(){
     setConnBadge(true);
     WsAuth.joinRoom(ws, myDeptId, () => {
       console.log('[dept] joined room + page', myDeptId);
-      PttVoice.onWsReconnect(); // restore voice-room state on the new authenticated socket
     });
   };
 
@@ -1933,10 +1836,6 @@ function connectWS(){
     } else if(data.action === 'deleteVoiceMessage'){
       const vm = voiceMessages.get(data.messageId);
       if(vm){ if(vm.blobUrl) URL.revokeObjectURL(vm.blobUrl); voiceMessages.delete(data.messageId); renderVoiceMessages(); }
-    } else if(['voicePeers','voicePeerJoined','voicePeerLeft',
-                'offer','answer','ice-candidate',
-                'talkingStart','talkingStop'].includes(data.action)){
-      PttVoice.handleSignal(data);
     } else if(['OPS_TASK_CREATED','OPS_TASK_UPDATED','OPS_TASK_REASSIGNED','OPS_TASK_PROGRESS'].includes(data.action)){
       // [Task 66] Upsert-only: the card appears/refreshes when the task is
       // published to THIS department with an active status. Removal is NEVER
@@ -2309,7 +2208,6 @@ loadDepts().then(() => {
 
 window.addEventListener('beforeunload', () => {
   clearInterval(tickTimer);
-  PttVoice.leave();
   if(ws) ws.close();
   voiceMessages.forEach(vm => { if(vm.blobUrl) URL.revokeObjectURL(vm.blobUrl); });
 });
