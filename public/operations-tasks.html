@@ -35,7 +35,11 @@
       <h1 class="pg-title" data-i18n="ops.nav.tasks">Compiti</h1>
       <p class="pg-sub"><span id="me-name"></span> · <span id="me-role" class="role-badge"></span></p>
     </div>
-    <button class="btn btn-primary" id="new-task-btn" onclick="openCreatePanel()" data-i18n="ops.task.new">+ Nuovo compito</button>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span id="pdf-msg" style="font-size:13px;color:var(--muted)"></span>
+      <button id="export-pdf-btn" class="btn btn-secondary" onclick="exportToPDF()">📄 Export PDF</button>
+      <button class="btn btn-primary" id="new-task-btn" onclick="openCreatePanel()" data-i18n="ops.task.new">+ Nuovo compito</button>
+    </div>
   </div>
 
   <!-- Filter / search bar -->
@@ -105,6 +109,8 @@
   <div id="panel-inner"></div>
 </div>
 
+<script src="js/vendor/jspdf.umd.min.js"></script>
+<script src="js/vendor/jspdf.plugin.autotable.min.js"></script>
 <script src="js/ws-auth.js"></script>
 <script src="js/operations-common.js"></script>
 <script src="js/operations-realtime.js"></script>
@@ -220,12 +226,209 @@ async function loadTasks() {
   renderList();
 }
 
+// ── PDF export ────────────────────────────────────────────────────────────────
+// Returns the exact final visible dataset — the same array renderList() renders.
+// When today-filter is active, apply client-side date boundary on top of whatever
+// the API returned (server params already applied there).
+function getExportDataset() {
+  return todayFilterActive ? applyTodayFilter(allTasks) : allTasks;
+}
+
+// Human-readable summary of every active filter for the PDF header.
+// Pure over an explicit state object so it is unit-testable without a DOM.
+function buildFilterSummaryFrom(state) {
+  const parts = [];
+  if (state.status)   parts.push('Status = ' + state.statusLabel);
+  if (state.priority) parts.push('Priority = ' + state.priorityLabel);
+  if (state.my)       parts.push('Only my tasks');
+  if (state.today)    parts.push('Due today / overdue');
+  if (state.q)        parts.push('"' + state.q + '"');
+  return parts.length ? 'Filters: ' + parts.join(' | ') : 'Filters: All visible tasks';
+}
+
+function buildFilterSummary() {
+  const status = document.getElementById('flt-status').value;
+  const priority = document.getElementById('flt-priority').value;
+  return buildFilterSummaryFrom({
+    status,
+    statusLabel: status ? OpsCommon.statusLabel(status) : '',
+    priority,
+    priorityLabel: priority ? OpsCommon.priorityLabel(priority) : '',
+    my: document.getElementById('flt-my').checked,
+    today: todayFilterActive,
+    q: document.getElementById('flt-search').value.trim()
+  });
+}
+
+// Group tasks by assignee, resolve name+role from users map, sort groups A→Z.
+// Pure — unit-testable. Returns [{ name, role, tasks: [...] }].
+function groupTasksByAssignee(tasks, users) {
+  const map = new Map();
+  tasks.forEach(t => {
+    const u = users[t.assigneeId] || {};
+    const key = t.assigneeId || '_none';
+    if (!map.has(key)) map.set(key, { name: u.name || '—', role: u.role || '', tasks: [] });
+    map.get(key).tasks.push(t);
+  });
+  return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// Summary counts from the exported array using effectiveStatus. Each task in
+// exactly one bucket. Pure — unit-testable.
+function buildExportSummary(tasks) {
+  const s = { total: tasks.length, completed: 0, openInProgress: 0, overdue: 0, other: 0 };
+  tasks.forEach(t => {
+    const eff = t.effectiveStatus || t.status;
+    if (t.status === 'COMPLETED') s.completed++;
+    else if (eff === 'OVERDUE') s.overdue++;
+    else if (t.status === 'OPEN' || t.status === 'IN_PROGRESS') s.openInProgress++;
+    else s.other++;
+  });
+  return s;
+}
+
+// Strip anything but alphanumerics, dash and underscore from filename parts.
+function sanitizeFilenamePart(s) {
+  return String(s || '').trim().replace(/\s+/g, '-').replace(/[^A-Za-z0-9\-_]/g, '');
+}
+
+function buildExportFilename(myOnly, userName, now) {
+  const d = now || new Date();
+  const ymd = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  const namePart = myOnly && userName ? sanitizeFilenamePart(userName) : '';
+  return 'PlateTimer-Operations-Tasks-' + (namePart ? namePart + '-' : '') + ymd + '.pdf';
+}
+
+function _pdfMsg(text) {
+  const el = document.getElementById('pdf-msg');
+  if (!el) return;
+  el.textContent = text;
+  clearTimeout(_pdfMsg._t);
+  if (text) _pdfMsg._t = setTimeout(() => { el.textContent = ''; }, 4000);
+}
+
+function exportToPDF() {
+  const tasks = getExportDataset();
+  if (!tasks || tasks.length === 0) {
+    _pdfMsg('No tasks to export with the current filters.');
+    return;
+  }
+  const btn = document.getElementById('export-pdf-btn');
+  const prevLabel = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Generating PDF…';
+  try {
+    const NAVY = '#101722';
+    const doc = new jspdf.jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    const pageW = doc.internal.pageSize.getWidth();
+    const pageH = doc.internal.pageSize.getHeight();
+    const now = new Date();
+
+    // Title block
+    doc.setTextColor(NAVY);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(16);
+    doc.text('PlateTimer Operations', 14, 16);
+    doc.setFontSize(13);
+    doc.text('Tasks Report', 14, 23);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(90);
+    doc.text('Generated: ' + now.toLocaleString('it-IT'), 14, 29);
+    const userName = (meData && meData.user && meData.user.name) || '';
+    if (userName) doc.text('User: ' + userName, 14, 34);
+    doc.text(buildFilterSummary(), 14, userName ? 39 : 34, { maxWidth: pageW - 28 });
+
+    // Column set — omit Completed when every value is blank
+    const anyCompleted = tasks.some(t => t.completedAt);
+    const head = ['Title / Description', 'Priority', 'Status', 'Due Date', 'Created'];
+    if (anyCompleted) head.push('Completed');
+
+    const fmtD = ts => ts ? OpsCommon.fmtDatetime(ts) : '—';
+
+    let y = userName ? 46 : 41;
+    const groups = groupTasksByAssignee(tasks, allUsers);
+    groups.forEach(g => {
+      if (y > pageH - 30) { doc.addPage(); y = 16; }
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.setTextColor(NAVY);
+      doc.text(g.name + (g.role ? ' — ' + OpsCommon.roleLabel(g.role) : ''), 14, y);
+      y += 3;
+      const body = g.tasks.map(t => {
+        const eff = t.effectiveStatus || t.status;
+        const row = [
+          t.title + (t.description ? '\n' + t.description : ''),
+          OpsCommon.priorityLabel(t.priority),
+          OpsCommon.statusLabel(eff) + (eff === 'OVERDUE' ? ' ⚠' : ''),
+          fmtD(t.dueDate),
+          fmtD(t.createdAt)
+        ];
+        if (anyCompleted) row.push(t.completedAt ? fmtD(t.completedAt) : '');
+        return row;
+      });
+      doc.autoTable({
+        startY: y,
+        head: [head],
+        body,
+        theme: 'grid',
+        styles: { fontSize: 8, cellPadding: 2, overflow: 'linebreak' },
+        headStyles: { fillColor: [16, 23, 34], textColor: 255, fontStyle: 'bold' },
+        columnStyles: {
+          0: { cellWidth: 'auto' },   // Title/Description takes remaining width
+          1: { cellWidth: 24 },
+          2: { cellWidth: 28 },
+          3: { cellWidth: 32 },
+          4: { cellWidth: 32 }
+        },
+        pageBreak: 'auto',
+        rowPageBreak: 'avoid',
+        showHead: 'everyPage',
+        margin: { left: 14, right: 14, bottom: 14 }
+      });
+      y = doc.lastAutoTable.finalY + 10;
+    });
+
+    // Summary block
+    const sum = buildExportSummary(tasks);
+    if (y > pageH - 30) { doc.addPage(); y = 16; }
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(NAVY);
+    doc.text('Summary', 14, y);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor(40);
+    doc.text(
+      'Total: ' + sum.total + '   |   Completed: ' + sum.completed +
+      '   |   Open / In Progress: ' + sum.openInProgress + '   |   Overdue: ' + sum.overdue,
+      14, y + 6
+    );
+
+    // Footer: page numbers drawn AFTER all content so every page — including a
+    // summary-only final page created via doc.addPage() — gets "Page X / Y".
+    const totalPages = doc.getNumberOfPages();
+    for (let p = 1; p <= totalPages; p++) {
+      doc.setPage(p);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(120);
+      doc.text('Page ' + p + ' / ' + totalPages, pageW - 14, pageH - 8, { align: 'right' });
+    }
+
+    const myOnly = document.getElementById('flt-my').checked;
+    doc.save(buildExportFilename(myOnly, userName, now));
+  } catch (e) {
+    _pdfMsg('PDF export failed: ' + (e && e.message ? e.message : e));
+  } finally {
+    btn.disabled = false;
+    btn.textContent = prevLabel;
+  }
+}
+
 // ── Task list rendering ──
 function renderList() {
-  // When today-filter is active, apply client-side date boundary on top of whatever
-  // the API returned. This keeps the existing status/priority/sort controls working
-  // while additionally restricting the view to today + overdue active tasks.
-  const tasks = todayFilterActive ? applyTodayFilter(allTasks) : allTasks;
+  const tasks = getExportDataset();
 
   // Keep the banner in sync — show it whenever the today filter is active.
   const banner = document.getElementById('today-banner');
