@@ -2408,13 +2408,41 @@ async function loadOpsTasks(){
 // ── Mex Step 3 ────────────────────────────────────────────────────────────────
 function _mt(k){ return (window.I18n && I18n.t) ? I18n.t(k) : k; }
 
-/** Populate the Mex recipient <select> from active sibling depts, excluding own. */
-function buildMexRecipientList(){
+/** Populate the Mex recipient <select> from active sibling depts, excluding own.
+ *
+ * Bound Department Accounts receive only their own dept from /api/departments (S1.4),
+ * so we fetch /api/voice-recipients — the tenant-safe active-dept directory — exactly
+ * as buildDestList() and buildVoiceDestList() do.  Company identity is always
+ * server-derived from the authenticated session; client never supplies companyId.
+ *
+ * Sibling entries are also merged into departmentMap so that mex card name resolution
+ * (departmentMap[msg.from]) works correctly when a sibling sends a message.
+ */
+async function buildMexRecipientList(){
   const sel = document.getElementById('mex-recipient-sel');
   if(!sel) return;
   const prev = sel.value;
   while(sel.options.length > 1) sel.remove(1);
-  const depts = Object.values(departmentMap).filter(d => d.active && d.id !== myDeptId);
+
+  let depts = [];
+  try {
+    const r = await fetch('/api/voice-recipients', { headers:{ Authorization:`Bearer ${token}` } });
+    const d = await r.json();
+    if(d.success && Array.isArray(d.recipients)){
+      // Merge sibling entries into departmentMap so incoming mex sender names resolve.
+      d.recipients.forEach(rec => {
+        if(!departmentMap[rec.id]) departmentMap[rec.id] = rec;
+      });
+      depts = d.recipients.filter(rec => rec.id !== myDeptId);
+    }
+  } catch(e){
+    console.error('[MEX] buildMexRecipientList fetch error:', e);
+  }
+  // Fallback: unbound/legacy sessions already have the full departmentMap.
+  if(!depts.length){
+    depts = Object.values(departmentMap).filter(d => d.active !== false && d.id !== myDeptId);
+  }
+
   if(!depts.length){
     const opt = document.createElement('option');
     opt.value = ''; opt.disabled = true;
