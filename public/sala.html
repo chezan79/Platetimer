@@ -1844,6 +1844,14 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 
     I18n.init({ selector: '#i18n-sala-sel' }).then(() => {
         window.addEventListener('load', initializePage);
+        // Rebuild Floor QM button labels when the operator switches language.
+        // buildMexFloorQmButtons() uses btn.textContent (no data-i18n), so
+        // I18n.apply() never reaches those buttons without this listener.
+        document.addEventListener('click', function(e) {
+            if (e.target.classList.contains('i18n-lang-btn')) {
+                setTimeout(buildMexFloorQmButtons, 0);
+            }
+        });
     });
 
     window.addEventListener('beforeunload', () => {

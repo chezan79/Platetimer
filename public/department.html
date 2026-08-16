@@ -985,7 +985,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 <script src="js/mex-qm.js"></script>
 <script src="js/mex-qr.js"></script>
 <script src="js/i18n.js"></script>
-<script>I18n.init({ selector: '#i18n-dept-sel' });</script>
+<script>const i18nReady = I18n.init({ selector: '#i18n-dept-sel' });</script>
 <script>
 'use strict';
 
@@ -3055,12 +3055,22 @@ async function loadMexInbox(){
 }
 
 // ── Boot ───────────────────────────────────────────────────────────────────────
-loadDepts().then(() => {
+// Wait for both the department list and the i18n dictionaries before rendering
+// the QM button grid — either can win the race and leaving i18nReady unawaited
+// caused canonical keys (TABLE_DELAY etc.) to appear when depts resolved first.
+Promise.all([loadDepts(), i18nReady]).then(() => {
   connectWS();
   tickTimer = setInterval(tick, 1000);
   loadOpsTasks();
   buildMexRecipientList();  // populate Mex recipient list after depts are loaded
-  buildMexQmButtons();       // [Step 6] build QM button grid after i18n is ready
+  buildMexQmButtons();       // [Step 6] both depts AND i18n are now ready
+  // Rebuild QM button labels whenever the operator switches language (buttons are
+  // created with btn.textContent, not data-i18n, so I18n.apply() doesn't reach them).
+  document.addEventListener('click', function(e) {
+    if (e.target.classList.contains('i18n-lang-btn')) {
+      setTimeout(buildMexQmButtons, 0);
+    }
+  });
 });
 
 window.addEventListener('beforeunload', () => {
