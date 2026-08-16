@@ -198,13 +198,17 @@ function genDeptId() { return 'dept_' + Date.now() + '_' + crypto.randomBytes(3)
 
 // Sign a session token using HMAC-SHA256.
 // The token payload contains uid, companyName, iat, exp — never trust these from the client.
-function signSessionToken(uid, companyName) {
-    const payload = Buffer.from(JSON.stringify({
+// Optional role (e.g. 'floor') is embedded in the signed payload for server-side principal
+// resolution only — the client cannot forge or alter this field.
+function signSessionToken(uid, companyName, role = null) {
+    const payloadObj = {
         uid,
         companyName,
         iat: Date.now(),
         exp: Date.now() + SESSION_DURATION_MS
-    })).toString('base64');
+    };
+    if (role) payloadObj.role = role;
+    const payload = Buffer.from(JSON.stringify(payloadObj)).toString('base64');
     const sig = crypto.createHmac('sha256', WS_SECRET).update(payload).digest('hex');
     return `${payload}.${sig}`;
 }
@@ -1110,6 +1114,41 @@ app.post('/api/service/ops-tasks/:taskId/acknowledge', (req, res) => {
 
     console.log(`[OPS-ACK-AUTH] finalStatus=200`);
     res.json({ success: true });
+});
+
+// ── [MEX Step 5] GET /api/sala/token ──────────────────────────────────────────
+// Issues a new session token that carries role:'floor' in its signed payload.
+// Called by sala.html at startup to obtain a Floor-principal token.
+// [SECURITY] The caller must already hold a valid session token (requireAuth).
+// The Floor role is assigned server-side only — the client cannot request it for
+// any path other than this endpoint, and this endpoint may only be called by
+// authenticated sessions with a valid existing token.
+app.get('/api/sala/token', (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const floorToken = signSessionToken(session.uid, session.companyName, 'floor');
+    res.json({ success: true, token: floorToken });
+});
+
+// ── [MEX Step 5] GET /api/service/mex/floor-inbox ─────────────────────────────
+// Returns open Mex conversations where __sala__ (Floor) is a participant.
+// Requires a Floor-principal token (role:'floor' in verified session).
+// [SECURITY] companyId derived from server-side session only; __sala__ is the
+// server-authoritative principal — never from client payload.
+app.get('/api/service/mex/floor-inbox', async (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    if (session.role !== 'floor') {
+        return res.status(403).json({ error: 'Floor principal required.', code: 'NOT_FLOOR' });
+    }
+    const companyId = session.companyName;
+    try {
+        const conversations = await mexStoreModule.getInboxForDept(companyId, '__sala__');
+        res.json({ success: true, conversations });
+    } catch (e) {
+        console.error('[MEX] Floor inbox fetch error:', e.message);
+        res.status(500).json({ error: 'Failed to load inbox.' });
+    }
 });
 
 // ── [MEX Step 3] GET /api/service/mex/inbox ───────────────────────────────────
@@ -5219,6 +5258,10 @@ wss.on('connection', (ws, req) => {
                 const companyName = session.companyName;
                 ws.isAuthenticated = true;
                 ws.authenticatedUid = session.uid;
+                // [MEX Step 5] Floor principal: set ONLY from the server-signed role claim in
+                // the HMAC-verified token. Client-supplied fields (pageType, data.from) are
+                // explicitly prohibited as authorization inputs for this flag.
+                ws.isFloorPrincipal = (session.role === 'floor');
                 console.log(`🔑 [SECURITY] joinRoom authenticated: uid=${session.uid}, company="${companyName}" (IP: ${ws.clientIp})`);
                 console.log(`[WS-DIAG] joinRoom result=TOKEN_VALID wsId=${ws._diagId} uid=${session.uid} company=${companyName}`);
 
@@ -5723,15 +5766,20 @@ wss.on('connection', (ws, req) => {
                 }
 
             } else if (data.action === 'mexSend') {
-                // ── [MEX Step 3] Department-to-department text message ────────
-                // [SECURITY] Sender identity = ws.boundDepartmentId ONLY.
-                // Any client-supplied 'from' field is completely ignored.
-                // Unbound sockets (no boundDepartmentId) are rejected immediately.
-                const mexSender = ws.boundDepartmentId;
+                // ── [MEX Step 5] Department ↔ Floor + Department ↔ Department messaging ──
+                // [SECURITY] Sender identity is derived from server socket state only:
+                //   - Bound department account → ws.boundDepartmentId
+                //   - Floor principal (role:'floor' in verified token) → '__sala__'
+                //   - Anything else (unbound legacy/admin) → rejected immediately
+                // Client-supplied 'from', 'pageType', and isServiceSession() are all
+                // prohibited as authorization inputs (architecture audit §E.2).
+                const MEX_SALA_ID = '__sala__';
+                const mexSender = ws.boundDepartmentId
+                    || (ws.isFloorPrincipal ? MEX_SALA_ID : null);
                 if (!mexSender) {
                     ws.send(JSON.stringify({
                         action: 'error', code: 'MEX_NOT_BOUND',
-                        message: 'Only bound department accounts can send Mex messages.'
+                        message: 'Only bound department accounts and the Floor principal can send Mex messages.'
                     }));
                     return;
                 }
@@ -5752,7 +5800,11 @@ wss.on('connection', (ws, req) => {
                     return;
                 }
 
-                // Validate recipient — must be an ACTIVE dept in the same company, not __sala__, not sender.
+                // Validate recipient:
+                //   - Department sender → active real dept OR __sala__ (Floor)
+                //   - Floor sender → active real dept only (floor cannot message floor)
+                // [SECURITY] __sala__ whitelisted exactly like voice-message handlers.
+                // All real dept ids validated against THIS company's server-derived active list.
                 const mexRecipient = typeof data.to === 'string' ? data.to.trim() : '';
                 if (!mexRecipient) {
                     ws.send(JSON.stringify({ action: 'mexSendAck', success: false, code: 'MEX_NO_RECIPIENT' }));
@@ -5762,11 +5814,16 @@ wss.on('connection', (ws, req) => {
                     ws.send(JSON.stringify({ action: 'mexSendAck', success: false, code: 'MEX_SELF_SEND' }));
                     return;
                 }
-                // [SECURITY] Cross-company spoofing: recipient validated against THIS company's active dept list.
                 const mexCompanyId   = ws.companyRoom;
                 const mexActiveDepts = getCompanyDepts(mexCompanyId).filter(d => d.active);
-                const mexRecipDept   = mexActiveDepts.find(d => d.id === mexRecipient);
-                if (!mexRecipDept) {
+                let mexRecipValid = false;
+                if (mexRecipient === MEX_SALA_ID) {
+                    // Floor is a valid recipient only when a real department is sending
+                    mexRecipValid = (mexSender !== MEX_SALA_ID);
+                } else {
+                    mexRecipValid = !!mexActiveDepts.find(d => d.id === mexRecipient);
+                }
+                if (!mexRecipValid) {
                     console.log(`⛔ [MEX] mexSend rejected — invalid/inactive recipient "${mexRecipient}" for company "${mexCompanyId}"`);
                     ws.send(JSON.stringify({ action: 'mexSendAck', success: false, code: 'MEX_INVALID_RECIPIENT' }));
                     return;
@@ -5794,6 +5851,10 @@ wss.on('connection', (ws, req) => {
                     // Participant-only predicate (audit §E.4) — wsSocketMatchesDest is
                     // explicitly forbidden: it leaks to all unbound sockets.
                     // Sender's own socket is excluded: sender must not see mexIncoming.
+                    // [MEX Step 5] Effective principal per socket:
+                    //   - Bound dept socket → ws.boundDepartmentId
+                    //   - Floor socket (ws.isFloorPrincipal===true) → '__sala__'
+                    //   - Unbound/admin → no principal → excluded
                     if (companyRooms.has(mexCompanyId)) {
                         const participants = conversation.participants;
                         const incoming = JSON.stringify({
@@ -5807,9 +5868,10 @@ wss.on('connection', (ws, req) => {
                         companyRooms.get(mexCompanyId).forEach(client => {
                             if (client === ws) return;                            // no echo to sender
                             if (client.readyState !== WebSocket.OPEN) return;
-                            // Participant-only: effective principal must be in participants array.
-                            // Unbound sockets have no principal → excluded.
-                            if (client.boundDepartmentId && participants.includes(client.boundDepartmentId)) {
+                            // Effective principal for this client socket
+                            const clientPrincipal = client.boundDepartmentId
+                                || (client.isFloorPrincipal ? MEX_SALA_ID : null);
+                            if (clientPrincipal && participants.includes(clientPrincipal)) {
                                 client.send(incoming);
                             }
                         });

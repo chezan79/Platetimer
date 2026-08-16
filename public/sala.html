@@ -196,6 +196,54 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 .cd-card.expired{border-color:var(--danger);background:#FFF5F5;}
 /* Alert badge adjusted for light bg */
 .status-badge.alert{color:var(--danger);background:rgba(220,38,38,.08);border-color:rgba(220,38,38,.2);}
+
+/* ── MEX PANEL (Floor compose) ──────────────────────────────────────────────── */
+.mex-panel{
+  position:fixed;top:var(--hdr);right:0;width:320px;max-height:calc(100vh - var(--hdr));
+  overflow-y:auto;background:#fff;border-left:1.5px solid var(--border);
+  box-shadow:-4px 0 20px rgba(0,0,0,.10);z-index:150;
+  transform:translateX(100%);transition:transform .25s ease;padding:20px;}
+.mex-panel.open{transform:translateX(0);}
+.mex-panel-title{font-size:14px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.5px;color:var(--muted);margin-bottom:14px;}
+.mex-panel select{width:100%;padding:9px 10px;border:1.5px solid var(--border-l);
+  border-radius:8px;font-size:14px;margin-bottom:10px;background:#fff;color:var(--text);}
+.mex-panel select:focus{outline:none;border-color:var(--accent);}
+.mex-panel textarea{width:100%;padding:10px;border:1.5px solid var(--border-l);
+  border-radius:8px;font-size:14px;resize:vertical;min-height:90px;
+  background:#fff;color:var(--text);font-family:inherit;}
+.mex-panel textarea:focus{outline:none;border-color:var(--accent);}
+.mex-char-count{font-size:11px;color:var(--muted);text-align:right;margin-bottom:8px;}
+.mex-send-btn{width:100%;padding:10px;background:var(--accent);color:#fff;
+  border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;
+  transition:background .15s;}
+.mex-send-btn:hover:not(:disabled){background:var(--accent2);}
+.mex-send-btn:disabled{opacity:.5;cursor:default;}
+.mex-send-status{font-size:12px;margin-top:8px;min-height:18px;color:var(--muted);}
+.mex-send-status.ok{color:var(--ok);}
+.mex-send-status.err{color:var(--danger);}
+
+/* ── MEX INCOMING CARDS in #countdownsList ─────────────────────────────────── */
+/* These cards must survive renderCountdowns() rebuilds — see coexistence fix. */
+.mex-cd-card{
+  background:#fff;border:2px solid #3b82f6;border-radius:12px;
+  padding:14px 16px;display:flex;align-items:flex-start;gap:12px;
+  box-shadow:0 2px 8px rgba(59,130,246,.12);}
+.mex-cd-icon{font-size:22px;flex-shrink:0;line-height:1;}
+.mex-cd-content{flex:1;min-width:0;}
+.mex-cd-from{font-size:12px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.5px;color:#3b82f6;margin-bottom:4px;}
+.mex-cd-body{font-size:14px;color:var(--text);word-break:break-word;margin-bottom:6px;}
+.mex-cd-time{font-size:11px;color:var(--muted);}
+@keyframes mex-pulse-arrive{
+  0%,100%{box-shadow:0 2px 8px rgba(59,130,246,.12);}
+  50%{box-shadow:0 0 0 6px rgba(59,130,246,.25),0 2px 8px rgba(59,130,246,.12);}
+}
+.mex-cd-card.new-arrival{animation:mex-pulse-arrive .9s ease-out 3;}
+
+/* ── MEX MESSAGES SECTION ───────────────────────────────────────────────────── */
+.mex-msgs-section{margin-top:24px;}
+.mex-inbox-list .mex-empty{font-size:13px;color:var(--muted);padding:12px 0;}
 </style>
 </head>
 <body>
@@ -207,10 +255,26 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
   <span class="hdr-page" data-i18n="sala.title">Servizio</span>
   <span id="connectionStatus" class="conn-badge">🔴 Riconnessione…</span>
   <button id="voice-toggle-btn" class="hdr-btn" onclick="toggleVoicePanel()" title="Messaggi vocali" data-i18n="sala.voiceBtn">🎙️ Vocale</button>
+  <button id="mex-toggle-btn" class="hdr-btn" onclick="toggleMexPanel()" data-i18n="sala.mexBtn">💬 Mex</button>
   <span id="i18n-sala-sel"></span>
   <button class="hdr-btn" onclick="window.location.href='home.html'" data-i18n="common.home">Home</button>
   <button class="hdr-btn danger" onclick="window.location.href='index.html'" data-i18n="common.logout">Esci</button>
 </header>
+
+<!-- ── MEX PANEL (Floor compose) ────────── -->
+<div id="mex-panel" class="mex-panel">
+  <div class="mex-panel-title" data-i18n="sala.mexPanel">📨 Send a message</div>
+  <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px;" data-i18n="sala.mexSendTo">SEND TO</div>
+  <select id="mex-floor-recipient">
+    <option value="" data-i18n="sala.mexNoRecipient">Select a recipient</option>
+  </select>
+  <textarea id="mex-floor-body" rows="3" maxlength="300"
+    placeholder="Type a message… (max 300 chars)"
+    oninput="mexFloorUpdateCharCount()"></textarea>
+  <div class="mex-char-count" id="mex-floor-char-count">0/300</div>
+  <button class="mex-send-btn" id="mex-floor-send-btn" onclick="sendMexFromFloor()" data-i18n="sala.mexBtn">💬 Mex</button>
+  <div class="mex-send-status" id="mex-floor-status"></div>
+</div>
 
 <!-- ── VOICE PANEL ──────────────────────── -->
 <div id="voice-panel" class="voice-panel">
@@ -273,6 +337,15 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
       <span class="section-count" id="voice-msg-count">0</span>
     </div>
     <div id="voice-msg-list"></div>
+  </div>
+
+  <!-- Mex messages section (hidden until a message arrives) -->
+  <div id="mex-msgs-section" class="mex-msgs-section" style="display:none;">
+    <div class="section-hdr">
+      <span class="section-title" data-i18n="sala.mexMessages">💬 Mex messages</span>
+      <span class="section-count" id="mex-floor-msg-count">0</span>
+    </div>
+    <div id="mex-floor-inbox-list" class="mex-inbox-list"></div>
   </div>
 
 </main>
@@ -388,7 +461,257 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
     let recCountdownInterval = null;
     let voiceMessages        = new Map(); // messageId → { id, fromName, timestamp, blobUrl }
 
+    // ── Mex (Floor messaging) state ──────────────────────────────────────────
+    // [MEX Step 5] Floor is the virtual principal __sala__; token is exchanged
+    // server-side via /api/sala/token to embed role:'floor' in the signed payload.
+    let mexCdCards       = new Map(); // messageId → DOM element (in #countdownsList)
+    let mexFloorMessages = [];        // inbox messages shown in #mex-floor-inbox-list
+
     function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+    // ── Mex panel toggle ──────────────────────────────────────────────────────
+    function toggleMexPanel() {
+        const panel = document.getElementById('mex-panel');
+        if (panel) panel.classList.toggle('open');
+    }
+
+    /** Update character counter for the Mex textarea. */
+    function mexFloorUpdateCharCount() {
+        const ta  = document.getElementById('mex-floor-body');
+        const ctr = document.getElementById('mex-floor-char-count');
+        if (!ta || !ctr) return;
+        ctr.textContent = ta.value.length + '/300';
+        ctr.style.color = ta.value.length > 280 ? 'var(--danger)' : 'var(--muted)';
+    }
+
+    /** Populate the Mex recipient selector with active departments. */
+    function buildMexFloorRecipientList() {
+        const sel = document.getElementById('mex-floor-recipient');
+        if (!sel) return;
+        const prev = sel.value;
+        while (sel.options.length > 1) sel.remove(1);
+        const depts = Object.values(departmentMap).filter(d => d.active);
+        if (!depts.length) {
+            const opt = document.createElement('option');
+            opt.value = ''; opt.disabled = true;
+            opt.textContent = _t('sala.mexNoRecipients');
+            sel.add(opt);
+            return;
+        }
+        depts.forEach(d => {
+            const opt = document.createElement('option');
+            opt.value = d.id;
+            opt.textContent = d.name;
+            if (d.id === prev) opt.selected = true;
+            sel.add(opt);
+        });
+    }
+
+    /** Set Mex compose status text. */
+    function mexFloorStatus(msg, cls) {
+        const el = document.getElementById('mex-floor-status');
+        if (!el) return;
+        el.textContent = msg;
+        el.className = 'mex-send-status' + (cls ? ' ' + cls : '');
+    }
+
+    /** Send a Mex from Floor using the WS already managed by CountdownsModule. */
+    function sendMexFromFloor() {
+        const sel = document.getElementById('mex-floor-recipient');
+        const ta  = document.getElementById('mex-floor-body');
+        const btn = document.getElementById('mex-floor-send-btn');
+        if (!sel || !ta || !btn) return;
+        const recipient = sel.value.trim();
+        const body      = ta.value.trim();
+        if (!recipient)        { mexFloorStatus(_t('sala.mexNoRecipient'), 'err'); return; }
+        if (!body)             { mexFloorStatus(_t('sala.mexBodyEmpty'),    'err'); return; }
+        if (body.length > 300) { mexFloorStatus(_t('sala.mexBodyTooLong'),  'err'); return; }
+        const ws = CountdownsModule.getWebSocket();
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+            mexFloorStatus(_t('sala.mexErrorSend'), 'err'); return;
+        }
+        btn.disabled = true;
+        mexFloorStatus(_t('sala.mexSending'));
+        // [MEX SECURITY] 'from' intentionally NOT sent — server derives sender from
+        // ws.isFloorPrincipal (set during joinRoom from the signed role:'floor' claim).
+        ws.send(JSON.stringify({ action: 'mexSend', to: recipient, body }));
+    }
+
+    /** Play a short two-note Mex notification tone using the Web Audio API. */
+    function playMexSound() {
+        try {
+            const ctx  = new (window.AudioContext || window.webkitAudioContext)();
+            const osc  = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(880, ctx.currentTime);
+            osc.frequency.setValueAtTime(660, ctx.currentTime + 0.18);
+            gain.gain.setValueAtTime(0.28, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
+            osc.start(ctx.currentTime);
+            osc.stop(ctx.currentTime + 0.6);
+            setTimeout(() => ctx.close().catch(() => {}), 800);
+        } catch (e) { console.warn('[mex] sala notification sound failed:', e.message); }
+    }
+
+    /**
+     * Insert (or skip if already present) a Mex card into #countdownsList.
+     * Coexistence: .mex-cd-card elements survive renderCountdowns() rebuilds
+     * because renderCountdowns() only removes non-.mex-cd-card children.
+     *
+     * @param {object}  msg   - { id, from, fromName, body, timestamp }
+     * @param {boolean} isNew - true → pulse animation; false → backfill (no animation)
+     */
+    function insertMexCdCard(msg, isNew) {
+        if (mexCdCards.has(msg.id)) return;  // already inserted — skip
+        const list = document.getElementById('countdownsList');
+        if (!list) return;
+
+        // Remove empty-state placeholder if present
+        const emptyEl = list.querySelector('.empty-state');
+        if (emptyEl) emptyEl.remove();
+
+        const timeFmt = ts => {
+            try {
+                const d = new Date(ts);
+                return isNaN(d.getTime()) ? String(ts) : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            } catch { return String(ts); }
+        };
+
+        const el = document.createElement('div');
+        el.id = 'mex-cd-' + msg.id;
+        el.className = 'mex-cd-card' + (isNew ? ' new-arrival' : '');
+        el.innerHTML =
+            '<span class="mex-cd-icon">💬</span>' +
+            '<div class="mex-cd-content">' +
+              '<div class="mex-cd-from">' + esc(msg.fromName || msg.from) + '</div>' +
+              '<div class="mex-cd-body">' + esc(msg.body) + '</div>' +
+              '<div class="mex-cd-time">' + esc(timeFmt(msg.timestamp)) + '</div>' +
+            '</div>';
+
+        // Mex cards appear AFTER all countdown cards (append at end)
+        list.appendChild(el);
+        mexCdCards.set(msg.id, el);
+
+        // Remove the pulse class after animation completes (3 × 0.9s = 2.7s)
+        if (isNew) {
+            setTimeout(() => el.classList.remove('new-arrival'), 2800);
+        }
+    }
+
+    /** Handle an incoming mexIncoming event from the server (real-time). */
+    function handleMexIncoming(data) {
+        // [MEX Step 5] Map sender: __sala__ is Floor (never shown raw), real depts from map.
+        const fromDept = departmentMap[data.from];
+        const fromName = data.from === '__sala__'
+            ? _t('dept.floorDest')
+            : (fromDept ? fromDept.name : esc(data.from || '?'));
+
+        const msg = {
+            id:        data.messageId,
+            convId:    data.conversationId,
+            from:      data.from,
+            fromName,
+            body:      data.body,
+            timestamp: data.timestamp
+        };
+
+        mexFloorMessages.push(msg);
+        renderMexFloorInbox();
+        insertMexCdCard(msg, true);
+        playMexSound();
+    }
+
+    /** Handle mexSendAck from server (response to our mexSend). */
+    function handleMexFloorSendAck(data) {
+        const btn = document.getElementById('mex-floor-send-btn');
+        const ta  = document.getElementById('mex-floor-body');
+        if (data.success) {
+            mexFloorStatus(_t('sala.mexSent'), 'ok');
+            if (ta) { ta.value = ''; mexFloorUpdateCharCount(); }
+            setTimeout(() => mexFloorStatus(''), 3000);
+        } else {
+            mexFloorStatus(_t('sala.mexErrorSend'), 'err');
+        }
+        if (btn) btn.disabled = false;
+    }
+
+    /** Re-render the Floor inbox (newest first). */
+    function renderMexFloorInbox() {
+        const section = document.getElementById('mex-msgs-section');
+        const list    = document.getElementById('mex-floor-inbox-list');
+        const badge   = document.getElementById('mex-floor-msg-count');
+        if (!section || !list) return;
+        if (!mexFloorMessages.length) {
+            section.style.display = 'none';
+            return;
+        }
+        section.style.display = 'block';
+        if (badge) badge.textContent = mexFloorMessages.length;
+        list.innerHTML = [...mexFloorMessages].reverse().map(m => `
+            <div class="mex-card">
+              <div class="mex-card-from">${_t('sala.mexFrom')}: ${esc(m.fromName)}</div>
+              <div class="mex-card-body">${esc(m.body)}</div>
+              <div class="mex-card-time">${esc(m.timestamp)}</div>
+            </div>`).join('');
+    }
+
+    /** Backfill Floor inbox from REST after reconnect/reload. */
+    async function loadMexFloorInbox() {
+        try {
+            const tk = WsAuth.getStoredToken();
+            if (!tk) return;
+            const r = await fetch('/api/service/mex/floor-inbox',
+                { headers: { Authorization: 'Bearer ' + tk } });
+            if (!r.ok) return;
+            const d = await r.json();
+            if (!d.success || !Array.isArray(d.conversations)) return;
+            const seen  = new Set(mexFloorMessages.map(m => m.id));
+            const fresh = [];
+            for (const conv of d.conversations) {
+                for (const msg of (conv.messages || [])) {
+                    // Show messages from depts (not the __sala__ sent messages, which are ours)
+                    if (msg.from !== '__sala__' && !seen.has(msg.id)) {
+                        const fromDept = departmentMap[msg.from];
+                        fresh.push({
+                            id: msg.id, convId: conv.id,
+                            from: msg.from,
+                            fromName: fromDept ? fromDept.name : (msg.from || '?'),
+                            body: msg.body, timestamp: msg.timestamp
+                        });
+                        seen.add(msg.id);
+                    }
+                }
+            }
+            if (fresh.length) {
+                fresh.sort((a, b) => a.timestamp < b.timestamp ? -1 : 1);
+                mexFloorMessages.push(...fresh);
+                renderMexFloorInbox();
+                fresh.forEach(m => insertMexCdCard(m, false));
+            }
+        } catch (e) { console.warn('[MEX] loadMexFloorInbox error', e); }
+    }
+
+    /**
+     * Exchange the current session token for a Floor-principal token.
+     * Must be called before WS connect so joinRoom sends the floor-scoped token.
+     * Silently falls back if the server returns an error (sala stays in legacy mode).
+     */
+    async function exchangeForFloorToken() {
+        try {
+            const tk = WsAuth.getStoredToken();
+            if (!tk) return;
+            const r = await fetch('/api/sala/token', { headers: { Authorization: 'Bearer ' + tk } });
+            if (!r.ok) { console.warn('[MEX] Floor token exchange failed:', r.status); return; }
+            const d = await r.json();
+            if (d.success && d.token) {
+                WsAuth.storeToken(d.token);
+                console.log('[MEX] Floor principal token stored');
+            }
+        } catch (e) { console.warn('[MEX] Floor token exchange error:', e.message); }
+    }
 
     function blobToBase64(blob) {
         return new Promise((resolve, reject) => {
@@ -704,8 +1027,14 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
         });
     }
 
-    function initializePage() {
-        loadDepartments();
+    async function initializePage() {
+        // [MEX Step 5] Exchange for a Floor-principal token BEFORE connecting WS,
+        // so joinRoom sends the signed role:'floor' claim (sets ws.isFloorPrincipal).
+        await exchangeForFloorToken();
+        loadDepartments().then(() => {
+            buildMexFloorRecipientList();
+            loadMexFloorInbox();
+        });
         loadInitialCountdowns();
         subscribeToUpdates();
         startAutoRefresh();
@@ -756,6 +1085,13 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
             },
             onVoiceMessage: (data) => {
                 handleVoiceMessage(data);
+            },
+            // [MEX Step 5] Floor receives department messages via mexIncoming
+            onMexIncoming: (data) => {
+                handleMexIncoming(data);
+            },
+            onMexSendAck: (data) => {
+                handleMexFloorSendAck(data);
             }
         });
     }
@@ -902,17 +1238,35 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
         const visibleCount = document.getElementById('visibleCount');
         if (visibleCount) visibleCount.textContent = filtered.length;
 
+        // [MEX Step 5] Coexistence: remove only non-.mex-cd-card children so that
+        // Mex cards inserted by insertMexCdCard() survive countdown re-renders.
+        // This mirrors the same fix in department.html's renderCards().
+        const hasMexCards = !!container.querySelector('.mex-cd-card');
         if (filtered.length === 0) {
-            container.innerHTML = `
-                <div class="empty-state">
-                    <div class="empty-state-icon">🍽️</div>
-                    <div class="empty-state-text">${_t('sala.noActive')}</div>
-                </div>
-            `;
+            // Remove countdown-only children, preserve Mex cards
+            Array.from(container.children).forEach(el => {
+                if (!el.classList.contains('mex-cd-card')) el.remove();
+            });
+            // Show empty state only when there are no Mex cards either
+            if (!hasMexCards) {
+                const empty = document.createElement('div');
+                empty.className = 'empty-state';
+                empty.innerHTML =
+                    '<div class="empty-state-icon">🍽️</div>' +
+                    '<div class="empty-state-text">' + _t('sala.noActive') + '</div>';
+                container.insertBefore(empty, container.firstChild);
+            }
             return;
         }
 
-        container.innerHTML = filtered.map(countdown => {
+        // Remove existing countdown cards only (not Mex cards)
+        Array.from(container.children).forEach(el => {
+            if (!el.classList.contains('mex-cd-card')) el.remove();
+        });
+
+        // Build and insert countdown cards before any Mex cards
+        const firstMex = container.querySelector('.mex-cd-card');
+        filtered.map(countdown => {
             const isExpired   = countdown.expiredAt !== null;
             const alertLevel  = isExpired
                 ? 'expired'
@@ -940,7 +1294,12 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
                     </span>
                 </div>
             `;
-        }).join('');
+        }).forEach(html => {
+                const tmp = document.createElement('div');
+                tmp.innerHTML = html;
+                const el = tmp.firstElementChild;
+                if (el) container.insertBefore(el, firstMex || null);
+            });
     }
 
     function getStationIcon(station) {

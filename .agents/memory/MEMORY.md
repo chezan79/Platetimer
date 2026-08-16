@@ -41,4 +41,5 @@
 - [Mex audit constraints](mex-audit.md) — binding Mex design: server-verified Floor principal, participant-only WS delivery (not wsSocketMatchesDest), per-company Firestore docs with UTF-8 byte cap + rev-transaction writes.
 - [Mex Step 3 implementation](mex-step3.md) — service/mex-store.js per-company store; WS mexSend→mexSendAck/mexIncoming; GET /api/service/mex/inbox backfill; 9 Jest unit + 33 WS integration tests; port 4446.
 - [Mex Step 4 rendering](mex-step4.md) — insertMexCdCard(msg,isNew) + mexCdCards Map; renderCards() refactored to preserve .mex-cd-card; playMexSound() Web Audio API; 30 plain-Node.js jsdom tests; test file: tests/mex-step4-render.test.js.
+- [Mex Step 5 Floor↔Dept](mex-step5.md) — role:'floor' in signed token; /api/sala/token endpoint; ws.isFloorPrincipal; sender resolution; delivery predicate; 41 WS + 11 render tests.
 - [WS join confirmation](ws-join-confirmation.md) — server sends {action:'joinedRoom'} after joinRoom; ops realtime client requires it within 5s or reconnects; auth errors surfaced, not silently ignored.

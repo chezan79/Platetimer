@@ -2323,7 +2323,7 @@ function buildMexRecipientList(){
     opt.value = ''; opt.disabled = true;
     opt.textContent = _mt('dept.mexNoRecipients');
     sel.add(opt);
-    return;
+    // Still add Floor even if no other depts
   }
   depts.forEach(d => {
     const opt = document.createElement('option');
@@ -2331,6 +2331,14 @@ function buildMexRecipientList(){
     if(d.id === prev) opt.selected = true;
     sel.add(opt);
   });
+  // [MEX Step 5] Add Floor (__sala__) as a valid recipient.
+  // The server verifies the Floor destination; the client just passes '__sala__' as the 'to' field.
+  const floorOpt = document.createElement('option');
+  floorOpt.value = '__sala__';
+  floorOpt.setAttribute('data-i18n', 'dept.floorDest');
+  floorOpt.textContent = _mt('dept.floorDest');
+  if('__sala__' === prev) floorOpt.selected = true;
+  sel.add(floorOpt);
 }
 
 /** Update the character counter for the Mex textarea. */
@@ -2453,8 +2461,11 @@ function insertMexCdCard(msg, isNew){
 /** Handle an incoming mexIncoming event delivered by the server. */
 function handleMexIncoming(data){
   const _esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  // [MEX Step 5] __sala__ is the Floor virtual principal — show localized label, never raw ID.
   const fromDept = departmentMap[data.from];
-  const fromName = fromDept ? fromDept.name : _esc(data.from || '?');
+  const fromName = data.from === '__sala__'
+    ? _mt('dept.floorDest')
+    : (fromDept ? fromDept.name : _esc(data.from || '?'));
   const msg = {
     id: data.messageId, convId: data.conversationId,
     from: data.from, fromName, body: data.body, timestamp: data.timestamp
@@ -2498,10 +2509,14 @@ async function loadMexInbox(){
       for(const msg of (conv.messages||[])){
         // Only show messages FROM others (not sent by this dept)
         if(msg.from !== myDeptId && !seen.has(msg.id)){
+          // [MEX Step 5] __sala__ is the Floor virtual principal — use localized label.
           const fromDept = departmentMap[msg.from];
+          const fromName = msg.from === '__sala__'
+            ? _mt('dept.floorDest')
+            : (fromDept ? fromDept.name : (msg.from||'?'));
           fresh.push({
             id: msg.id, convId: conv.id,
-            from: msg.from, fromName: fromDept ? fromDept.name : (msg.from||'?'),
+            from: msg.from, fromName,
             body: msg.body, timestamp: msg.timestamp
           });
           seen.add(msg.id);

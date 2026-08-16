@@ -78,6 +78,8 @@ const CountdownsModule = (() => {
             onCountdownDelete,
             onConnectionStatus,
             onVoiceMessage,
+            onMexIncoming,
+            onMexSendAck,
             pageType,
             reconnectDelay = 3000
         } = config;
@@ -149,6 +151,11 @@ const CountdownsModule = (() => {
                             onCountdownDeleteCallback(data.tableNumber);
                         } else if (data.action === 'voiceMessage' && onVoiceMessage) {
                             onVoiceMessage(data);
+                        } else if (data.action === 'mexIncoming' && onMexIncoming) {
+                            // [MEX Step 5] Delivered only to participant sockets (server enforces).
+                            onMexIncoming(data);
+                        } else if (data.action === 'mexSendAck' && onMexSendAck) {
+                            onMexSendAck(data);
                         }
                     } catch (error) {
                         console.error('Error parsing WebSocket message:', error);
