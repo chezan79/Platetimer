@@ -1112,6 +1112,42 @@ app.post('/api/service/ops-tasks/:taskId/acknowledge', (req, res) => {
     res.json({ success: true });
 });
 
+// ── [MEX Step 3] GET /api/service/mex/inbox ───────────────────────────────────
+// Returns open conversations where the bound department is a participant.
+// Used for reconnect/reload backfill — restores message state without requiring
+// the client to re-receive WS events it may have missed while disconnected.
+// [SECURITY] companyId + departmentId derived from server-side session only.
+app.get('/api/service/mex/inbox', async (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+
+    const boundAcct = getBoundDepartmentContext(session);
+    if (!boundAcct) {
+        return res.status(403).json({ error: 'No department account binding.', code: 'NOT_BOUND' });
+    }
+    if (boundAcct.status !== 'ACTIVE') {
+        const e = departmentAccessError(boundAcct);
+        return res.status(e.status).json(e.body);
+    }
+
+    const companyId    = boundAcct.companyId;
+    const departmentId = boundAcct.departmentId;
+
+    // Live department-activity check — deactivated departments lose inbox access.
+    const liveDept = getCompanyDepts(companyId).find(d => d.id === departmentId);
+    if (!liveDept || !liveDept.active) {
+        return res.status(410).json({ error: 'Assigned department inactive', code: 'DEPARTMENT_INACTIVE' });
+    }
+
+    try {
+        const conversations = await mexStoreModule.getInboxForDept(companyId, departmentId);
+        res.json({ success: true, conversations });
+    } catch (e) {
+        console.error('[MEX] Inbox fetch error:', e.message);
+        res.status(500).json({ error: 'Failed to load inbox.' });
+    }
+});
+
 // ── [S2.2] In-memory rate limiter for POST /api/service/login ────────────────
 // Keyed by `${normalizedLogin}:${clientIP}`. Max 5 failures per 5-minute window.
 // Successful login clears the entry. No persistence — restarts reset counters (acceptable).
@@ -2277,6 +2313,10 @@ const opsAssistant    = require('./operations/ops-assistant');
 const opsPerformance  = require('./operations/ops-performance');
 const opsExceptions   = require('./operations/ops-exceptions');
 const opsVisits       = require('./operations/ops-visits');
+
+// ── [MEX Step 3] Per-company Mex conversation store ───────────────────────────
+const mexStoreModule = require('./service/mex-store');
+mexStoreModule.init(DATA_DIR, db, STORE_COLLECTION);
 
 const OPS_USERS_FILE = path.join(DATA_DIR, 'ops-users.json');
 const OPS_TASKS_FILE = path.join(DATA_DIR, 'ops-tasks.json');
@@ -5682,6 +5722,108 @@ wss.on('connection', (ws, req) => {
                     console.log('⚠️ Client non assegnato a nessuna room per eliminazione messaggio vocale');
                 }
 
+            } else if (data.action === 'mexSend') {
+                // ── [MEX Step 3] Department-to-department text message ────────
+                // [SECURITY] Sender identity = ws.boundDepartmentId ONLY.
+                // Any client-supplied 'from' field is completely ignored.
+                // Unbound sockets (no boundDepartmentId) are rejected immediately.
+                const mexSender = ws.boundDepartmentId;
+                if (!mexSender) {
+                    ws.send(JSON.stringify({
+                        action: 'error', code: 'MEX_NOT_BOUND',
+                        message: 'Only bound department accounts can send Mex messages.'
+                    }));
+                    return;
+                }
+                if (!ws.companyRoom) {
+                    ws.send(JSON.stringify({ action: 'mexSendAck', success: false, code: 'MEX_NO_ROOM' }));
+                    return;
+                }
+
+                // Validate body — empty or over limit rejected here (before persistence).
+                const mexBody = typeof data.body === 'string' ? data.body.trim() : '';
+                if (!mexBody) {
+                    ws.send(JSON.stringify({ action: 'mexSendAck', success: false, code: 'MEX_EMPTY_BODY' }));
+                    return;
+                }
+                if (mexBody.length > mexStoreModule.MEX_MAX_BODY_LENGTH) {
+                    ws.send(JSON.stringify({ action: 'mexSendAck', success: false, code: 'MEX_BODY_TOO_LONG',
+                        maxLength: mexStoreModule.MEX_MAX_BODY_LENGTH }));
+                    return;
+                }
+
+                // Validate recipient — must be an ACTIVE dept in the same company, not __sala__, not sender.
+                const mexRecipient = typeof data.to === 'string' ? data.to.trim() : '';
+                if (!mexRecipient) {
+                    ws.send(JSON.stringify({ action: 'mexSendAck', success: false, code: 'MEX_NO_RECIPIENT' }));
+                    return;
+                }
+                if (mexRecipient === mexSender) {
+                    ws.send(JSON.stringify({ action: 'mexSendAck', success: false, code: 'MEX_SELF_SEND' }));
+                    return;
+                }
+                // [SECURITY] Cross-company spoofing: recipient validated against THIS company's active dept list.
+                const mexCompanyId   = ws.companyRoom;
+                const mexActiveDepts = getCompanyDepts(mexCompanyId).filter(d => d.active);
+                const mexRecipDept   = mexActiveDepts.find(d => d.id === mexRecipient);
+                if (!mexRecipDept) {
+                    console.log(`⛔ [MEX] mexSend rejected — invalid/inactive recipient "${mexRecipient}" for company "${mexCompanyId}"`);
+                    ws.send(JSON.stringify({ action: 'mexSendAck', success: false, code: 'MEX_INVALID_RECIPIENT' }));
+                    return;
+                }
+
+                // Persist + deliver (async — does not block the WS message loop).
+                mexStoreModule.createAndSend({
+                    companyId:       mexCompanyId,
+                    senderDeptId:    mexSender,         // server-derived; never from client
+                    recipientDeptId: mexRecipient,
+                    body:            mexBody
+                }).then(({ conversation, message }) => {
+                    // Ack to sender — NOT an incoming-message event.
+                    if (ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({
+                            action:         'mexSendAck',
+                            success:         true,
+                            conversationId:  conversation.id,
+                            messageId:       message.id,
+                            timestamp:       message.timestamp
+                        }));
+                    }
+
+                    // Deliver to recipient sockets only.
+                    // Participant-only predicate (audit §E.4) — wsSocketMatchesDest is
+                    // explicitly forbidden: it leaks to all unbound sockets.
+                    // Sender's own socket is excluded: sender must not see mexIncoming.
+                    if (companyRooms.has(mexCompanyId)) {
+                        const participants = conversation.participants;
+                        const incoming = JSON.stringify({
+                            action:         'mexIncoming',
+                            conversationId:  conversation.id,
+                            messageId:       message.id,
+                            from:            mexSender,
+                            body:            message.body,
+                            timestamp:       message.timestamp
+                        });
+                        companyRooms.get(mexCompanyId).forEach(client => {
+                            if (client === ws) return;                            // no echo to sender
+                            if (client.readyState !== WebSocket.OPEN) return;
+                            // Participant-only: effective principal must be in participants array.
+                            // Unbound sockets have no principal → excluded.
+                            if (client.boundDepartmentId && participants.includes(client.boundDepartmentId)) {
+                                client.send(incoming);
+                            }
+                        });
+                    }
+
+                    console.log(`[MEX] conv=${conversation.id} from="${mexSender}" to="${mexRecipient}" company="${mexCompanyId}"`);
+                }).catch(e => {
+                    const code = (e && e.code) || 'MEX_PERSIST_ERROR';
+                    if (ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({ action: 'mexSendAck', success: false, code }));
+                    }
+                    console.error(`[MEX] Send error (${code}): ${e && (e.message || JSON.stringify(e))}`);
+                });
+
             } else if (data.action === 'pausaCucina') {
                 // Validazione richiesta pausa cucina
                 if (!data.durataMinuti || typeof data.durataMinuti !== 'number') {
@@ -6279,6 +6421,9 @@ const opsSchedulerInstance = opsScheduler.createScheduler(
 );
 
 initializeDataStores().then(() => {
+    // [MEX] Init Mex store — local dev: eager load from file; Firestore: lazy per company.
+    mexStoreModule.initMexStore().catch(e => console.error('[MEX] initMexStore error:', e.message));
+
     // Kick off the first scheduler run shortly after startup, then every 5 minutes.
     setTimeout(() => {
         opsSchedulerInstance.run().catch(e => console.error('[SCHEDULER] Initial run error:', e.message));

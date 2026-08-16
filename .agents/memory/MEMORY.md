@@ -39,4 +39,5 @@
 - [Task 66 dept cards](ops-dept-cards.md) — ops tasks render as .ops-task-card in #ops-task-list; detail modal openOpsDetailModal(taskId) reads from opsTasks Map; _opsIsOverdue()/_opsFmtDue() helpers; Escape closes modal; 68 tests ops-dept-cards.test.js.
 - [Task 66 Ack: service-dept acknowledgement](ops-dept-ack.md) — opsAckStore (ops-ack.json); POST /api/service/ops-tasks/:id/acknowledge; idempotent; status filter (OPEN/IN_PROGRESS only); GET excludes acked; 48 tests ops-dept-ack.test.js.
 - [Mex audit constraints](mex-audit.md) — binding Mex design: server-verified Floor principal, participant-only WS delivery (not wsSocketMatchesDest), per-company Firestore docs with UTF-8 byte cap + rev-transaction writes.
+- [Mex Step 3 implementation](mex-step3.md) — service/mex-store.js per-company store; WS mexSend→mexSendAck/mexIncoming; GET /api/service/mex/inbox backfill; 9 Jest unit + 33 WS integration tests; port 4446.
 - [WS join confirmation](ws-join-confirmation.md) — server sends {action:'joinedRoom'} after joinRoom; ops realtime client requires it within 5s or reconnects; auth errors surfaced, not silently ignored.

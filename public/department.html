@@ -183,6 +183,37 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 .vc-result-body{font-size:13px;color:var(--text);line-height:1.6;}
 
 
+/* ── MEX MESSAGING ──────────────────────────── */
+.mex-compose-box{display:flex;flex-direction:column;gap:8px;
+  background:rgba(79,70,229,.05);border:1.5px solid rgba(79,70,229,.15);
+  border-radius:12px;padding:14px 16px;}
+.mex-sel{width:100%;padding:8px 10px;border-radius:8px;
+  border:1.5px solid var(--border-l);background:var(--card);color:var(--text);
+  font-size:13px;cursor:pointer;outline:none;box-sizing:border-box;}
+.mex-sel:focus{border-color:var(--accent);}
+.mex-textarea{width:100%;padding:9px 11px;border-radius:8px;resize:vertical;
+  border:1.5px solid var(--border-l);background:var(--card);color:var(--text);
+  font-size:13px;line-height:1.5;outline:none;box-sizing:border-box;font-family:inherit;}
+.mex-textarea:focus{border-color:var(--accent);}
+.mex-send-btn{padding:7px 18px;background:var(--accent);color:#fff;border:none;
+  border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;transition:all .18s;
+  white-space:nowrap;}
+.mex-send-btn:hover:not(:disabled){background:#4338ca;}
+.mex-send-btn:disabled{opacity:.4;cursor:not-allowed;}
+.mex-send-status{font-size:12px;min-height:18px;}
+.mex-send-status.ok{color:var(--ok);}
+.mex-send-status.err{color:var(--danger);}
+.mex-inbox-box{display:flex;flex-direction:column;gap:6px;padding-top:4px;
+  border-top:1px solid var(--border);margin-top:4px;}
+.mex-card{background:var(--card);border:1.5px solid var(--border-l);border-radius:10px;
+  padding:11px 14px;display:flex;flex-direction:column;gap:4px;}
+.mex-card-from{font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;
+  letter-spacing:.5px;}
+.mex-card-body{font-size:14px;color:var(--text);line-height:1.5;word-break:break-word;}
+.mex-card-time{font-size:11px;color:var(--muted);text-align:right;}
+.mex-empty{font-size:13px;color:var(--muted);line-height:1.6;text-align:center;
+  padding:16px 0;}
+
 /* ── DISCONNECTED OVERLAY ───────────────────── */
 .dc-bar{position:fixed;top:var(--hdr);left:0;right:0;background:rgba(239,68,68,.95);
   color:#fff;text-align:center;padding:8px;font-size:13px;font-weight:600;z-index:150;
@@ -737,7 +768,30 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
   <!-- ── MEX SECTION ────────────────────────────── -->
   <div id="section-mex" class="lp-section" style="display:none;">
     <div class="lp-title" data-i18n="dept.mexTitle">Messaggi</div>
-    <p style="font-size:13px;color:var(--muted);line-height:1.6;" data-i18n="dept.mexPlaceholder">I messaggi operativi di testo appariranno qui in un prossimo aggiornamento.</p>
+
+    <!-- Compose (Step 3: dept→dept text only, no Floor) -->
+    <div class="mex-compose-box">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:2px;font-weight:700;letter-spacing:.5px;" data-i18n="dept.mexTo">A</div>
+      <select id="mex-recipient-sel" class="mex-sel">
+        <option value="" data-i18n="dept.mexSelectDept">Seleziona reparto…</option>
+      </select>
+      <textarea id="mex-body" class="mex-textarea" maxlength="300"
+        placeholder="Scrivi un messaggio (max 300 caratteri)…" rows="3"
+        oninput="mexUpdateCharCount()"></textarea>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:4px;">
+        <span id="mex-char-count" style="font-size:11px;color:var(--muted);">0/300</span>
+        <button id="mex-send-btn" class="mex-send-btn" onclick="sendMexMessage()" data-i18n="dept.mexSend">Invia</button>
+      </div>
+      <div id="mex-send-status" class="mex-send-status"></div>
+    </div>
+
+    <!-- Received messages inbox -->
+    <div class="mex-inbox-box">
+      <div style="font-size:11px;color:var(--muted);font-weight:700;letter-spacing:.5px;padding-bottom:8px;" data-i18n="dept.mexInbox">MESSAGGI RICEVUTI</div>
+      <div id="mex-inbox-list">
+        <div class="mex-empty" data-i18n="dept.mexEmpty">Nessun messaggio ricevuto.</div>
+      </div>
+    </div>
   </div>
 
   <!-- ── VOICE SECTION ──────────────────────────── -->
@@ -895,6 +949,10 @@ let vcTimer     = null;
 let vcCountInt  = null;
 // Map: messageId → { id, fromName, timestamp, blobUrl }
 let voiceMessages = new Map();
+
+// [MEX Step 3] Received messages — ordered newest-last array for display.
+// Shape: [{ id, convId, from, fromName, body, timestamp }]
+let mexInboxMessages = [];
 
 // ── Alarm audio ──────────────────────────────────────────────────────────────
 // Browsers block audio until the user has interacted with the page.
@@ -1795,6 +1853,8 @@ function connectWS(){
     setConnBadge(true);
     WsAuth.joinRoom(ws, myDeptId, () => {
       console.log('[dept] joined room + page', myDeptId);
+      // [MEX Step 3] Backfill open conversations after reconnect/reload.
+      if(WsAuth.isServiceSession()) loadMexInbox();
     });
   };
 
@@ -1865,6 +1925,16 @@ function connectWS(){
       if(!WsAuth.isServiceSession()) return;
       const tid = data.taskId || (data.task && data.task.id);
       if(tid && opsTasks.delete(tid)) renderOpsTasks();
+    } else if(data.action === 'mexIncoming'){
+      // [MEX Step 3] Server delivers incoming message to participant sockets only.
+      // Guard: only bound service sessions are participants; unbound sessions are
+      // never in the participant list so they would never receive this — guard is
+      // a client-side double-check for defence-in-depth only.
+      if(!WsAuth.isServiceSession()) return;
+      handleMexIncoming(data);
+    } else if(data.action === 'mexSendAck'){
+      // [MEX Step 3] Server ack for a mexSend we initiated.
+      handleMexSendAck(data);
     }
   };
 }
@@ -2199,11 +2269,149 @@ async function loadOpsTasks(){
   }catch{ /* network error — leave hidden */ }
 }
 
+// ── Mex Step 3 ────────────────────────────────────────────────────────────────
+function _mt(k){ return (window.I18n && I18n.t) ? I18n.t(k) : k; }
+
+/** Populate the Mex recipient <select> from active sibling depts, excluding own. */
+function buildMexRecipientList(){
+  const sel = document.getElementById('mex-recipient-sel');
+  if(!sel) return;
+  const prev = sel.value;
+  while(sel.options.length > 1) sel.remove(1);
+  const depts = Object.values(departmentMap).filter(d => d.active && d.id !== myDeptId);
+  if(!depts.length){
+    const opt = document.createElement('option');
+    opt.value = ''; opt.disabled = true;
+    opt.textContent = _mt('dept.mexNoRecipients');
+    sel.add(opt);
+    return;
+  }
+  depts.forEach(d => {
+    const opt = document.createElement('option');
+    opt.value = d.id; opt.textContent = d.name;
+    if(d.id === prev) opt.selected = true;
+    sel.add(opt);
+  });
+}
+
+/** Update the character counter for the Mex textarea. */
+function mexUpdateCharCount(){
+  const ta  = document.getElementById('mex-body');
+  const ctr = document.getElementById('mex-char-count');
+  if(!ta || !ctr) return;
+  ctr.textContent = `${ta.value.length}/300`;
+  ctr.style.color = ta.value.length > 280 ? 'var(--danger)' : 'var(--muted)';
+}
+
+/** Set status text inside the compose box. */
+function mexStatus(msg, cls){
+  const el = document.getElementById('mex-send-status');
+  if(!el) return;
+  el.textContent = msg;
+  el.className   = `mex-send-status${cls ? ' '+cls : ''}`;
+}
+
+/** Send a message via WS. Validation mirrors server-side checks for fast feedback. */
+function sendMexMessage(){
+  const sel = document.getElementById('mex-recipient-sel');
+  const ta  = document.getElementById('mex-body');
+  const btn = document.getElementById('mex-send-btn');
+  if(!sel||!ta||!btn) return;
+  const recipient = sel.value.trim();
+  const body      = ta.value.trim();
+  if(!recipient)       { mexStatus(_mt('dept.mexNoRecipient'), 'err'); return; }
+  if(!body)            { mexStatus(_mt('dept.mexBodyEmpty'), 'err'); return; }
+  if(body.length > 300){ mexStatus(_mt('dept.mexBodyTooLong'), 'err'); return; }
+  if(!ws || ws.readyState !== WebSocket.OPEN){ mexStatus(_mt('dept.mexErrorSend'), 'err'); return; }
+  btn.disabled = true;
+  mexStatus(_mt('dept.mexSending'));
+  // [MEX SECURITY] 'from' is intentionally NOT sent — sender identity is
+  // derived by the server from ws.boundDepartmentId, never from client payload.
+  ws.send(JSON.stringify({ action: 'mexSend', to: recipient, body }));
+}
+
+/** Handle mexSendAck from server (response to our mexSend). */
+function handleMexSendAck(data){
+  const btn = document.getElementById('mex-send-btn');
+  const ta  = document.getElementById('mex-body');
+  if(data.success){
+    mexStatus(_mt('dept.mexSent'), 'ok');
+    if(ta){ ta.value = ''; mexUpdateCharCount(); }
+    setTimeout(() => mexStatus(''), 3000);
+  } else {
+    mexStatus(_mt('dept.mexErrorSend'), 'err');
+  }
+  if(btn) btn.disabled = false;
+}
+
+/** Handle an incoming mexIncoming event delivered by the server. */
+function handleMexIncoming(data){
+  const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const fromDept = departmentMap[data.from];
+  const fromName = fromDept ? fromDept.name : esc(data.from || '?');
+  mexInboxMessages.push({
+    id: data.messageId, convId: data.conversationId,
+    from: data.from, fromName, body: data.body, timestamp: data.timestamp
+  });
+  renderMexInbox();
+}
+
+/** Re-render the inbox list from mexInboxMessages (newest first). */
+function renderMexInbox(){
+  const list = document.getElementById('mex-inbox-list');
+  if(!list) return;
+  if(!mexInboxMessages.length){
+    list.innerHTML = `<div class="mex-empty">${_mt('dept.mexEmpty')}</div>`;
+    return;
+  }
+  const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  list.innerHTML = [...mexInboxMessages].reverse().map(m => `
+    <div class="mex-card">
+      <div class="mex-card-from">${_mt('dept.mexFrom')}: ${esc(m.fromName)}</div>
+      <div class="mex-card-body">${esc(m.body)}</div>
+      <div class="mex-card-time">${esc(m.timestamp)}</div>
+    </div>`).join('');
+}
+
+/** Backfill open conversations from REST on reconnect/reload. De-dupes by messageId. */
+async function loadMexInbox(){
+  if(!WsAuth.isServiceSession()) return;
+  try{
+    const r = await fetch('/api/service/mex/inbox',
+      { headers: { Authorization: `Bearer ${token}` } });
+    if(!r.ok) return;
+    const d = await r.json();
+    if(!d.success || !Array.isArray(d.conversations)) return;
+    const seen  = new Set(mexInboxMessages.map(m => m.id));
+    const fresh = [];
+    for(const conv of d.conversations){
+      for(const msg of (conv.messages||[])){
+        // Only show messages FROM others (not sent by this dept)
+        if(msg.from !== myDeptId && !seen.has(msg.id)){
+          const fromDept = departmentMap[msg.from];
+          fresh.push({
+            id: msg.id, convId: conv.id,
+            from: msg.from, fromName: fromDept ? fromDept.name : (msg.from||'?'),
+            body: msg.body, timestamp: msg.timestamp
+          });
+          seen.add(msg.id);
+        }
+      }
+    }
+    if(fresh.length){
+      fresh.sort((a,b) => a.timestamp < b.timestamp ? -1 : 1);
+      mexInboxMessages.push(...fresh);
+      renderMexInbox();
+    }
+  }catch(e){ console.warn('[MEX] loadMexInbox error', e); }
+}
+
 // ── Boot ───────────────────────────────────────────────────────────────────────
 loadDepts().then(() => {
   connectWS();
   tickTimer = setInterval(tick, 1000);
   loadOpsTasks();
+  buildMexRecipientList();  // populate Mex recipient list after depts are loaded
 });
 
 window.addEventListener('beforeunload', () => {
