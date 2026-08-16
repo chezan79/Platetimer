@@ -134,7 +134,10 @@ async function load() {
     document.getElementById('tpl-btn').style.display = '';
   }
 
-  const aData = await OpsCommon.api('/api/operations/assignees');
+  const [aData] = await Promise.all([
+    OpsCommon.api('/api/operations/assignees'),
+    loadServiceDepts(),   // pre-warm dept cache so the create/edit dropdown is instant
+  ]);
   assignableUsers = (aData && aData.assignees) || [];
 
   // Detect ?filter=today — set by Director dashboard "Compiti della giornata" quick-action.
@@ -500,7 +503,9 @@ let _serviceDepts = null;
 async function loadServiceDepts() {
   if (_serviceDepts) return _serviceDepts;
   const r = await OpsCommon.api('/api/operations/service-departments');
+  console.log('[SVCdept-DIAG] raw response:', JSON.stringify(r));
   _serviceDepts = (r && r.success && Array.isArray(r.departments)) ? r.departments : [];
+  console.log('[SVCdept-DIAG] depts stored:', _serviceDepts.length, JSON.stringify(_serviceDepts.map(d=>d.name)));
   return _serviceDepts;
 }
 async function initServiceDeptControls(selId, cbId, selectedId, publish) {

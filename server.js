@@ -2441,8 +2441,11 @@ app.get('/api/operations/assignees', (req, res) => {
 app.get('/api/operations/service-departments', (req, res) => {
     const ctx = requireOpsAuth(req, res);
     if (!ctx) return;
-    const departments = getCompanyDepts(ctx.opsUser.companyId)
-        .filter(d => d.active === true)
+    const companyId = ctx.opsUser.companyId;
+    const allDepts = getCompanyDepts(companyId);
+    const activeDepts = allDepts.filter(d => d.active === true);
+    console.log(`[SVCdept-DIAG] companyId=${JSON.stringify(companyId)} storeKeys=${JSON.stringify(Object.keys(departmentsStore))} total=${allDepts.length} active=${activeDepts.length} names=${JSON.stringify(activeDepts.map(d=>d.name))}`);
+    const departments = activeDepts
         .map(d => ({ id: d.id, name: d.name }))
         .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
     res.json({ success: true, departments });
