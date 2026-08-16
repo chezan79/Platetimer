@@ -315,27 +315,12 @@ async function main() {
         check('S15-7.  voiceMessage from is server-derived D1 (not forged D2)', vmReceived?.from === d1Id, vmReceived?.from);
         check('S15-7b. sourceDepartmentId is also D1', vmReceived?.sourceDepartmentId === d1Id, vmReceived?.sourceDepartmentId);
 
-        // ── 8. Bound D1 cannot impersonate D2 in PTT metadata ────────────────
-        // Bound accounts' voice room is locked to their own dept ID (d1Id for D1, d2Id for D2).
-        // To observe the server-derived deptName, we use the unbound wsAdmin socket — which
-        // can join D1's voice room freely — and have D1 send talkingStart.
-        // wsAdmin receives the PTT and verifies deptName = 'Cucina' (server-derived),
-        // NOT 'FORGED_DEPT_NAME' (what the client sent).
-        console.log('\n  — 8. PTT deptName locked to server-derived dept —\n');
-        wsAdmin.send(JSON.stringify({ action: 'joinVoice', room: d1Id, peerId: 'peer-admin-ptt' }));
-        wsD1.send(JSON.stringify({ action: 'joinVoice', room: 'ignored-room', peerId: 'peer-d1-ptt' }));
-        // D1's voiceRoom will be locked to d1Id (boundDepartmentId), regardless of 'ignored-room'
-        await new Promise(r => setTimeout(r, 250));
-        wsAdmin.clearMsgs(); wsD1.clearMsgs(); wsD2.clearMsgs();
-
-        wsD1.send(JSON.stringify({
-            action: 'talkingStart',
-            peerId: 'peer-d1-ptt',
-            deptName: 'FORGED_DEPT_NAME'    // client tries to impersonate
-        }));
-        const pttMsg = await wsAdmin.waitFor(m => m.action === 'talkingStart', 1500).catch(() => null);
-        check('S15-8.  talkingStart deptName is server-derived (Cucina, not FORGED)',
-            pttMsg?.deptName === 'Cucina', pttMsg?.deptName);
+        // ── 8. PTT/talkingStart removed (Step 10 cleanup) ────────────────────
+        // The talkingStart / talkingStop / joinVoice / WebRTC signaling handlers
+        // were removed in Step 10 as part of the Intercom/PTT cleanup.
+        // The deptName server-derivation test that previously lived here is no longer
+        // applicable; Voice Message identity isolation is covered by S15-7/S15-7b above.
+        console.log('\n  — 8. PTT handlers removed in Step 10 — skipped —\n');
 
         // ── 9. Suspended account rejected at joinRoom ─────────────────────────
         console.log('\n  — 9. Suspended account cannot use Service WS —\n');
@@ -474,39 +459,9 @@ async function main() {
         check('S15-del1. D1 receives deleteCountdown for D1 countdown', !!delD1, delD1);
         check('S15-del2. D2 does not receive deleteCountdown for D1-only countdown', delD2, 'D2 got delete for D1 countdown');
 
-        // ── joinVoice room locking ────────────────────────────────────────────
-        // D1 and D2 already have ACTIVE accounts (one per dept limit).
-        // Use fresh departments D4/D5 so new accounts can be created and bound.
-        console.log('\n  — joinVoice room locking —\n');
-        const d4Id = await createDept(tokAdmin, 'Dispensa');
-        const d5Id = await createDept(tokAdmin, 'Magazzino');
-        const tokD4v = sign('uid-d4-v', 'tratt');
-        const tokD5v = sign('uid-d5-v', 'tratt');
-        const acctD4v = await createAcct(tokAdmin, d4Id, 'DispensaV', 'dispensa.v');
-        const acctD5v = await createAcct(tokAdmin, d5Id, 'MagazzinoV', 'magazzino.v');
-        check('Setup voice: D4 acct', !!acctD4v?.id, acctD4v?.id);
-        check('Setup voice: D5 acct', !!acctD5v?.id, acctD5v?.id);
-        await bindUid(tokD4v, 'dispensa.v');
-        await bindUid(tokD5v, 'magazzino.v');
-
-        const wsD4v = await openWs(); openSockets.push(wsD4v);
-        const wsD5v = await openWs(); openSockets.push(wsD5v);
-        await joinRoom(wsD4v, tokD4v);   // D4v.boundDepartmentId = d4Id
-        await joinRoom(wsD5v, tokD5v);   // D5v.boundDepartmentId = d5Id
-
-        // D4v tries to join D5's voice room (forged room name)
-        // Server overrides to D4's bound dept id — so D4v.voiceRoom = d4Id
-        wsD4v.send(JSON.stringify({ action: 'joinVoice', room: d5Id, peerId: 'v-peer-d4' }));
-        // D5v joins legitimately — D5v.voiceRoom = d5Id
-        wsD5v.send(JSON.stringify({ action: 'joinVoice', room: d5Id, peerId: 'v-peer-d5' }));
-        await new Promise(r => setTimeout(r, 300));
-        wsD4v.clearMsgs(); wsD5v.clearMsgs();
-
-        // D5v starts talking — D4v should NOT receive it (D4v.voiceRoom=d4Id ≠ D5v.voiceRoom=d5Id)
-        wsD5v.send(JSON.stringify({ action: 'talkingStart', peerId: 'v-peer-d5', deptName: 'Magazzino' }));
-        const voiceIsolated = await wsD4v.notReceived(m => m.action === 'talkingStart', 400);
-        check('S15-vr1. Bound D4 forged voice room is isolated from D5 voice room',
-            voiceIsolated, 'D4 received D5 PTT despite different bound departments');
+        // joinVoice room locking tests removed in Step 10: joinVoice, talkingStart, and the
+        // WebRTC PTT signaling layer were removed as part of Intercom/PTT cleanup.
+        // Voice Message isolation (voiceMessage action) is separately verified by S15-7/S15-15.
 
         // Auth guard — no token
         console.log('\n  — auth guard —\n');

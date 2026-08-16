@@ -46,3 +46,4 @@
 - [WS join confirmation](ws-join-confirmation.md) — server sends {action:'joinedRoom'} after joinRoom; ops realtime client requires it within 5s or reconnects; auth errors surfaced, not silently ignored.
 - [Mex Step 7 Replies](mex-step7-replies.md) — mexReply WS handler; mexReplyAck/mexReplyIncoming events; convId-keyed cards; addReply queue resilience fix; countdowns.js callback extension pattern.
 - [Mex Step 8 Close/Resolve](mex-step8-close.md) — createAndSend needs .catch(()=>{}) on queue chain; rendering test window.I18n + _scriptCountdowns patterns; 39+36 tests on port 4452.
+- [PTT cleanup (Step 10)](ptt-cleanup.md) — ptt-voice.js deleted; 7 WS handlers removed (joinVoice/offer/answer/ice-candidate/leaveVoice/talkingStart/talkingStop); rate-limit exemption removed; 2 i18n keys removed; 2 test sections updated with removal explanation.
