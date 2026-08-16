@@ -1942,6 +1942,11 @@ function connectWS(){
       // published to THIS department with an active status. Removal is NEVER
       // inferred from an updated payload — it is driven exclusively by the
       // explicit server event OPS_TASK_SERVICE_REMOVED below.
+      // [OPS-ACK-AUTH] Guard: only a bound Service dept account session can
+      // receive and acknowledge ops tasks. Unbound admin/Firebase sessions that
+      // happen to share the WS room are filtered out here so no cards appear
+      // and no 403 is ever triggered on the acknowledge endpoint.
+      if(!WsAuth.isServiceSession()) return;
       const tk = data.task;
       if(tk && tk.publishToService === true && tk.serviceDepartmentId === myDeptId &&
          (tk.status === 'OPEN' || tk.status === 'IN_PROGRESS')){
@@ -1951,12 +1956,14 @@ function connectWS(){
     } else if(data.action === 'OPS_TASK_SERVICE_REMOVED'){
       // [Task 66] The single deterministic removal path (server-originated):
       // dept move, unpublish, completion, cancellation, deletion.
+      if(!WsAuth.isServiceSession()) return;
       if(data.prevServiceDepartmentId === myDeptId){
         opsTasks.delete(data.taskId);
         renderOpsTasks();
       }
     } else if(data.action === 'OPS_TASK_COMPLETED' || data.action === 'OPS_TASK_DELETED'){
       // [Task 66] Secondary safety net only — primary removal is the event above.
+      if(!WsAuth.isServiceSession()) return;
       const tid = data.taskId || (data.task && data.task.id);
       if(tid && opsTasks.delete(tid)) renderOpsTasks();
     }
@@ -2279,9 +2286,13 @@ async function acknowledgeOpsTask(taskId){
 }
 
 async function loadOpsTasks(){
+  // [OPS-ACK-AUTH] Only a bound Service dept account session may fetch and display
+  // ops tasks. Unbound admin/Firebase sessions are silently skipped — the section
+  // stays hidden and the acknowledge endpoint is never reachable from this session.
+  if(!WsAuth.isServiceSession()) return;
   try{
     const r = await fetch('/api/service/ops-tasks', { headers: { Authorization: `Bearer ${token}` } });
-    if(!r.ok) return; // unbound legacy session / suspended — section stays hidden
+    if(!r.ok) return; // suspended / inactive — section stays hidden
     const d = await r.json();
     if(!d.success || !Array.isArray(d.tasks)) return;
     opsTasks = new Map(d.tasks.map(tk => [tk.id, tk]));
