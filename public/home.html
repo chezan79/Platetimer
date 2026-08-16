@@ -148,6 +148,34 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 .today-event-sub{font-size:11px;color:var(--muted);margin-top:1px;}
 .today-empty{font-size:13px;color:var(--muted);text-align:center;
   padding:12px 0;}
+
+/* ── PT SECTIONS (Service vs Operations split) ── */
+.pt-section{margin-bottom:32px;padding:22px 20px 18px;border-radius:16px;}
+.pt-section-hdr{font-size:14px;font-weight:800;letter-spacing:1.4px;
+  text-transform:uppercase;margin-bottom:4px;}
+.pt-section-sub{font-size:13px;color:var(--muted);margin-bottom:18px;}
+.pt-service-section{background:rgba(99,102,241,.05);
+  border:1.5px solid rgba(99,102,241,.18);border-left:4px solid var(--accent2);}
+.pt-service-section .pt-section-hdr{color:var(--accent);}
+.pt-ops-section{background:#101722;border:1.5px solid #101722;
+  border-left:4px solid #2C3A52;}
+.pt-ops-section .pt-section-hdr{color:#E5EAF2;}
+.pt-ops-section .pt-section-sub{color:#9AA7BC;}
+/* Operations entry card — white interior on navy strip */
+.nav-card.ops-entry-card{background:#FFFFFF;border-color:#2C3A52;
+  min-height:96px;max-width:420px;position:relative;}
+.nav-card.ops-entry-card:hover,.nav-card.ops-entry-card:focus-visible{
+  background:#F5F7FA;border-color:#48597A;}
+.ops-entry-cta{display:inline-flex;align-items:center;justify-content:center;
+  margin-top:10px;padding:11px 18px;min-height:44px;align-self:flex-start;
+  background:#101722;color:#FFFFFF;font-size:13px;font-weight:700;
+  border-radius:8px;letter-spacing:.3px;}
+.nav-card.ops-entry-card:hover .ops-entry-cta{background:#1C2940;}
+@media(max-width:700px){.pt-section{padding:18px 14px 14px;}}
+@media(max-width:440px){
+  .pt-section{padding:16px 12px 12px;}
+  .nav-card.ops-entry-card{max-width:none;}
+}
 </style>
 </head>
 <body>
@@ -191,54 +219,68 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
     <div class="dam-action"><a href="index.html" data-i18n="home.backToLogin">← Torna al login</a></div>
   </div>
 
-  <!-- Dynamic department cards — hidden until identity resolves (avoids flash for bound accounts) -->
-  <div id="dept-section" style="display:none;">
-    <p class="section-label" data-i18n="home.depts">Reparti</p>
-    <div id="dept-grid" class="card-grid">
-      <div class="grid-msg" data-i18n="home.loadingDepts">Caricamento reparti…</div>
-    </div>
-  </div>
+  <!-- ══ PLATETIMER SERVICE ══════════════════ -->
+  <section id="pt-service-section" class="pt-section pt-service-section">
+    <div class="pt-section-hdr">PLATETIMER SERVICE</div>
+    <div class="pt-section-sub" data-i18n="home.serviceSub">Coordinamento del servizio in tempo reale</div>
 
-  <!-- Static function cards -->
-  <p class="section-label" data-i18n="home.functions">Funzioni</p>
-  <div class="card-grid">
-    <a href="sala.html" class="nav-card floor">
-      <span class="card-icon" aria-hidden="true">🍽️</span>
-      <span class="card-name" data-i18n="home.floor">Floor</span>
-      <span class="card-sub" data-i18n="home.floorSub">Monitoraggio tavoli</span>
-    </a>
-    <a href="calendar.html" class="nav-card calendar">
-      <span class="card-icon" aria-hidden="true">📅</span>
-      <span class="card-name"><span data-i18n="home.calendar">Calendario</span><span id="cal-notif-badge" class="card-notif-badge" style="display:none;"></span></span>
-      <span class="card-sub" data-i18n="home.calendarSub">Agenda operativa</span>
-    </a>
-    <a href="operations.html" class="nav-card calendar">
+    <!-- Dynamic department cards — hidden until identity resolves (avoids flash for bound accounts) -->
+    <div id="dept-section" style="display:none;">
+      <p class="section-label" data-i18n="home.depts">Reparti</p>
+      <div id="dept-grid" class="card-grid">
+        <div class="grid-msg" data-i18n="home.loadingDepts">Caricamento reparti…</div>
+      </div>
+    </div>
+
+    <!-- Static Service function cards -->
+    <p class="section-label" data-i18n="home.functions">Funzioni</p>
+    <div class="card-grid">
+      <a href="sala.html" class="nav-card floor">
+        <span class="card-icon" aria-hidden="true">🍽️</span>
+        <span class="card-name" data-i18n="home.floor">Floor</span>
+        <span class="card-sub" data-i18n="home.floorSub">Monitoraggio tavoli</span>
+      </a>
+      <a href="calendar.html" class="nav-card calendar">
+        <span class="card-icon" aria-hidden="true">📅</span>
+        <span class="card-name"><span data-i18n="home.calendar">Calendario</span><span id="cal-notif-badge" class="card-notif-badge" style="display:none;"></span></span>
+        <span class="card-sub" data-i18n="home.calendarSub">Agenda operativa</span>
+      </a>
+      <a href="admin-departments.html" class="nav-card admin">
+        <span class="card-icon" aria-hidden="true">⚙️</span>
+        <span class="card-name" data-i18n="home.adminDepts">Gestione Reparti</span>
+        <span class="card-sub" data-i18n="home.adminDeptsSub">Configurazione</span>
+      </a>
+      <a href="history.html" class="nav-card">
+        <span class="card-icon" aria-hidden="true">📊</span>
+        <span class="card-name" data-i18n="home.history">Storico Attese</span>
+        <span class="card-sub" data-i18n="home.historySub">Durata e analisi tavoli</span>
+      </a>
+    </div>
+
+    <!-- Today calendar summary (Service data only) -->
+    <div class="today-summary" id="today-summary" style="display:none;">
+      <div class="today-summary-hdr">
+        <span class="today-summary-title" data-i18n="home.todayService">📅 Oggi — Service</span>
+        <a href="calendar.html" class="today-summary-link" data-i18n="home.openCalendar">Apri calendario →</a>
+      </div>
+      <div id="today-summary-body">
+        <div class="today-empty">Caricamento…</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ PLATETIMER OPERATIONS ═══════════════ -->
+  <section id="pt-ops-section" class="pt-section pt-ops-section">
+    <div class="pt-section-hdr">PLATETIMER OPERATIONS</div>
+    <div class="pt-section-sub" data-i18n="home.opsSectionSub">Organizzazione, compiti e gestione del team</div>
+
+    <a href="operations.html" class="nav-card ops-entry-card">
       <span class="card-icon" aria-hidden="true">📋</span>
       <span class="card-name" data-i18n="home.operations">Operations</span>
-      <span class="card-sub" data-i18n="home.operationsSub">Gestione compiti brigata</span>
+      <span class="card-sub" data-i18n="home.opsCardSub">Compiti · Pianificazione · Team · Prestazioni</span>
+      <span class="ops-entry-cta" data-i18n="home.openOps">Apri Operations</span>
     </a>
-    <a href="admin-departments.html" class="nav-card admin">
-      <span class="card-icon" aria-hidden="true">⚙️</span>
-      <span class="card-name" data-i18n="home.adminDepts">Gestione Reparti</span>
-      <span class="card-sub" data-i18n="home.adminDeptsSub">Configurazione</span>
-    </a>
-    <a href="history.html" class="nav-card">
-      <span class="card-icon" aria-hidden="true">📊</span>
-      <span class="card-name" data-i18n="home.history">Storico Attese</span>
-      <span class="card-sub" data-i18n="home.historySub">Durata e analisi tavoli</span>
-    </a>
-  </div>
-
-  <!-- Today calendar summary -->
-  <div class="today-summary" id="today-summary" style="display:none;">
-    <div class="today-summary-hdr">
-      <span class="today-summary-title" data-i18n="home.todayLabel">📅 Oggi</span>
-      <a href="calendar.html" class="today-summary-link" data-i18n="home.openCalendar">Apri calendario →</a>
-    </div>
-    <div id="today-summary-body">
-      <div class="today-empty">Caricamento…</div>
-    </div>
-  </div>
+  </section>
 
 </main>
 
