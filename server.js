@@ -5923,6 +5923,110 @@ wss.on('connection', (ws, req) => {
                     console.error(`[MEX] Send error (${code}): ${e && (e.message || JSON.stringify(e))}`);
                 });
 
+            } else if (data.action === 'mexReply') {
+                // ── [MEX Step 7] Reply to an existing Mex conversation ────────────────────
+                // [SECURITY] Sender derived from verified socket state only.
+                // Client MUST NOT supply 'from', companyId, or recipient.
+                const MEX_SALA_ID_R = '__sala__';
+                const repSender = ws.boundDepartmentId
+                    || (ws.isFloorPrincipal ? MEX_SALA_ID_R : null);
+                if (!repSender || !ws.companyRoom) {
+                    ws.send(JSON.stringify({ action: 'mexReplyAck', success: false, code: 'MEX_NOT_BOUND' }));
+                    return;
+                }
+
+                // Validate replyType — unknown types are treated as null (CUSTOM path)
+                const MEX_VALID_REPLY_TYPES = new Set(['ACK','MIN_2','MIN_5','READY','PROBLEM','CUSTOM']);
+                const rawRepType = typeof data.replyType === 'string'
+                    ? data.replyType.trim().toUpperCase() : null;
+                const repTypeSafe = (rawRepType && MEX_VALID_REPLY_TYPES.has(rawRepType))
+                    ? rawRepType : null;
+
+                // Validate body — required, non-empty, ≤ 300 chars
+                const repBody = typeof data.body === 'string' ? data.body.trim() : '';
+                if (!repBody) {
+                    ws.send(JSON.stringify({ action: 'mexReplyAck', success: false, code: 'MEX_EMPTY_BODY' }));
+                    return;
+                }
+                if (repBody.length > mexStoreModule.MEX_MAX_BODY_LENGTH) {
+                    ws.send(JSON.stringify({ action: 'mexReplyAck', success: false,
+                        code: 'MEX_BODY_TOO_LONG', maxLength: mexStoreModule.MEX_MAX_BODY_LENGTH }));
+                    return;
+                }
+
+                // Validate conversationId provided
+                const repConvId = typeof data.conversationId === 'string'
+                    ? data.conversationId.trim() : '';
+                if (!repConvId) {
+                    ws.send(JSON.stringify({ action: 'mexReplyAck', success: false,
+                        code: 'MEX_MISSING_CONVERSATION' }));
+                    return;
+                }
+
+                const repCompanyId = ws.companyRoom;
+                mexStoreModule.addReply(repCompanyId, repConvId, {
+                    from: repSender,
+                    replyType: repTypeSafe,
+                    body: repBody
+                }).then(({ conversation, reply }) => {
+                    // Determine recipient = the other participant
+                    const repRecipient = conversation.participants.find(p => p !== repSender);
+
+                    // Collect original message context for card creation on the sender's side
+                    const origMsg = conversation.messages && conversation.messages[0];
+
+                    // ── Ack to reply sender ──────────────────────────────────────────────
+                    if (ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({
+                            action:         'mexReplyAck',
+                            success:         true,
+                            conversationId:  repConvId,
+                            replyId:         reply.id,
+                            from:            repSender,
+                            replyType:       reply.replyType,
+                            body:            reply.body,
+                            createdAt:       reply.createdAt
+                        }));
+                    }
+
+                    // ── Deliver mexReplyIncoming to the other participant ────────────────
+                    // Participant-only delivery (audit §E.4) — same predicate as mexIncoming.
+                    // Sender's own socket is excluded.
+                    if (repRecipient && companyRooms.has(repCompanyId)) {
+                        const incoming = JSON.stringify({
+                            action:            'mexReplyIncoming',
+                            conversationId:    repConvId,
+                            replyId:           reply.id,
+                            from:              repSender,
+                            replyType:         reply.replyType,
+                            body:              reply.body,
+                            createdAt:         reply.createdAt,
+                            // Original message context — lets the recipient create a card
+                            // if they don't already have one (e.g. original Floor sender).
+                            originalFrom:      origMsg ? origMsg.from      : null,
+                            originalBody:      origMsg ? origMsg.body      : null,
+                            originalTimestamp: origMsg ? origMsg.timestamp : null
+                        });
+                        companyRooms.get(repCompanyId).forEach(client => {
+                            if (client === ws) return;                             // no echo to reply sender
+                            if (client.readyState !== WebSocket.OPEN) return;
+                            const clientPrincipal = client.boundDepartmentId
+                                || (client.isFloorPrincipal ? MEX_SALA_ID_R : null);
+                            if (clientPrincipal === repRecipient) {
+                                client.send(incoming);
+                            }
+                        });
+                    }
+
+                    console.log(`[MEX-REPLY] conv=${repConvId} reply="${reply.id}" from="${repSender}" to="${repRecipient}" company="${repCompanyId}"`);
+                }).catch(e => {
+                    const code = (e && e.code) || 'MEX_REPLY_ERROR';
+                    if (ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({ action: 'mexReplyAck', success: false, code }));
+                    }
+                    console.error(`[MEX-REPLY] Error (${code}): ${e && (e.message || JSON.stringify(e))}`);
+                });
+
             } else if (data.action === 'pausaCucina') {
                 // Validazione richiesta pausa cucina
                 if (!data.durataMinuti || typeof data.durataMinuti !== 'number') {

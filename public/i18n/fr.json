@@ -1217,5 +1217,22 @@
   "mex.qm.preview": "Aperçu :",
   "mex.qm.continue": "Continuer →",
   "mex.qm.back": "← Retour",
-  "mex.qm.customPlaceholder": "Écrivez votre message…"
+  "mex.qm.customPlaceholder": "Écrivez votre message…",
+  "mex.qr.ACK": "👍 Reçu",
+  "mex.qr.MIN_2": "2 min",
+  "mex.qr.MIN_5": "5 min",
+  "mex.qr.READY": "✅ Prêt",
+  "mex.qr.PROBLEM": "⚠️ Problème",
+  "mex.qr.CUSTOM": "✍️ Répondre",
+  "mex.qr.ACK_body": "Reçu.",
+  "mex.qr.MIN_2_body": "Environ 2 minutes.",
+  "mex.qr.MIN_5_body": "Environ 5 minutes.",
+  "mex.qr.READY_body": "Prêt.",
+  "mex.qr.PROBLEM_body": "Problème.",
+  "mex.qr.customPlaceholder": "Saisir la réponse…",
+  "mex.qr.customTitle": "Réponse libre",
+  "mex.qr.repliedBy": "Réponse :",
+  "mex.qr.sending": "Envoi de la réponse…",
+  "mex.qr.sent": "Réponse envoyée.",
+  "mex.qr.error": "Erreur lors de l'envoi de la réponse."
 }

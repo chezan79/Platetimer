@@ -80,6 +80,8 @@ const CountdownsModule = (() => {
             onVoiceMessage,
             onMexIncoming,
             onMexSendAck,
+            onMexReplyAck,        // [Step 7] mexReplyAck callback
+            onMexReplyIncoming,   // [Step 7] mexReplyIncoming callback
             pageType,
             reconnectDelay = 3000
         } = config;
@@ -156,6 +158,12 @@ const CountdownsModule = (() => {
                             onMexIncoming(data);
                         } else if (data.action === 'mexSendAck' && onMexSendAck) {
                             onMexSendAck(data);
+                        } else if (data.action === 'mexReplyAck' && onMexReplyAck) {
+                            // [Step 7] Ack for a reply we sent
+                            onMexReplyAck(data);
+                        } else if (data.action === 'mexReplyIncoming' && onMexReplyIncoming) {
+                            // [Step 7] Incoming reply on a conversation we participate in
+                            onMexReplyIncoming(data);
                         }
                     } catch (error) {
                         console.error('Error parsing WebSocket message:', error);

@@ -265,6 +265,29 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
   50%{box-shadow:0 0 0 6px rgba(59,130,246,.25),0 2px 8px rgba(59,130,246,.12);}
 }
 .mex-cd-card.new-arrival{animation:mex-pulse-arrive .9s ease-out 3;}
+/* ── QR reply extension (Step 7) ─────────────────────────────────────────────── */
+.mex-cd-reply-sep{border-top:1px solid var(--border-l);margin:6px 0 4px;}
+.mex-cd-reply-from{font-size:11px;color:var(--accent);font-weight:700;letter-spacing:.3px;margin-bottom:2px;}
+.mex-cd-reply-body{font-size:13px;color:var(--text);word-break:break-word;margin-bottom:2px;}
+.mex-cd-qr-btns{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-top:6px;}
+.mex-qr-btn{padding:5px 4px;background:var(--bg-card);border:1px solid var(--border-l);
+  border-radius:6px;font-size:11px;font-weight:600;color:var(--text);cursor:pointer;
+  text-align:center;transition:all .12s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.mex-qr-btn:hover:not(:disabled){background:var(--accent);color:#fff;border-color:var(--accent);}
+.mex-qr-btn.mex-qr-custom-btn{grid-column:1/-1;}
+.mex-qr-btn:disabled{opacity:.4;cursor:not-allowed;}
+.mex-cd-custom-reply{margin-top:6px;}
+.mex-cd-custom-ta{width:100%;padding:6px 8px;background:var(--bg-card);border:1px solid var(--border-l);
+  border-radius:6px;font-size:13px;color:var(--text);resize:none;box-sizing:border-box;}
+.mex-cd-custom-ta:focus{outline:none;border-color:var(--accent);}
+.mex-cd-reply-row{display:flex;gap:6px;margin-top:4px;}
+.mex-cd-reply-send-btn{flex:1;padding:5px;background:var(--accent);border:none;border-radius:6px;
+  font-size:12px;font-weight:700;color:#fff;cursor:pointer;}
+.mex-cd-reply-cancel-btn{padding:5px 10px;background:var(--bg-card);border:1px solid var(--border-l);
+  border-radius:6px;font-size:12px;color:var(--muted);cursor:pointer;}
+.mex-cd-reply-status{font-size:11px;min-height:14px;margin-top:3px;color:var(--muted);}
+.mex-cd-reply-status.ok{color:var(--ok);}
+.mex-cd-reply-status.err{color:var(--danger);}
 
 /* ── MEX MESSAGES SECTION ───────────────────────────────────────────────────── */
 .mex-msgs-section{margin-top:24px;}
@@ -408,6 +431,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 
 <script src="js/i18n.js"></script>
 <script src="js/mex-qm.js"></script>
+<script src="js/mex-qr.js"></script>
 <script src="js/ws-auth.js"></script>
 <script src="js/countdowns.js"></script>
 <script src="company-header.js"></script>
@@ -518,7 +542,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
     // ── Mex (Floor messaging) state ──────────────────────────────────────────
     // [MEX Step 5] Floor is the virtual principal __sala__; token is exchanged
     // server-side via /api/sala/token to embed role:'floor' in the signed payload.
-    let mexCdCards       = new Map(); // messageId → DOM element (in #countdownsList)
+    let mexCdCards       = new Map(); // conversationId → DOM element (in #countdownsList, Step 7+)
     let mexFloorMessages = [];        // inbox messages shown in #mex-floor-inbox-list
 
     function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
@@ -746,7 +770,9 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
      * @param {boolean} isNew - true → pulse animation; false → backfill (no animation)
      */
     function insertMexCdCard(msg, isNew) {
-        if (mexCdCards.has(msg.id)) return;  // already inserted — skip
+        // [Step 7] Key by conversationId so replies update the same card.
+        const cardKey = msg.convId || msg.id;
+        if (mexCdCards.has(cardKey)) return;  // already inserted — skip
         const list = document.getElementById('countdownsList');
         if (!list) return;
 
@@ -760,21 +786,48 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
                 return isNaN(d.getTime()) ? String(ts) : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
             } catch { return String(ts); }
         };
+        const convIdSafe = esc(cardKey);
+
+        // Build QR button grid using MexQR module (i18n-resolved labels)
+        const qrBtns = (typeof MexQR !== 'undefined' ? MexQR.TYPES : []).map(({ key }) =>
+            '<button class="mex-qr-btn' + (key === 'CUSTOM' ? ' mex-qr-custom-btn' : '') + '" ' +
+            'onclick="sendMexReply(\'' + convIdSafe + '\',\'' + key + '\')">' +
+            esc(MexQR.buttonLabel(key, k => _t(k))) + '</button>'
+        ).join('');
 
         const el = document.createElement('div');
-        el.id = 'mex-cd-' + msg.id;
+        el.id   = 'mex-cd-' + convIdSafe;
         el.className = 'mex-cd-card' + (isNew ? ' new-arrival' : '');
         el.innerHTML =
             '<span class="mex-cd-icon">💬</span>' +
             '<div class="mex-cd-content">' +
               '<div class="mex-cd-from">' + esc(msg.fromName || msg.from) + '</div>' +
               '<div class="mex-cd-body">' + esc(msg.body) + '</div>' +
+              // Reply area — hidden until a reply arrives
+              '<div class="mex-cd-reply-area" style="display:none">' +
+                '<div class="mex-cd-reply-sep"></div>' +
+                '<div class="mex-cd-reply-from"></div>' +
+                '<div class="mex-cd-reply-body"></div>' +
+              '</div>' +
               '<div class="mex-cd-time">' + esc(timeFmt(msg.timestamp)) + '</div>' +
+              // Quick Reply buttons
+              '<div class="mex-cd-qr-btns">' + qrBtns + '</div>' +
+              // Custom reply input (hidden by default)
+              '<div class="mex-cd-custom-reply" id="mex-custom-reply-' + convIdSafe + '" style="display:none">' +
+                '<textarea class="mex-cd-custom-ta" id="mex-custom-ta-' + convIdSafe + '" maxlength="300" ' +
+                  'placeholder="' + esc(_t('mex.qr.customPlaceholder')) + '" rows="2"></textarea>' +
+                '<div class="mex-cd-reply-row">' +
+                  '<button class="mex-cd-reply-send-btn" onclick="sendMexReplyCustom(\'' + convIdSafe + '\')">' +
+                    esc(_t('dept.mexSend')) + '</button>' +
+                  '<button class="mex-cd-reply-cancel-btn" onclick="mexToggleCustomReply(\'' + convIdSafe + '\')">✕</button>' +
+                '</div>' +
+              '</div>' +
+              '<div class="mex-cd-reply-status" id="mex-reply-status-' + convIdSafe + '"></div>' +
             '</div>';
 
         // Mex cards appear AFTER all countdown cards (append at end)
         list.appendChild(el);
-        mexCdCards.set(msg.id, el);
+        mexCdCards.set(cardKey, el);
 
         // Remove the pulse class after animation completes (3 × 0.9s = 2.7s)
         if (isNew) {
@@ -802,6 +855,117 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
         mexFloorMessages.push(msg);
         renderMexFloorInbox();
         insertMexCdCard(msg, true);
+        playMexSound();
+    }
+
+    // ── [Step 7] Quick Reply functions (Floor) ──────────────────────────────────
+
+    /** Send a Quick Reply on behalf of the Floor. CUSTOM shows the text input. */
+    function sendMexReply(convId, replyType) {
+        if (replyType === 'CUSTOM') { mexToggleCustomReply(convId); return; }
+        const body = (typeof MexQR !== 'undefined') ? MexQR.renderBody(replyType, k => _t(k)) : null;
+        if (!body) return;
+        mexFloorSendReplyWs(convId, replyType, body);
+    }
+
+    /** Toggle visibility of the per-card custom reply textarea. */
+    function mexToggleCustomReply(convId) {
+        const area = document.getElementById('mex-custom-reply-' + convId);
+        if (!area) return;
+        const show = area.style.display === 'none';
+        area.style.display = show ? 'block' : 'none';
+        if (show) { const ta = document.getElementById('mex-custom-ta-' + convId); if (ta) setTimeout(() => ta.focus(), 30); }
+    }
+
+    /** Send the custom (free-text) reply from the per-card textarea. */
+    function sendMexReplyCustom(convId) {
+        const ta = document.getElementById('mex-custom-ta-' + convId);
+        if (!ta) return;
+        const body = ta.value.trim();
+        if (!body)             { mexFloorSetReplyStatus(convId, _t('sala.mexBodyEmpty'), 'err'); return; }
+        if (body.length > 300) { mexFloorSetReplyStatus(convId, _t('sala.mexBodyTooLong'), 'err'); return; }
+        mexFloorSendReplyWs(convId, 'CUSTOM', body);
+    }
+
+    /** Low-level: send mexReply WS message, disable buttons while in-flight. */
+    function mexFloorSendReplyWs(convId, replyType, body) {
+        const wsObj = CountdownsModule.getWebSocket();
+        if (!wsObj || wsObj.readyState !== WebSocket.OPEN) {
+            mexFloorSetReplyStatus(convId, _t('sala.mexErrorSend'), 'err'); return;
+        }
+        const card = mexCdCards.get(convId);
+        if (card) card.querySelectorAll('.mex-qr-btn').forEach(b => { b.disabled = true; });
+        mexFloorSetReplyStatus(convId, _t('mex.qr.sending'));
+        wsObj.send(JSON.stringify({ action: 'mexReply', conversationId: convId, replyType, body }));
+    }
+
+    /** Set/clear the per-card reply status line. */
+    function mexFloorSetReplyStatus(convId, msg, cls) {
+        const el = document.getElementById('mex-reply-status-' + convId);
+        if (!el) return;
+        el.textContent = msg || '';
+        el.className = 'mex-cd-reply-status' + (cls ? ' ' + cls : '');
+    }
+
+    /** Update (or create) the reply area on a Mex card. */
+    function updateMexCdCardWithReply(convId, reply, fromName, isNew) {
+        const card = mexCdCards.get(convId);
+        if (!card) return;
+        const area   = card.querySelector('.mex-cd-reply-area');
+        const fromEl = card.querySelector('.mex-cd-reply-from');
+        const bodyEl = card.querySelector('.mex-cd-reply-body');
+        if (!area || !fromEl || !bodyEl) return;
+        fromEl.textContent = (_t('mex.qr.repliedBy') || 'Risposta:') + ' ' + (fromName || reply.from || '?');
+        bodyEl.textContent = reply.body || '';
+        area.style.display = 'block';
+        if (isNew) {
+            card.classList.remove('new-arrival');
+            void card.offsetWidth;
+            card.classList.add('new-arrival');
+            setTimeout(() => card.classList.remove('new-arrival'), 2800);
+        }
+    }
+
+    /** Handle mexReplyAck — response to our own mexReply send. */
+    function handleMexFloorReplyAck(data) {
+        const convId = data.conversationId;
+        const card   = mexCdCards.get(convId);
+        if (card) card.querySelectorAll('.mex-qr-btn').forEach(b => { b.disabled = false; });
+        if (!data.success) {
+            mexFloorSetReplyStatus(convId, _t('mex.qr.error'), 'err'); return;
+        }
+        const area = document.getElementById('mex-custom-reply-' + convId);
+        if (area) { area.style.display = 'none'; const ta = area.querySelector('.mex-cd-custom-ta'); if (ta) ta.value = ''; }
+        mexFloorSetReplyStatus(convId, _t('mex.qr.sent'), 'ok');
+        setTimeout(() => mexFloorSetReplyStatus(convId, ''), 2000);
+    }
+
+    /** Handle mexReplyIncoming — a reply on a conversation we participate in. */
+    function handleMexFloorReplyIncoming(data) {
+        const { conversationId, replyId, from, replyType, body, createdAt,
+                originalFrom, originalBody, originalTimestamp } = data;
+        const fromDept = departmentMap[from];
+        const fromName = from === '__sala__'
+            ? _t('dept.floorDest')
+            : (fromDept ? fromDept.name : (from || '?'));
+
+        if (mexCdCards.has(conversationId)) {
+            updateMexCdCardWithReply(conversationId, { id: replyId, from, replyType, body, createdAt }, fromName, true);
+        } else {
+            // Original sender receiving first reply — create card from context
+            const origFromDept = originalFrom ? departmentMap[originalFrom] : null;
+            const origFromName = !originalFrom ? '?'
+                : originalFrom === '__sala__' ? _t('dept.floorDest')
+                : (origFromDept ? origFromDept.name : originalFrom);
+            const synthMsg = {
+                id: conversationId, convId: conversationId,
+                from: originalFrom || from, fromName: origFromName,
+                body: originalBody || '', timestamp: originalTimestamp || createdAt,
+                replies: []
+            };
+            insertMexCdCard(synthMsg, false);
+            updateMexCdCardWithReply(conversationId, { id: replyId, from, replyType, body, createdAt }, fromName, true);
+        }
         playMexSound();
     }
 
@@ -872,6 +1036,18 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
                 mexFloorMessages.push(...fresh);
                 renderMexFloorInbox();
                 fresh.forEach(m => insertMexCdCard(m, false));
+            }
+            // [Step 7] Restore replies for backfilled conversations (no sound/pulse)
+            for (const conv of d.conversations) {
+                if (!Array.isArray(conv.replies) || !conv.replies.length) continue;
+                if (!mexCdCards.has(conv.id)) continue;
+                const latestReply = conv.replies[conv.replies.length - 1];
+                if (!latestReply) continue;
+                const repFromDept = departmentMap[latestReply.from];
+                const repFromName = latestReply.from === '__sala__'
+                    ? _t('dept.floorDest')
+                    : (repFromDept ? repFromDept.name : (latestReply.from || '?'));
+                updateMexCdCardWithReply(conv.id, latestReply, repFromName, false);
             }
         } catch (e) { console.warn('[MEX] loadMexFloorInbox error', e); }
     }
@@ -1275,6 +1451,13 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
             },
             onMexSendAck: (data) => {
                 handleMexFloorSendAck(data);
+            },
+            // [Step 7] Reply callbacks
+            onMexReplyAck: (data) => {
+                handleMexFloorReplyAck(data);
+            },
+            onMexReplyIncoming: (data) => {
+                handleMexFloorReplyIncoming(data);
             }
         });
     }

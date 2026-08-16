@@ -250,7 +250,7 @@ async function createAndSend({ companyId, senderDeptId, recipientDeptId, body, t
  * Awaits any in-flight queue for the company to avoid returning stale data.
  */
 async function getInboxForDept(companyId, deptId) {
-    await (queues[companyId] || Promise.resolve());
+    await (queues[companyId] || Promise.resolve()).catch(() => {});
     if (!mexStore[companyId]) await loadMexCompany(companyId);
     return Object.values(mexStore[companyId].conversations)
         .filter(c => !c.closedAt && c.participants.includes(deptId))
@@ -263,8 +263,59 @@ async function getInboxForDept(companyId, deptId) {
                 // [Step 6] Pass through QM metadata (null for legacy messages — backward compat)
                 templateType: m.templateType || null,
                 tableNumber:  m.tableNumber  || null
+            })),
+            // [Step 7] Replies (null on legacy conversations — backward compat)
+            replies: (c.replies || []).map(r => ({
+                id: r.id, conversationId: r.conversationId,
+                from: r.from, replyType: r.replyType || null,
+                body: r.body, createdAt: r.createdAt
             }))
         }));
+}
+
+/**
+ * Add a reply to an existing conversation.
+ * `from` MUST be server-derived (ws.boundDepartmentId or '__sala__').
+ * Validates that `from` is an active participant before persisting.
+ * Returns { conversation, reply } on success; throws { code } on failure.
+ */
+async function addReply(companyId, conversationId, { from, replyType, body }) {
+    // Use .catch(() => {}) so a previous rejection (e.g. a security check that
+    // failed) does not poison subsequent operations in the queue.
+    const prev = (queues[companyId] || Promise.resolve()).catch(() => {});
+    return (queues[companyId] = prev.then(async () => {
+        await loadMexCompany(companyId);
+        const co   = mexStore[companyId];
+        const conv = co && co.conversations[conversationId];
+        if (!conv) throw { code: 'MEX_CONVERSATION_NOT_FOUND' };
+        if (!conv.participants.includes(from)) throw { code: 'MEX_NOT_PARTICIPANT' };
+        if (conv.closedAt) throw { code: 'MEX_CONVERSATION_CLOSED' };
+
+        const now   = new Date().toISOString();
+        const reply = {
+            id:             'mexrep_' + crypto.randomBytes(8).toString('hex'),
+            conversationId,
+            from,                          // always server-derived
+            replyType: replyType || null,
+            body,
+            createdAt: now
+        };
+
+        if (!conv.replies) conv.replies = [];
+        conv.replies.push(reply);
+
+        // Byte budget guard (reuses existing eviction helpers)
+        if (utfBytes(buildFirestoreDoc(companyId)) > MEX_MAX_COMPANY_BYTES) {
+            const ok = evictForBytesCap(companyId);
+            if (!ok) {
+                conv.replies.pop();
+                throw { code: 'MEX_STORE_FULL', message: 'Message store capacity exceeded.' };
+            }
+        }
+
+        await saveMexCompany(companyId);
+        return { conversation: conv, reply };
+    }));
 }
 
 // ── Startup ───────────────────────────────────────────────────────────────────
@@ -301,6 +352,7 @@ module.exports = {
     initMexStore,
     loadMexCompany,
     createAndSend,
+    addReply,
     getInboxForDept,
 
     // Constants (used by server.js for validation)

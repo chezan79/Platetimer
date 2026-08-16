@@ -44,3 +44,4 @@
 - [Mex Step 5 Floor↔Dept](mex-step5.md) — role:'floor' in signed token; /api/sala/token endpoint; ws.isFloorPrincipal; sender resolution; delivery predicate; 41 WS + 11 render tests.
 - [Mex Step 6 Quick Messages](mex-step6-qm.md) — stable key QM templates; shared mex-qm.js module; 3-step compose UI on dept+sala pages; server validates tableNumber; templateType/tableNumber in ack+incoming+inbox; 94 unit + 39 WS tests.
 - [WS join confirmation](ws-join-confirmation.md) — server sends {action:'joinedRoom'} after joinRoom; ops realtime client requires it within 5s or reconnects; auth errors surfaced, not silently ignored.
+- [Mex Step 7 Replies](mex-step7-replies.md) — mexReply WS handler; mexReplyAck/mexReplyIncoming events; convId-keyed cards; addReply queue resilience fix; countdowns.js callback extension pattern.

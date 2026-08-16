@@ -1217,5 +1217,22 @@
   "mex.qm.preview": "Preview:",
   "mex.qm.continue": "Continue →",
   "mex.qm.back": "← Back",
-  "mex.qm.customPlaceholder": "Write your message…"
+  "mex.qm.customPlaceholder": "Write your message…",
+  "mex.qr.ACK": "👍 Got it",
+  "mex.qr.MIN_2": "2 min",
+  "mex.qr.MIN_5": "5 min",
+  "mex.qr.READY": "✅ Ready",
+  "mex.qr.PROBLEM": "⚠️ Problem",
+  "mex.qr.CUSTOM": "✍️ Reply",
+  "mex.qr.ACK_body": "Got it.",
+  "mex.qr.MIN_2_body": "About 2 minutes.",
+  "mex.qr.MIN_5_body": "About 5 minutes.",
+  "mex.qr.READY_body": "Ready.",
+  "mex.qr.PROBLEM_body": "Problem.",
+  "mex.qr.customPlaceholder": "Type reply…",
+  "mex.qr.customTitle": "Free reply",
+  "mex.qr.repliedBy": "Reply:",
+  "mex.qr.sending": "Sending reply…",
+  "mex.qr.sent": "Reply sent.",
+  "mex.qr.error": "Error sending reply."
 }
