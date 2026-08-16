@@ -37,4 +37,5 @@
 - [Operations → Service task sync](ops-service-sync.md) — Service pages get a read-only projection; removal is always the explicit OPS_TASK_SERVICE_REMOVED event, never inferred from payloads.
 - [Task 66 Rework: calendar mirror](ops-calendar-mirror.md) — syncOpsTaskToCalendar() upserts id='opsmirror_'+taskId in calendarEventsStore; source='OPERATIONS' blocks PUT/PATCH/DELETE/duplicate (403); fire-and-forget from all ops mutation handlers.
 - [Task 66 dept cards](ops-dept-cards.md) — ops tasks render as .ops-task-card in #ops-task-list; detail modal openOpsDetailModal(taskId) reads from opsTasks Map; _opsIsOverdue()/_opsFmtDue() helpers; Escape closes modal; 68 tests ops-dept-cards.test.js.
+- [Task 66 Ack: service-dept acknowledgement](ops-dept-ack.md) — opsAckStore (ops-ack.json); POST /api/service/ops-tasks/:id/acknowledge; idempotent; status filter (OPEN/IN_PROGRESS only); GET excludes acked; 48 tests ops-dept-ack.test.js.
 - [WS join confirmation](ws-join-confirmation.md) — server sends {action:'joinedRoom'} after joinRoom; ops realtime client requires it within 5s or reconnects; auth errors surfaced, not silently ignored.
