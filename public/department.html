@@ -203,6 +203,16 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 .mex-send-status{font-size:12px;min-height:18px;}
 .mex-send-status.ok{color:var(--ok);}
 .mex-send-status.err{color:var(--danger);}
+/* ── Mex recipient rows — mirrors Voice .di, single-select radio variant ──────── */
+.mex-recipient-list{display:flex;flex-direction:column;gap:4px;margin-bottom:4px;}
+.mex-di{display:flex;align-items:center;gap:10px;padding:9px 12px;
+  background:var(--card);border:1.5px solid var(--border);border-radius:8px;cursor:pointer;
+  transition:all .12s;user-select:none;}
+.mex-di:hover{border-color:var(--border-l);}
+.mex-di.sel{background:rgba(99,102,241,.15);border-color:var(--accent);}
+.mex-di label{cursor:pointer;font-size:14px;font-weight:500;flex:1;pointer-events:none;}
+.mex-di input[type=radio]{accent-color:var(--accent);width:15px;height:15px;cursor:pointer;}
+.mex-no-recipients{font-size:13px;color:var(--muted);padding:8px 0;}
 /* ── QM step system ──────────────────────────────────────────────────────────── */
 .mex-step{display:none;}
 .mex-step.active{display:block;}
@@ -889,15 +899,13 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
         <button class="mex-back-btn" onclick="mexDeptGoBack()" data-i18n="mex.qm.back">← Indietro</button>
         <div id="mex-send-preview" class="mex-preview-box" style="display:none;"></div>
         <div style="font-size:11px;color:var(--muted);margin-bottom:2px;font-weight:700;letter-spacing:.5px;" data-i18n="dept.mexTo">A</div>
-        <select id="mex-recipient-sel" class="mex-sel">
-          <option value="" data-i18n="dept.mexSelectDept">Seleziona reparto…</option>
-        </select>
+        <div id="mex-recipient-list" class="mex-recipient-list"></div>
         <textarea id="mex-body" class="mex-textarea" maxlength="300"
           placeholder="Scrivi un messaggio (max 300 caratteri)…" rows="3"
           oninput="mexUpdateCharCount()"></textarea>
         <div style="display:flex;align-items:center;justify-content:space-between;margin-top:4px;">
           <span id="mex-char-count" style="font-size:11px;color:var(--muted);">0/300</span>
-          <button id="mex-send-btn" class="mex-send-btn" onclick="sendMexMessage()" data-i18n="dept.mexSend">Invia</button>
+          <button id="mex-send-btn" class="mex-send-btn" onclick="sendMexMessage()" disabled data-i18n="dept.mexSend">Invia</button>
         </div>
         <div id="mex-send-status" class="mex-send-status"></div>
       </div>
@@ -2433,10 +2441,9 @@ function _mt(k){ return (window.I18n && I18n.t) ? I18n.t(k) : k; }
  * (departmentMap[msg.from]) works correctly when a sibling sends a message.
  */
 async function buildMexRecipientList(){
-  const sel = document.getElementById('mex-recipient-sel');
-  if(!sel) return;
-  const prev = sel.value;
-  while(sel.options.length > 1) sel.remove(1);
+  const list = document.getElementById('mex-recipient-list');
+  if(!list) return;
+  list.innerHTML = '';
 
   let depts = [];
   try {
@@ -2458,26 +2465,58 @@ async function buildMexRecipientList(){
   }
 
   if(!depts.length){
-    const opt = document.createElement('option');
-    opt.value = ''; opt.disabled = true;
-    opt.textContent = _mt('dept.mexNoRecipients');
-    sel.add(opt);
-    // Still add Floor even if no other depts
+    const msg = document.createElement('div');
+    msg.className = 'mex-no-recipients';
+    msg.textContent = _mt('dept.mexNoRecipients');
+    list.appendChild(msg);
+    // Still add Floor row even when no other depts
   }
+
+  // Render real department rows
   depts.forEach(d => {
-    const opt = document.createElement('option');
-    opt.value = d.id; opt.textContent = d.name;
-    if(d.id === prev) opt.selected = true;
-    sel.add(opt);
+    const idSafe = 'mxr-' + d.id.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const row = document.createElement('div');
+    row.className = 'mex-di';
+    row.onclick = () => toggleMexRecipient(d.id);
+    row.innerHTML =
+      `<input type="radio" name="mex-recipient" id="${idSafe}" value="${esc(d.id)}" ` +
+      `onclick="event.stopPropagation()">` +
+      `<label for="${idSafe}">${esc(d.name)}</label>`;
+    list.appendChild(row);
   });
-  // [MEX Step 5] Add Floor (__sala__) as a valid recipient.
-  // The server verifies the Floor destination; the client just passes '__sala__' as the 'to' field.
-  const floorOpt = document.createElement('option');
-  floorOpt.value = '__sala__';
-  floorOpt.setAttribute('data-i18n', 'dept.floorDest');
-  floorOpt.textContent = _mt('dept.floorDest');
-  if('__sala__' === prev) floorOpt.selected = true;
-  sel.add(floorOpt);
+
+  // [MEX Step 5] Floor (__sala__) — always shown for dept users.
+  // Server verifies the destination; client just passes '__sala__' as the 'to' field.
+  const floorSafe = 'mxr-sala';
+  const floorRow = document.createElement('div');
+  floorRow.className = 'mex-di';
+  floorRow.onclick = () => toggleMexRecipient('__sala__');
+  floorRow.innerHTML =
+    `<input type="radio" name="mex-recipient" id="${floorSafe}" value="__sala__" ` +
+    `onclick="event.stopPropagation()">` +
+    `<label for="${floorSafe}" data-i18n="dept.floorDest">${esc(_mt('dept.floorDest'))}</label>`;
+  list.appendChild(floorRow);
+
+  mexUpdateSendBtn();
+}
+
+/** Toggle Mex recipient selection — enforces single-select. */
+function toggleMexRecipient(id) {
+  const idSafe = id === '__sala__' ? 'mxr-sala' : 'mxr-' + id.replace(/[^a-zA-Z0-9_-]/g, '_');
+  const inp = document.getElementById(idSafe);
+  if(!inp) return;
+  inp.checked = true;
+  // Update .sel class: only the selected row gets it
+  document.querySelectorAll('#mex-recipient-list .mex-di').forEach(el => el.classList.remove('sel'));
+  inp.closest('.mex-di')?.classList.add('sel');
+  mexUpdateSendBtn();
+}
+
+/** Enable/disable the Mex send button based on whether a recipient is selected. */
+function mexUpdateSendBtn() {
+  const btn     = document.getElementById('mex-send-btn');
+  const checked = document.querySelector('input[name="mex-recipient"]:checked');
+  if(btn) btn.disabled = !checked;
 }
 
 /** Update the character counter for the Mex textarea. */
@@ -2619,16 +2658,19 @@ function mexDeptResetCompose() {
   const prev = document.getElementById('mex-send-preview');
   if (ta)   { ta.value = ''; ta.style.display = 'block'; mexUpdateCharCount(); }
   if (prev) { prev.style.display = 'none'; }
+  // Reset recipient selection
+  document.querySelectorAll('input[name="mex-recipient"]').forEach(r => r.checked = false);
+  document.querySelectorAll('#mex-recipient-list .mex-di').forEach(el => el.classList.remove('sel'));
+  mexUpdateSendBtn();
   mexDeptShowStep('mex-step-qm');
 }
 
 /** Send a message via WS. Validation mirrors server-side checks for fast feedback. */
 function sendMexMessage(){
-  const sel = document.getElementById('mex-recipient-sel');
   const ta  = document.getElementById('mex-body');
   const btn = document.getElementById('mex-send-btn');
-  if(!sel||!ta||!btn) return;
-  const recipient = sel.value.trim();
+  if(!ta||!btn) return;
+  const recipient = (document.querySelector('input[name="mex-recipient"]:checked')?.value || '').trim();
   const body      = ta.value.trim();
   if(!recipient)       { mexStatus(_mt('dept.mexNoRecipient'), 'err'); return; }
   if(!body)            { mexStatus(_mt('dept.mexBodyEmpty'), 'err'); return; }
