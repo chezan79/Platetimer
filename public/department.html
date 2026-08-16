@@ -741,6 +741,15 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
     </div>
     <div class="cd-list" id="voice-msg-list"></div>
   </div>
+
+  <!-- [Task 66] Read-only Operations tasks published to this department -->
+  <div id="ops-tasks-section" class="vm-section" style="display:none;">
+    <div class="ra-hdr">
+      <span class="ra-title" data-i18n="service.opsTasksSection">Attività Operations</span>
+      <span class="ra-count" id="ops-task-count">0</span>
+    </div>
+    <div class="cd-list" id="ops-task-list"></div>
+  </div>
 </main>
 
 <audio id="snd-warn"   src="alerte-346112.mp3"           preload="auto"></audio>
@@ -817,6 +826,8 @@ const pendingSends = new Set();   // table numbers recently sent by this page; t
 //                                 startedAt, destinations, direction }
 // direction: 'sent' | 'received'
 let countdowns    = new Map();
+// [Task 66] Operations tasks published to this department (id → projected task)
+let opsTasks      = new Map();
 let ws            = null;
 let wsConnected   = false;
 let tickTimer     = null;
@@ -1838,6 +1849,28 @@ function connectWS(){
                 'offer','answer','ice-candidate',
                 'talkingStart','talkingStop'].includes(data.action)){
       PttVoice.handleSignal(data);
+    } else if(['OPS_TASK_CREATED','OPS_TASK_UPDATED','OPS_TASK_REASSIGNED','OPS_TASK_PROGRESS'].includes(data.action)){
+      // [Task 66] Upsert-only: the card appears/refreshes when the task is
+      // published to THIS department with an active status. Removal is NEVER
+      // inferred from an updated payload — it is driven exclusively by the
+      // explicit server event OPS_TASK_SERVICE_REMOVED below.
+      const tk = data.task;
+      if(tk && tk.publishToService === true && tk.serviceDepartmentId === myDeptId &&
+         (tk.status === 'OPEN' || tk.status === 'IN_PROGRESS')){
+        opsTasks.set(tk.id, tk);
+        renderOpsTasks();
+      }
+    } else if(data.action === 'OPS_TASK_SERVICE_REMOVED'){
+      // [Task 66] The single deterministic removal path (server-originated):
+      // dept move, unpublish, completion, cancellation, deletion.
+      if(data.prevServiceDepartmentId === myDeptId){
+        opsTasks.delete(data.taskId);
+        renderOpsTasks();
+      }
+    } else if(data.action === 'OPS_TASK_COMPLETED' || data.action === 'OPS_TASK_DELETED'){
+      // [Task 66] Secondary safety net only — primary removal is the event above.
+      const tid = data.taskId || (data.task && data.task.id);
+      if(tid && opsTasks.delete(tid)) renderOpsTasks();
     }
   };
 }
@@ -2001,10 +2034,61 @@ function tick(){
   if(changed) renderCards();
 }
 
+// ── [Task 66] Operations tasks — read-only projection for this department ────
+// Rendered without any action controls: the Operations task is the source of
+// truth; this section is a viewer only.
+const OPS_PRIO_COLORS = { LOW:'#4caf50', MEDIUM:'#2196f3', HIGH:'#ff9800', URGENT:'#f44336' };
+function _ot(k){ return (window.I18n && I18n.t) ? I18n.t(k) : k; }
+
+function renderOpsTasks(){
+  const sec  = document.getElementById('ops-tasks-section');
+  const list = document.getElementById('ops-task-list');
+  const cnt  = document.getElementById('ops-task-count');
+  if(!sec || !list) return;
+  const arr = Array.from(opsTasks.values())
+    .sort((a,b) => (a.dueDate || '9999') < (b.dueDate || '9999') ? -1 : 1);
+  if(cnt) cnt.textContent = arr.length;
+  if(arr.length === 0){
+    sec.style.display = 'none';
+    list.innerHTML = `<div class="empty-state" data-i18n="service.opsTasksEmpty">${esc(_ot('service.opsTasksEmpty'))}</div>`;
+    return;
+  }
+  sec.style.display = '';
+  list.innerHTML = arr.map(tk => {
+    const col = OPS_PRIO_COLORS[tk.priority] || '#2196f3';
+    const due = tk.dueDate ? new Date(tk.dueDate) : null;
+    const dueTxt = due && !isNaN(due.getTime()) ? due.toLocaleString() : '';
+    return `
+    <details class="ops-task-card" data-task-id="${esc(tk.id)}"
+       style="border-left:4px solid ${col};border-radius:10px;padding:10px 14px;margin-bottom:8px;background:rgba(255,255,255,.04)">
+      <summary style="display:flex;justify-content:space-between;gap:8px;align-items:center;cursor:pointer;list-style:none">
+        <strong style="font-size:14px">${esc(tk.title || '')}</strong>
+        <span style="font-size:11px;padding:2px 8px;border-radius:10px;background:rgba(255,255,255,.10);white-space:nowrap">${esc(tk.status || '')}</span>
+      </summary>
+      ${tk.description ? `<div style="font-size:12px;opacity:.85;margin-top:6px;white-space:pre-wrap">${esc(tk.description)}</div>` : ''}
+      <div style="font-size:11px;opacity:.7;margin-top:6px">
+        ${dueTxt ? `${esc(_ot('service.opsTaskDue'))}: ${esc(dueTxt)} · ` : ''}${esc(_ot('service.opsTaskAssignee'))}: ${esc(tk.assigneeName || '—')} · ${esc(_ot('service.opsSource'))}
+      </div>
+    </details>`;
+  }).join('');
+}
+
+async function loadOpsTasks(){
+  try{
+    const r = await fetch('/api/service/ops-tasks', { headers: { Authorization: `Bearer ${token}` } });
+    if(!r.ok) return; // unbound legacy session / suspended — section stays hidden
+    const d = await r.json();
+    if(!d.success || !Array.isArray(d.tasks)) return;
+    opsTasks = new Map(d.tasks.map(tk => [tk.id, tk]));
+    renderOpsTasks();
+  }catch{ /* network error — leave hidden */ }
+}
+
 // ── Boot ───────────────────────────────────────────────────────────────────────
 loadDepts().then(() => {
   connectWS();
   tickTimer = setInterval(tick, 1000);
+  loadOpsTasks();
 });
 
 window.addEventListener('beforeunload', () => {

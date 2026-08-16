@@ -1121,5 +1121,13 @@
  "ops.cal.empty.month": "Nessun compito in questo mese.",
  "ops.cal.loading": "Caricamento…",
  "ops.cal.error.network": "Errore di rete. Impossibile caricare il calendario.",
- "ops.cal.more": "altri"
+ "ops.cal.more": "altri",
+ "ops.task.serviceDepartment": "Reparto Service",
+ "ops.task.publishToService": "Rendi visibile anche nel reparto Service",
+ "ops.task.noServiceDepartment": "Nessun reparto",
+ "service.opsTasksSection": "Attività Operations",
+ "service.opsTasksEmpty": "Nessuna attività Operations per questo reparto",
+ "service.opsSource": "Operations",
+ "service.opsTaskDue": "Scadenza",
+ "service.opsTaskAssignee": "Assegnato a"
 }

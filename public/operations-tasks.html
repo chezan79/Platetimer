@@ -410,7 +410,7 @@ async function openDetail(taskId, opts = {}) {
           <div class="info-cell"><div class="info-cell-label">${t('ops.task.createdAt')}</div><div class="info-cell-val">${esc(OpsCommon.fmtDatetime(task.createdAt))}</div></div>
           ${task.startedAt ? `<div class="info-cell"><div class="info-cell-label">${t('ops.task.startedAt')}</div><div class="info-cell-val">${esc(OpsCommon.fmtDatetime(task.startedAt))}</div></div>` : ''}
           ${task.completedAt ? `<div class="info-cell"><div class="info-cell-label">${t('ops.task.completedAt')}</div><div class="info-cell-val">${esc(OpsCommon.fmtDatetime(task.completedAt))}</div></div>` : ''}
-          ${task.department ? `<div class="info-cell"><div class="info-cell-label">${t('ops.task.department')}</div><div class="info-cell-val">${esc(task.department)}</div></div>` : ''}
+          ${(task.serviceDepartmentName || task.department) ? `<div class="info-cell"><div class="info-cell-label">${t('ops.task.department')}</div><div class="info-cell-val">${esc(task.serviceDepartmentName || task.department)}</div></div>` : ''}
           ${task.templateId ? `<div class="info-cell"><div class="info-cell-label">${t('ops.task.recurring')}</div><div class="info-cell-val">🔁 <small style="color:var(--muted)">ID template: ${esc(task.templateId.slice(-8))}</small></div></div>` : ''}
         </div>
         ${task.description ? `<div style="margin-top:10px;font-size:14px;line-height:1.55;color:var(--muted)">${esc(task.description)}</div>` : ''}
@@ -474,8 +474,12 @@ function openCreatePanel() {
       </select>
       <label class="form-label">${t('ops.task.dueDateLabel')}</label>
       <input id="c-due" class="form-input" type="datetime-local">
-      <label class="form-label">${t('ops.task.deptLabel')}</label>
-      <input id="c-dept" class="form-input" maxlength="80">
+      <label class="form-label">${t('ops.task.serviceDepartment')}</label>
+      <select id="c-dept" class="form-select"><option value="">${t('ops.task.noServiceDepartment')}</option></select>
+      <label style="display:flex;align-items:center;gap:8px;margin:6px 0 10px;font-size:13px;cursor:pointer">
+        <input type="checkbox" id="c-publish" disabled>
+        <span>${t('ops.task.publishToService')}</span>
+      </label>
 
       <label class="form-label" style="margin-top:8px">${t('ops.task.attachLabel')}</label>
       <div style="display:flex;gap:8px;margin-bottom:8px">
@@ -488,6 +492,34 @@ function openCreatePanel() {
       <button class="btn btn-primary" style="width:100%;margin-top:6px" id="c-btn" onclick="doCreate()">${t('ops.task.create')}</button>
     </div>`;
   openPanel();
+  initServiceDeptControls('c-dept', 'c-publish', null, false);
+}
+
+// ── [Task 66] Service department dropdown + publish checkbox ──
+let _serviceDepts = null;
+async function loadServiceDepts() {
+  if (_serviceDepts) return _serviceDepts;
+  const r = await OpsCommon.api('/api/operations/service-departments');
+  _serviceDepts = (r && r.success && Array.isArray(r.departments)) ? r.departments : [];
+  return _serviceDepts;
+}
+async function initServiceDeptControls(selId, cbId, selectedId, publish) {
+  const depts = await loadServiceDepts();
+  const sel = document.getElementById(selId), cb = document.getElementById(cbId);
+  if (!sel || !cb) return; // panel closed meanwhile
+  depts.forEach(d => {
+    const o = document.createElement('option');
+    o.value = d.id; o.textContent = d.name;
+    sel.appendChild(o);
+  });
+  if (selectedId && depts.some(d => d.id === selectedId)) sel.value = selectedId;
+  const sync = () => {
+    if (!sel.value) { cb.checked = false; cb.disabled = true; }
+    else cb.disabled = false;
+  };
+  sel.addEventListener('change', sync);
+  if (sel.value && publish === true) cb.checked = true;
+  sync();
 }
 
 // ── Edit mode (inside panel) ──
@@ -510,8 +542,12 @@ function openEditMode(taskId) {
       </select>
       <label class="form-label">${t('ops.task.dueDateLabel')}</label>
       <input id="e-due" class="form-input" type="datetime-local" value="${esc(task.dueDate ? task.dueDate.slice(0,16) : '')}">
-      <label class="form-label">${t('ops.task.deptLabel')}</label>
-      <input id="e-dept" class="form-input" maxlength="80" value="${esc(task.department || '')}">
+      <label class="form-label">${t('ops.task.serviceDepartment')}</label>
+      <select id="e-dept" class="form-select"><option value="">${t('ops.task.noServiceDepartment')}</option></select>
+      <label style="display:flex;align-items:center;gap:8px;margin:6px 0 10px;font-size:13px;cursor:pointer">
+        <input type="checkbox" id="e-publish" disabled>
+        <span>${t('ops.task.publishToService')}</span>
+      </label>
       <label class="form-label">${t('ops.task.notesLabel')}</label>
       <textarea id="e-notes" class="form-textarea" maxlength="5000">${esc(task.notes || '')}</textarea>
       <div style="display:flex;gap:10px;margin-top:4px">
@@ -519,6 +555,7 @@ function openEditMode(taskId) {
         <button class="btn btn-neutral" onclick="openDetail('${esc(taskId)}')">${t('common.cancel')}</button>
       </div>
     </div>`;
+  initServiceDeptControls('e-dept', 'e-publish', task.serviceDepartmentId || null, task.publishToService === true);
 }
 
 // ── Reassign mode ──
@@ -767,7 +804,8 @@ async function doCreate() {
     assigneeId:  document.getElementById('c-assignee').value,
     priority:    document.getElementById('c-priority').value,
     dueDate:     document.getElementById('c-due').value || null,
-    department:  document.getElementById('c-dept').value.trim() || null
+    serviceDepartmentId: document.getElementById('c-dept').value || null,
+    publishToService:    document.getElementById('c-publish').checked
   };
   if (!body.title) { panelMsg(t('ops.task.titleRequired')); btn.disabled = false; return; }
 
@@ -801,7 +839,8 @@ async function doEdit(taskId) {
     description: document.getElementById('e-desc').value.trim(),
     priority: document.getElementById('e-priority').value,
     dueDate: document.getElementById('e-due').value || null,
-    department: document.getElementById('e-dept').value.trim() || null,
+    serviceDepartmentId: document.getElementById('e-dept').value || null,
+    publishToService:    document.getElementById('e-publish').checked,
     notes: document.getElementById('e-notes').value.trim()
   };
   const r = await OpsCommon.api('/api/operations/tasks/' + taskId, { method: 'PATCH', body: JSON.stringify(body) });

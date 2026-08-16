@@ -995,6 +995,46 @@ app.get('/api/service/department', (req, res) => {
     });
 });
 
+// ── [Task 66] GET /api/service/ops-tasks — read-only Operations projection ──
+// Returns the Operations tasks explicitly published to the bound department.
+// [SECURITY] companyId + departmentId derived ENTIRELY from the server-side
+// account record (getBoundDepartmentContext) — no client-supplied filters are
+// accepted. The projection omits companyId, assigneeId, createdBy and every
+// other internal field: the Service side is a read-only viewer.
+app.get('/api/service/ops-tasks', (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+
+    const boundAcct = getBoundDepartmentContext(session);
+    if (!boundAcct) {
+        return res.status(403).json({ error: 'No department account binding.', code: 'NOT_BOUND' });
+    }
+    if (boundAcct.status !== 'ACTIVE') {
+        const e = departmentAccessError(boundAcct);
+        return res.status(e.status).json(e.body);
+    }
+
+    const companyId    = boundAcct.companyId;      // server-side record only
+    const departmentId = boundAcct.departmentId;   // server-side record only
+
+    // [SECURITY] Live department-activity check (same model as /api/service/department):
+    // a deactivated department must lose access to previously published tasks.
+    const liveDept = getCompanyDepts(companyId).find(d => d.id === departmentId);
+    if (!liveDept || !liveDept.active) {
+        return res.status(410).json({ error: 'Assigned department inactive', code: 'DEPARTMENT_INACTIVE' });
+    }
+
+    const tasks = getOpsTasks(companyId)
+        .filter(t =>
+            t.companyId === companyId &&
+            t.publishToService === true &&
+            t.serviceDepartmentId === departmentId &&
+            (t.status === 'OPEN' || t.status === 'IN_PROGRESS'))
+        .map(projectOpsTaskForService);
+
+    res.json({ success: true, tasks });
+});
+
 // ── [S2.2] In-memory rate limiter for POST /api/service/login ────────────────
 // Keyed by `${normalizedLogin}:${clientIP}`. Max 5 failures per 5-minute window.
 // Successful login clears the entry. No persistence — restarts reset counters (acceptable).
@@ -2327,7 +2367,14 @@ function opsTaskWithComputedStatus(t) {
         const due = new Date(t.dueDate).getTime();
         if (!isNaN(due) && Date.now() > due) effectiveStatus = 'OVERDUE';
     }
-    return { ...t, effectiveStatus };
+    return {
+        ...t,
+        // [Task 66] Service publication fields — always present with defaults
+        serviceDepartmentId:   t.serviceDepartmentId ?? null,
+        publishToService:      t.publishToService === true,
+        serviceDepartmentName: t.serviceDepartmentName ?? null,
+        effectiveStatus
+    };
 }
 
 // [SECURITY] Audit history events are ALWAYS created server-side.
@@ -2385,6 +2432,20 @@ app.get('/api/operations/assignees', (req, res) => {
     if (!ctx) return;
     const allowed = opsAuth.allowedAssignees(ctx.opsUser, getOpsUsers(ctx.opsUser.companyId));
     res.json({ success: true, assignees: allowed.map(publicOpsUser) });
+});
+
+// ── [Task 66] GET /api/operations/service-departments ───────────────────────
+// Active Service departments of the actor's company, for the task-form dropdown.
+// [SECURITY] companyId ALWAYS from the server-side ops record — never from the
+// request. Returns only {id, name}, sorted by name.
+app.get('/api/operations/service-departments', (req, res) => {
+    const ctx = requireOpsAuth(req, res);
+    if (!ctx) return;
+    const departments = getCompanyDepts(ctx.opsUser.companyId)
+        .filter(d => d.active === true)
+        .map(d => ({ id: d.id, name: d.name }))
+        .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    res.json({ success: true, departments });
 });
 
 // ── POST /api/operations/users — Director only: invite a new team member ──
@@ -2959,6 +3020,78 @@ function sanitizeOpsTaskPatch(body) {
     return out;
 }
 
+// ── [Task 66] Operations → Service publication helpers ──────────────────────
+// Resolve & validate the Service publication fields of a task.
+// `existing` is the current task record (null on create). Fields absent from
+// the body are carried over unchanged from `existing`.
+// [SECURITY] serviceDepartmentId is validated against the company's ACTIVE
+// departments via getCompanyDepts(companyId); serviceDepartmentName is ALWAYS
+// derived server-side from the validated department record — never from the
+// client. publishToService is coerced to false when no valid department is set.
+// Throws a user-facing message (→ 400) when an explicitly provided ID is invalid.
+function resolveServicePublication(companyId, body, existing) {
+    const hasDeptField = body.serviceDepartmentId !== undefined;
+    const hasPubField  = body.publishToService !== undefined;
+
+    let deptId, deptName;
+    if (hasDeptField) {
+        deptId = body.serviceDepartmentId ? body.serviceDepartmentId.toString().trim() : null;
+        deptName = null;
+        if (deptId) {
+            const dept = getCompanyDepts(companyId).find(d => d.id === deptId && d.active === true);
+            if (!dept) throw 'Reparto Service non valido o non attivo.';
+            deptName = dept.name; // server-derived display snapshot
+        }
+    } else {
+        deptId   = (existing && existing.serviceDepartmentId) || null;
+        deptName = (existing && existing.serviceDepartmentName) || null;
+    }
+
+    let publish = hasPubField
+        ? body.publishToService === true
+        : !!(existing && existing.publishToService === true);
+    if (!deptId) { publish = false; deptName = null; }
+
+    return { serviceDepartmentId: deptId, publishToService: publish, serviceDepartmentName: deptName };
+}
+
+// Explicit server-originated removal signal for the Service view.
+// Removal from a department page must NEVER be inferred client-side from an
+// updated task payload — this event is the single deterministic removal path.
+// [Task 66] Safe read-only projection of an Operations task for Service
+// consumers (HTTP endpoint AND WebSocket delivery use this single helper).
+// Omits companyId, assigneeId, createdBy, notes, history, comments,
+// attachments and every other internal field.
+function projectOpsTaskForService(t) {
+    return {
+        id:                    t.id,
+        title:                 t.title,
+        description:           t.description,
+        dueDate:               t.dueDate,
+        priority:              t.priority,
+        status:                t.status,
+        assigneeName:          t.assigneeName,
+        serviceDepartmentId:   t.serviceDepartmentId,
+        serviceDepartmentName: t.serviceDepartmentName,
+        source:                'OPERATIONS',
+        createdAt:             t.createdAt,
+        updatedAt:             t.updatedAt
+    };
+}
+
+function broadcastOpsServiceRemoved(companyId, taskId, prevServiceDepartmentId) {
+    broadcastOps(companyId, { action: 'OPS_TASK_SERVICE_REMOVED', taskId, prevServiceDepartmentId });
+}
+
+// True when a previously-published task is no longer visible to the SAME
+// department it was published to (unpublished, moved, completed or cancelled).
+function opsServiceEntitlementLost(task, prevPublish, prevDeptId) {
+    if (!prevPublish) return false;
+    return task.publishToService !== true ||
+           task.serviceDepartmentId !== prevDeptId ||
+           (task.status !== 'OPEN' && task.status !== 'IN_PROGRESS');
+}
+
 // ── POST /api/operations/tasks — create (hierarchy-enforced assignment) ──
 // [SECURITY] companyId + createdBy from the server-side ops record; forged
 // companyId/createdBy/status/completedAt in the payload are ignored.
@@ -2970,6 +3103,11 @@ app.post('/api/operations/tasks', async (req, res) => {
 
     let clean;
     try { clean = sanitizeOpsTaskInput(req.body); }
+    catch (msg) { return res.status(400).json({ error: msg }); }
+
+    // [Task 66] Validate optional Service publication fields
+    let svc;
+    try { svc = resolveServicePublication(companyId, req.body, null); }
     catch (msg) { return res.status(400).json({ error: msg }); }
 
     const assigneeId = (req.body.assigneeId || actor.id).toString();
@@ -2998,6 +3136,10 @@ app.post('/api/operations/tasks', async (req, res) => {
         status: 'OPEN',
         dueDate: clean.dueDate,
         department: clean.department,
+        // [Task 66] Service publication (validated server-side above)
+        serviceDepartmentId:   svc.serviceDepartmentId,
+        publishToService:      svc.publishToService,
+        serviceDepartmentName: svc.serviceDepartmentName,
         notes: '',
         completionPercent: 0,
         startedAt: null,
@@ -3148,6 +3290,10 @@ app.put('/api/operations/tasks/:id', (req, res) => {
         return res.status(404).json({ error: 'Compito non trovato.' });
     }
 
+    // [Task 66] Snapshot Service entitlement BEFORE any mutation
+    const prevServiceDepartmentId = task.serviceDepartmentId ?? null;
+    const prevPublish = task.publishToService === true;
+
     const wantsComplete = req.body.status === 'COMPLETED';
     const wantsStatus = typeof req.body.status === 'string' && !wantsComplete;
     const wantsEdit = ['title', 'description', 'priority', 'dueDate', 'assigneeId', 'department']
@@ -3227,9 +3373,21 @@ app.put('/api/operations/tasks/:id', (req, res) => {
         }
     }
 
+    // [Task 66] Service publication changes (edit-rights required)
+    if (req.body.serviceDepartmentId !== undefined || req.body.publishToService !== undefined) {
+        if (!opsAuth.canEditTask(actor, task, byId)) {
+            return res.status(403).json({ error: 'Non autorizzato a modificare questo compito.' });
+        }
+        try { Object.assign(task, resolveServicePublication(companyId, req.body, task)); }
+        catch (msg) { return res.status(400).json({ error: msg }); }
+    }
+
     task.updatedAt = Date.now();
     saveOpsTasks();
     broadcastOps(companyId, { action: 'OPS_TASK_UPDATED', task: opsTaskWithComputedStatus(task) });
+    // [Task 66] Explicit removal signal to the previously-entitled department
+    if (opsServiceEntitlementLost(task, prevPublish, prevServiceDepartmentId))
+        broadcastOpsServiceRemoved(companyId, task.id, prevServiceDepartmentId);
     res.json({ success: true, task: opsTaskWithComputedStatus(task) });
 });
 
@@ -3280,7 +3438,17 @@ app.patch('/api/operations/tasks/:id', (req, res) => {
     try { patch = sanitizeOpsTaskPatch(req.body); }
     catch (msg) { return res.status(400).json({ error: msg }); }
 
-    if (Object.keys(patch).length === 0)
+    // [Task 66] Snapshot Service entitlement BEFORE any mutation
+    const prevServiceDepartmentId = task.serviceDepartmentId ?? null;
+    const prevPublish = task.publishToService === true;
+    const svcFieldsPresent = req.body.serviceDepartmentId !== undefined || req.body.publishToService !== undefined;
+    let svc = null;
+    if (svcFieldsPresent) {
+        try { svc = resolveServicePublication(actor.companyId, req.body, task); }
+        catch (msg) { return res.status(400).json({ error: msg }); }
+    }
+
+    if (Object.keys(patch).length === 0 && !svcFieldsPresent)
         return res.status(400).json({ error: 'Nessun campo modificabile fornito.' });
 
     const histData = {};
@@ -3294,12 +3462,22 @@ app.patch('/api/operations/tasks/:id', (req, res) => {
     if (patch.department !== undefined && patch.department !== task.department)
         histData.departmentFrom = task.department, histData.departmentTo = patch.department;
 
-    Object.assign(task, patch);
+    if (svc) {
+        if (svc.serviceDepartmentId !== prevServiceDepartmentId)
+            histData.serviceDeptFrom = prevServiceDepartmentId, histData.serviceDeptTo = svc.serviceDepartmentId;
+        if (svc.publishToService !== prevPublish)
+            histData.publishToServiceTo = svc.publishToService;
+    }
+
+    Object.assign(task, patch, svc || {});
     addHistory(task, 'TASK_EDITED', actor.id, actor.name, histData);
     task.updatedAt = Date.now();
     saveOpsTasks();
     console.log(`✅ [OPS] Task patched: ${task.id} by ${actor.id} — fields: ${Object.keys(patch).join(',')}`);
     broadcastOps(actor.companyId, { action: 'OPS_TASK_UPDATED', task: opsTaskWithComputedStatus(task) });
+    // [Task 66] Explicit removal signal to the previously-entitled department
+    if (opsServiceEntitlementLost(task, prevPublish, prevServiceDepartmentId))
+        broadcastOpsServiceRemoved(actor.companyId, task.id, prevServiceDepartmentId);
     res.json({ success: true, task: opsTaskWithComputedStatus(task) });
 });
 
@@ -3347,6 +3525,10 @@ app.post('/api/operations/tasks/:id/progress', (req, res) => {
     if (isNaN(pct) || pct < 0 || pct > 100)
         return res.status(400).json({ error: 'completionPercent deve essere un intero tra 0 e 100.' });
 
+    // [Task 66] Snapshot Service entitlement BEFORE mutation
+    const prevServiceDepartmentId = task.serviceDepartmentId ?? null;
+    const prevPublish = task.publishToService === true;
+
     const prevPct = task.completionPercent || 0;
     const prevStatus = task.status;
     task.completionPercent = pct;
@@ -3376,6 +3558,9 @@ app.post('/api/operations/tasks/:id/progress', (req, res) => {
         action: task.status === 'COMPLETED' ? 'OPS_TASK_COMPLETED' : 'OPS_TASK_PROGRESS',
         task: opsTaskWithComputedStatus(task)
     });
+    // [Task 66] Auto-completion via 100% removes the task from the Service view
+    if (prevPublish && task.status === 'COMPLETED')
+        broadcastOpsServiceRemoved(actor.companyId, task.id, prevServiceDepartmentId);
     res.json({ success: true, task: opsTaskWithComputedStatus(task) });
 });
 
@@ -3395,6 +3580,10 @@ app.post('/api/operations/tasks/:id/complete', (req, res) => {
     if (task.status === 'CANCELLED')
         return res.status(400).json({ error: 'Impossibile completare un compito cancellato.' });
 
+    // [Task 66] Snapshot Service entitlement BEFORE mutation
+    const prevServiceDepartmentId = task.serviceDepartmentId ?? null;
+    const prevPublish = task.publishToService === true;
+
     const prevStatus = task.status;
     if (task.status !== 'COMPLETED') {
         task.status = 'COMPLETED';
@@ -3406,6 +3595,9 @@ app.post('/api/operations/tasks/:id/complete', (req, res) => {
     task.updatedAt = Date.now();
     saveOpsTasks();
     broadcastOps(actor.companyId, { action: 'OPS_TASK_COMPLETED', task: opsTaskWithComputedStatus(task) });
+    // [Task 66] Completed tasks leave the Service view — explicit removal signal
+    if (prevPublish)
+        broadcastOpsServiceRemoved(actor.companyId, task.id, prevServiceDepartmentId);
     res.json({ success: true, task: opsTaskWithComputedStatus(task) });
 });
 
@@ -3418,6 +3610,10 @@ app.post('/api/operations/tasks/:id/reassign', async (req, res) => {
     const r = requireOpsTask(req, res, ctx);
     if (!r) return;
     const { task, byId } = r;
+
+    // [Task 66] Snapshot Service entitlement BEFORE mutation
+    const prevServiceDepartmentId = task.serviceDepartmentId ?? null;
+    const prevPublish = task.publishToService === true;
 
     // canEditTask covers Director + creator with hierarchy
     if (!opsAuth.canEditTask(actor, task, byId)) {
@@ -3474,6 +3670,10 @@ app.post('/api/operations/tasks/:id/reassign', async (req, res) => {
     }
 
     console.log(`✅ [OPS] Task ${task.id} reassigned: ${oldAssigneeId} → ${newAssignee.id} by ${actor.id}`);
+    // [Task 66] Consistency signal first, then the REASSIGNED upsert re-adds
+    // the card on the (still-entitled) department page with fresh data.
+    if (prevPublish)
+        broadcastOpsServiceRemoved(actor.companyId, task.id, prevServiceDepartmentId);
     broadcastOps(actor.companyId, { action: 'OPS_TASK_REASSIGNED', task: opsTaskWithComputedStatus(task), prevAssigneeId: oldAssigneeId });
     res.json({ success: true, task: opsTaskWithComputedStatus(task), notificationResult });
 });
@@ -3492,6 +3692,10 @@ app.post('/api/operations/tasks/:id/cancel', (req, res) => {
     if (task.status === 'CANCELLED')
         return res.status(400).json({ error: 'Il compito è già cancellato.' });
 
+    // [Task 66] Snapshot Service entitlement BEFORE mutation
+    const prevServiceDepartmentId = task.serviceDepartmentId ?? null;
+    const prevPublish = task.publishToService === true;
+
     const prevStatus = task.status;
     task.status = 'CANCELLED';
     const reason = (req.body.reason || '').toString().trim().substring(0, 500);
@@ -3500,6 +3704,9 @@ app.post('/api/operations/tasks/:id/cancel', (req, res) => {
     saveOpsTasks();
     console.log(`✅ [OPS] Task ${task.id} cancelled by Director ${actor.id}`);
     broadcastOps(actor.companyId, { action: 'OPS_TASK_UPDATED', task: opsTaskWithComputedStatus(task) });
+    // [Task 66] Cancelled tasks leave the Service view — explicit removal signal
+    if (prevPublish)
+        broadcastOpsServiceRemoved(actor.companyId, task.id, prevServiceDepartmentId);
     res.json({ success: true, task: opsTaskWithComputedStatus(task) });
 });
 
@@ -3698,6 +3905,10 @@ app.delete('/api/operations/tasks/:id', async (req, res) => {
     if (!r) return;
     const { task } = r;
 
+    // [Task 66] Snapshot Service entitlement BEFORE deletion
+    const prevServiceDepartmentId = task.serviceDepartmentId ?? null;
+    const prevPublish = task.publishToService === true;
+
     // Clean up Firebase Storage attachments (non-fatal — metadata is removed regardless).
     if (Array.isArray(task.attachments) && task.attachments.length > 0) {
         const expectedPrefix = `operations/${actor.companyId}/tasks/${task.id}/`;
@@ -3716,6 +3927,9 @@ app.delete('/api/operations/tasks/:id', async (req, res) => {
 
     console.log(`✅ [OPS] Task ${task.id} permanently deleted by Director ${actor.id}`);
     broadcastOps(actor.companyId, { action: 'OPS_TASK_DELETED', taskId: task.id });
+    // [Task 66] Deleted tasks leave the Service view — explicit removal signal
+    if (prevPublish)
+        broadcastOpsServiceRemoved(actor.companyId, task.id, prevServiceDepartmentId);
     res.json({ success: true });
 });
 
@@ -4380,6 +4594,46 @@ const companyRooms = new Map();
 //            never from client-supplied payload.
 // Failures are intentionally silent — WS delivery is best-effort;
 // HTTP persistence is the source of truth.
+// [Task 66] Actions whose payload carries a full canonical task record.
+// Bound Service sockets never receive these raw — see broadcastOps below.
+const OPS_TASK_PAYLOAD_ACTIONS = new Set([
+    'OPS_TASK_CREATED', 'OPS_TASK_UPDATED', 'OPS_TASK_REASSIGNED',
+    'OPS_TASK_PROGRESS', 'OPS_TASK_COMPLETED'
+]);
+
+// [Task 66] Decide what (if anything) a bound Service department socket may
+// receive for an OPS_* broadcast. Returns a JSON string to send, or null.
+// [SECURITY] Bound sockets are read-only Service viewers: they get
+//   • OPS_TASK_SERVICE_REMOVED — only when they are the previously-entitled
+//     department (minimal payload: taskId + prevServiceDepartmentId);
+//   • a safe projection of task events — only while the task is published to
+//     THEIR department with an active status.
+// Every other OPS_* payload (full task records, comments, intelligence, …)
+// is withheld entirely: entitlement is enforced server-side per socket, never
+// left to the client.
+function opsPayloadForBoundSocket(payload, boundDepartmentId, companyId) {
+    // [SECURITY] Live authorization check — do not trust the activity state
+    // cached at joinRoom time: a department deactivated after the socket
+    // joined must stop receiving Ops data immediately.
+    const liveDept = getCompanyDepts(companyId).find(d => d.id === boundDepartmentId);
+    if (!liveDept || !liveDept.active) return null;
+    if (payload.action === 'OPS_TASK_SERVICE_REMOVED') {
+        return payload.prevServiceDepartmentId === boundDepartmentId
+            ? JSON.stringify(payload)   // already minimal: {action, taskId, prevServiceDepartmentId}
+            : null;
+    }
+    if (OPS_TASK_PAYLOAD_ACTIONS.has(payload.action) && payload.task) {
+        const t = payload.task;
+        const entitled = t.publishToService === true &&
+                         t.serviceDepartmentId === boundDepartmentId &&
+                         (t.status === 'OPEN' || t.status === 'IN_PROGRESS');
+        return entitled
+            ? JSON.stringify({ action: payload.action, task: projectOpsTaskForService(t) })
+            : null;
+    }
+    return null; // everything else is Operations-internal
+}
+
 function broadcastOps(companyId, payload) {
     const room = companyRooms.get(companyId);
     if (!room || room.size === 0) return;
@@ -4387,7 +4641,15 @@ function broadcastOps(companyId, payload) {
     let sent = 0;
     room.forEach(client => {
         if (client.readyState === 1) { // WebSocket.OPEN
-            try { client.send(msg); sent++; }
+            try {
+                if (client.boundDepartmentId) {
+                    // [Task 66] Bound Service department socket: filtered, safe-projection delivery only.
+                    const safeMsg = opsPayloadForBoundSocket(payload, client.boundDepartmentId, companyId);
+                    if (safeMsg) { client.send(safeMsg); sent++; }
+                } else {
+                    client.send(msg); sent++; // Operations / unbound legacy sockets: full payload
+                }
+            }
             catch (_) { /* ignore per-client send errors */ }
         }
     });

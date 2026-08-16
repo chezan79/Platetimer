@@ -1121,5 +1121,13 @@
  "ops.cal.empty.month": "No tasks this month.",
  "ops.cal.loading": "Loading…",
  "ops.cal.error.network": "Network error. Unable to load the calendar.",
- "ops.cal.more": "more"
+ "ops.cal.more": "more",
+ "ops.task.serviceDepartment": "Service Department",
+ "ops.task.publishToService": "Also show in Service department",
+ "ops.task.noServiceDepartment": "No department",
+ "service.opsTasksSection": "Operations Tasks",
+ "service.opsTasksEmpty": "No Operations tasks for this department",
+ "service.opsSource": "Operations",
+ "service.opsTaskDue": "Due",
+ "service.opsTaskAssignee": "Assigned to"
 }

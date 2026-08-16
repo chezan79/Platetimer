@@ -1121,5 +1121,13 @@
  "ops.cal.empty.month": "Aucune tâche ce mois-ci.",
  "ops.cal.loading": "Chargement…",
  "ops.cal.error.network": "Erreur réseau. Impossible de charger le calendrier.",
- "ops.cal.more": "autres"
+ "ops.cal.more": "autres",
+ "ops.task.serviceDepartment": "Département Service",
+ "ops.task.publishToService": "Afficher également dans le département Service",
+ "ops.task.noServiceDepartment": "Aucun département",
+ "service.opsTasksSection": "Tâches Operations",
+ "service.opsTasksEmpty": "Aucune tâche Operations pour ce département",
+ "service.opsSource": "Operations",
+ "service.opsTaskDue": "Échéance",
+ "service.opsTaskAssignee": "Assigné à"
 }
