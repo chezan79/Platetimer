@@ -522,6 +522,84 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
   .vc-hint { display: none; }
   .vc-sep  { margin: 0; }
 }
+
+/* ── OPERATIONS TASK CARDS (Task 66 enhancement) ────────────────────────── */
+/* Container section reuses .vm-section; cards go into #ops-task-list (.cd-list).
+   Cards must NOT look like countdown cards — no timer, no table number, no controls. */
+.ops-task-card{
+  background:var(--card);border:1.5px solid var(--border);border-radius:12px;
+  padding:14px 16px;position:relative;overflow:hidden;transition:border-color .2s;}
+/* Left accent bar — colour driven by priority class */
+.ops-task-card::before{
+  content:'';position:absolute;left:0;top:0;bottom:0;width:4px;
+  background:var(--ops-prio-clr,var(--accent));}
+.ops-task-card.ops-prio-urgent{--ops-prio-clr:var(--danger);border-color:rgba(220,38,38,.22);}
+.ops-task-card.ops-prio-high  {--ops-prio-clr:var(--warn);  border-color:rgba(217,119,6,.22);}
+.ops-task-card.ops-prio-medium{--ops-prio-clr:var(--accent);}
+.ops-task-card.ops-prio-low   {--ops-prio-clr:var(--ok);opacity:.92;}
+.ops-task-card.ops-overdue{border-color:rgba(220,38,38,.35);background:rgba(220,38,38,.025);}
+
+/* Card header row */
+.ops-task-hdr{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px;}
+.ops-task-title{font-size:14px;font-weight:700;color:var(--text);line-height:1.3;flex:1;}
+
+/* Operations source badge (small pill top-right) */
+.ops-src-badge{display:inline-flex;align-items:center;gap:3px;
+  font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;
+  padding:2px 7px;border-radius:5px;white-space:nowrap;flex-shrink:0;
+  background:rgba(99,102,241,.12);color:var(--accent2);border:1px solid rgba(99,102,241,.25);}
+.ops-src-badge.urgent{background:rgba(220,38,38,.1);color:var(--danger);border-color:rgba(220,38,38,.3);}
+.ops-src-badge.high  {background:rgba(217,119,6,.1); color:var(--warn);  border-color:rgba(217,119,6,.3);}
+
+/* Meta row */
+.ops-task-meta{display:flex;flex-wrap:wrap;gap:7px;align-items:center;margin-top:7px;font-size:12px;color:var(--muted);}
+
+/* Priority pill */
+.ops-prio-pill{font-size:11px;font-weight:600;padding:2px 7px;border-radius:5px;}
+.ops-prio-pill.urgent{background:rgba(220,38,38,.1);color:var(--danger);border:1px solid rgba(220,38,38,.25);}
+.ops-prio-pill.high  {background:rgba(217,119,6,.1); color:var(--warn);  border:1px solid rgba(217,119,6,.25);}
+.ops-prio-pill.medium{background:rgba(99,102,241,.1);color:var(--accent2);border:1px solid rgba(99,102,241,.2);}
+.ops-prio-pill.low   {background:rgba(22,163,74,.08);color:var(--ok);    border:1px solid rgba(22,163,74,.2);}
+
+/* Overdue tag */
+.ops-overdue-tag{font-size:11px;font-weight:700;padding:2px 7px;border-radius:5px;
+  background:rgba(220,38,38,.1);color:var(--danger);border:1px solid rgba(220,38,38,.25);}
+
+/* Details button */
+.ops-task-footer{display:flex;justify-content:flex-end;margin-top:10px;}
+.ops-detail-btn{padding:5px 14px;border:1.5px solid var(--border-l);border-radius:7px;
+  background:rgba(0,0,0,.03);color:var(--text);font-size:12px;font-weight:600;
+  cursor:pointer;transition:all .15s;}
+.ops-detail-btn:hover{background:var(--card-h);border-color:var(--accent);color:var(--accent);}
+
+/* ── OPERATIONS TASK DETAIL MODAL ─────────────────────────────────────────── */
+.ops-modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);
+  z-index:500;align-items:center;justify-content:center;}
+.ops-modal-overlay.open{display:flex;}
+.ops-modal{background:var(--card);border-radius:14px;border:1.5px solid var(--border);
+  padding:24px;max-width:460px;width:calc(100vw - 32px);
+  max-height:calc(100vh - 64px);overflow-y:auto;
+  box-shadow:0 12px 40px rgba(0,0,0,.18);}
+.ops-modal-hdr{display:flex;align-items:flex-start;gap:12px;margin-bottom:18px;}
+.ops-modal-icon{font-size:22px;width:42px;height:42px;background:rgba(99,102,241,.1);
+  border:1.5px solid rgba(99,102,241,.2);border-radius:10px;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.ops-modal-title{font-size:17px;font-weight:800;line-height:1.3;margin-bottom:6px;color:var(--text);}
+.ops-modal-badges{display:flex;gap:6px;flex-wrap:wrap;align-items:center;}
+.ops-modal-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.ops-modal-field{margin-bottom:0;}
+.ops-modal-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;
+  color:var(--muted);margin-bottom:3px;}
+.ops-modal-value{font-size:14px;color:var(--text);}
+.ops-modal-desc{font-size:13px;color:var(--muted);line-height:1.6;white-space:pre-wrap;margin-top:12px;
+  border-top:1px solid var(--border);padding-top:12px;}
+.ops-modal-footer{display:flex;justify-content:flex-end;margin-top:18px;padding-top:14px;
+  border-top:1px solid var(--border);}
+.ops-modal-close{padding:9px 22px;border:1.5px solid var(--border-l);border-radius:8px;
+  background:transparent;color:var(--text);font-size:14px;font-weight:600;cursor:pointer;
+  transition:all .15s;}
+.ops-modal-close:hover{background:var(--card-h);}
+@media(max-width:400px){.ops-modal-grid{grid-template-columns:1fr;}}
 </style>
 </head>
 <body>
@@ -751,6 +829,11 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
     <div class="cd-list" id="ops-task-list"></div>
   </div>
 </main>
+
+<!-- [Task 66 enhancement] Read-only Operations task detail modal -->
+<div class="ops-modal-overlay" id="ops-detail-modal" onclick="if(event.target===this)closeOpsDetailModal()">
+  <div class="ops-modal" id="ops-detail-content"></div>
+</div>
 
 <audio id="snd-warn"   src="alerte-346112.mp3"           preload="auto"></audio>
 <audio id="snd-expiry" src="costa-rica-eas-alarm-346194.mp3" preload="auto"></audio>
@@ -2037,8 +2120,23 @@ function tick(){
 // ── [Task 66] Operations tasks — read-only projection for this department ────
 // Rendered without any action controls: the Operations task is the source of
 // truth; this section is a viewer only.
-const OPS_PRIO_COLORS = { LOW:'#4caf50', MEDIUM:'#2196f3', HIGH:'#ff9800', URGENT:'#f44336' };
 function _ot(k){ return (window.I18n && I18n.t) ? I18n.t(k) : k; }
+
+function _opsIsOverdue(tk){
+  if(!tk.dueDate) return false;
+  if(tk.status !== 'OPEN' && tk.status !== 'IN_PROGRESS') return false;
+  return new Date(tk.dueDate).getTime() < Date.now();
+}
+
+function _opsFmtDue(dueDate){
+  if(!dueDate) return '';
+  const d = new Date(dueDate);
+  if(isNaN(d.getTime())) return dueDate;
+  const lang = (window.I18n && I18n.currentLocale) ? I18n.currentLocale() : navigator.language || 'it';
+  try{
+    return d.toLocaleString(lang, { dateStyle:'short', timeStyle:'short' });
+  }catch{ return d.toLocaleString(); }
+}
 
 function renderOpsTasks(){
   const sec  = document.getElementById('ops-tasks-section');
@@ -2050,28 +2148,96 @@ function renderOpsTasks(){
   if(cnt) cnt.textContent = arr.length;
   if(arr.length === 0){
     sec.style.display = 'none';
-    list.innerHTML = `<div class="empty-state" data-i18n="service.opsTasksEmpty">${esc(_ot('service.opsTasksEmpty'))}</div>`;
+    list.innerHTML = `<div class="empty-state">${esc(_ot('service.opsTasksEmpty'))}</div>`;
     return;
   }
   sec.style.display = '';
   list.innerHTML = arr.map(tk => {
-    const col = OPS_PRIO_COLORS[tk.priority] || '#2196f3';
-    const due = tk.dueDate ? new Date(tk.dueDate) : null;
-    const dueTxt = due && !isNaN(due.getTime()) ? due.toLocaleString() : '';
-    return `
-    <details class="ops-task-card" data-task-id="${esc(tk.id)}"
-       style="border-left:4px solid ${col};border-radius:10px;padding:10px 14px;margin-bottom:8px;background:rgba(255,255,255,.04)">
-      <summary style="display:flex;justify-content:space-between;gap:8px;align-items:center;cursor:pointer;list-style:none">
-        <strong style="font-size:14px">${esc(tk.title || '')}</strong>
-        <span style="font-size:11px;padding:2px 8px;border-radius:10px;background:rgba(255,255,255,.10);white-space:nowrap">${esc(tk.status || '')}</span>
-      </summary>
-      ${tk.description ? `<div style="font-size:12px;opacity:.85;margin-top:6px;white-space:pre-wrap">${esc(tk.description)}</div>` : ''}
-      <div style="font-size:11px;opacity:.7;margin-top:6px">
-        ${dueTxt ? `${esc(_ot('service.opsTaskDue'))}: ${esc(dueTxt)} · ` : ''}${esc(_ot('service.opsTaskAssignee'))}: ${esc(tk.assigneeName || '—')} · ${esc(_ot('service.opsSource'))}
+    const prio    = (tk.priority || 'MEDIUM').toUpperCase();
+    const prioLow = prio.toLowerCase();
+    const overdue = _opsIsOverdue(tk);
+    const dueStr  = _opsFmtDue(tk.dueDate);
+    const prioLabel = _ot(`ops.priority.${prio}`) || prioLow;
+    // Badge intensity: stronger colour for urgent/high
+    const badgeCls = (prio === 'URGENT' || prio === 'HIGH') ? ` ${prioLow}` : '';
+
+    return `<div class="ops-task-card ops-prio-${prioLow}${overdue ? ' ops-overdue' : ''}" data-task-id="${esc(tk.id)}">
+      <div class="ops-task-hdr">
+        <span class="ops-task-title">${esc(tk.title || '')}</span>
+        <span class="ops-src-badge${badgeCls}">⚙ ${esc(_ot('service.opsSource'))}</span>
       </div>
-    </details>`;
+      <div class="ops-task-meta">
+        ${dueStr
+          ? overdue
+            ? `<span class="ops-overdue-tag">⚠ ${esc(_ot('service.opsTaskOverdue'))} · ${esc(dueStr)}</span>`
+            : `<span>📅 ${esc(dueStr)}</span>`
+          : ''}
+        <span class="ops-prio-pill ${prioLow}">${esc(prioLabel)}</span>
+        ${tk.assigneeName ? `<span>👤 ${esc(tk.assigneeName)}</span>` : ''}
+      </div>
+      <div class="ops-task-footer">
+        <button class="ops-detail-btn" onclick="openOpsDetailModal('${esc(tk.id)}')">${esc(_ot('service.opsTaskDetails'))}</button>
+      </div>
+    </div>`;
   }).join('');
 }
+
+function openOpsDetailModal(taskId){
+  const tk = opsTasks.get(taskId);
+  if(!tk){ return; }
+  const prio     = (tk.priority || 'MEDIUM').toUpperCase();
+  const prioLow  = prio.toLowerCase();
+  const prioLabel = _ot(`ops.priority.${prio}`) || prioLow;
+  const overdue  = _opsIsOverdue(tk);
+  const dueStr   = _opsFmtDue(tk.dueDate);
+  const statusLabel = _ot(`ops.status.${tk.status}`) || tk.status || '';
+  const badgeCls = (prio === 'URGENT' || prio === 'HIGH') ? ` ${prioLow}` : '';
+
+  document.getElementById('ops-detail-content').innerHTML = `
+    <div class="ops-modal-hdr">
+      <div class="ops-modal-icon">⚙</div>
+      <div style="flex:1;min-width:0;">
+        <div class="ops-modal-title">${esc(tk.title || '')}</div>
+        <div class="ops-modal-badges">
+          <span class="ops-src-badge${badgeCls}">${esc(_ot('service.opsSource'))}</span>
+          <span class="ops-prio-pill ${prioLow}">${esc(prioLabel)}</span>
+          ${overdue ? `<span class="ops-overdue-tag">⚠ ${esc(_ot('service.opsTaskOverdue'))}</span>` : ''}
+        </div>
+      </div>
+    </div>
+    <div class="ops-modal-grid">
+      ${dueStr ? `<div class="ops-modal-field">
+        <div class="ops-modal-label">${esc(_ot('service.opsTaskDue'))}</div>
+        <div class="ops-modal-value">${overdue ? `<span class="ops-overdue-tag" style="display:inline">⚠</span> ` : ''}${esc(dueStr)}</div>
+      </div>` : ''}
+      <div class="ops-modal-field">
+        <div class="ops-modal-label">${esc(_ot('service.opsTaskStatus'))}</div>
+        <div class="ops-modal-value">${esc(statusLabel)}</div>
+      </div>
+      <div class="ops-modal-field">
+        <div class="ops-modal-label">${esc(_ot('service.opsTaskPriority'))}</div>
+        <div class="ops-modal-value"><span class="ops-prio-pill ${prioLow}">${esc(prioLabel)}</span></div>
+      </div>
+      ${tk.assigneeName ? `<div class="ops-modal-field">
+        <div class="ops-modal-label">${esc(_ot('service.opsTaskAssignee'))}</div>
+        <div class="ops-modal-value">${esc(tk.assigneeName)}</div>
+      </div>` : ''}
+    </div>
+    ${tk.description ? `<div class="ops-modal-desc">${esc(tk.description)}</div>` : ''}
+    <div class="ops-modal-footer">
+      <button class="ops-modal-close" onclick="closeOpsDetailModal()">${esc(_ot('service.opsTaskClose'))}</button>
+    </div>`;
+  document.getElementById('ops-detail-modal').classList.add('open');
+}
+
+function closeOpsDetailModal(){
+  document.getElementById('ops-detail-modal').classList.remove('open');
+}
+
+// Close detail modal with Escape key
+document.addEventListener('keydown', e => {
+  if(e.key === 'Escape') closeOpsDetailModal();
+});
 
 async function loadOpsTasks(){
   try{

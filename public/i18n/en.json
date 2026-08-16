@@ -1132,5 +1132,10 @@
  "service.opsTaskAssignee": "Assigned to",
  "cal.ops.badge": "Operations",
  "cal.ops.readonly": "This event is managed by Operations and cannot be edited here.",
- "cal.ops.assignee": "Assigned to"
+ "cal.ops.assignee": "Assigned to",
+ "service.opsTaskDetails": "Details",
+ "service.opsTaskPriority": "Priority",
+ "service.opsTaskOverdue": "Overdue",
+ "service.opsTaskStatus": "Status",
+ "service.opsTaskClose": "Close"
 }
