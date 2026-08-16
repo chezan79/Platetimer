@@ -214,6 +214,24 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 .mex-empty{font-size:13px;color:var(--muted);line-height:1.6;text-align:center;
   padding:16px 0;}
 
+/* ── MEX OPERATIONAL CARD (inside #cd-list) ─── */
+/* Visually distinct from .cdc countdown cards — blue channel instead of red/amber alarms. */
+.mex-cd-card{background:linear-gradient(135deg,rgba(37,99,235,.13) 0%,rgba(17,24,39,.9) 100%);
+  border:2px solid #3b82f6;border-radius:12px;padding:13px 16px;position:relative;
+  box-shadow:0 2px 10px rgba(59,130,246,.2);}
+.mex-cd-from{font-size:12px;font-weight:700;color:#93c5fd;letter-spacing:.5px;
+  text-transform:uppercase;margin-bottom:6px;}
+.mex-cd-icon{margin-right:5px;}
+.mex-cd-body{font-size:15px;color:#e8f0fe;line-height:1.45;word-break:break-word;margin-bottom:8px;}
+.mex-cd-time{font-size:11px;color:#7eb8f7;}
+/* Three short pulses on arrival — finite, then card settles to a static blue border */
+@keyframes mex-pulse-arrive{
+  0%  {box-shadow:0 0 0 0 rgba(59,130,246,.75);border-color:#60a5fa;}
+  35% {box-shadow:0 0 0 10px rgba(59,130,246,0); border-color:#3b82f6;}
+  70% {box-shadow:0 0 0 0 rgba(59,130,246,.6); border-color:#60a5fa;}
+  100%{box-shadow:0 0 0 0 rgba(59,130,246,0); border-color:#3b82f6;}}
+.mex-cd-card.new-arrival{animation:mex-pulse-arrive 0.9s ease-out 3;} /* 3 × 0.9 s = 2.7 s */
+
 /* ── DISCONNECTED OVERLAY ───────────────────── */
 .dc-bar{position:fixed;top:var(--hdr);left:0;right:0;background:rgba(239,68,68,.95);
   color:#fff;text-align:center;padding:8px;font-size:13px;font-weight:600;z-index:150;
@@ -953,6 +971,8 @@ let voiceMessages = new Map();
 // [MEX Step 3] Received messages — ordered newest-last array for display.
 // Shape: [{ id, convId, from, fromName, body, timestamp }]
 let mexInboxMessages = [];
+/** Tracks message IDs already rendered as .mex-cd-card in #cd-list (deduplication). */
+const mexCdCards = new Map(); // messageId → DOM element
 
 // ── Alarm audio ──────────────────────────────────────────────────────────────
 // Browsers block audio until the user has interacted with the page.
@@ -2009,18 +2029,35 @@ function setConnBadge(ok){
 }
 
 // ── Render ─────────────────────────────────────────────────────────────────────
+// Coexistence rule: renderCards() must NOT remove .mex-cd-card elements.
+// Strategy: remove only non-mex children (countdown cards, empty-state), then
+// insert fresh countdown cards before any existing Mex cards so the layout is:
+//   [countdown cards...] [mex cd cards...]
 function renderCards(){
   const list = document.getElementById('cd-list');
   document.getElementById('ra-count').textContent = countdowns.size;
 
+  // Remove every child that is NOT a Mex operational card
+  Array.from(list.children).forEach(el => {
+    if(!el.classList.contains('mex-cd-card')) el.remove();
+  });
+
   if(!countdowns.size){
-    list.innerHTML = '<div class="empty-state">Nessun countdown attivo per questo reparto.</div>';
+    // Only show the empty-state when there are also no Mex cards in the area
+    if(!list.querySelector('.mex-cd-card')){
+      const e = document.createElement('div');
+      e.className = 'empty-state';
+      e.textContent = 'Nessun countdown attivo per questo reparto.';
+      list.insertAdjacentElement('afterbegin', e);
+    }
     return;
   }
 
   const sorted = Array.from(countdowns.values()).sort((a,b) => a.timeRemaining - b.timeRemaining);
+  // Reference node: insert countdown cards BEFORE the first Mex card (or append if none)
+  const firstMex = list.querySelector('.mex-cd-card');
 
-  list.innerHTML = sorted.map(cd => {
+  sorted.forEach(cd => {
     const lv  = level(cd.timeRemaining);
     const pct = cd.initialDuration > 0
       ? Math.max(0, Math.round((cd.timeRemaining / cd.initialDuration) * 100))
@@ -2032,7 +2069,8 @@ function renderCards(){
         }).join('')
       : '<span class="cdc-badge recv">Ricevuto</span>';
 
-    return `
+    const tmp = document.createElement('div');
+    tmp.innerHTML = `
       <div class="cdc ${lv}">
         <div class="cdc-top">
           <div class="cdc-tbl">
@@ -2050,7 +2088,8 @@ function renderCards(){
           <div class="cdc-started">Avviato: ${esc(cd.startedAt)}</div>
         </div>
       </div>`;
-  }).join('');
+    list.insertBefore(tmp.firstElementChild, firstMex || null);
+  });
 }
 
 // ── Tick ───────────────────────────────────────────────────────────────────────
@@ -2344,16 +2383,87 @@ function handleMexSendAck(data){
   if(btn) btn.disabled = false;
 }
 
+/**
+ * Play a short two-note Mex notification tone using the Web Audio API.
+ * Fully independent from Voice Message audio and countdown alarms.
+ * Silently no-ops if AudioContext is unavailable or not yet unlocked.
+ */
+function playMexSound(){
+  try{
+    const ctx  = new (window.AudioContext || window.webkitAudioContext)();
+    const osc  = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = 'sine';
+    // Two-note descending ding: A5 (880 Hz) → E5 (660 Hz)
+    osc.frequency.setValueAtTime(880, ctx.currentTime);
+    osc.frequency.setValueAtTime(660, ctx.currentTime + 0.18);
+    gain.gain.setValueAtTime(0.28, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.6);
+    // Schedule context close to free resources (non-blocking)
+    setTimeout(() => ctx.close().catch(()=>{}), 800);
+  }catch(e){ console.warn('[mex] notification sound failed:', e.message); }
+}
+
+/**
+ * Insert (or skip if already present) a Mex card into #cd-list.
+ *
+ * @param {object}  msg   - {id, from, fromName, body, timestamp}
+ * @param {boolean} isNew - true → new real-time arrival (pulse + sound already
+ *                          triggered by caller); false → backfill/reload (no pulse)
+ */
+function insertMexCdCard(msg, isNew){
+  if(mexCdCards.has(msg.id)) return;           // already in the list — skip
+  const list = document.getElementById('cd-list');
+  if(!list) return;
+
+  // Remove empty-state placeholder if present (a Mex card takes priority)
+  const emptyEl = list.querySelector('.empty-state');
+  if(emptyEl) emptyEl.remove();
+
+  const _esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const timeFmt = ts => {
+    try{
+      const d = new Date(ts);
+      if(isNaN(d)) return String(ts||'');
+      return d.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
+    }catch{ return String(ts||''); }
+  };
+
+  const el = document.createElement('div');
+  el.className = 'mex-cd-card' + (isNew ? ' new-arrival' : '');
+  el.id = `mex-cd-${_esc(msg.id)}`;
+  el.innerHTML =
+    `<div class="mex-cd-from"><span class="mex-cd-icon">💬</span>${_esc(msg.fromName||msg.from)}</div>` +
+    `<div class="mex-cd-body">${_esc(msg.body)}</div>` +
+    `<div class="mex-cd-time">Ricevuto ${timeFmt(msg.timestamp)}</div>`;
+
+  list.appendChild(el);
+  mexCdCards.set(msg.id, el);
+
+  if(isNew){
+    // Auto-remove the arrival animation class after it finishes (3 × 0.9 s ≈ 2.7 s)
+    setTimeout(() => el.classList.remove('new-arrival'), 2800);
+  }
+}
+
 /** Handle an incoming mexIncoming event delivered by the server. */
 function handleMexIncoming(data){
-  const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const _esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const fromDept = departmentMap[data.from];
-  const fromName = fromDept ? fromDept.name : esc(data.from || '?');
-  mexInboxMessages.push({
+  const fromName = fromDept ? fromDept.name : _esc(data.from || '?');
+  const msg = {
     id: data.messageId, convId: data.conversationId,
     from: data.from, fromName, body: data.body, timestamp: data.timestamp
-  });
+  };
+  mexInboxMessages.push(msg);
   renderMexInbox();
+  // Insert as a new-arrival card in the operational #cd-list area + play sound
+  insertMexCdCard(msg, true);
+  playMexSound();
 }
 
 /** Re-render the inbox list from mexInboxMessages (newest first). */
@@ -2402,6 +2512,8 @@ async function loadMexInbox(){
       fresh.sort((a,b) => a.timestamp < b.timestamp ? -1 : 1);
       mexInboxMessages.push(...fresh);
       renderMexInbox();
+      // Restore backfilled Mex cards into #cd-list WITHOUT the arrival animation or sound
+      fresh.forEach(m => insertMexCdCard(m, false));
     }
   }catch(e){ console.warn('[MEX] loadMexInbox error', e); }
 }

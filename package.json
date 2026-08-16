@@ -18,5 +18,8 @@
     "nodemailer": "^9.0.5",
     "stripe": "^18.2.1",
     "ws": "^8.13.0"
+  },
+  "devDependencies": {
+    "jsdom": "^29.1.1"
   }
 }
