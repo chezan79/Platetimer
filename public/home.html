@@ -176,6 +176,15 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
   .pt-section{padding:16px 12px 12px;}
   .nav-card.ops-entry-card{max-width:none;}
 }
+
+/* ── WIDE-SCREEN SIDE-BY-SIDE LAYOUT ────── */
+@media(min-width:960px){
+  .main{max-width:1280px;display:flex;flex-wrap:wrap;align-items:flex-start;gap:24px;}
+  .main > .identity,
+  .main > #suspended-msg,
+  .main > #dept-error-msg{flex:0 0 100%;}
+  #pt-service-section,#pt-ops-section{flex:1 1 0;min-width:0;}
+}
 </style>
 </head>
 <body>
