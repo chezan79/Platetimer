@@ -5788,6 +5788,36 @@ wss.on('connection', (ws, req) => {
                     return;
                 }
 
+                // ── [Step 6] Quick Message metadata — optional, never used for auth ──────
+                // Client provides the rendered `body` as the display text.
+                // `templateType` and `tableNumber` are stored as metadata only.
+                const MEX_TABLE_TYPES = new Set(['TABLE_DELAY','TABLE_STATUS','TABLE_URGENT','TABLE_HOLD','TABLE_SEND']);
+                const mexTemplateType = typeof data.templateType === 'string'
+                    ? data.templateType.trim().toUpperCase() : null;
+                const validTemplateTypes = new Set([...MEX_TABLE_TYPES, 'CUSTOM']);
+                const mexTemplateTypeSafe = (mexTemplateType && validTemplateTypes.has(mexTemplateType))
+                    ? mexTemplateType : null;
+
+                // For table-based templates, validate tableNumber server-side.
+                let mexTableNumberSafe = null;
+                if (mexTemplateTypeSafe && MEX_TABLE_TYPES.has(mexTemplateTypeSafe)) {
+                    const rawTn = typeof data.tableNumber === 'string' || typeof data.tableNumber === 'number'
+                        ? String(data.tableNumber).trim() : '';
+                    if (!rawTn || rawTn.length > 8 || !/^[A-Za-z0-9]+$/.test(rawTn)) {
+                        ws.send(JSON.stringify({ action: 'mexSendAck', success: false, code: 'MEX_INVALID_TABLE_NUMBER' }));
+                        return;
+                    }
+                    // Purely numeric: 1–999 range
+                    if (/^\d+$/.test(rawTn)) {
+                        const n = parseInt(rawTn, 10);
+                        if (n < 1 || n > 999) {
+                            ws.send(JSON.stringify({ action: 'mexSendAck', success: false, code: 'MEX_INVALID_TABLE_NUMBER' }));
+                            return;
+                        }
+                    }
+                    mexTableNumberSafe = rawTn;
+                }
+
                 // Validate body — empty or over limit rejected here (before persistence).
                 const mexBody = typeof data.body === 'string' ? data.body.trim() : '';
                 if (!mexBody) {
@@ -5834,7 +5864,10 @@ wss.on('connection', (ws, req) => {
                     companyId:       mexCompanyId,
                     senderDeptId:    mexSender,         // server-derived; never from client
                     recipientDeptId: mexRecipient,
-                    body:            mexBody
+                    body:            mexBody,
+                    // [Step 6] Optional QM metadata — stored for analytics; never affects auth.
+                    templateType:    mexTemplateTypeSafe,
+                    tableNumber:     mexTableNumberSafe
                 }).then(({ conversation, message }) => {
                     // Ack to sender — NOT an incoming-message event.
                     if (ws.readyState === WebSocket.OPEN) {
@@ -5843,7 +5876,9 @@ wss.on('connection', (ws, req) => {
                             success:         true,
                             conversationId:  conversation.id,
                             messageId:       message.id,
-                            timestamp:       message.timestamp
+                            timestamp:       message.timestamp,
+                            templateType:    message.templateType,
+                            tableNumber:     message.tableNumber
                         }));
                     }
 
@@ -5863,7 +5898,9 @@ wss.on('connection', (ws, req) => {
                             messageId:       message.id,
                             from:            mexSender,
                             body:            message.body,
-                            timestamp:       message.timestamp
+                            timestamp:       message.timestamp,
+                            templateType:    message.templateType,
+                            tableNumber:     message.tableNumber
                         });
                         companyRooms.get(mexCompanyId).forEach(client => {
                             if (client === ws) return;                            // no echo to sender

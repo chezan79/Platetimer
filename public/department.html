@@ -203,6 +203,31 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 .mex-send-status{font-size:12px;min-height:18px;}
 .mex-send-status.ok{color:var(--ok);}
 .mex-send-status.err{color:var(--danger);}
+/* ── QM step system ──────────────────────────────────────────────────────────── */
+.mex-step{display:none;}
+.mex-step.active{display:block;}
+.mex-qm-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:4px;}
+.mex-qm-btn{padding:10px 8px;background:#fff;border:1.5px solid var(--border);
+  border-radius:10px;font-size:12px;font-weight:600;cursor:pointer;text-align:center;
+  transition:all .15s;line-height:1.3;color:var(--text);}
+.mex-qm-btn:hover,.mex-qm-btn:active{background:var(--accent);color:#fff;border-color:var(--accent);}
+.mex-qm-btn.custom-btn{grid-column:1/-1;background:#F5F7FA;}
+.mex-step-label{font-size:11px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.5px;color:var(--muted);margin-bottom:8px;}
+.mex-table-input{width:100%;padding:12px;font-size:28px;font-weight:700;
+  text-align:center;border:2px solid var(--border);border-radius:10px;
+  background:#fff;color:var(--text);letter-spacing:2px;box-sizing:border-box;}
+.mex-table-input:focus{outline:none;border-color:var(--accent);}
+.mex-table-err{font-size:12px;color:var(--danger);min-height:16px;margin-top:4px;}
+.mex-preview-box{background:#F0F4FF;border:1.5px solid #c7d2fe;border-radius:8px;
+  padding:10px 12px;font-size:13px;font-weight:600;color:#3730a3;
+  margin:8px 0;min-height:36px;word-break:break-word;}
+.mex-continue-btn{width:100%;padding:10px;background:var(--accent);color:#fff;
+  border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;margin-top:6px;}
+.mex-continue-btn:disabled{opacity:.4;cursor:not-allowed;}
+.mex-back-btn{display:inline-flex;align-items:center;gap:4px;background:none;
+  border:none;color:var(--muted);font-size:13px;cursor:pointer;padding:0 0 8px;font-weight:600;}
+.mex-back-btn:hover{color:var(--text);}
 .mex-inbox-box{display:flex;flex-direction:column;gap:6px;padding-top:4px;
   border-top:1px solid var(--border);margin-top:4px;}
 .mex-card{background:var(--card);border:1.5px solid var(--border-l);border-radius:10px;
@@ -787,20 +812,48 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
   <div id="section-mex" class="lp-section" style="display:none;">
     <div class="lp-title" data-i18n="dept.mexTitle">Messaggi</div>
 
-    <!-- Compose (Step 3: dept→dept text only, no Floor) -->
+    <!-- Compose — Quick Message stepped flow (Step 6) -->
     <div class="mex-compose-box">
-      <div style="font-size:11px;color:var(--muted);margin-bottom:2px;font-weight:700;letter-spacing:.5px;" data-i18n="dept.mexTo">A</div>
-      <select id="mex-recipient-sel" class="mex-sel">
-        <option value="" data-i18n="dept.mexSelectDept">Seleziona reparto…</option>
-      </select>
-      <textarea id="mex-body" class="mex-textarea" maxlength="300"
-        placeholder="Scrivi un messaggio (max 300 caratteri)…" rows="3"
-        oninput="mexUpdateCharCount()"></textarea>
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:4px;">
-        <span id="mex-char-count" style="font-size:11px;color:var(--muted);">0/300</span>
-        <button id="mex-send-btn" class="mex-send-btn" onclick="sendMexMessage()" data-i18n="dept.mexSend">Invia</button>
+
+      <!-- Step 0: QM picker -->
+      <div id="mex-step-qm" class="mex-step active">
+        <div class="mex-step-label" data-i18n="mex.qm.title">Messaggi rapidi</div>
+        <div class="mex-qm-grid" id="mex-qm-grid-dept">
+          <!-- populated by buildMexQmButtons() -->
+        </div>
       </div>
-      <div id="mex-send-status" class="mex-send-status"></div>
+
+      <!-- Step 1: Table number -->
+      <div id="mex-step-table" class="mex-step">
+        <button class="mex-back-btn" onclick="mexDeptGoBack()" data-i18n="mex.qm.back">← Indietro</button>
+        <div class="mex-preview-box" id="mex-dept-qm-label"></div>
+        <div class="mex-step-label" data-i18n="mex.qm.tableLabel">Numero tavolo</div>
+        <input id="mex-table-input" type="text" inputmode="numeric" pattern="[0-9A-Za-z]*"
+          class="mex-table-input" maxlength="8" oninput="mexDeptUpdateTablePreview()" />
+        <div class="mex-table-err" id="mex-table-err"></div>
+        <div id="mex-table-preview" class="mex-preview-box" style="display:none;"></div>
+        <button class="mex-continue-btn" id="mex-table-continue-btn"
+          onclick="mexDeptGoToSendStep()" data-i18n="mex.qm.continue">Continua →</button>
+      </div>
+
+      <!-- Step 2: Recipient + send -->
+      <div id="mex-step-send" class="mex-step">
+        <button class="mex-back-btn" onclick="mexDeptGoBack()" data-i18n="mex.qm.back">← Indietro</button>
+        <div id="mex-send-preview" class="mex-preview-box" style="display:none;"></div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:2px;font-weight:700;letter-spacing:.5px;" data-i18n="dept.mexTo">A</div>
+        <select id="mex-recipient-sel" class="mex-sel">
+          <option value="" data-i18n="dept.mexSelectDept">Seleziona reparto…</option>
+        </select>
+        <textarea id="mex-body" class="mex-textarea" maxlength="300"
+          placeholder="Scrivi un messaggio (max 300 caratteri)…" rows="3"
+          oninput="mexUpdateCharCount()"></textarea>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:4px;">
+          <span id="mex-char-count" style="font-size:11px;color:var(--muted);">0/300</span>
+          <button id="mex-send-btn" class="mex-send-btn" onclick="sendMexMessage()" data-i18n="dept.mexSend">Invia</button>
+        </div>
+        <div id="mex-send-status" class="mex-send-status"></div>
+      </div>
+
     </div>
 
     <!-- Received messages inbox -->
@@ -873,6 +926,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 <audio id="snd-expiry" src="costa-rica-eas-alarm-346194.mp3" preload="auto"></audio>
 
 <script src="js/ws-auth.js"></script>
+<script src="js/mex-qm.js"></script>
 <script src="js/i18n.js"></script>
 <script>I18n.init({ selector: '#i18n-dept-sel' });</script>
 <script>
@@ -2358,6 +2412,131 @@ function mexStatus(msg, cls){
   el.className   = `mex-send-status${cls ? ' '+cls : ''}`;
 }
 
+// ── [Step 6] Quick Message compose state ──────────────────────────────────────
+let _deptMexQmType  = null;  // currently selected template key (or null)
+let _deptMexTableNum = null; // validated table number (for table-based templates)
+
+/** Show one of the three Mex compose steps (hides the others). */
+function mexDeptShowStep(stepId) {
+  ['mex-step-qm','mex-step-table','mex-step-send'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.classList.remove('active'); el.style.display = 'none'; }
+  });
+  const target = document.getElementById(stepId);
+  if (target) { target.classList.add('active'); target.style.display = 'block'; }
+}
+
+/** Build the QM button grid for the department Mex panel. */
+function buildMexQmButtons() {
+  const grid = document.getElementById('mex-qm-grid-dept');
+  if (!grid || typeof MexQM === 'undefined') return;
+  grid.innerHTML = '';
+  MexQM.TYPES.forEach(({ key, icon }) => {
+    const btn = document.createElement('button');
+    btn.className = 'mex-qm-btn' + (key === 'CUSTOM' ? ' custom-btn' : '');
+    btn.textContent = MexQM.buttonLabel(key, k => _mt(k));
+    btn.onclick = () => mexDeptSelectQm(key);
+    grid.appendChild(btn);
+  });
+}
+
+/** Called when an operator selects a Quick Message type. */
+function mexDeptSelectQm(type) {
+  _deptMexQmType  = type;
+  _deptMexTableNum = null;
+  if (type === 'CUSTOM') {
+    // Custom: show send step directly with empty editable textarea
+    const ta   = document.getElementById('mex-body');
+    const prev = document.getElementById('mex-send-preview');
+    if (ta)   { ta.value = ''; ta.style.display = 'block'; mexUpdateCharCount(); }
+    if (prev) { prev.style.display = 'none'; }
+    mexDeptShowStep('mex-step-send');
+  } else if (MexQM.isTableType(type)) {
+    // Table template: ask for table number
+    const lbl = document.getElementById('mex-dept-qm-label');
+    if (lbl) lbl.textContent = MexQM.buttonLabel(type, k => _mt(k));
+    const inp = document.getElementById('mex-table-input');
+    if (inp) inp.value = '';
+    const errEl = document.getElementById('mex-table-err');
+    if (errEl) errEl.textContent = '';
+    const prevEl = document.getElementById('mex-table-preview');
+    if (prevEl) prevEl.style.display = 'none';
+    mexDeptShowStep('mex-step-table');
+    setTimeout(() => { if (inp) inp.focus(); }, 50);
+  }
+}
+
+/** Update the table number preview as the operator types. */
+function mexDeptUpdateTablePreview() {
+  const inp    = document.getElementById('mex-table-input');
+  const prevEl = document.getElementById('mex-table-preview');
+  const errEl  = document.getElementById('mex-table-err');
+  const contBtn = document.getElementById('mex-table-continue-btn');
+  if (!inp || !prevEl) return;
+  const val = inp.value.trim();
+  const res = MexQM.validateTableNum(val, k => _mt(k));
+  if (val && res.ok) {
+    const rendered = MexQM.renderBody(_deptMexQmType, res.normalized, k => _mt(k));
+    prevEl.textContent = rendered || '';
+    prevEl.style.display = 'block';
+    if (errEl) errEl.textContent = '';
+    if (contBtn) contBtn.disabled = false;
+  } else {
+    prevEl.style.display = 'none';
+    if (errEl) errEl.textContent = val && !res.ok ? (res.error || '') : '';
+    if (contBtn) contBtn.disabled = true;
+  }
+}
+
+/** "Continue" from the table step — validate, store number, proceed to send step. */
+function mexDeptGoToSendStep() {
+  const inp = document.getElementById('mex-table-input');
+  if (!inp) return;
+  const res = MexQM.validateTableNum(inp.value, k => _mt(k));
+  const errEl = document.getElementById('mex-table-err');
+  if (!res.ok) {
+    if (errEl) errEl.textContent = res.error || _mt('mex.qm.tableError');
+    return;
+  }
+  _deptMexTableNum = res.normalized;
+  const body = MexQM.renderBody(_deptMexQmType, _deptMexTableNum, k => _mt(k)) || '';
+  // Pre-fill body and show read-only preview; hide editable textarea
+  const ta   = document.getElementById('mex-body');
+  const prev = document.getElementById('mex-send-preview');
+  if (ta)   { ta.value = body; ta.style.display = 'none'; }
+  if (prev) { prev.textContent = body; prev.style.display = 'block'; }
+  mexDeptShowStep('mex-step-send');
+}
+
+/** Back button handler — figure out which step to return to. */
+function mexDeptGoBack() {
+  const tableStep = document.getElementById('mex-step-table');
+  const sendStep  = document.getElementById('mex-step-send');
+  const tableActive = tableStep && tableStep.classList.contains('active');
+  const sendActive  = sendStep  && sendStep.classList.contains('active');
+  if (sendActive && MexQM.isTableType(_deptMexQmType)) {
+    mexDeptShowStep('mex-step-table');
+  } else {
+    // Return to QM picker; reset state
+    _deptMexQmType   = null;
+    _deptMexTableNum = null;
+    const ta = document.getElementById('mex-body');
+    if (ta) { ta.value = ''; ta.style.display = 'block'; }
+    mexDeptShowStep('mex-step-qm');
+  }
+}
+
+/** Reset Mex compose back to the QM picker (called after successful send). */
+function mexDeptResetCompose() {
+  _deptMexQmType   = null;
+  _deptMexTableNum = null;
+  const ta   = document.getElementById('mex-body');
+  const prev = document.getElementById('mex-send-preview');
+  if (ta)   { ta.value = ''; ta.style.display = 'block'; mexUpdateCharCount(); }
+  if (prev) { prev.style.display = 'none'; }
+  mexDeptShowStep('mex-step-qm');
+}
+
 /** Send a message via WS. Validation mirrors server-side checks for fast feedback. */
 function sendMexMessage(){
   const sel = document.getElementById('mex-recipient-sel');
@@ -2374,7 +2553,13 @@ function sendMexMessage(){
   mexStatus(_mt('dept.mexSending'));
   // [MEX SECURITY] 'from' is intentionally NOT sent — sender identity is
   // derived by the server from ws.boundDepartmentId, never from client payload.
-  ws.send(JSON.stringify({ action: 'mexSend', to: recipient, body }));
+  // [Step 6] Attach QM metadata when a template was selected (never affects auth).
+  const payload = { action: 'mexSend', to: recipient, body };
+  if (_deptMexQmType && _deptMexQmType !== 'CUSTOM') {
+    payload.templateType = _deptMexQmType;
+    if (_deptMexTableNum) payload.tableNumber = _deptMexTableNum;
+  }
+  ws.send(JSON.stringify(payload));
 }
 
 /** Handle mexSendAck from server (response to our mexSend). */
@@ -2384,7 +2569,8 @@ function handleMexSendAck(data){
   if(data.success){
     mexStatus(_mt('dept.mexSent'), 'ok');
     if(ta){ ta.value = ''; mexUpdateCharCount(); }
-    setTimeout(() => mexStatus(''), 3000);
+    // [Step 6] After successful send, return to QM picker
+    setTimeout(() => { mexStatus(''); mexDeptResetCompose(); }, 1500);
   } else {
     mexStatus(_mt('dept.mexErrorSend'), 'err');
   }
@@ -2539,6 +2725,7 @@ loadDepts().then(() => {
   tickTimer = setInterval(tick, 1000);
   loadOpsTasks();
   buildMexRecipientList();  // populate Mex recipient list after depts are loaded
+  buildMexQmButtons();       // [Step 6] build QM button grid after i18n is ready
 });
 
 window.addEventListener('beforeunload', () => {

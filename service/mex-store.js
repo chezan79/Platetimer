@@ -195,7 +195,7 @@ function evictForBytesCap(companyId) {
  * senderDeptId MUST be server-derived — never accept from client.
  * Returns { conversation, message } on success; throws { code, message } on failure.
  */
-async function createAndSend({ companyId, senderDeptId, recipientDeptId, body }) {
+async function createAndSend({ companyId, senderDeptId, recipientDeptId, body, templateType, tableNumber }) {
     // Enqueue so concurrent sends for the same company are serialised
     return (queues[companyId] = getQueue(companyId).then(async () => {
         await loadMexCompany(companyId);
@@ -214,7 +214,10 @@ async function createAndSend({ companyId, senderDeptId, recipientDeptId, body })
             id: msgId, conversationId: convId,
             from: senderDeptId,     // always server-derived; never from client payload
             body,
-            templateKey: null,
+            // [Step 6] Optional Quick Message metadata — undefined on legacy messages;
+            // receiving clients always use `body` for display (backward compat).
+            templateType: templateType || null,
+            tableNumber:  tableNumber  || null,
             timestamp: now
         };
         const conv = {
@@ -256,7 +259,10 @@ async function getInboxForDept(companyId, deptId) {
             participants: c.participants,
             createdAt:    c.createdAt,
             messages:     (c.messages || []).map(m => ({
-                id: m.id, from: m.from, body: m.body, timestamp: m.timestamp
+                id: m.id, from: m.from, body: m.body, timestamp: m.timestamp,
+                // [Step 6] Pass through QM metadata (null for legacy messages — backward compat)
+                templateType: m.templateType || null,
+                tableNumber:  m.tableNumber  || null
             }))
         }));
 }
