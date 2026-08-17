@@ -41,7 +41,7 @@
 
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile, sendEmailVerification } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
 import { getFirestore, doc, setDoc, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
 const firebaseConfig = {
@@ -79,14 +79,10 @@ async function loadInvitation() {
 // After Firebase auth: write users/{uid} profile (company FIXED by the server-side
 // invitation — the invitee never chooses it), then bind uid to the invitation.
 // emailVerified is NOT required to complete activation: the invite code (single-use,
-// Director-generated) is the security proof. A verification email is sent as
-// background hygiene but activation proceeds immediately without waiting for it.
+// Director-generated, delivered to the Director-verified address via Resend) is the
+// security proof. No additional Firebase verification email is sent — the Resend
+// invitation is the sole outgoing email for normal onboarding.
 async function finishActivation(user) {
-  await user.reload();
-  if (!user.emailVerified) {
-    // Fire-and-forget: good hygiene, does not block the activation flow.
-    try { sendEmailVerification(user).catch(() => {}); } catch (_) {}
-  }
   const idToken = await user.getIdToken(true);
 
   // STEP 1 — Bind the uid to the invitation (server verifies invite code +
@@ -98,7 +94,6 @@ async function finishActivation(user) {
   });
   const data = await resp.json();
   if (!data.success) {
-    if (data.needsEmailVerification) { showVerifyStep(user); return; }
     throw new Error(data.error || 'Attivazione fallita.');
   }
   localStorage.setItem('userCompany', data.companyId);
@@ -132,27 +127,6 @@ async function finishActivation(user) {
   sessionStorage.setItem('ws_session_token', sess.token);
   show('act-success', 'Account attivato! Reindirizzamento a Operations…');
   setTimeout(() => location.href = '/operations.html', 1200);
-}
-
-function showVerifyStep(user) {
-  hide('act-error');
-  show('act-success', 'Ti abbiamo inviato un\'email di verifica. Apri il link nella tua casella di posta, poi torna qui e clicca il pulsante sotto.');
-  let btn = document.getElementById('verify-done-btn');
-  if (!btn) {
-    btn = document.createElement('button');
-    btn.id = 'verify-done-btn';
-    btn.className = 'btn btn-primary';
-    btn.style.width = '100%';
-    btn.style.marginTop = '10px';
-    btn.textContent = 'Ho verificato la mia email — Attiva';
-    document.getElementById('act-form').appendChild(btn);
-  }
-  btn.onclick = async () => {
-    btn.disabled = true;
-    try { await finishActivation(user); }
-    catch (e) { show('act-error', e.message || 'Errore.'); }
-    btn.disabled = false;
-  };
 }
 
 window.activate = async () => {

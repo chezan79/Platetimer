@@ -287,13 +287,13 @@ async function main() {
         check('7.6 index.html no longer falls back to email prefix as company',
             !indexHtml.includes("user.email.split('@')[0]"), null);
 
-        // 7.7 — activation page: does NOT have the emailVerified early-return guard
+        // 7.7 — activation page: showVerifyStep dead-UI is fully removed (was unreachable in normal flow)
         const activateHtml = fs.readFileSync(path.join(__dirname, '..', 'public', 'operations-activate.html'), 'utf8');
-        check('7.7 activation page does not early-return on !emailVerified',
-            !activateHtml.includes('showVerifyStep(user);\n    return;') &&
-            !activateHtml.includes('showVerifyStep(user);\r\n    return;'), null);
-        check('7.8 activation page still sends verification email as background hygiene',
-            activateHtml.includes('sendEmailVerification(user)'), null);
+        check('7.7 activation page does not define showVerifyStep (dead UI removed)',
+            !activateHtml.includes('showVerifyStep'), null);
+        // 7.8 — duplicate Firebase verification email removed: sendEmailVerification must NOT appear
+        check('7.8 activation page does NOT call sendEmailVerification (duplicate email fix)',
+            !activateHtml.includes('sendEmailVerification'), null);
 
         // Server contract: activated user WITH a Service profile document still gets
         // isOperations + opsRole → client reaches operations.html.
