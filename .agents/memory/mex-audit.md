@@ -10,3 +10,10 @@ Authoritative blueprint: `docs/mex-architecture-audit.md`. Key durable facts lea
 - The seven-action WebRTC list (~server.js 5087) is only a rate-limit exemption; the only WS auth gate is `PUBLIC_ACTIONS=['ping','pong','joinRoom']` (~5139).
 - With Firestore active, `saveJSON` for a file not in `getStoreNameForFile` silently persists NOWHERE (no local fallback); unregistered stores never load at startup.
 - Shared single-document stores hit Firestore's 1 MiB limit; Mex mandates per-company docs (`mex_<sha256(companyId)[0:32]>`), UTF-8 byte cap 700KB via `Buffer.byteLength`, per-company promise queue + transaction with `rev` precondition (multi-instance safe), success/broadcast only after commit.
+
+## Production data divergence (Task-96 audit finding)
+- Firestore is authoritative in prod; workspace data/departments.json + department-accounts.json are STALE dev fixtures with entirely different dept IDs for "pizzeria molino molard".
+- Prod depts: Cucina dept_1784278620048_3d142d (CENTRAL), Pizzeria dept_1784278626582_fe0814, Carne pesce dept_1784278637201_e53d6c; accounts cucina1/pizzeria1/cucina2.
+- Firestore department_accounts also holds 3 ORPHANED accounts (cucina/pizzeria/griglia) whose departmentIds don't exist in prod → joinRoom silently binds sockets to a phantom dept (found=false), causing 410 on /api/voice-recipients and Mex delivery misses.
+- **Why:** joinRoom sets ws.boundDepartmentId from the account record without checking the dept exists/active.
+- **How to apply:** any Mex "works for some depts, not one" report → first check account.departmentId exists in the live departments store. Full report: docs/mex-carne-pesce-audit-report.md.
