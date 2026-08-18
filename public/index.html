@@ -17,12 +17,81 @@
             background-position: center center;
             background-repeat: no-repeat;
         }
+
+        /* ── Two-column registration card ── */
+
+        /* Widen the card and reset inherited padding on desktop */
+        @media (min-width: 700px) {
+            .container {
+                max-width: 980px !important;
+                padding: 10px !important;
+            }
+            .form-container {
+                max-width: 100% !important;
+                padding: 0 !important;
+                display: flex;
+                flex-direction: row;
+                align-items: stretch;
+                overflow: hidden;
+            }
+        }
+
+        /* Branding column (left) */
+        .pt-reg-brand {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(160deg, #f0f5ff 0%, #e4ecf8 100%);
+            padding: 2.5rem 2rem;
+        }
+        @media (min-width: 700px) {
+            .pt-reg-brand {
+                flex: 0 0 40%;
+                border-radius: var(--border-radius, 12px) 0 0 var(--border-radius, 12px);
+                border-right: 1px solid #dce6f3;
+            }
+        }
+        @media (max-width: 699px) {
+            .pt-reg-brand {
+                padding: 1.75rem 1rem 0.75rem;
+            }
+        }
+
         .pt-signup-logo {
             display: block;
-            margin: 24px auto 16px;
-            max-width: 250px;
+            max-width: 230px;
             width: 100%;
             height: auto;
+        }
+        @media (min-width: 700px) {
+            .pt-signup-logo {
+                max-width: 200px;
+            }
+        }
+
+        /* Form column (right) */
+        .pt-reg-forms {
+            flex: 1 1 0;
+            padding: 2.25rem 2.5rem;
+            min-width: 0;
+        }
+        @media (max-width: 699px) {
+            .pt-reg-forms {
+                padding: 1.25rem 1.5rem 1.75rem;
+            }
+        }
+
+        /* First-name / last-name on the same row (desktop only) */
+        @media (min-width: 700px) {
+            .pt-name-row {
+                display: flex;
+                gap: 12px;
+            }
+            .pt-name-row input {
+                flex: 1 1 0;
+                min-width: 0;
+            }
         }
     </style>
 </head>
@@ -30,14 +99,24 @@
 <body>
     <div class="container">
         <div class="form-container">
-            <img src="platetimer-logo.png" alt="PlateTimer" class="pt-signup-logo">
+
+            <!-- ── Branding column (logo) ── -->
+            <div class="pt-reg-brand">
+                <img src="platetimer-logo.png" alt="PlateTimer" class="pt-signup-logo">
+            </div>
+
+            <!-- ── Form column (all panels) ── -->
+            <div class="pt-reg-forms">
+
             <!-- Modulo di registrazione -->
             <div id="register-form">
                 <h2 data-i18n="login.registerTitle">Registrati</h2>
                 <div id="register-message" class="message"></div>
                 <form id="form-register">
-                    <input type="text" id="register-firstname" placeholder="Nome" data-i18n-placeholder="login.firstName" required>
-                    <input type="text" id="register-lastname" placeholder="Cognome" data-i18n-placeholder="login.lastName" required>
+                    <div class="pt-name-row">
+                        <input type="text" id="register-firstname" placeholder="Nome" data-i18n-placeholder="login.firstName" required>
+                        <input type="text" id="register-lastname" placeholder="Cognome" data-i18n-placeholder="login.lastName" required>
+                    </div>
                     <input type="text" id="register-company" placeholder="Azienda (facoltativo)" data-i18n-placeholder="login.company">
                     <input type="email" id="register-email" placeholder="Email" data-i18n-placeholder="login.email" required>
                     <input type="password" id="register-password" placeholder="Password" data-i18n-placeholder="login.password" required>
@@ -141,6 +220,7 @@
             </div>
             <!-- ── end Accesso Reparto ── -->
 
+            </div><!-- /.pt-reg-forms -->
         </div>
     </div>
 
