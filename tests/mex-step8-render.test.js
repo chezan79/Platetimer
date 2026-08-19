@@ -41,6 +41,10 @@ function buildDom() {
     window._mt = k => I18N[k] !== undefined ? I18N[k] : k;
     // Also shim window.I18n so the script's own `function _mt(k) { window.I18n?.t(k) }` resolves correctly
     window.I18n = { t: k => I18N[k] !== undefined ? I18N[k] : k };
+    // department.html initializes this in a separate script before the main
+    // inline script. The harness evaluates only the main script, so mirror the
+    // already-resolved initialization dependency here.
+    window.i18nReady = Promise.resolve();
 
     // WebSocket constructor shim — department.html does `ws = new WebSocket(url)` inside DOMContentLoaded.
     // We need a singleton that captures the instance so tests can inspect ws._sent.
