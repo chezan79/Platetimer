@@ -1102,7 +1102,10 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
             // [Step 6] Return to QM picker after successful send
             setTimeout(() => { mexFloorStatus(''); mexFloorResetCompose(); }, 1500);
         } else {
-            mexFloorStatus(_t('sala.mexErrorSend'), 'err');
+            const message = data.code === 'MEX_RATE_LIMITED'
+                ? _t('sala.mexRateLimited')
+                : _t('sala.mexErrorSend');
+            mexFloorStatus(message, 'err');
         }
         if (btn) btn.disabled = false;
     }

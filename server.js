@@ -5167,6 +5167,21 @@ wss.on('connection', (ws, req) => {
                     ws.messageCount++;
                     if (ws.messageCount > 5) {
                         console.log('⚠️ Rate limit superato, messaggio scartato');
+                        // Mex sends must receive the same explicit ACK envelope as
+                        // every other mexSend rejection so the compose UI can
+                        // recover and the operator can retry.  This branch runs
+                        // before the action dispatcher, so it is the only response
+                        // for this message and the normal mexSend handler is never
+                        // reached.
+                        if (data.action === 'mexSend' &&
+                            ws.isAuthenticated &&
+                            ws.readyState === WebSocket.OPEN) {
+                            ws.send(JSON.stringify({
+                                action: 'mexSendAck',
+                                success: false,
+                                code: 'MEX_RATE_LIMITED'
+                            }));
+                        }
                         return;
                     }
                 } else {

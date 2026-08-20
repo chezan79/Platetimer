@@ -2708,7 +2708,10 @@ function handleMexSendAck(data){
     // [Step 6] After successful send, return to QM picker
     setTimeout(() => { mexStatus(''); mexDeptResetCompose(); }, 1500);
   } else {
-    mexStatus(_mt('dept.mexErrorSend'), 'err');
+    const message = data.code === 'MEX_RATE_LIMITED'
+      ? _mt('dept.mexRateLimited')
+      : _mt('dept.mexErrorSend');
+    mexStatus(message, 'err');
   }
   if(btn) btn.disabled = false;
 }
