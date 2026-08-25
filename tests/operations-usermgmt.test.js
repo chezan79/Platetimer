@@ -59,7 +59,16 @@ async function run() {
     const DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'opstest-um-'));
     const proc = spawn('node', ['server.js'], {
         cwd: path.join(__dirname, '..'),
-        env: { ...process.env, PORT: String(PORT), WS_SESSION_SECRET: SECRET, DATA_DIR, FIREBASE_ADMIN_SERVICE_ACCOUNT: '' },
+        env: {
+            ...process.env,
+            PORT: String(PORT),
+            WS_SESSION_SECRET: SECRET,
+            DATA_DIR,
+            FIREBASE_ADMIN_SERVICE_ACCOUNT: '',
+            // User-management tests must not send real assignment mail.
+            RESEND_API_KEY: '',
+            RESEND_API_BASE: ''
+        },
         stdio: ['ignore', 'pipe', 'pipe']
     });
     proc.stderr.on('data', () => {});

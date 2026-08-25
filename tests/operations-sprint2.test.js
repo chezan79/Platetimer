@@ -44,7 +44,9 @@ async function main() {
             ...process.env,
             PORT: String(PORT), WS_SESSION_SECRET: SECRET, DATA_DIR,
             FIREBASE_ADMIN_SERVICE_ACCOUNT: '',
-            SMTP_HOST: '', SMTP_USER: '', SMTP_PASS: ''
+            SMTP_HOST: '', SMTP_USER: '', SMTP_PASS: '',
+            // Keep task-management tests on the legacy fallback transport.
+            RESEND_API_KEY: '', RESEND_API_BASE: ''
         },
         stdio: ['ignore', 'pipe', 'pipe']
     });

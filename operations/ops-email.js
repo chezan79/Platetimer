@@ -41,9 +41,9 @@ function getTransporter() {
     return _transporter;
 }
 
-// ── Resend transport (invitation emails only) ────────────────────────────────
-// RESEND_API_KEY selects Resend for the invitation flow. Other email types
-// (task assignment, reminders, escalations, digest) keep SMTP/logging.
+// ── Resend transport (invitations and task assignments) ──────────────────────
+// RESEND_API_KEY selects Resend for invitations and task assignments. Reminder,
+// escalation, and digest messages keep the existing SMTP/logging transport.
 // RESEND_API_BASE is a TEST-ONLY override so tests can point to a local mock;
 // production always uses the real Resend API.
 const RESEND_API_BASE = () => process.env.RESEND_API_BASE || 'https://api.resend.com';
@@ -202,10 +202,20 @@ async function sendTaskAssignmentEmail({ to, toName, task, assignedByName, appUr
 ${btn(taskUrl, 'Apri i miei compiti')}`);
 
     try {
+        // Assignment notifications follow the established invitation transport
+        // when Resend is configured. All other Operations email types continue
+        // to use _send() and therefore retain the SMTP/logging fallback.
+        if (hasResend()) {
+            return await _sendViaResend({ to, subject, text, html });
+        }
         return await _send({ to, subject, text, html });
     } catch (e) {
         console.error('📧 [OPS-EMAIL] sendTaskAssignmentEmail unexpected error (non-fatal):', sanitizeError(e.message));
-        return { result: RESULT.FAILED, transport: TRANSPORT, reason: sanitizeError(e.message) };
+        return {
+            result: RESULT.FAILED,
+            transport: hasResend() ? 'resend' : TRANSPORT,
+            reason: sanitizeError(e.message)
+        };
     }
 }
 

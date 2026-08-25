@@ -6,7 +6,8 @@
 // cross-tenant rejection, role validation, duplicate handling, Resend failure
 // resilience (user persisted, PROVIDER_ERROR reported), single-use invite code,
 // INVITED→ACTIVE transition, already-active resend rejection, missing-config
-// reporting, and no change to non-invitation (Service/task) email behavior.
+// reporting, and no change to non-invitation reminder/escalation/digest email
+// behavior.
 //
 // Run: node tests/operations-invite-resend.test.js
 
@@ -207,17 +208,56 @@ async function main() {
         const resendActive = await api(dirA, 'POST', `/api/operations/users/${userId1}/resend-invite`);
         check('R10c. Resend for already-active user rejected (400)', resendActive.status === 400, resendActive.data);
 
-        // ── R11. Non-invitation emails do NOT go through Resend ──────────────
-        // Task assignment must keep the existing transport (logging here, since no SMTP).
+        // ── R11. Task assignments use the configured Resend transport ────────
+        // Assignment notifications share the verified sender with invitations.
         const nBeforeTask = captured.length;
         r = await api(dirA, 'POST', '/api/operations/tasks', {
             title: 'Task no resend', assigneeId: userId1
         });
-        check('R11. Task created; notification NOT routed through Resend',
-            r.status === 201 && captured.length === nBeforeTask,
+        check('R11. Task created; notification routed through Resend exactly once',
+            r.status === 201 && r.data.notificationResult === 'SENT' && captured.length === nBeforeTask + 1,
             { status: r.status, captured: captured.length - nBeforeTask });
-        check('R11b. Task notificationResult still uses legacy transport result',
-            r.data.notificationResult === 'FAILED' || r.data.notificationResult === 'SKIPPED', r.data.notificationResult);
+        const taskMail = captured[captured.length - 1];
+        check('R11b. Assignment sender uses the verified Operations address',
+            taskMail && taskMail.body.from === EXPECTED_FROM, taskMail && taskMail.body.from);
+        check('R11c. Assignment recipient uses the server-resolved assignee email',
+            taskMail && taskMail.body.to[0] === 'invitee1@example.com', taskMail && taskMail.body.to);
+
+        // Self-assignment must not call any provider.
+        const nBeforeSelfTask = captured.length;
+        r = await api(dirA, 'POST', '/api/operations/tasks', {
+            title: 'Self assigned with resend', assigneeId: dirAId
+        });
+        check('R11d. Self-assignment returns SKIPPED without a Resend request',
+            r.status === 201 && r.data.notificationResult === 'SKIPPED' && captured.length === nBeforeSelfTask,
+            { result: r.data.notificationResult, captured: captured.length - nBeforeSelfTask });
+
+        // A provider failure is non-fatal: the task is still persisted and fetchable.
+        mockMode = 'fail500';
+        r = await api(dirA, 'POST', '/api/operations/tasks', {
+            title: 'Task provider failure', assigneeId: userId1
+        });
+        const failedTaskId = r.data.task && r.data.task.id;
+        check('R11e. Resend failure returns FAILED while task creation succeeds',
+            r.status === 201 && r.data.notificationResult === 'FAILED' && failedTaskId,
+            r.data);
+        const failedTaskFetch = await api(dirA, 'GET', `/api/operations/tasks/${failedTaskId}`);
+        check('R11f. Task remains fetchable after assignment provider failure',
+            failedTaskFetch.status === 200 && failedTaskFetch.data.task && failedTaskFetch.data.task.id === failedTaskId,
+            failedTaskFetch.data);
+        mockMode = 'ok';
+
+        // Reassignment uses the same assignment transport and returns one request.
+        const reassignSource = await api(dirA, 'POST', '/api/operations/tasks', {
+            title: 'Task reassignment source', assigneeId: dirAId
+        });
+        const nBeforeReassign = captured.length;
+        r = await api(dirA, 'POST', `/api/operations/tasks/${reassignSource.data.task.id}/reassign`, {
+            assigneeId: userId1
+        });
+        check('R11g. Reassignment sends exactly one Resend request',
+            r.status === 200 && r.data.notificationResult === 'SENT' && captured.length === nBeforeReassign + 1,
+            { result: r.data.notificationResult, captured: captured.length - nBeforeReassign });
 
         // ── R12. Service unaffected: dept endpoints still respond normally ───
         const svc = await fetch(`${BASE}/api/voice-recipients`, { headers: { 'Authorization': `Bearer ${sign('uid-svc', 'resend-co-a')}` } });

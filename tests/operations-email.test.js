@@ -54,6 +54,9 @@ async function main() {
             SMTP_HOST: '',
             SMTP_USER: '',
             SMTP_PASS: '',
+            // Explicitly clear Resend so this suite exercises the fallback.
+            RESEND_API_KEY: '',
+            RESEND_API_BASE: '',
             // Set APP_BASE_URL to verify activation link construction
             APP_BASE_URL: 'https://test.platetimer.example'
         },
