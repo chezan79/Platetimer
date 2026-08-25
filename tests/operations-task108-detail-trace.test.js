@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 'use strict';
 
-// Task 108: trace the post-create Operations task-detail request chain.
+// Task 109: trace the authenticated browser-level Operations task request chain.
 //
-// This is intentionally an evidence-producing regression rather than a
-// production workaround. It records the exact method, URL, response, caller,
-// and persisted record for the create -> list -> detail flow.
+// The server-side flow remains an evidence-producing regression, while the
+// source assertions verify that the browser page records exact API requests,
+// detail failures, static assets/source maps, and preview WebSockets.
 //
 // Run: node tests/operations-task108-detail-trace.test.js
 
@@ -13,6 +13,7 @@ const { spawn } = require('child_process');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
+const vm = require('vm');
 
 const SECRET = 'test-task108-detail-trace-secret';
 const PORT = 5110;
@@ -70,6 +71,73 @@ function evidence(label, method, requestPath, caller, response) {
     }));
 }
 
+function createBrowserTraceHarness() {
+    const values = new Map();
+    const sessionStorage = {
+        getItem: key => values.has(key) ? values.get(key) : null,
+        setItem: (key, value) => values.set(key, value),
+        removeItem: key => values.delete(key)
+    };
+    class FakeWebSocket {
+        constructor(url) {
+            this.url = String(url);
+            this.listeners = {};
+        }
+        addEventListener(name, listener) {
+            (this.listeners[name] ||= []).push(listener);
+        }
+    }
+    class FakePerformanceObserver {
+        constructor(callback) { this.callback = callback; }
+        observe() {}
+    }
+    const location = {
+        href: 'https://preview.example.replit.dev/operations-tasks.html',
+        origin: 'https://preview.example.replit.dev'
+    };
+    const window = {
+        location,
+        sessionStorage,
+        WebSocket: FakeWebSocket,
+        PerformanceObserver: FakePerformanceObserver,
+        performance: {
+            getEntriesByType: () => [
+                {
+                    name: 'https://preview.example.replit.dev/css/operations.css',
+                    startTime: 1,
+                    initiatorType: 'link',
+                    duration: 12
+                },
+                {
+                    name: 'https://preview.example.replit.dev/js/operations-common.js.map',
+                    startTime: 2,
+                    initiatorType: 'script',
+                    duration: 3
+                }
+            ]
+        }
+    };
+    const context = {
+        window,
+        URL,
+        console: { info() {}, warn() {} },
+        alert() {},
+        WsAuth: {
+            getStoredToken: () => 'browser-trace-token',
+            clearToken() {}
+        },
+        fetch: async requestUrl => ({
+            status: 404,
+            url: new URL(requestUrl, location.href).href,
+            text: async () => '{"success":false,"error":"Task not found"}'
+        })
+    };
+    vm.createContext(context);
+    const commonSource = fs.readFileSync(path.join(ROOT, 'public', 'js', 'operations-common.js'), 'utf8');
+    vm.runInContext(`${commonSource}\nglobalThis.__opsCommonForTraceTest = OpsCommon;`, context);
+    return context;
+}
+
 async function startServer() {
     const server = spawn('node', ['server.js'], {
         cwd: ROOT,
@@ -110,7 +178,7 @@ async function startServer() {
 }
 
 async function run() {
-    console.log('Starting isolated server (Task 108 detail trace)…');
+    console.log('Starting isolated server (Task 109 detail trace)…');
     const server = await startServer();
     const companyId = `task108-co-${crypto.randomBytes(3).toString('hex')}`;
     const uid = `task108-director-${crypto.randomBytes(3).toString('hex')}`;
@@ -131,7 +199,7 @@ async function run() {
 
         const createPath = '/api/operations/tasks';
         const create = await api(token, 'POST', createPath, {
-            title: 'Task 108 detail trace',
+            title: 'Task 109 detail trace',
             description: 'Authorized creator detail regression',
             assigneeId: actor.id,
             priority: 'HIGH',
@@ -211,16 +279,47 @@ async function run() {
         const pageSource = fs.readFileSync(path.join(ROOT, 'public', 'operations-tasks.html'), 'utf8');
         check('doCreate passes the create response ID to openDetail',
             pageSource.includes('const taskId  = r.task.id;') &&
-            pageSource.includes('setTimeout(() => openDetail(taskId), 500);'));
+            pageSource.includes('setTimeout(() => openDetail(taskId, {'));
         check('loadTasks constructs the exact default list URL',
-            pageSource.includes("OpsCommon.api('/api/operations/tasks?' + params)"));
+            pageSource.includes("OpsCommon.api('/api/operations/tasks?' + params,"));
         check('openDetail calls the expected task-detail route',
-            pageSource.includes("OpsCommon.api('/api/operations/tasks/' + taskId)"));
+            pageSource.includes("OpsCommon.api('/api/operations/tasks/' + taskId,"));
+
+        const browser = createBrowserTraceHarness();
+        const initialTrace = browser.window.OpsRequestTrace.get();
+        check('Browser trace labels static assets and source maps separately',
+            initialTrace.some(event => event.category === 'STATIC_ASSET') &&
+            initialTrace.some(event => event.category === 'SOURCE_MAP'));
+        browser.window.OpsRequestTrace.clear();
+        const missingDetail = await browser.__opsCommonForTraceTest.api(
+            '/api/operations/tasks/missing-task',
+            { traceAction: 'operations-tasks.html:doCreate() -> setTimeout() -> openDetail(taskId)' }
+        );
+        const detail404 = browser.window.OpsRequestTrace.get()
+            .find(event => event.category === 'TASK_DETAIL_404');
+        check('Task-detail 404 preserves its response for the caller',
+            missingDetail && missingDetail.success === false);
+        check('Task-detail 404 trace includes full URL, body, and page action',
+            detail404 &&
+            detail404.url === 'https://preview.example.replit.dev/api/operations/tasks/missing-task' &&
+            detail404.responseBody === '{"success":false,"error":"Task not found"}' &&
+            detail404.caller === 'operations-tasks.html:doCreate() -> setTimeout() -> openDetail(taskId)');
+        new browser.window.WebSocket('wss://preview.example.replit.dev/ws');
+        check('Browser trace labels preview WebSocket requests separately',
+            browser.window.OpsRequestTrace.get().some(event =>
+                event.category === 'PREVIEW_WEBSOCKET' &&
+                event.url === 'wss://preview.example.replit.dev/ws' &&
+                event.event === 'connect'
+            ));
+        check('Create and list calls identify their initiating page actions',
+            pageSource.includes("traceAction: 'operations-tasks.html:doCreate()'") &&
+            pageSource.includes("loadTasks('operations-tasks.html:doCreate() -> loadTasks()')") &&
+            pageSource.includes("operations-tasks.html:doCreate() -> setTimeout() -> openDetail(taskId)"));
     } finally {
         server.kill();
     }
 
-    console.log(`\nTask 108 detail trace: ${passed} passed, ${failed} failed.`);
+    console.log(`\nTask 109 detail trace: ${passed} passed, ${failed} failed.`);
     if (failed > 0) process.exitCode = 1;
 }
 

@@ -154,12 +154,17 @@ async function load() {
     document.getElementById('flt-sort').value = 'dueDate'; // overdue first
   }
 
-  await loadTasks();
+  await loadTasks('operations-tasks.html:load() -> loadTasks()');
 
   // Auto-open detail panel when a ?taskId= query param is present.
   // Uses silent mode so invalid / cross-company IDs are silently ignored.
   const taskIdParam = new URLSearchParams(location.search).get('taskId');
-  if (taskIdParam) { openDetail(taskIdParam, { silent: true }); }
+  if (taskIdParam) {
+    openDetail(taskIdParam, {
+      silent: true,
+      traceAction: 'operations-tasks.html:load() -> query taskId -> openDetail(taskId)'
+    });
+  }
 }
 
 // ── Filter helpers ──
@@ -170,7 +175,7 @@ function scheduleFilter() {
 
 function applyFilters() {
   clearTimeout(filterTimer);
-  loadTasks();
+  loadTasks('operations-tasks.html:applyFilters() -> loadTasks()');
 }
 
 // ── Today filter ──────────────────────────────────────────────────────────────
@@ -206,7 +211,7 @@ function setStatusTab(btn) {
   applyFilters();
 }
 
-async function loadTasks() {
+async function loadTasks(traceAction) {
   const params = new URLSearchParams();
   const status = document.getElementById('flt-status').value;
   const priority = document.getElementById('flt-priority').value;
@@ -219,7 +224,8 @@ async function loadTasks() {
   if (my)       params.set('my', '1');
   if (q)        params.set('q', q);
 
-  const data = await OpsCommon.api('/api/operations/tasks?' + params);
+  const data = await OpsCommon.api('/api/operations/tasks?' + params,
+    traceAction ? { traceAction } : {});
   if (!data || !data.success) { OpsCommon.showError(data && data.error); return; }
   allTasks = data.tasks;
   allUsers = data.users;
@@ -452,7 +458,9 @@ function renderList() {
 // opts.silent — if true, silently ignore non-200 responses (used for URL-param auto-open
 // so invalid / cross-company IDs do not surface error banners to the user).
 async function openDetail(taskId, opts = {}) {
-  const data = await OpsCommon.api('/api/operations/tasks/' + taskId);
+  const traceAction = opts.traceAction ||
+    'operations-tasks.html:task card click -> openDetail(taskId)';
+  const data = await OpsCommon.api('/api/operations/tasks/' + taskId, { traceAction });
   if (!data || !data.success) {
     if (!opts.silent) OpsCommon.showError(data && data.error);
     return; // leave list visible; panel stays closed
@@ -1017,7 +1025,11 @@ async function doCreate() {
   };
   if (!body.title) { panelMsg(t('ops.task.titleRequired')); btn.disabled = false; return; }
 
-  const r = await OpsCommon.api('/api/operations/tasks', { method: 'POST', body: JSON.stringify(body) });
+  const r = await OpsCommon.api('/api/operations/tasks', {
+    method: 'POST',
+    body: JSON.stringify(body),
+    traceAction: 'operations-tasks.html:doCreate()'
+  });
   btn.disabled = false;
   if (!r || !r.success) { panelMsg((r && r.error) || t('common.error')); return; }
 
@@ -1029,13 +1041,17 @@ async function doCreate() {
     if (!ur || !ur.success) errors.push(esc(att.file.name) + ': ' + ((ur && ur.error) || t('common.error')));
   }
 
-  await loadTasks();
+  await loadTasks('operations-tasks.html:doCreate() -> loadTasks()');
   if (errors.length) {
     panelMsg(t('ops.task.createdMsg') + ' ' + errors.join('; '), 'error');
-    setTimeout(() => openDetail(taskId), 1200);
+    setTimeout(() => openDetail(taskId, {
+      traceAction: 'operations-tasks.html:doCreate() -> setTimeout() -> openDetail(taskId)'
+    }), 1200);
   } else {
     panelMsg(t('ops.task.createdMsg'), 'success');
-    setTimeout(() => openDetail(taskId), 500);
+    setTimeout(() => openDetail(taskId, {
+      traceAction: 'operations-tasks.html:doCreate() -> setTimeout() -> openDetail(taskId)'
+    }), 500);
   }
 }
 

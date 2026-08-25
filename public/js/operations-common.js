@@ -6,6 +6,131 @@
 // this file via <script src="js/i18n.js">). Falls back to Italian constants.
 
 const OpsCommon = (() => {
+    // Browser-level preview diagnostics. The trace is session-scoped and never
+    // includes Authorization headers or session tokens. It remains available
+    // after navigation so the create -> list -> detail chain can be inspected.
+    const TRACE_STORAGE_KEY = 'ops_preview_request_trace';
+    const TRACE_MAX_ENTRIES = 300;
+
+    function readRequestTrace() {
+        try {
+            const raw = window.sessionStorage.getItem(TRACE_STORAGE_KEY);
+            const parsed = raw ? JSON.parse(raw) : [];
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (_) {
+            return [];
+        }
+    }
+
+    function recordRequestTrace(entry) {
+        const event = { at: new Date().toISOString(), ...entry };
+        try {
+            const entries = readRequestTrace();
+            entries.push(event);
+            window.sessionStorage.setItem(
+                TRACE_STORAGE_KEY,
+                JSON.stringify(entries.slice(-TRACE_MAX_ENTRIES))
+            );
+        } catch (_) {
+            // Diagnostics must never interfere with the authenticated page.
+        }
+        try {
+            const prefix = `[OPS-TRACE][${event.category || 'EVENT'}]`;
+            if (event.category === 'TASK_DETAIL_404') console.warn(prefix, event);
+            else console.info(prefix, event);
+        } catch (_) { /* embedded previews may not expose a console */ }
+        return event;
+    }
+
+    function absoluteTraceUrl(url) {
+        try { return new URL(url, window.location.href).href; }
+        catch (_) { return String(url); }
+    }
+
+    function isTaskDetailUrl(url) {
+        try {
+            const pathname = new URL(url, window.location.href).pathname;
+            return /^\/api\/operations\/tasks\/[^/]+$/.test(pathname);
+        } catch (_) {
+            return false;
+        }
+    }
+
+    function recordStaticResource(resource) {
+        if (!resource || !resource.name) return;
+        const url = absoluteTraceUrl(resource.name);
+        let parsed;
+        try { parsed = new URL(url); } catch (_) { return; }
+        if (parsed.origin === window.location.origin &&
+            parsed.pathname.startsWith('/api/')) return;
+
+        const isSourceMap = /\.map(?:$|\?)/i.test(parsed.pathname + parsed.search);
+        recordRequestTrace({
+            category: isSourceMap ? 'SOURCE_MAP' : 'STATIC_ASSET',
+            method: 'GET',
+            url,
+            initiator: resource.initiatorType || 'resource',
+            durationMs: resource.duration
+        });
+    }
+
+    function installStaticResourceTrace() {
+        const seen = new Set();
+        const observe = resource => {
+            const key = `${resource.name}|${resource.startTime}|${resource.initiatorType}`;
+            if (seen.has(key)) return;
+            seen.add(key);
+            recordStaticResource(resource);
+        };
+        try {
+            (window.performance.getEntriesByType('resource') || []).forEach(observe);
+            if (window.PerformanceObserver) {
+                const observer = new window.PerformanceObserver(list => {
+                    list.getEntries().forEach(observe);
+                });
+                observer.observe({ type: 'resource', buffered: true });
+            }
+        } catch (_) { /* resource timing is optional in embedded previews */ }
+    }
+
+    function installPreviewWebSocketTrace() {
+        const NativeWebSocket = window.WebSocket;
+        if (!NativeWebSocket || NativeWebSocket.__opsTraceWrapped) return;
+
+        class TracedWebSocket extends NativeWebSocket {
+            constructor(url, protocols) {
+                if (protocols === undefined) super(url);
+                else super(url, protocols);
+                const base = {
+                    category: 'PREVIEW_WEBSOCKET',
+                    method: 'GET',
+                    url: absoluteTraceUrl(url),
+                    caller: 'operations-realtime.js:connect()'
+                };
+                recordRequestTrace({ ...base, event: 'connect' });
+                this.addEventListener('open', () => recordRequestTrace({ ...base, event: 'open' }));
+                this.addEventListener('close', event => recordRequestTrace({
+                    ...base,
+                    event: 'close',
+                    closeCode: event && event.code
+                }));
+                this.addEventListener('error', () => recordRequestTrace({ ...base, event: 'error' }));
+            }
+        }
+        TracedWebSocket.__opsTraceWrapped = true;
+        window.WebSocket = TracedWebSocket;
+    }
+
+    installStaticResourceTrace();
+    installPreviewWebSocketTrace();
+
+    window.OpsRequestTrace = {
+        get: readRequestTrace,
+        clear() {
+            try { window.sessionStorage.removeItem(TRACE_STORAGE_KEY); } catch (_) {}
+        }
+    };
+
     // Legacy constant maps — kept for backward compatibility and as Italian fallbacks.
     const ROLE_LABELS = {
         DIRECTOR: 'Direttore',
@@ -89,19 +214,61 @@ const OpsCommon = (() => {
     async function api(path, opts = {}) {
         const t = token();
         if (!t) return null;
+        const requestOpts = { ...opts };
+        const traceAction = requestOpts.traceAction || 'OpsCommon.api()';
+        delete requestOpts.traceAction;
+        const requestUrl = absoluteTraceUrl(path);
+        const requestMethod = String(requestOpts.method || 'GET').toUpperCase();
+        const requestBody = requestOpts.body === undefined
+            ? undefined
+            : String(requestOpts.body);
         try {
             const res = await fetch(path, {
-                ...opts,
+                ...requestOpts,
                 headers: { 'Authorization': `Bearer ${t}`, 'Content-Type': 'application/json', ...(opts.headers || {}) }
             });
+            const responseBody = await res.text();
+            let data;
+            let parseError = null;
+            try { data = responseBody ? JSON.parse(responseBody) : {}; }
+            catch (error) { parseError = error; }
+            const isTaskDetail404 = res.status === 404 && isTaskDetailUrl(requestUrl);
+            recordRequestTrace({
+                category: isTaskDetail404 ? 'TASK_DETAIL_404' : 'OPERATIONS_API',
+                method: requestMethod,
+                url: requestUrl,
+                responseUrl: res.url || requestUrl,
+                responseStatus: res.status,
+                responseBody,
+                requestBody,
+                action: traceAction,
+                caller: traceAction
+            });
+            if (parseError) {
+                return {
+                    success: false,
+                    error: _t('ops.ui.networkError', 'Errore di rete: ') + parseError.message
+                };
+            }
             if (res.status === 401) {
                 WsAuth.clearToken();
                 alert(_t('ops.ui.sessionExpired', 'Sessione scaduta. Effettua nuovamente il login.'));
                 window.location.href = 'index.html';
                 return null;
             }
-            return await res.json();
+            return data;
         } catch (e) {
+            recordRequestTrace({
+                category: 'OPERATIONS_API',
+                method: requestMethod,
+                url: requestUrl,
+                responseStatus: null,
+                responseBody: '',
+                requestBody,
+                action: traceAction,
+                caller: traceAction,
+                error: e.message
+            });
             return { success: false, error: _t('ops.ui.networkError', 'Errore di rete: ') + e.message };
         }
     }
@@ -111,7 +278,9 @@ const OpsCommon = (() => {
         const el = document.getElementById('hdr-company');
         if (el) el.textContent = company;
         const name = localStorage.getItem('opsDisplayName') || '';
-        const data = await api('/api/operations/me' + (name ? `?name=${encodeURIComponent(name)}` : ''));
+        const data = await api('/api/operations/me' + (name ? `?name=${encodeURIComponent(name)}` : ''), {
+            traceAction: 'operations-tasks.html:load() -> OpsCommon.loadMe()'
+        });
         if (!data) return null;
         if (!data.success) {
             showError(data.error || _t('ops.ui.accessDenied', 'Accesso a Operations non autorizzato.'));
@@ -440,5 +609,9 @@ const OpsCommon = (() => {
         renderNewSinceLastVisit,
         langParam, intelligenceUrl,
         briefFmt,
+        getRequestTrace: readRequestTrace,
+        clearRequestTrace() {
+            try { window.sessionStorage.removeItem(TRACE_STORAGE_KEY); } catch (_) {}
+        },
     };
 })();
