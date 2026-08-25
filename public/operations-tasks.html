@@ -38,7 +38,7 @@
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       <span id="pdf-msg" style="font-size:13px;color:var(--muted)"></span>
       <button id="export-pdf-btn" class="btn btn-secondary" onclick="exportToPDF()" data-i18n="ops.pdf.exportBtn">📄 Esporta PDF</button>
-      <button class="btn btn-primary" id="new-task-btn" onclick="openCreatePanel()" data-i18n="ops.task.new">+ Nuovo compito</button>
+      <button class="btn btn-primary" id="new-task-btn" data-i18n="ops.task.new">+ Nuovo compito</button>
     </div>
   </div>
 
@@ -1192,6 +1192,11 @@ async function doSetEscalation(taskId) {
   if (r && r.success) { panelMsg(t('ops.task.escalationSaved'), 'success'); await loadTasks(); setTimeout(() => openDetail(taskId), 500); }
   else panelMsg((r && r.error) || t('common.error'));
 }
+
+// The create control intentionally uses a direct listener rather than an inline
+// handler, keeping this page's panel entry point inside the script's scope.
+const newTaskBtn = document.getElementById('new-task-btn');
+if (newTaskBtn) newTaskBtn.addEventListener('click', openCreatePanel);
 
 // ── Init: load translations then boot ──
 I18n.init({ selector: '#i18n-sel' }).then(() => load());
