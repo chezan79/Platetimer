@@ -14,8 +14,27 @@ function check(label, condition, detail) {
 const wait = () => new Promise(resolve => setTimeout(resolve, 0));
 
 const page = fs.readFileSync(path.join(__dirname, '..', 'public', 'operations-notes.html'), 'utf8');
+const common = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'operations-common.js'), 'utf8');
+const tasksPage = fs.readFileSync(path.join(__dirname, '..', 'public', 'operations-tasks.html'), 'utf8');
 const script = [...page.matchAll(/<script>([\s\S]*?)<\/script>/g)]
     .map(match => match[1]).find(code => code.includes('async function toggleVoice'));
+
+check('Manual note requests use the protected Operations Notes API',
+    page.includes("OpsCommon.api('/api/operations/notes'") &&
+    page.includes("const endpoint = _voiceCaptured ? '/api/operations/notes/voice' : '/api/operations/notes';"));
+check('Notes list, dismiss, and task handoff use canonical absolute API paths',
+    page.includes("OpsCommon.api('/api/operations/notes/'") &&
+    tasksPage.includes("OpsCommon.api('/api/operations/notes/'"));
+check('Notes count uses the canonical absolute API path',
+    common.includes("api('/api/operations/notes/count')"));
+check('Voice transcription uses the existing speech endpoint',
+    page.includes("fetch('/api/speech-to-text'") &&
+    !page.includes("fetch('voice'") && !page.includes('fetch("voice"'));
+check('Quick Notes contains no bare notes or voice request targets',
+    !/(?:fetch|api)\(\s*['"`](?:notes|voice)(?:['"`]|\/)/.test(page));
+check('Voice-note persistence is text-only and separate from transcription',
+    page.includes("body: JSON.stringify({ text })") &&
+    !page.includes("OpsCommon.api('/api/speech-to-text'"));
 
 const dom = new JSDOM(`<!doctype html><html><body>
   <div id="capture-modal"><textarea id="note-text"></textarea></div>
@@ -29,7 +48,11 @@ const { window } = dom;
 window.I18n = { t: key => key, getLanguage: () => 'en', init: () => new Promise(() => {}) };
 window.OpsCommon = {
     escHtml: value => String(value),
-    api: async () => ({ success: true, count: 0, notes: [] }),
+    apiCalls: [],
+    api: async (path, options = {}) => {
+        window.OpsCommon.apiCalls.push({ path, options });
+        return { success: true, count: 0, notes: [] };
+    },
     fmtDatetime: () => '',
     showError() {},
     loadMe: async () => null,
@@ -105,6 +128,60 @@ function streamWithStopCounter() {
     check('Canceled transcription never appends its transcript', window.document.getElementById('note-text').value === '');
     check('Cancel during transcription stops recorder tracks', processingStream.track.stopped);
     check('Recorder was started before the processing-cancel check', recorder && recorder.state === 'inactive');
+
+    // Manual capture must use the protected Notes API, not a page-relative URL.
+    window.openCapture();
+    window.document.getElementById('note-text').value = 'Manual route contract';
+    await window.saveNote();
+    const manualCall = window.OpsCommon.apiCalls.find(call => call.options.method === 'POST' &&
+        call.path === '/api/operations/notes');
+    check('Manual save calls POST /api/operations/notes', !!manualCall);
+    check('Manual save sends only note text', !!manualCall &&
+        JSON.parse(manualCall.options.body).text === 'Manual route contract' &&
+        !('audio' in JSON.parse(manualCall.options.body)));
+
+    // A completed recording must transcribe at the speech endpoint, then save
+    // only the resulting text through the separate VOICE note persistence API.
+    window.openCapture();
+    const voiceStart = window.toggleVoice();
+    const voiceStream = streamWithStopCounter();
+    getUserMediaResolve(voiceStream);
+    await voiceStart;
+    window.fetch = (url, options) => {
+        window.OpsCommon.lastSpeechCall = { url, options };
+        speechSignal = options.signal;
+        speechResolve = null;
+        return Promise.resolve({
+            ok: true,
+            json: async () => ({ transcription: 'Transcript route contract' })
+        });
+    };
+    window.toggleVoice();
+    await wait();
+    await wait();
+    const speechCall = window.OpsCommon.lastSpeechCall;
+    // The fetch shim records the request independently from OpsCommon.api,
+    // whose responsibility is only protected note persistence.
+    check('Voice recording posts to POST /api/speech-to-text', !!speechCall &&
+        speechCall.url === '/api/speech-to-text' && speechCall.options.method === 'POST');
+    check('Speech request keeps bearer auth and JSON audio payload', !!speechCall &&
+        speechCall.options.headers.Authorization === 'Bearer test-token' &&
+        typeof JSON.parse(speechCall.options.body).audioData === 'string' &&
+        JSON.parse(speechCall.options.body).config.encoding === 'WEBM_OPUS');
+    check('Speech request is not sent to the VOICE note persistence route',
+        !speechCall || speechCall.url !== '/api/operations/notes/voice');
+    check('Transcription is inserted before VOICE note save',
+        window.document.getElementById('note-text').value === 'Transcript route contract');
+    await window.saveNote();
+    const voiceCall = window.OpsCommon.apiCalls.find(call => call.options.method === 'POST' &&
+        call.path === '/api/operations/notes/voice');
+    check('Transcript save calls POST /api/operations/notes/voice', !!voiceCall);
+    check('VOICE persistence sends transcript text without audio', !!voiceCall &&
+        JSON.parse(voiceCall.options.body).text === 'Transcript route contract' &&
+        !('audioData' in JSON.parse(voiceCall.options.body)) &&
+        !('audio' in JSON.parse(voiceCall.options.body)));
+    check('No Quick Notes request uses a bare notes or voice path',
+        window.OpsCommon.apiCalls.every(call => !/^(?:notes|voice)(?:\/|$)/.test(call.path)));
 
     console.log(`\nOperations Quick Note capture: ${passed} passed, ${failed} failed.`);
     process.exitCode = failed ? 1 : 0;
