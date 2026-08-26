@@ -78,6 +78,13 @@ async function load() {
   assignableUsers = (aData && aData.assignees) || [];
 
   await loadTemplates();
+
+  // The Director dashboard links here with ?action=create. Wait until the
+  // Director gate and initial template data have completed before opening the
+  // panel so its assignee list is ready.
+  if (new URLSearchParams(location.search).get('action') === 'create') {
+    openCreatePanel();
+  }
 }
 
 async function loadTemplates() {
@@ -298,7 +305,10 @@ function collectForm() {
 async function doCreate() {
   const btn = document.getElementById('tpl-save-btn');
   btn.disabled = true;
-  const data = await OpsCommon.api('/api/operations/templates', 'POST', collectForm());
+  const data = await OpsCommon.api('/api/operations/templates', {
+    method: 'POST',
+    body: JSON.stringify(collectForm()),
+  });
   btn.disabled = false;
   if (!data || !data.success) { OpsCommon.showPanelMsg(data && data.error, true); return; }
   closePanel();
@@ -308,7 +318,10 @@ async function doCreate() {
 async function doEdit(tplId) {
   const btn = document.getElementById('tpl-save-btn');
   btn.disabled = true;
-  const data = await OpsCommon.api('/api/operations/templates/' + tplId, 'PATCH', collectForm());
+  const data = await OpsCommon.api('/api/operations/templates/' + tplId, {
+    method: 'PATCH',
+    body: JSON.stringify(collectForm()),
+  });
   btn.disabled = false;
   if (!data || !data.success) { OpsCommon.showPanelMsg(data && data.error, true); return; }
   closePanel();
@@ -316,7 +329,9 @@ async function doEdit(tplId) {
 }
 
 async function forceGenerate(tplId) {
-  const data = await OpsCommon.api('/api/operations/templates/' + tplId + '/generate-now', 'POST', {});
+  const data = await OpsCommon.api('/api/operations/templates/' + tplId + '/generate-now', {
+    method: 'POST',
+  });
   if (!data || !data.success) { alert(data && data.error); return; }
   alert(`Generati ${data.generated} compiti.`);
   await loadTemplates();
@@ -324,7 +339,9 @@ async function forceGenerate(tplId) {
 
 async function deactivate(tplId) {
   if (!confirm('Disattivare questo template? I compiti già generati rimarranno invariati.')) return;
-  const data = await OpsCommon.api('/api/operations/templates/' + tplId, 'DELETE', {});
+  const data = await OpsCommon.api('/api/operations/templates/' + tplId, {
+    method: 'DELETE',
+  });
   if (!data || !data.success) { alert(data && data.error); return; }
   closePanel();
   await loadTemplates();
