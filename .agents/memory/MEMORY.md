@@ -48,3 +48,4 @@
 - [Mex Step 8 Close/Resolve](mex-step8-close.md) — createAndSend needs .catch(()=>{}) on queue chain; rendering test window.I18n + _scriptCountdowns patterns; 39+36 tests on port 4452.
 - [PTT cleanup (Step 10)](ptt-cleanup.md) — ptt-voice.js deleted; 7 WS handlers removed (joinVoice/offer/answer/ice-candidate/leaveVoice/talkingStart/talkingStop); rate-limit exemption removed; 2 i18n keys removed; 2 test sections updated with removal explanation.
 - [Operations email test isolation](ops-email-test-isolation.md) — spawned test servers inherit workspace providers unless each fallback suite explicitly clears them.
+- [Operations Quick Notes](ops-quick-notes.md) — note-to-task conversion is a cross-store commit; capture cancellation must invalidate both pending permission and transcription.

@@ -147,6 +147,7 @@ const OpsCommon = (() => {
 
     const HISTORY_LABELS = {
         TASK_CREATED:    '📝 Compito creato',
+        NOTE_CONVERTED:  '📝 Nota rapida convertita in compito',
         TASK_STARTED:    '▶ Avviato',
         TASK_COMPLETED:  '✅ Completato',
         PROGRESS_CHANGED:'📊 Progresso aggiornato',
@@ -599,6 +600,17 @@ const OpsCommon = (() => {
         return _t(key).replace('{n}', span);
     }
 
+    // Personal Quick Notes are intentionally polled only on normal dashboard
+    // loads. They do not participate in Operations' shared real-time stream.
+    async function refreshNotesCount() {
+        const result = await api('/api/operations/notes/count');
+        if (!result || !result.success) return null;
+        document.querySelectorAll('[data-ops-notes-count]').forEach(function (el) {
+            el.textContent = String(result.count || 0);
+        });
+        return result.count || 0;
+    }
+
     return {
         api, loadMe, showError, escHtml,
         fmtDue, fmtDatetime, fmtDateShort,
@@ -608,7 +620,7 @@ const OpsCommon = (() => {
         nextTask, isToday, isCompletedToday, greeting, taskCard, renderSection,
         renderNewSinceLastVisit,
         langParam, intelligenceUrl,
-        briefFmt,
+        briefFmt, refreshNotesCount,
         getRequestTrace: readRequestTrace,
         clearRequestTrace() {
             try { window.sessionStorage.removeItem(TRACE_STORAGE_KEY); } catch (_) {}

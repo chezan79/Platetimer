@@ -41,6 +41,9 @@ check('Create control has no stale inline openCreatePanel handler',
     !!buttonTag && !/\bonclick\s*=\s*"[^"]*openCreatePanel\s*\(/.test(buttonTag[0]));
 check('Page registers a direct click listener for the Create control',
     page.includes("newTaskBtn.addEventListener('click', openCreatePanel)"));
+check('Quick Note handoff sends only an opaque source note ID',
+    page.includes('body.sourceNoteId = _createSourceNoteId') &&
+    !/sourceNoteText\s*[:=]/.test(page));
 
 const dom = new JSDOM(`<!doctype html><html><body>
   <button id="new-task-btn">Create</button>
@@ -77,6 +80,15 @@ try {
     check('Clicking Create opens the side panel', panel.classList.contains('open'));
     check('Clicking Create activates the panel overlay', overlay.classList.contains('active'));
     check('Clicking Create renders the task title field', !!title);
+
+    const note = { id: 'opsn-client-test', text: 'Prepare pastry station\nBefore lunch' };
+    window.openCreatePanel(note);
+    const handoffTitle = window.document.getElementById('c-title');
+    const handoffDescription = window.document.getElementById('c-desc');
+    check('Quick Note handoff pre-fills the task title', handoffTitle.value === 'Prepare pastry station Before lunch');
+    check('Quick Note handoff copies the note text into the task description', handoffDescription.value === note.text);
+    handoffDescription.value = 'Edited task draft';
+    check('Editing a task draft does not mutate the source note', note.text === 'Prepare pastry station\nBefore lunch');
 } catch (error) {
     check('Create-panel script evaluates and click handler runs', false, error.stack || error.message);
 }

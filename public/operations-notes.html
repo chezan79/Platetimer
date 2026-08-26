@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Operations — Note — PlateTimer</title>
+<link rel="stylesheet" href="css/operations.css">
+<link rel="stylesheet" href="css/operations-redesign.css">
+<script src="js/i18n.js"></script>
+</head>
+<body class="operations-shell">
+<header class="hdr">
+  <a class="ops-brand" href="operations.html">
+    <span class="ob-pt">PLATETIMER</span><span class="ob-sep"> / </span><span class="ob-ops">OPERATIONS</span>
+  </a>
+  <nav class="ops-nav">
+    <a class="ops-nav-item" href="operations.html" data-i18n="ops.nav.dashboard">Dashboard</a>
+    <a class="ops-nav-item" href="operations-tasks.html" data-i18n="ops.nav.tasks">Compiti</a>
+    <span class="ops-nav-item active"><span data-i18n="ops.notes.link">Note</span> <span class="ops-notes-count" data-ops-notes-count>0</span></span>
+    <a class="ops-nav-item" href="operations-calendar.html" data-i18n="ops.cal.navLink">📅 Calendario</a>
+  </nav>
+  <div class="ops-hdr-util">
+    <span id="hdr-company" class="hdr-company"></span>
+    <span id="i18n-sel"></span>
+    <a class="hdr-btn" href="home.html" data-i18n="common.home">Home</a>
+    <button class="hdr-btn danger" onclick="OpsCommon.logout()" data-i18n="common.logout">Esci</button>
+  </div>
+</header>
+
+<main class="main">
+  <div class="pg-heading" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+    <div>
+      <h1 class="pg-title" data-i18n="ops.notes.heading">Le mie note rapide</h1>
+      <p class="pg-sub"><span id="me-name"></span> · <span id="me-role" class="role-badge"></span></p>
+    </div>
+    <div class="notes-heading-actions">
+      <button class="btn btn-primary" onclick="openCapture()" data-i18n="ops.notes.new">📝 Nuova nota</button>
+    </div>
+  </div>
+  <div id="ops-error" class="msg msg-error" style="display:none"></div>
+  <div id="notes-empty" class="note-empty" style="display:none">
+    <div style="font-size:28px;margin-bottom:8px">📝</div>
+    <div style="font-weight:800" data-i18n="ops.notes.emptyTitle">Nessuna nota in sospeso</div>
+    <p style="margin:6px 0 0;font-size:13px" data-i18n="ops.notes.emptyBody">Cattura un pensiero e trasformalo in un compito quando sei pronto.</p>
+  </div>
+  <div id="notes-list" class="notes-inbox"></div>
+</main>
+
+<div id="capture-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="capture-title">
+  <div class="modal-box notes-capture-modal">
+    <h2 id="capture-title" class="modal-title" data-i18n="ops.notes.captureTitle">Cattura una nota</h2>
+    <p class="modal-sub" data-i18n="ops.notes.captureHint">Scrivi subito il pensiero. Potrai creare un compito in seguito.</p>
+    <textarea id="note-text" class="form-textarea notes-capture-text" maxlength="2000" data-i18n-placeholder="ops.notes.placeholder" placeholder="Scrivi una nota…"></textarea>
+    <div class="voice-capture-row">
+      <button id="voice-btn" type="button" class="btn btn-secondary" onclick="toggleVoice()"><span id="voice-btn-label" data-i18n="ops.notes.record">🎙 Registra voce</span></button>
+      <span class="voice-capture-note" data-i18n="ops.notes.voiceOptional">Facoltativo: l'audio non viene conservato.</span>
+    </div>
+    <div id="capture-state" class="notes-capture-state" aria-live="polite"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" type="button" onclick="closeCapture()" data-i18n="common.cancel">Annulla</button>
+      <button id="save-note-btn" class="btn btn-primary" type="button" onclick="saveNote()" data-i18n="ops.notes.save">Salva nota</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/ws-auth.js"></script>
+<script src="js/operations-common.js"></script>
+<script>
+const t = (key) => (typeof I18n !== 'undefined' && I18n.t) ? I18n.t(key) : key;
+const esc = OpsCommon.escHtml;
+let _recorder = null, _stream = null, _chunks = [], _voiceCaptured = false;
+let _captureGeneration = 0, _processingController = null;
+
+function setCaptureState(key, kind) {
+  const el = document.getElementById('capture-state');
+  el.textContent = key ? t(key) : '';
+  el.className = 'notes-capture-state' + (kind ? ' ' + kind : '');
+}
+
+function stopTracks() {
+  if (_stream) _stream.getTracks().forEach(track => track.stop());
+  _stream = null;
+}
+
+function resetCapture() {
+  _voiceCaptured = false;
+  _chunks = [];
+  _recorder = null;
+  stopTracks();
+  const text = document.getElementById('note-text');
+  if (text) text.value = '';
+  document.getElementById('voice-btn').disabled = false;
+  document.getElementById('voice-btn-label').textContent = t('ops.notes.record');
+  setCaptureState('');
+}
+
+function openCapture() {
+  resetCapture();
+  document.getElementById('capture-modal').classList.add('open');
+  setTimeout(() => document.getElementById('note-text').focus(), 0);
+}
+
+function closeCapture() {
+  // A recorder may emit its final data/stop events after this modal closes.
+  // Mark that specific recorder so those late events are discarded instead of
+  // sending a canceled recording for transcription.
+  _captureGeneration++;
+  if (_processingController) _processingController.abort();
+  _processingController = null;
+  if (_recorder) _recorder._quickNoteCancelled = true;
+  if (_recorder && _recorder.state !== 'inactive') _recorder.stop();
+  stopTracks();
+  document.getElementById('capture-modal').classList.remove('open');
+  resetCapture();
+}
+
+function recordingMimeType() {
+  if (!window.MediaRecorder || !MediaRecorder.isTypeSupported) return '';
+  return ['audio/webm;codecs=opus', 'audio/ogg;codecs=opus', 'audio/webm']
+    .find(type => MediaRecorder.isTypeSupported(type)) || '';
+}
+
+function activeSpeechLocale() {
+  const lang = typeof I18n !== 'undefined' && I18n.getLanguage ? I18n.getLanguage() : 'it';
+  return lang === 'fr' ? 'fr-FR' : lang === 'en' ? 'en-GB' : 'it-IT';
+}
+
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(',')[1] || '');
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function toggleVoice() {
+  if (_recorder && _recorder.state === 'recording') {
+    document.getElementById('voice-btn').disabled = true;
+    document.getElementById('voice-btn-label').textContent = t('ops.notes.processing');
+    _recorder.stop();
+    stopTracks();
+    setCaptureState('ops.notes.processing', 'processing');
+    return;
+  }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) {
+    setCaptureState('ops.notes.voiceUnsupported', 'error');
+    return;
+  }
+  try {
+    const generation = ++_captureGeneration;
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    if (generation !== _captureGeneration || !document.getElementById('capture-modal').classList.contains('open')) {
+      stream.getTracks().forEach(track => track.stop());
+      return;
+    }
+    _stream = stream;
+    const mimeType = recordingMimeType();
+    _chunks = [];
+    _recorder = mimeType ? new MediaRecorder(_stream, { mimeType }) : new MediaRecorder(_stream);
+    const recorder = _recorder;
+    recorder._quickNoteGeneration = generation;
+    recorder.ondataavailable = event => {
+      if (generation === _captureGeneration && !recorder._quickNoteCancelled && event.data && event.data.size) _chunks.push(event.data);
+    };
+    recorder.onstop = async () => {
+      stopTracks();
+      if (generation !== _captureGeneration || recorder._quickNoteCancelled) { _chunks = []; return; }
+      await processVoiceRecording(mimeType || recorder.mimeType || 'audio/webm', generation);
+    };
+    recorder.start();
+    document.getElementById('voice-btn-label').textContent = t('ops.notes.stopRecording');
+    setCaptureState('ops.notes.listening', 'listening');
+  } catch (error) {
+    stopTracks();
+    _recorder = null;
+    setCaptureState(error && error.name === 'NotAllowedError' ? 'ops.notes.voicePermissionDenied' : 'ops.notes.voiceUnavailable', 'error');
+  }
+}
+
+async function processVoiceRecording(mimeType, generation) {
+  const controller = new AbortController();
+  _processingController = controller;
+  try {
+    if (generation !== _captureGeneration) return;
+    const blob = new Blob(_chunks, { type: mimeType });
+    _recorder = null;
+    document.getElementById('voice-btn').disabled = false;
+    document.getElementById('voice-btn-label').textContent = t('ops.notes.record');
+    if (!blob.size) { setCaptureState('ops.notes.emptyTranscript', 'error'); return; }
+    const token = WsAuth.getStoredToken();
+    const encoding = mimeType.includes('ogg') ? 'OGG_OPUS' : mimeType.includes('mp4') ? 'MP3' : 'WEBM_OPUS';
+    const response = await fetch('/api/speech-to-text', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ audioData: await blobToBase64(blob), config: { encoding, sampleRateHertz: 48000, languageCode: activeSpeechLocale() } }),
+      signal: controller.signal
+    });
+    const data = await response.json().catch(() => null);
+    if (generation !== _captureGeneration || controller.signal.aborted) return;
+    const transcript = data && typeof data.transcription === 'string' ? data.transcription.trim() : '';
+    if (!response.ok) { setCaptureState('ops.notes.transcriptionError', 'error'); return; }
+    if (!transcript) { setCaptureState('ops.notes.emptyTranscript', 'error'); return; }
+    const field = document.getElementById('note-text');
+    field.value = (field.value.trim() ? field.value.trim() + '\n' : '') + transcript;
+    _voiceCaptured = true;
+    setCaptureState('ops.notes.transcribed');
+    field.focus();
+  } catch (_) {
+    if (generation !== _captureGeneration || controller.signal.aborted) return;
+    _recorder = null;
+    document.getElementById('voice-btn').disabled = false;
+    document.getElementById('voice-btn-label').textContent = t('ops.notes.record');
+    setCaptureState('ops.notes.transcriptionError', 'error');
+  } finally {
+    if (_processingController === controller) _processingController = null;
+    _chunks = []; // Audio blobs are intentionally never retained.
+  }
+}
+
+async function saveNote() {
+  const button = document.getElementById('save-note-btn');
+  const text = document.getElementById('note-text').value.trim();
+  if (!text) { setCaptureState('ops.notes.emptyText', 'error'); return; }
+  button.disabled = true;
+  const endpoint = _voiceCaptured ? '/api/operations/notes/voice' : '/api/operations/notes';
+  const result = await OpsCommon.api(endpoint, { method: 'POST', body: JSON.stringify({ text }) });
+  button.disabled = false;
+  if (!result || !result.success) { setCaptureState((result && result.error) || 'ops.notes.saveError', 'error'); return; }
+  closeCapture();
+  await loadNotes();
+}
+
+async function dismissNote(id) {
+  const result = await OpsCommon.api('/api/operations/notes/' + encodeURIComponent(id) + '/dismiss', { method: 'POST' });
+  if (result && result.success) loadNotes();
+  else OpsCommon.showError((result && result.error) || t('common.error'));
+}
+
+function renderNotes(notes) {
+  const list = document.getElementById('notes-list');
+  const empty = document.getElementById('notes-empty');
+  list.innerHTML = '';
+  empty.style.display = notes.length ? 'none' : '';
+  notes.forEach(note => {
+    const sourceVoice = note.source === 'VOICE';
+    const card = document.createElement('article');
+    card.className = 'note-card';
+    card.innerHTML = `
+      <div class="note-card-top"><div class="note-text">${esc(note.text)}</div></div>
+      <div class="note-meta">
+        <span class="note-source${sourceVoice ? ' voice' : ''}">${esc(t(sourceVoice ? 'ops.notes.sourceVoice' : 'ops.notes.sourceText'))}</span>
+        <span>${esc(OpsCommon.fmtDatetime(note.createdAt))}</span>
+      </div>
+      <div class="note-actions">
+        <a class="btn btn-primary" href="operations-tasks.html?sourceNoteId=${encodeURIComponent(note.id)}">${esc(t('ops.notes.createTask'))}</a>
+        <button class="btn btn-secondary" type="button" data-note-id="${esc(note.id)}">${esc(t('ops.notes.dismiss'))}</button>
+      </div>`;
+    card.querySelector('button').addEventListener('click', () => dismissNote(note.id));
+    list.appendChild(card);
+  });
+}
+
+async function loadNotes() {
+  const result = await OpsCommon.api('/api/operations/notes');
+  if (!result || !result.success) { OpsCommon.showError(result && result.error); return; }
+  document.querySelectorAll('[data-ops-notes-count]').forEach(el => { el.textContent = String(result.count || 0); });
+  renderNotes(result.notes || []);
+}
+
+async function boot() {
+  const me = await OpsCommon.loadMe();
+  if (!me) return;
+  document.getElementById('me-name').textContent = me.user.name || '';
+  document.getElementById('me-role').textContent = OpsCommon.roleLabel(me.user.role);
+  await loadNotes();
+  if (new URLSearchParams(location.search).get('action') === 'capture') openCapture();
+}
+
+document.getElementById('capture-modal').addEventListener('click', event => {
+  if (event.target === event.currentTarget) closeCapture();
+});
+I18n.init({ selector: '#i18n-sel' }).then(boot);
+</script>
+</body>
+</html>

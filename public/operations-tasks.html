@@ -123,6 +123,7 @@ const t = (key) => (typeof I18n !== 'undefined' && I18n.t) ? I18n.t(key) : key;
 let allTasks = [], allUsers = {}, meData = null;
 let assignableUsers = [];
 let filterTimer = null;
+let _createSourceNoteId = null;
 // true when page was opened with ?filter=today (Director quick-action)
 let todayFilterActive = false;
 
@@ -155,6 +156,27 @@ async function load() {
   }
 
   await loadTasks('operations-tasks.html:load() -> loadTasks()');
+
+  // Quick Notes pass only an opaque owned-note ID in the URL. Fetching the
+  // text through the protected API keeps the note body out of browser history.
+  const params = new URLSearchParams(location.search);
+  const sourceNoteId = params.get('sourceNoteId');
+  if (sourceNoteId) {
+    const noteData = await OpsCommon.api('/api/operations/notes/' + encodeURIComponent(sourceNoteId));
+    if (noteData && noteData.success && noteData.note && noteData.note.status === 'INBOX') {
+      openCreatePanel(noteData.note);
+      return;
+    }
+    OpsCommon.showError((noteData && noteData.error) || t('ops.notes.handoffUnavailable'));
+    return;
+  }
+
+  // Existing quick actions link with action=create. Keep this direct entry
+  // point and the Quick Note handoff on the same established task panel.
+  if (params.get('action') === 'create') {
+    openCreatePanel();
+    return;
+  }
 
   // Auto-open detail panel when a ?taskId= query param is present.
   // Uses silent mode so invalid / cross-company IDs are silently ignored.
@@ -661,10 +683,13 @@ async function openDetail(taskId, opts = {}) {
 }
 
 // ── Create panel ──
-function openCreatePanel() {
+function openCreatePanel(sourceNote) {
+  _createSourceNoteId = sourceNote && sourceNote.id ? sourceNote.id : null;
   const assigneeOptions = assignableUsers.map(u =>
     `<option value="${esc(u.id)}"${u.id === (meData && meData.user.id) ? ' selected' : ''}>${esc(u.name)} (${esc(OpsCommon.roleLabel(u.role))})</option>`
   ).join('');
+  const sourceText = sourceNote && typeof sourceNote.text === 'string' ? sourceNote.text : '';
+  const sourceTitle = sourceText.replace(/\s+/g, ' ').trim().slice(0, 200);
 
   document.getElementById('panel-inner').innerHTML = `
     <div class="panel-hdr">
@@ -673,10 +698,11 @@ function openCreatePanel() {
     </div>
     <div class="panel-body">
       <div id="panel-msg"></div>
+      ${sourceNote ? `<div class="note-handoff-banner">📝 ${esc(t('ops.notes.taskPrefill'))}</div>` : ''}
       <label class="form-label">${t('ops.task.titleLabel')}</label>
-      <input id="c-title" class="form-input" maxlength="200" placeholder="Es. Preparare mise en place">
+      <input id="c-title" class="form-input" maxlength="200" value="${esc(sourceTitle)}" placeholder="Es. Preparare mise en place">
       <label class="form-label">${t('ops.task.descLabel')}</label>
-      <textarea id="c-desc" class="form-textarea" maxlength="2000"></textarea>
+      <textarea id="c-desc" class="form-textarea" maxlength="2000">${esc(sourceText)}</textarea>
       <label class="form-label">${t('ops.task.assignLabel')}</label>
       <select id="c-assignee" class="form-select">${assigneeOptions}</select>
       <label class="form-label">${t('ops.task.priorityLabel')}</label>
@@ -1023,6 +1049,7 @@ async function doCreate() {
     serviceDepartmentId: document.getElementById('c-dept').value || null,
     publishToService:    document.getElementById('c-publish').checked
   };
+  if (_createSourceNoteId) body.sourceNoteId = _createSourceNoteId;
   if (!body.title) { panelMsg(t('ops.task.titleRequired')); btn.disabled = false; return; }
 
   const r = await OpsCommon.api('/api/operations/tasks', {

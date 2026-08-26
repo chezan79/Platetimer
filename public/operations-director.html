@@ -17,6 +17,7 @@
   <nav class="ops-nav">
     <span class="ops-nav-item active" data-i18n="ops.nav.dashboard">Dashboard</span>
     <a class="ops-nav-item" href="operations-tasks.html" data-i18n="ops.nav.tasks">Compiti</a>
+    <a class="ops-nav-item ops-notes-nav" href="operations-notes.html"><span data-i18n="ops.notes.link">Note</span> <span class="ops-notes-count" data-ops-notes-count>0</span></a>
     <a class="ops-nav-item" href="operations-calendar.html" data-i18n="ops.cal.navLink">📅 Calendario</a>
     <a class="ops-nav-item" href="operations-team.html" data-i18n="ops.nav.team">Team</a>
     <a class="ops-nav-item" href="operations-templates.html" data-i18n="ops.nav.templates">Template</a>
@@ -50,6 +51,9 @@
   <div class="qa-grid">
     <button class="qa-btn qa-primary" onclick="location.href='operations-tasks.html?action=create'">
       <span class="qa-icon">➕</span><span data-i18n="ops.dir.createTask">Crea compito</span>
+    </button>
+    <button class="qa-btn qa-note" onclick="location.href='operations-notes.html?action=capture'">
+      <span class="qa-icon">📝</span><span data-i18n="ops.notes.quickNote">Nota rapida</span>
     </button>
     <button class="qa-btn" onclick="location.href='operations-team.html?action=create'">
       <span class="qa-icon">👤</span><span data-i18n="ops.dir.createUser">Crea utente</span>
@@ -204,6 +208,7 @@ async function load() {
   if (me.user.role !== 'DIRECTOR') { location.replace('operations.html'); return; }
   document.getElementById('me-name').textContent = me.user.name || '';
   document.getElementById('me-role').textContent = OpsCommon.roleLabel(me.user.role);
+  await OpsCommon.refreshNotesCount();
 
   // Parallel API calls  (isRealtime=0 on intentional load)
   const [taskRes, statsRes, escRes, intelRes] = await Promise.all([

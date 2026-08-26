@@ -1372,7 +1372,7 @@ app.post('/api/speech-to-text', async (req, res) => {
             .map(result => result.alternatives[0].transcript)
             .join('\n');
 
-        console.log('🎤 Trascrizione:', transcription);
+        console.log(`🎤 Trascrizione completata (${transcription.length} caratteri)`);
 
         res.json({
             transcription: transcription,
@@ -1592,6 +1592,7 @@ function getStoreNameForFile(filePath) {
     if (filePath === OPS_TEMPLATES_FILE)  return 'ops_templates';
     if (filePath === OPS_PREFS_FILE)      return 'ops_prefs';
     if (filePath === OPS_ACK_FILE)        return 'ops_ack';
+    if (filePath === OPS_NOTES_FILE)      return 'ops_notes';
     return null;
 }
 
@@ -2360,6 +2361,8 @@ mexStoreModule.init(DATA_DIR, db, STORE_COLLECTION);
 const OPS_USERS_FILE = path.join(DATA_DIR, 'ops-users.json');
 const OPS_TASKS_FILE = path.join(DATA_DIR, 'ops-tasks.json');
 const OPS_ACK_FILE   = path.join(DATA_DIR, 'ops-ack.json');
+const OPS_NOTES_FILE = path.join(DATA_DIR, 'ops-notes.json');
+const OPS_NOTE_CONVERSION_JOURNAL_FILE = path.join(DATA_DIR, 'ops-note-conversion-journal.json');
 
 // Populated by initializeDataStores() at startup.
 // Shape: { [companyId]: [ user, ... ] } / { [companyId]: [ task, ... ] }
@@ -2368,10 +2371,15 @@ let opsTasksStore = {};
 // Acknowledgement store — tracks which Service department acknowledged which task.
 // Shape: { [companyId]: [ { taskId, serviceDepartmentId, acknowledgedAt }, ... ] }
 let opsAckStore = {};
+// Personal Quick Notes, partitioned by company. Every record is additionally
+// bound to the creator's canonical Firebase UID.
+// Shape: { [companyId]: [ note, ... ] }
+let opsNotesStore = {};
 
 const OPS_PRIORITIES = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'];
 // OVERDUE is computed dynamically (never stored). CANCELLED = soft-deleted.
 const OPS_STATUSES = ['OPEN', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'];
+const OPS_NOTE_MAX_LENGTH = 2000;
 
 const PRIORITY_ORDER = { URGENT: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
 const EFF_STATUS_ORDER = { OVERDUE: 0, IN_PROGRESS: 1, OPEN: 2, COMPLETED: 3, CANCELLED: 4 };
@@ -2380,6 +2388,7 @@ function genOpsUserId()      { return 'opsu_' + Date.now() + '_' + crypto.random
 function genOpsTaskId()      { return 'opst_' + Date.now() + '_' + crypto.randomBytes(3).toString('hex'); }
 function genOpsCommentId()   { return 'opsc_' + Date.now() + '_' + crypto.randomBytes(3).toString('hex'); }
 function genOpsAttachmentId(){ return 'opsa_' + Date.now() + '_' + crypto.randomBytes(3).toString('hex'); }
+function genOpsNoteId()      { return 'opsn_' + Date.now() + '_' + crypto.randomBytes(3).toString('hex'); }
 function genInviteCode()     { return crypto.randomBytes(16).toString('hex'); }
 
 // ── [S6.4.1] Attachment constants ────────────────────────────────────────────
@@ -2452,11 +2461,75 @@ function getOpsTemplates(companyId) { return opsTemplatesStore[companyId] || [];
 function getOpsUsers(companyId)     { return opsUsersStore[companyId]     || []; }
 function getOpsTasks(companyId)     { return opsTasksStore[companyId]     || []; }
 function getOpsAcks(companyId)      { return opsAckStore[companyId]       || []; }
+function getOpsNotes(companyId)     { return opsNotesStore[companyId]     || []; }
 function saveOpsUsers()     { saveJSON(OPS_USERS_FILE,     opsUsersStore);     }
 function saveOpsTasks()     { saveJSON(OPS_TASKS_FILE,     opsTasksStore);     }
 function saveOpsTemplates() { saveJSON(OPS_TEMPLATES_FILE, opsTemplatesStore); }
 function saveOpsPrefs()     { saveJSON(OPS_PREFS_FILE,     opsPrefsStore);     }
 function saveOpsAcks()      { saveJSON(OPS_ACK_FILE,       opsAckStore);       }
+function saveOpsNotes()     { saveJSON(OPS_NOTES_FILE,      opsNotesStore);      }
+
+// A Quick Note conversion changes two stores. Firestore commits the task and
+// note together; local mode uses a durable write-ahead journal so an abrupt
+// stop between file replacements is completed during the next startup.
+function recoverOpsNoteConversionJournal() {
+    if (db || !fs.existsSync(OPS_NOTE_CONVERSION_JOURNAL_FILE)) return;
+    const journal = JSON.parse(fs.readFileSync(OPS_NOTE_CONVERSION_JOURNAL_FILE, 'utf8'));
+    if (!journal || !journal.tasks || !journal.notes) throw new Error('invalid Quick Note conversion journal');
+    const suffix = `.recovery-${process.pid}-${Date.now()}`;
+    const tasksTmp = OPS_TASKS_FILE + suffix;
+    const notesTmp = OPS_NOTES_FILE + suffix;
+    fs.writeFileSync(tasksTmp, JSON.stringify(journal.tasks, null, 2));
+    fs.writeFileSync(notesTmp, JSON.stringify(journal.notes, null, 2));
+    fs.renameSync(tasksTmp, OPS_TASKS_FILE);
+    fs.renameSync(notesTmp, OPS_NOTES_FILE);
+    opsTasksStore = journal.tasks;
+    opsNotesStore = journal.notes;
+    fs.rmSync(OPS_NOTE_CONVERSION_JOURNAL_FILE, { force: true });
+    console.warn('⚠️ [OPS] Quick Note conversion journal recovered after an interrupted local write.');
+}
+
+async function persistOpsTaskAndNoteConversion() {
+    if (db) {
+        const batch = db.batch();
+        batch.set(db.collection(STORE_COLLECTION).doc('ops_tasks'), {
+            store: opsTasksStore, updatedAt: Date.now()
+        });
+        batch.set(db.collection(STORE_COLLECTION).doc('ops_notes'), {
+            store: opsNotesStore, updatedAt: Date.now()
+        });
+        await batch.commit();
+        return;
+    }
+
+    const suffix = `.pending-${process.pid}-${Date.now()}`;
+    const tasksTmp = OPS_TASKS_FILE + suffix;
+    const notesTmp = OPS_NOTES_FILE + suffix;
+    let journalWritten = false;
+    try {
+        // This is written before either store is replaced. If the process dies
+        // below, startup deterministically completes this exact target state.
+        fs.writeFileSync(OPS_NOTE_CONVERSION_JOURNAL_FILE, JSON.stringify({
+            tasks: opsTasksStore, notes: opsNotesStore, createdAt: Date.now()
+        }, null, 2));
+        journalWritten = true;
+        fs.writeFileSync(tasksTmp, JSON.stringify(opsTasksStore, null, 2));
+        fs.writeFileSync(notesTmp, JSON.stringify(opsNotesStore, null, 2));
+        fs.renameSync(tasksTmp, OPS_TASKS_FILE);
+        fs.renameSync(notesTmp, OPS_NOTES_FILE);
+        fs.rmSync(OPS_NOTE_CONVERSION_JOURNAL_FILE, { force: true });
+    } catch (error) {
+        try { fs.rmSync(tasksTmp, { force: true }); fs.rmSync(notesTmp, { force: true }); } catch (_) {}
+        // Once the journal is durable, either complete that target now or
+        // preserve it for startup recovery; do not roll memory back to a state
+        // that could disagree with the journal after a restart.
+        if (journalWritten) {
+            recoverOpsNoteConversionJournal();
+            return;
+        }
+        throw error;
+    }
+}
 
 // Returns true when the given Service department has already acknowledged this task.
 function isTaskAcknowledgedBy(companyId, taskId, serviceDepartmentId) {
@@ -2541,6 +2614,145 @@ function publicOpsUser(u) {
         hasFirebaseAccount: !!u.uid,
     };
 }
+
+// ── Operations Quick Notes ─────────────────────────────────────────────────
+// Notes intentionally contain transcript/text only. Company and creator
+// identity, status, source, and conversion provenance are all server-owned.
+function publicOpsNote(note) {
+    return {
+        id: note.id,
+        text: note.text,
+        creatorName: note.creatorName || null,
+        createdAt: note.createdAt,
+        updatedAt: note.updatedAt,
+        status: note.status,
+        source: note.source,
+        ...(note.convertedTaskId ? { convertedTaskId: note.convertedTaskId } : {}),
+        ...(note.convertedAt ? { convertedAt: note.convertedAt } : {})
+    };
+}
+
+function findOwnedOpsNote(actor, noteId) {
+    if (!actor || !noteId) return null;
+    return getOpsNotes(actor.companyId).find(note =>
+        note.id === noteId &&
+        note.companyId === actor.companyId &&
+        note.creatorUid === actor.uid
+    ) || null;
+}
+
+function cleanOpsNoteText(value) {
+    if (typeof value !== 'string') throw 'Il testo della nota è obbligatorio.';
+    const text = value.trim();
+    if (!text) throw 'Il testo della nota non può essere vuoto.';
+    if (text.length > OPS_NOTE_MAX_LENGTH) {
+        throw `La nota è troppo lunga (massimo ${OPS_NOTE_MAX_LENGTH} caratteri).`;
+    }
+    return text;
+}
+
+function createOpsNote(actor, text, source) {
+    const now = Date.now();
+    const note = {
+        id: genOpsNoteId(),
+        companyId: actor.companyId,
+        creatorUid: actor.uid,
+        creatorOpsUserId: actor.id,
+        creatorName: actor.name || '',
+        text,
+        createdAt: now,
+        updatedAt: now,
+        status: 'INBOX',
+        source
+    };
+    if (!opsNotesStore[actor.companyId]) opsNotesStore[actor.companyId] = [];
+    opsNotesStore[actor.companyId].push(note);
+    saveOpsNotes();
+    return note;
+}
+
+// POST /api/operations/notes — manual text capture. The source is deliberately
+// fixed here; client-supplied source/status/identity/provenance fields are ignored.
+app.post('/api/operations/notes', (req, res) => {
+    const ctx = requireOpsAuth(req, res);
+    if (!ctx) return;
+    let text;
+    try { text = cleanOpsNoteText(req.body && req.body.text); }
+    catch (msg) { return res.status(400).json({ error: msg }); }
+    const note = createOpsNote(ctx.opsUser, text, 'TEXT');
+    res.status(201).json({ success: true, note: publicOpsNote(note), count: getOpsNotes(ctx.opsUser.companyId).filter(n => n.status === 'INBOX' && n.creatorUid === ctx.opsUser.uid).length });
+});
+
+// Voice notes use a separate server-selected route. Audio never reaches this
+// endpoint: the browser sends only the authenticated transcription result.
+app.post('/api/operations/notes/voice', (req, res) => {
+    const ctx = requireOpsAuth(req, res);
+    if (!ctx) return;
+    let text;
+    try { text = cleanOpsNoteText(req.body && req.body.text); }
+    catch (msg) { return res.status(400).json({ error: msg }); }
+    const note = createOpsNote(ctx.opsUser, text, 'VOICE');
+    res.status(201).json({ success: true, note: publicOpsNote(note), count: getOpsNotes(ctx.opsUser.companyId).filter(n => n.status === 'INBOX' && n.creatorUid === ctx.opsUser.uid).length });
+});
+
+// GET /api/operations/notes — unresolved notes, newest first.
+app.get('/api/operations/notes', (req, res) => {
+    const ctx = requireOpsAuth(req, res);
+    if (!ctx) return;
+    const notes = getOpsNotes(ctx.opsUser.companyId)
+        .filter(note => note.creatorUid === ctx.opsUser.uid && note.companyId === ctx.opsUser.companyId && note.status === 'INBOX')
+        .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    res.json({ success: true, notes: notes.map(publicOpsNote), count: notes.length });
+});
+
+app.get('/api/operations/notes/count', (req, res) => {
+    const ctx = requireOpsAuth(req, res);
+    if (!ctx) return;
+    const count = getOpsNotes(ctx.opsUser.companyId).filter(note =>
+        note.creatorUid === ctx.opsUser.uid &&
+        note.companyId === ctx.opsUser.companyId &&
+        note.status === 'INBOX'
+    ).length;
+    res.json({ success: true, count });
+});
+
+// GET /api/operations/notes/:id — owned-note read for the task handoff.
+app.get('/api/operations/notes/:id', (req, res) => {
+    const ctx = requireOpsAuth(req, res);
+    if (!ctx) return;
+    const note = findOwnedOpsNote(ctx.opsUser, req.params.id);
+    if (!note) return res.status(404).json({ error: 'Nota non trovata.' });
+    res.json({ success: true, note: publicOpsNote(note) });
+});
+
+// PATCH only permits editing text on an unresolved owned note. All other
+// client-supplied fields are ignored.
+app.patch('/api/operations/notes/:id', (req, res) => {
+    const ctx = requireOpsAuth(req, res);
+    if (!ctx) return;
+    const note = findOwnedOpsNote(ctx.opsUser, req.params.id);
+    if (!note) return res.status(404).json({ error: 'Nota non trovata.' });
+    if (note.status !== 'INBOX') return res.status(409).json({ error: 'Questa nota non è più nella posta in arrivo.' });
+    let text;
+    try { text = cleanOpsNoteText(req.body && req.body.text); }
+    catch (msg) { return res.status(400).json({ error: msg }); }
+    note.text = text;
+    note.updatedAt = Date.now();
+    saveOpsNotes();
+    res.json({ success: true, note: publicOpsNote(note) });
+});
+
+app.post('/api/operations/notes/:id/dismiss', (req, res) => {
+    const ctx = requireOpsAuth(req, res);
+    if (!ctx) return;
+    const note = findOwnedOpsNote(ctx.opsUser, req.params.id);
+    if (!note) return res.status(404).json({ error: 'Nota non trovata.' });
+    if (note.status === 'CONVERTED') return res.status(409).json({ error: 'Una nota convertita non può essere eliminata.' });
+    note.status = 'DISMISSED';
+    note.updatedAt = Date.now();
+    saveOpsNotes();
+    res.json({ success: true, note: publicOpsNote(note) });
+});
 
 // Compute effective status. OVERDUE if not completed/cancelled and dueDate passed.
 function opsTaskWithComputedStatus(t) {
@@ -3378,6 +3590,17 @@ app.post('/api/operations/tasks', async (req, res) => {
     const actor = ctx.opsUser;
     const companyId = actor.companyId;
 
+    // A note handoff is opaque and optional. Validate ownership before any
+    // task mutation; the note is marked converted only after task persistence.
+    const sourceNoteId = req.body && typeof req.body.sourceNoteId === 'string'
+        ? req.body.sourceNoteId.trim() : '';
+    let sourceNote = null;
+    if (sourceNoteId) {
+        sourceNote = findOwnedOpsNote(actor, sourceNoteId);
+        if (!sourceNote) return res.status(404).json({ error: 'Nota non trovata.' });
+        if (sourceNote.status !== 'INBOX') return res.status(409).json({ error: 'La nota non è più convertibile.' });
+    }
+
     let clean;
     try { clean = sanitizeOpsTaskInput(req.body); }
     catch (msg) { return res.status(400).json({ error: msg }); }
@@ -3441,14 +3664,36 @@ app.post('/api/operations/tasks', async (req, res) => {
         escalationLevel:    0,
         escalationSentAt:   null,
         escalationNotified: [],
+        // Quick Note conversion provenance; never trust this field from the
+        // client beyond the owned note resolved above.
+        sourceNoteId:       sourceNote ? sourceNote.id : null,
     };
     addHistory(task, 'TASK_CREATED', actor.id, actor.name, {
         assigneeId: assignee.id, assigneeName: assignee.name,
         priority: task.priority, dueDate: task.dueDate
     });
     if (!opsTasksStore[companyId]) opsTasksStore[companyId] = [];
+    const sourceNoteBefore = sourceNote ? { ...sourceNote } : null;
     opsTasksStore[companyId].push(task);
-    saveOpsTasks(); // persist FIRST …
+    if (sourceNote) {
+        sourceNote.status = 'CONVERTED';
+        sourceNote.convertedTaskId = task.id;
+        sourceNote.convertedAt = Date.now();
+        sourceNote.updatedAt = sourceNote.convertedAt;
+        addHistory(task, 'NOTE_CONVERTED', actor.id, actor.name, { sourceNoteId: sourceNote.id });
+    }
+    try {
+        if (sourceNote) await persistOpsTaskAndNoteConversion();
+        else saveOpsTasks(); // normal task persistence remains unchanged
+    } catch (error) {
+        opsTasksStore[companyId] = opsTasksStore[companyId].filter(candidate => candidate.id !== task.id);
+        if (sourceNote && sourceNoteBefore) {
+            Object.keys(sourceNote).forEach(key => delete sourceNote[key]);
+            Object.assign(sourceNote, sourceNoteBefore);
+        }
+        console.error('❌ [OPS] Quick Note task conversion persistence failed:', error.message);
+        return res.status(500).json({ error: 'Impossibile salvare la conversione della nota. Riprova.' });
+    }
     console.log(`✅ [OPS] Task created: "${task.title}" → ${assignee.name} (${assignee.role}) in "${companyId}"`);
 
     // … THEN notify (failures logged, NEVER affect the saved task).
@@ -6432,6 +6677,7 @@ async function initializeDataStores() {
         { name: 'ops_templates',   file: OPS_TEMPLATES_FILE,   setter: v => { opsTemplatesStore   = v; } },
         { name: 'ops_prefs',       file: OPS_PREFS_FILE,       setter: v => { opsPrefsStore       = v; } },
         { name: 'ops_ack',         file: OPS_ACK_FILE,         setter: v => { opsAckStore         = v; } },
+        { name: 'ops_notes',       file: OPS_NOTES_FILE,       setter: v => { opsNotesStore       = v; } },
     ];
 
     if (!db) {
@@ -6450,6 +6696,7 @@ async function initializeDataStores() {
         for (const store of stores) {
             store.setter(loadJSON(store.file));
         }
+        recoverOpsNoteConversionJournal();
         return;
     }
 

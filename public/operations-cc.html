@@ -14,6 +14,7 @@
   <span class="hdr-sep"></span>
   <span class="hdr-page">Operations · Chef di Cucina</span>
   <button class="hdr-btn" onclick="location.href='operations-tasks.html'" data-i18n="ops.nav.tasks">Compiti</button>
+  <a class="hdr-btn ops-notes-header" href="operations-notes.html"><span data-i18n="ops.notes.link">Note</span> <span class="ops-notes-count" data-ops-notes-count>0</span></a>
   <button class="hdr-btn" onclick="location.href='operations-performance.html'" data-i18n="ops.nav.performance">📊 Prestazioni</button>
   <button class="hdr-btn" onclick="location.href='home.html'" data-i18n="common.home">Home</button>
   <span id="i18n-sel"></span>
@@ -38,6 +39,9 @@
   <div class="qa-grid">
     <button class="qa-btn qa-primary" onclick="location.href='operations-tasks.html?action=create'">
       <span class="qa-icon">➕</span><span data-i18n="ops.dir.createTask">Crea compito</span>
+    </button>
+    <button class="qa-btn qa-note" onclick="location.href='operations-notes.html?action=capture'">
+      <span class="qa-icon">📝</span><span data-i18n="ops.notes.quickNote">Nota rapida</span>
     </button>
     <button class="qa-btn qa-danger" onclick="location.href='operations-tasks.html?filter=overdue'">
       <span class="qa-icon">🕐</span><span data-i18n="ops.sec.overdue">In ritardo</span>
@@ -81,6 +85,7 @@ async function load(isRealtime) {
   if (me.user.role !== 'CHEF_CUISINE') { location.replace('operations.html'); return; }
   document.getElementById('me-name').textContent = me.user.name || '';
   document.getElementById('me-role').textContent = OpsCommon.roleLabel(me.user.role);
+  await OpsCommon.refreshNotesCount();
   const myId = me.user.id;
 
   const data = await OpsCommon.api('/api/operations/tasks');

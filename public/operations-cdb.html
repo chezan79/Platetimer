@@ -14,6 +14,7 @@
   <span class="hdr-sep"></span>
   <span class="hdr-page">Operations · Chef de Brigade</span>
   <button class="hdr-btn" onclick="location.href='operations-tasks.html'" data-i18n="ops.nav.tasks">Compiti</button>
+  <a class="hdr-btn ops-notes-header" href="operations-notes.html"><span data-i18n="ops.notes.link">Note</span> <span class="ops-notes-count" data-ops-notes-count>0</span></a>
   <button class="hdr-btn" onclick="location.href='operations-performance.html'" data-i18n="ops.nav.profile">📊 Il mio profilo</button>
   <button class="hdr-btn" onclick="location.href='home.html'" data-i18n="common.home">Home</button>
   <span id="i18n-sel"></span>
@@ -64,6 +65,9 @@
 
   <!-- Quick Actions -->
   <div class="qa-grid" style="margin-bottom:24px">
+    <button class="qa-btn qa-note" onclick="location.href='operations-notes.html?action=capture'">
+      <span class="qa-icon">📝</span><span data-i18n="ops.notes.quickNote">Nota rapida</span>
+    </button>
     <button class="qa-btn" onclick="location.href='operations-calendar.html'">
       <span class="qa-icon">📅</span><span data-i18n="ops.cal.quickAction">Calendario</span>
     </button>
@@ -154,6 +158,7 @@ async function load(isRealtime) {
     if (me.user.role !== 'CHEF_DE_BRIGADE') { location.replace('operations.html'); return; }
     document.getElementById('me-name').textContent = me.user.name || '';
     document.getElementById('me-role').textContent = OpsCommon.roleLabel(me.user.role);
+    await OpsCommon.refreshNotesCount();
     _myId = me.user.id;
 
     const data = await OpsCommon.api('/api/operations/tasks');
