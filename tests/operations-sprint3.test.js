@@ -7,6 +7,7 @@
 const http    = require('http');
 const crypto  = require('crypto');
 const path    = require('path');
+const WebSocket = require('ws');
 
 // ── HMAC helper (mirrors existing test suite token signing) ──────────────────
 const SECRET = 'test-sprint3-secret';
@@ -51,6 +52,45 @@ function api(token, method, path_, body) {
     });
 }
 
+function wsConnect(token) {
+    return new Promise((resolve, reject) => {
+        const client = new WebSocket(`ws://127.0.0.1:${PORT}/ws`);
+        const received = [];
+        const waiters = [];
+        client.on('error', reject);
+        client.on('message', raw => {
+            let message;
+            try { message = JSON.parse(raw.toString()); } catch (_) { return; }
+            received.push(message);
+            for (let i = waiters.length - 1; i >= 0; i--) {
+                if (waiters[i].action === message.action && waiters[i].predicate(message)) {
+                    const waiter = waiters.splice(i, 1)[0];
+                    clearTimeout(waiter.timer);
+                    waiter.resolve(message);
+                }
+            }
+        });
+        const waitFor = (action, predicate = () => true, timeoutMs = 4000) => {
+            const existing = received.find(message => message.action === action && predicate(message));
+            if (existing) return Promise.resolve(existing);
+            return new Promise((resolveWait, rejectWait) => {
+                const waiter = { action, predicate, resolve: resolveWait };
+                waiter.timer = setTimeout(() => {
+                    const index = waiters.indexOf(waiter);
+                    if (index >= 0) waiters.splice(index, 1);
+                    rejectWait(new Error(`timeout waiting for ${action}`));
+                }, timeoutMs);
+                waiters.push(waiter);
+            });
+        };
+        client.on('open', () => {
+            client.send(JSON.stringify({ action: 'joinRoom', token }));
+            client.send(JSON.stringify({ action: 'joinPage', pageType: 'operations' }));
+            resolve({ client, waitFor, received });
+        });
+    });
+}
+
 // ── Test runner ───────────────────────────────────────────────────────────────
 async function run() {
     console.log('\nStarting server (Sprint 3 tests)…');
@@ -60,6 +100,22 @@ async function run() {
     const os  = require('os');
     const fs2 = require('fs');
     const DATA_DIR_S3 = fs2.mkdtempSync(path.join(os.tmpdir(), 'opstest-s3-'));
+    const recoveredCompany = 's3-recovered-company';
+    fs2.writeFileSync(path.join(DATA_DIR_S3, 'ops-recurring-generation-journal.json'), JSON.stringify({
+        tasks: {
+            [recoveredCompany]: [{
+                id: 'opst-recovered', companyId: recoveredCompany, title: 'Recovered task',
+                status: 'OPEN', dueDate: '2026-08-27', templateId: 'opstpl-recovered',
+                occurrenceKey: 'opstpl-recovered_2026-08-27'
+            }]
+        },
+        templates: {
+            [recoveredCompany]: [{
+                id: 'opstpl-recovered', companyId: recoveredCompany, title: 'Recovered template',
+                active: false, generatedCount: 1, lastGeneratedAt: 1
+            }]
+        }
+    }));
     const serverEnv = {
         ...process.env,
         PORT: String(PORT),
@@ -81,6 +137,12 @@ async function run() {
         proc.on('exit', code => { clearTimeout(t); reject(new Error(`Server exited with code ${code}`)); });
     });
     console.log('Server up. Running Sprint 3 checks…\n');
+    const recoveredTasks = JSON.parse(fs2.readFileSync(path.join(DATA_DIR_S3, 'ops-tasks.json'), 'utf8'));
+    const recoveredTemplates = JSON.parse(fs2.readFileSync(path.join(DATA_DIR_S3, 'ops-templates.json'), 'utf8'));
+    check('S3-R1. Startup recovers both sides of interrupted recurring persistence',
+        recoveredTasks[recoveredCompany]?.[0]?.id === 'opst-recovered' &&
+        recoveredTemplates[recoveredCompany]?.[0]?.generatedCount === 1 &&
+        !fs2.existsSync(path.join(DATA_DIR_S3, 'ops-recurring-generation-journal.json')));
 
     // ── Tokens ──
     const dirUid  = 'sprint3-dir-' + crypto.randomBytes(3).toString('hex');
@@ -155,7 +217,8 @@ async function run() {
     // generateTasksForTemplate idempotency
     const tpl = {
         id: 'tpl_test_001', companyId: co, title: 'Daily Check', description: '', priority: 'HIGH',
-        department: 'Cucina', notes: '', defaultAssigneeId: dirId, frequency: 'DAILY',
+        department: 'Legacy Cucina', serviceDepartmentId: 'dept-canonical',
+        serviceDepartmentName: 'Cucina Canonica', notes: '', defaultAssigneeId: dirId, frequency: 'DAILY',
         interval: 1, daysOfWeek: [], dayOfMonth: null, startDate: '2026-08-01',
         endDate: '2026-08-03', maxOccurrences: null, workSchedule: [0,1,2,3,4,5,6],
         defaultReminderDays: null, defaultEscalation: false,
@@ -176,6 +239,13 @@ async function run() {
     check('S3-9e. Generated task has occurrenceKey', typeof genTask.occurrenceKey === 'string' && genTask.occurrenceKey.startsWith(tpl.id));
     check('S3-9f. Generated task has escalation object', genTask.escalation && typeof genTask.escalation.enabled === 'boolean');
     check('S3-9g. Generated task status is OPEN', genTask.status === 'OPEN');
+    check('S3-9h. Generated task carries canonical Service department ID + server name',
+        genTask.serviceDepartmentId === tpl.serviceDepartmentId &&
+        genTask.serviceDepartmentName === tpl.serviceDepartmentName, genTask);
+    check('S3-9i. Generated task keeps legacy free-text department for compatibility',
+        genTask.department === 'Legacy Cucina', genTask.department);
+    check('S3-9j. Generated task has the manual task publication field default',
+        genTask.publishToService === false, genTask.publishToService);
 
     // ── Escalation chain tests (module level) ─────────────────────────────────
     const opsAuth = require('../operations/ops-auth');
@@ -317,21 +387,53 @@ async function run() {
     // ── HTTP API tests ─────────────────────────────────────────────────────────
 
     // Template creation (Director A)
+    const deptAResponse = await api(dirA, 'POST', '/api/departments', { name: 'Cucina Ricorrente' });
+    const deptA = deptAResponse.data.department;
+    const inactiveResponse = await api(dirA, 'POST', '/api/departments', { name: 'Reparto Inattivo' });
+    const inactiveDept = inactiveResponse.data.department;
+    await api(dirA, 'PUT', `/api/departments/${inactiveDept.id}`, { active: false });
+    const deptBResponse = await api(dir2A, 'POST', '/api/departments', { name: 'Altro Cliente' });
+    const deptB = deptBResponse.data.department;
+    check('S3-29a. Department fixtures created in isolated companies',
+        !!(deptA && inactiveDept && deptB));
+
     r = await api(dirA, 'POST', '/api/operations/templates', {
         title: 'Pulizia serale', frequency: 'DAILY', startDate: '2026-08-01',
-        priority: 'HIGH', department: 'Cucina', workSchedule: [1,2,3,4,5]
+        priority: 'HIGH', department: 'Legacy Cucina',
+        serviceDepartmentId: deptA.id, serviceDepartmentName: 'Forged Browser Name',
+        workSchedule: [1,2,3,4,5]
     });
     check('S3-30. Director can create a template', r.data.success && r.data.template.id, r.data.error);
     const tplId = r.data.success ? r.data.template.id : null;
     check('S3-30b. Template has companyId from session (not forged)', r.data.template && r.data.template.companyId === co);
     check('S3-30c. Template has createdBy from session', r.data.template && r.data.template.createdBy === dirId);
+    check('S3-30d. Template stores canonical department ID and server-derived name',
+        r.data.template &&
+        r.data.template.serviceDepartmentId === deptA.id &&
+        r.data.template.serviceDepartmentName === deptA.name, r.data.template);
+
+    r = await api(dirA, 'POST', '/api/operations/templates', {
+        title: 'Cross-company dept', frequency: 'DAILY', startDate: '2026-08-01',
+        serviceDepartmentId: deptB.id, workSchedule: [0,1,2,3,4,5,6]
+    });
+    check('S3-30e. Template rejects another company department', r.status === 400, r.data);
+
+    r = await api(dirA, 'POST', '/api/operations/templates', {
+        title: 'Inactive dept', frequency: 'DAILY', startDate: '2026-08-01',
+        serviceDepartmentId: inactiveDept.id, workSchedule: [0,1,2,3,4,5,6]
+    });
+    check('S3-30f. Template rejects an inactive department', r.status === 400, r.data);
 
     // Forged companyId ignored
     r = await api(dirA, 'POST', '/api/operations/templates', {
         title: 'Forged tpl', frequency: 'DAILY', startDate: '2026-08-01',
         companyId: co2, createdBy: 'hacker', workSchedule: [0,1,2,3,4,5,6]
     });
-    check('S3-30d. Forged companyId ignored in template creation', r.data.success && r.data.template.companyId === co);
+    check('S3-30g. Forged companyId ignored in template creation', r.data.success && r.data.template.companyId === co);
+    check('S3-30h. Template department remains optional',
+        r.data.success &&
+        r.data.template.serviceDepartmentId === null &&
+        r.data.template.serviceDepartmentName === null, r.data.template);
 
     // GET templates
     r = await api(dirA, 'GET', '/api/operations/templates');
@@ -363,16 +465,55 @@ async function run() {
     if (tplId) {
         r = await api(dirA, 'POST', '/api/operations/templates/' + tplId + '/generate-now', {});
         check('S3-36. generate-now returns generated count', r.data.success && typeof r.data.generated === 'number');
+        const generatedTasks = await api(dirA, 'GET', '/api/operations/tasks');
+        const generatedForTemplate = (generatedTasks.data.tasks || []).filter(t => t.templateId === tplId);
+        check('S3-36b. Fresh task fetch sees generated calendar-critical fields',
+            generatedForTemplate.length > 0 &&
+            generatedForTemplate.every(t =>
+                !!t.dueDate &&
+                t.serviceDepartmentId === deptA.id &&
+                t.serviceDepartmentName === deptA.name &&
+                t.department === 'Legacy Cucina'
+            ), generatedForTemplate[0]);
 
         // Re-generate: idempotent (0 new tasks since already generated)
         r = await api(dirA, 'POST', '/api/operations/templates/' + tplId + '/generate-now', {});
         check('S3-37. generate-now is idempotent (0 duplicates)', r.data.success && r.data.generated === 0, r.data.generated);
     }
 
+    const realtime = await wsConnect(dirA);
+    await realtime.waitFor('joinedRoom');
+    r = await api(dirA, 'POST', '/api/operations/templates', {
+        title: 'Realtime calendar template',
+        frequency: 'DAILY',
+        startDate: rec.dateStr(new Date()),
+        maxOccurrences: 1,
+        serviceDepartmentId: deptA.id,
+        workSchedule: [0,1,2,3,4,5,6]
+    });
+    const realtimeTpl = r.data.template;
+    r = await api(dirA, 'POST', `/api/operations/templates/${realtimeTpl.id}/generate-now`, {});
+    const realtimeCreated = await realtime.waitFor(
+        'OPS_TASK_CREATED',
+        message => message.task && message.task.templateId === realtimeTpl.id
+    );
+    check('S3-37b. generate-now publishes the existing task-created lifecycle event',
+        r.data.generated === 1 &&
+        realtimeCreated.task.dueDate &&
+        realtimeCreated.task.serviceDepartmentId === deptA.id &&
+        realtimeCreated.task.serviceDepartmentName === deptA.name,
+        realtimeCreated);
+    realtime.client.close();
+
     // PATCH template
     if (tplId) {
+        await api(dirA, 'PUT', `/api/departments/${deptA.id}`, { active: false });
         r = await api(dirA, 'PATCH', '/api/operations/templates/' + tplId, { title: 'Pulizia serale UPDATED' });
         check('S3-38. Director can patch template', r.data.success && r.data.template.title === 'Pulizia serale UPDATED');
+        check('S3-38b. Unrelated patch preserves a department that later became inactive',
+            r.data.template &&
+            r.data.template.serviceDepartmentId === deptA.id &&
+            r.data.template.serviceDepartmentName === deptA.name, r.data.template);
         // Previously generated tasks should still exist (not modified)
         const tasks = await api(dirA, 'GET', '/api/operations/tasks');
         const genTasks = (tasks.data.tasks || []).filter(t => t.templateId === tplId);
@@ -477,10 +618,100 @@ async function run() {
         opsTemplatesStore: { schedco: [schedTpl] },
         opsPrefsStore: {}
     };
-    const schedSavers = { saveOpsTasks: () => {}, saveOpsTemplates: () => {}, saveOpsPrefs: () => {} };
-    const { generated: gen1 } = await sched.processRecurring(schedStores, schedSavers, null);
+    const schedulerOrder = [];
+    const schedulerEvents = [];
+    const schedSavers = {
+        saveOpsTasks: () => schedulerOrder.push('tasks-saved'),
+        saveOpsTemplates: () => schedulerOrder.push('templates-saved'),
+        saveOpsPrefs: () => {}
+    };
+    const { generated: gen1 } = await sched.processRecurring(
+        schedStores,
+        schedSavers,
+        null,
+        (companyId, task) => {
+            schedulerOrder.push('task-created');
+            schedulerEvents.push({ companyId, task });
+        }
+    );
     check('S3-55. processRecurring generates expected tasks', gen1 === 3, gen1);
     check('S3-55b. template generatedCount updated', schedTpl.generatedCount === 3);
+    check('S3-55c. scheduler publishes one lifecycle event per generated task',
+        schedulerEvents.length === gen1 &&
+        schedulerEvents.every(event => event.companyId === 'schedco' && event.task.templateId === schedTpl.id),
+        schedulerEvents.length);
+    check('S3-55d. scheduler lifecycle events publish only after persistence',
+        schedulerOrder.slice(0, 2).join(',') === 'tasks-saved,templates-saved' &&
+        schedulerOrder.slice(2).every(step => step === 'task-created'), schedulerOrder);
+
+    const deferredTpl = {
+        ...schedTpl,
+        id: 'tpl_sched_deferred',
+        active: true,
+        generatedCount: 0,
+        lastGeneratedAt: null,
+        startDate: rec.dateStr(new Date()),
+        maxOccurrences: 1,
+    };
+    const deferredStores = {
+        opsTasksStore: { deferred: [] },
+        opsUsersStore: { deferred: [] },
+        opsTemplatesStore: { deferred: [deferredTpl] },
+        opsPrefsStore: {}
+    };
+    let releasePersistence;
+    const persistenceGate = new Promise(resolve => { releasePersistence = resolve; });
+    const deferredEvents = [];
+    const deferredRun = sched.processRecurring(
+        deferredStores,
+        {
+            saveOpsTasks: () => {},
+            saveOpsTemplates: () => {},
+            saveOpsPrefs: () => {},
+            saveRecurringGeneration: () => persistenceGate,
+        },
+        null,
+        (companyId, task) => deferredEvents.push({ companyId, task })
+    );
+    await Promise.resolve();
+    check('S3-55e. scheduler emits no lifecycle event while persistence is pending',
+        deferredEvents.length === 0, deferredEvents);
+    releasePersistence();
+    await deferredRun;
+    check('S3-55f. scheduler emits after asynchronous persistence resolves',
+        deferredEvents.length === 1 && deferredEvents[0].companyId === 'deferred', deferredEvents);
+
+    const rejectedTpl = { ...deferredTpl, id: 'tpl_sched_rejected', generatedCount: 0, lastGeneratedAt: null };
+    const rejectedStores = {
+        opsTasksStore: { rejected: [] },
+        opsUsersStore: { rejected: [] },
+        opsTemplatesStore: { rejected: [rejectedTpl] },
+        opsPrefsStore: {}
+    };
+    const rejectedEvents = [];
+    let rejected = false;
+    try {
+        await sched.processRecurring(
+            rejectedStores,
+            {
+                saveOpsTasks: () => {},
+                saveOpsTemplates: () => {},
+                saveOpsPrefs: () => {},
+                saveRecurringGeneration: async () => { throw new Error('persistence failed'); },
+            },
+            null,
+            (companyId, task) => rejectedEvents.push({ companyId, task })
+        );
+    } catch (_) {
+        rejected = true;
+    }
+    check('S3-55g. failed persistence emits no lifecycle event',
+        rejected && rejectedEvents.length === 0, rejectedEvents);
+    check('S3-55h. failed persistence rolls generated occurrences back for retry',
+        rejectedStores.opsTasksStore.rejected.length === 0 &&
+        rejectedTpl.generatedCount === 0 &&
+        rejectedTpl.lastGeneratedAt === null,
+        { tasks: rejectedStores.opsTasksStore.rejected, template: rejectedTpl });
 
     const { generated: gen2 } = await sched.processRecurring(schedStores, schedSavers, null);
     check('S3-56. processRecurring is idempotent (no duplicates on re-run)', gen2 === 0, gen2);

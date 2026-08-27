@@ -53,6 +53,8 @@ function pageDom(url) {
         defaultAssigneeId: null,
         priority: 'MEDIUM',
         department: '',
+        serviceDepartmentId: 'dept-kitchen',
+        serviceDepartmentName: 'Kitchen',
         startDate: '2026-08-26',
         endDate: null,
         maxOccurrences: null,
@@ -76,6 +78,14 @@ function pageDom(url) {
             calls.push({ requestPath, options });
             if (requestPath === '/api/operations/assignees') {
                 return { success: true, assignees: [] };
+            }
+            if (requestPath === '/api/operations/service-departments') {
+                return {
+                    success: true,
+                    departments: [
+                        { id: 'dept-bar', name: 'Bar' }
+                    ]
+                };
             }
             if (requestPath === '/api/operations/templates') {
                 if (options.method === 'POST') return { success: true, template: templates[0] };
@@ -101,26 +111,41 @@ async function run() {
         route.dom.window.document.getElementById('side-panel').classList.contains('open'));
     check('action=create renders the template form',
         !!route.dom.window.document.getElementById('tpl-title'));
+    const createDepartment = route.dom.window.document.getElementById('tpl-service-dept');
+    check('template form uses the shared optional Service department dropdown',
+        !!createDepartment && createDepartment.options.length === 2 && createDepartment.value === '');
 
     const createCalls = route.calls.splice(0);
     const createTitle = route.dom.window.document.getElementById('tpl-title');
     createTitle.value = 'Nightly close';
+    createDepartment.value = 'dept-bar';
     await route.dom.window.doCreate();
     const create = route.calls.find(call => call.requestPath === '/api/operations/templates' &&
         call.options.method === 'POST');
     check('create uses the documented POST options object', !!create);
     check('create sends the collected form as a JSON body',
         !!create && JSON.parse(create.options.body).title === 'Nightly close');
+    check('create sends the canonical single Service department ID',
+        !!create &&
+        JSON.parse(create.options.body).serviceDepartmentId === 'dept-bar' &&
+        JSON.parse(create.options.body).department === undefined);
     check('initial loading uses GET options defaults, not a stale mutation call',
         createCalls.some(call => call.requestPath === '/api/operations/templates' &&
             call.options.method === undefined));
 
     route.dom.window.openEditMode('tpl-1');
+    const editDepartment = route.dom.window.document.getElementById('tpl-service-dept');
+    check('edit visibly preserves a selected department that is no longer active',
+        editDepartment.value === 'dept-kitchen' &&
+        editDepartment.selectedOptions[0].disabled &&
+        editDepartment.selectedOptions[0].textContent.includes('non attivo'));
     await route.dom.window.doEdit('tpl-1');
     const edit = route.calls.find(call => call.requestPath === '/api/operations/templates/tpl-1' &&
         call.options.method === 'PATCH');
     check('edit uses the PATCH options object', !!edit);
     check('edit sends a JSON body', !!edit && typeof edit.options.body === 'string');
+    check('unrelated edit omits an unchanged inactive department',
+        !!edit && JSON.parse(edit.options.body).serviceDepartmentId === undefined);
 
     await route.dom.window.forceGenerate('tpl-1');
     const generate = route.calls.find(call =>

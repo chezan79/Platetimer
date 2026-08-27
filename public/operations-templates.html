@@ -50,7 +50,7 @@
 <script src="js/operations-common.js"></script>
 <script>
 const esc = OpsCommon.escHtml;
-let meData = null, assignableUsers = [], allTemplates = [];
+let meData = null, assignableUsers = [], serviceDepartments = [], allTemplates = [];
 
 const FREQ_LABELS = {
   DAILY:          'Giornaliero',
@@ -74,8 +74,12 @@ async function load() {
   document.getElementById('me-name').textContent = meData.user.name || '';
   document.getElementById('me-role').textContent = OpsCommon.roleLabel(meData.user.role);
 
-  const aData = await OpsCommon.api('/api/operations/assignees');
+  const [aData, dData] = await Promise.all([
+    OpsCommon.api('/api/operations/assignees'),
+    OpsCommon.api('/api/operations/service-departments')
+  ]);
   assignableUsers = (aData && aData.assignees) || [];
+  serviceDepartments = (dData && dData.departments) || [];
 
   await loadTemplates();
 
@@ -104,6 +108,10 @@ function freqSummary(t) {
   return s;
 }
 
+function departmentName(t) {
+  return t.serviceDepartmentName || t.department || '';
+}
+
 function renderList() {
   const container = document.getElementById('tpl-list');
   if (!allTemplates.length) {
@@ -118,7 +126,7 @@ function renderList() {
           <div class="task-meta">
             <span class="badge badge-${(t.priority||'medium').toLowerCase()}">${OpsCommon.PRIORITY_LABELS[t.priority]||t.priority}</span>
             <span style="color:var(--muted);font-size:12px">🔁 ${esc(freqSummary(t))}</span>
-            ${t.department ? `<span style="color:var(--muted);font-size:12px">· ${esc(t.department)}</span>` : ''}
+            ${departmentName(t) ? `<span style="color:var(--muted);font-size:12px">· ${esc(departmentName(t))}</span>` : ''}
             ${t.active === false ? '<span class="badge badge-status-cancelled">Disattivato</span>' : '<span class="badge badge-status-open">Attivo</span>'}
           </div>
         </div>
@@ -156,7 +164,7 @@ function openDetail(tplId) {
           <div class="info-cell"><div class="info-cell-label">Frequenza</div><div class="info-cell-val">${esc(freqSummary(t))}</div></div>
           <div class="info-cell"><div class="info-cell-label">Assegnatario predefinito</div><div class="info-cell-val">${esc(assigneeName)}</div></div>
           <div class="info-cell"><div class="info-cell-label">Priorità</div><div class="info-cell-val">${esc(t.priority)}</div></div>
-          <div class="info-cell"><div class="info-cell-label">Reparto</div><div class="info-cell-val">${esc(t.department||'—')}</div></div>
+          <div class="info-cell"><div class="info-cell-label">Reparto Service</div><div class="info-cell-val">${esc(departmentName(t)||'—')}</div></div>
           <div class="info-cell"><div class="info-cell-label">Inizio</div><div class="info-cell-val">${esc(t.startDate)}</div></div>
           <div class="info-cell"><div class="info-cell-label">Fine</div><div class="info-cell-val">${esc(t.endDate||'—')}</div></div>
           ${t.maxOccurrences ? `<div class="info-cell"><div class="info-cell-label">Max occorrenze</div><div class="info-cell-val">${t.maxOccurrences}</div></div>` : ''}
@@ -222,6 +230,13 @@ function tplForm(t) {
     `<option value="">Nessun assegnatario predefinito</option>`,
     ...assignableUsers.map(u => `<option value="${esc(u.id)}"${t&&u.id===t.defaultAssigneeId?' selected':''}>${esc(u.name)} (${esc(OpsCommon.roleLabel(u.role))})</option>`)
   ].join('');
+  const departmentOpts = [
+    '<option value="">Nessun reparto Service</option>',
+    ...serviceDepartments.map(d => `<option value="${esc(d.id)}"${t&&d.id===t.serviceDepartmentId?' selected':''}>${esc(d.name)}</option>`),
+    ...(t && t.serviceDepartmentId && !serviceDepartments.some(d => d.id === t.serviceDepartmentId)
+      ? [`<option value="${esc(t.serviceDepartmentId)}" selected disabled>${esc(t.serviceDepartmentName || t.department || 'Reparto non disponibile')} (non attivo)</option>`]
+      : [])
+  ].join('');
   return `
     <label class="form-label">Titolo *</label>
     <input id="tpl-title" class="form-input" maxlength="200" value="${esc(t?t.title:'')}">
@@ -251,8 +266,10 @@ function tplForm(t) {
     <select id="tpl-priority" class="form-select">
       ${['LOW','MEDIUM','HIGH','URGENT'].map(p => `<option value="${p}"${t&&t.priority===p?' selected':''}>${OpsCommon.PRIORITY_LABELS[p]}</option>`).join('')}
     </select>
-    <label class="form-label">Reparto</label>
-    <input id="tpl-dept" class="form-input" maxlength="100" value="${esc(t?t.department:'')}">
+    <label class="form-label">Reparto Service (facoltativo)</label>
+    <select id="tpl-service-dept" class="form-select"
+      data-edit="${t ? 'true' : 'false'}"
+      data-original-value="${esc(t && t.serviceDepartmentId ? t.serviceDepartmentId : '')}">${departmentOpts}</select>
     <label class="form-label">Data inizio *</label>
     <input id="tpl-start" class="form-input" type="date" value="${esc(t?t.startDate:'')}">
     <label class="form-label">Data fine (facoltativa)</label>
@@ -283,7 +300,8 @@ function collectForm() {
   const freq = document.getElementById('tpl-freq').value;
   const daysOfWeek = [...document.querySelectorAll('.dow-check:checked')].map(c => Number(c.value));
   const workSchedule = [...document.querySelectorAll('.ws-check:checked')].map(c => Number(c.value));
-  return {
+  const departmentSelect = document.getElementById('tpl-service-dept');
+  const form = {
     title:              document.getElementById('tpl-title').value.trim(),
     description:        document.getElementById('tpl-desc').value.trim(),
     frequency:          freq,
@@ -292,7 +310,6 @@ function collectForm() {
     dayOfMonth:         document.getElementById('tpl-dom') ? Number(document.getElementById('tpl-dom').value) || null : null,
     defaultAssigneeId:  document.getElementById('tpl-assignee').value || null,
     priority:           document.getElementById('tpl-priority').value,
-    department:         document.getElementById('tpl-dept').value.trim(),
     startDate:          document.getElementById('tpl-start').value,
     endDate:            document.getElementById('tpl-end').value || null,
     maxOccurrences:     document.getElementById('tpl-maxocc').value ? Number(document.getElementById('tpl-maxocc').value) : null,
@@ -300,6 +317,14 @@ function collectForm() {
     defaultReminderDays: document.getElementById('tpl-reminder').value ? Number(document.getElementById('tpl-reminder').value) : null,
     defaultEscalation:  document.getElementById('tpl-escalation').value === 'true',
   };
+  // PATCH omits an unchanged department so a legacy/inactive association is
+  // preserved server-side. Selecting another active department or explicitly
+  // choosing "none" still sends the requested change.
+  if (departmentSelect.dataset.edit !== 'true' ||
+      departmentSelect.value !== departmentSelect.dataset.originalValue) {
+    form.serviceDepartmentId = departmentSelect.value || null;
+  }
+  return form;
 }
 
 async function doCreate() {

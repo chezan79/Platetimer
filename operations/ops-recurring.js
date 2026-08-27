@@ -49,6 +49,7 @@ function parseLocalDate(str) {
 // ── Template validation ─────────────────────────────────────────────────────
 function validateTemplateInput(body) {
     const errors = [];
+    const serviceDepartmentId = body.serviceDepartmentId;
     if (!body.title || typeof body.title !== 'string' || !body.title.trim())
         errors.push('title obbligatorio');
     if (!VALID_FREQUENCIES.includes(body.frequency))
@@ -82,6 +83,10 @@ function validateTemplateInput(body) {
             body.workSchedule.some(d => !Number.isInteger(Number(d)) || Number(d) < 0 || Number(d) > 6))
             errors.push('workSchedule deve essere un array di interi 0-6');
     }
+    if (serviceDepartmentId !== undefined && serviceDepartmentId !== null &&
+        typeof serviceDepartmentId !== 'string' && typeof serviceDepartmentId !== 'number') {
+        errors.push('serviceDepartmentId non valido');
+    }
     return errors;
 }
 
@@ -93,6 +98,11 @@ function sanitizeTemplateInput(body) {
         description:        String(body.description || '').trim().slice(0, 2000),
         priority:           OPS_PRIORITIES_TPL.includes(body.priority) ? body.priority : 'MEDIUM',
         department:         typeof body.department === 'string' ? body.department.trim().slice(0, 100) : '',
+        // Canonical Service department identity. The display name is derived by
+        // server.js after validating this ID against the authenticated company.
+        serviceDepartmentId: body.serviceDepartmentId
+            ? String(body.serviceDepartmentId).trim().slice(0, 120)
+            : null,
         notes:              String(body.notes || '').trim().slice(0, 5000),
         defaultAssigneeId:  typeof body.defaultAssigneeId === 'string' ? body.defaultAssigneeId : null,
         frequency:          body.frequency,
@@ -116,6 +126,11 @@ function sanitizeTemplatePatch(body) {
     if (body.notes !== undefined) out.notes = String(body.notes).trim().slice(0, 5000);
     if (body.priority !== undefined) { if (!OPS_PRIORITIES_TPL.includes(body.priority)) throw 'Priorità non valida.'; out.priority = body.priority; }
     if (body.department !== undefined) out.department = String(body.department || '').trim().slice(0, 100);
+    if (body.serviceDepartmentId !== undefined) {
+        if (body.serviceDepartmentId !== null && typeof body.serviceDepartmentId !== 'string' && typeof body.serviceDepartmentId !== 'number')
+            throw 'serviceDepartmentId non valido.';
+        out.serviceDepartmentId = body.serviceDepartmentId ? String(body.serviceDepartmentId).trim().slice(0, 120) : null;
+    }
     if (body.defaultAssigneeId !== undefined) out.defaultAssigneeId = body.defaultAssigneeId || null;
     if (body.startDate !== undefined) { if (!/^\d{4}-\d{2}-\d{2}$/.test(body.startDate)) throw 'startDate non valido.'; out.startDate = body.startDate; }
     if (body.endDate !== undefined) out.endDate = body.endDate || null;
@@ -255,6 +270,9 @@ function generateTasksForTemplate(template, companyId, existingKeysSet, usersByI
             description:      template.description || '',
             priority:         template.priority || 'MEDIUM',
             department:       template.department || '',
+            serviceDepartmentId:   template.serviceDepartmentId ?? null,
+            serviceDepartmentName: template.serviceDepartmentName ?? null,
+            publishToService:      template.publishToService === true,
             notes:            template.notes || '',
             status:           'OPEN',
             assigneeId:       assigneeId,

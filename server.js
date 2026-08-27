@@ -2449,6 +2449,7 @@ async function deleteAttachmentFromStorage(storagePath) {
 // ── Sprint 3: recurring-template and preference stores ─────────────────────
 const OPS_TEMPLATES_FILE = path.join(DATA_DIR, 'ops-templates.json');
 const OPS_PREFS_FILE     = path.join(DATA_DIR, 'ops-prefs.json');
+const OPS_RECURRING_GENERATION_JOURNAL_FILE = path.join(DATA_DIR, 'ops-recurring-generation-journal.json');
 
 // Shape: { [companyId]: [ template, ... ] }
 let opsTemplatesStore = {};
@@ -2468,6 +2469,66 @@ function saveOpsTemplates() { saveJSON(OPS_TEMPLATES_FILE, opsTemplatesStore); }
 function saveOpsPrefs()     { saveJSON(OPS_PREFS_FILE,     opsPrefsStore);     }
 function saveOpsAcks()      { saveJSON(OPS_ACK_FILE,       opsAckStore);       }
 function saveOpsNotes()     { saveJSON(OPS_NOTES_FILE,      opsNotesStore);      }
+
+function recoverOpsRecurringGenerationJournal() {
+    if (db || !fs.existsSync(OPS_RECURRING_GENERATION_JOURNAL_FILE)) return;
+    const journal = JSON.parse(fs.readFileSync(OPS_RECURRING_GENERATION_JOURNAL_FILE, 'utf8'));
+    if (!journal || !journal.tasks || !journal.templates) throw new Error('invalid recurring generation journal');
+    const suffix = `.recovery-${process.pid}-${Date.now()}`;
+    const tasksTmp = OPS_TASKS_FILE + suffix;
+    const templatesTmp = OPS_TEMPLATES_FILE + suffix;
+    fs.writeFileSync(tasksTmp, JSON.stringify(journal.tasks, null, 2));
+    fs.writeFileSync(templatesTmp, JSON.stringify(journal.templates, null, 2));
+    fs.renameSync(tasksTmp, OPS_TASKS_FILE);
+    fs.renameSync(templatesTmp, OPS_TEMPLATES_FILE);
+    opsTasksStore = journal.tasks;
+    opsTemplatesStore = journal.templates;
+    fs.rmSync(OPS_RECURRING_GENERATION_JOURNAL_FILE, { force: true });
+    console.warn('⚠️ [OPS] Recurring generation journal recovered after an interrupted local write.');
+}
+
+// Recurring generation changes tasks and template counters together. This
+// boundary resolves only after Firestore confirms its batch or local fallback
+// has a recoverable journal-backed replacement, so lifecycle events cannot
+// precede durable, internally consistent state.
+async function persistOpsRecurringGeneration() {
+    if (db) {
+        const batch = db.batch();
+        batch.set(db.collection(STORE_COLLECTION).doc('ops_tasks'), {
+            store: opsTasksStore, updatedAt: Date.now()
+        });
+        batch.set(db.collection(STORE_COLLECTION).doc('ops_templates'), {
+            store: opsTemplatesStore, updatedAt: Date.now()
+        });
+        await batch.commit();
+        return;
+    }
+
+    const suffix = `.pending-${process.pid}-${Date.now()}`;
+    const tasksTmp = OPS_TASKS_FILE + suffix;
+    const templatesTmp = OPS_TEMPLATES_FILE + suffix;
+    let journalWritten = false;
+    try {
+        fs.writeFileSync(OPS_RECURRING_GENERATION_JOURNAL_FILE, JSON.stringify({
+            tasks: opsTasksStore,
+            templates: opsTemplatesStore,
+            createdAt: Date.now()
+        }, null, 2));
+        journalWritten = true;
+        fs.writeFileSync(tasksTmp, JSON.stringify(opsTasksStore, null, 2));
+        fs.writeFileSync(templatesTmp, JSON.stringify(opsTemplatesStore, null, 2));
+        fs.renameSync(tasksTmp, OPS_TASKS_FILE);
+        fs.renameSync(templatesTmp, OPS_TEMPLATES_FILE);
+        fs.rmSync(OPS_RECURRING_GENERATION_JOURNAL_FILE, { force: true });
+    } catch (error) {
+        try { fs.rmSync(tasksTmp, { force: true }); fs.rmSync(templatesTmp, { force: true }); } catch (_) {}
+        if (journalWritten) {
+            recoverOpsRecurringGenerationJournal();
+            return;
+        }
+        throw error;
+    }
+}
 
 // A Quick Note conversion changes two stores. Firestore commits the task and
 // note together; local mode uses a durable write-ahead journal so an abrupt
@@ -3450,6 +3511,28 @@ function resolveServicePublication(companyId, body, existing) {
     if (!deptId) { publish = false; deptName = null; }
 
     return { serviceDepartmentId: deptId, publishToService: publish, serviceDepartmentName: deptName };
+}
+
+// Resolve the optional Service department on a recurring template. Templates
+// use the same active company department directory as manual task creation,
+// but do not expose a publish checkbox. The name is always a server snapshot.
+// When the field is absent on a patch, preserve the existing template fields
+// so legacy templates and already-generated tasks remain unchanged.
+function resolveTemplateDepartment(companyId, body, existing) {
+    const hasDeptField = body.serviceDepartmentId !== undefined;
+    if (!hasDeptField) {
+        return {
+            serviceDepartmentId: (existing && existing.serviceDepartmentId) || null,
+            serviceDepartmentName: (existing && existing.serviceDepartmentName) || null,
+        };
+    }
+
+    const deptId = body.serviceDepartmentId ? body.serviceDepartmentId.toString().trim() : null;
+    if (!deptId) return { serviceDepartmentId: null, serviceDepartmentName: null };
+
+    const dept = getCompanyDepts(companyId).find(d => d.id === deptId && d.active === true);
+    if (!dept) throw 'Reparto Service non valido o non attivo.';
+    return { serviceDepartmentId: dept.id, serviceDepartmentName: dept.name };
 }
 
 // Explicit server-originated removal signal for the Service view.
@@ -4874,11 +4957,15 @@ app.post('/api/operations/templates', (req, res) => {
     }
 
     const clean = opsRecurring.sanitizeTemplateInput(req.body);
+    let serviceDept;
+    try { serviceDept = resolveTemplateDepartment(companyId, req.body, null); }
+    catch (msg) { return res.status(400).json({ error: msg }); }
     const now   = Date.now();
     const template = {
         id:              genTemplateId(),
         companyId,
         ...clean,
+        ...serviceDept,
         defaultAssigneeName: (() => {
             if (!clean.defaultAssigneeId) return null;
             const u = opsUsersById(companyId)[clean.defaultAssigneeId];
@@ -4921,6 +5008,9 @@ app.patch('/api/operations/templates/:id', (req, res) => {
     let patch;
     try { patch = opsRecurring.sanitizeTemplatePatch(req.body); }
     catch (msg) { return res.status(400).json({ error: msg }); }
+    let serviceDept;
+    try { serviceDept = resolveTemplateDepartment(companyId, req.body, tpl); }
+    catch (msg) { return res.status(400).json({ error: msg }); }
 
     // Validate defaultAssigneeId if changing
     if (patch.defaultAssigneeId) {
@@ -4931,7 +5021,7 @@ app.patch('/api/operations/templates/:id', (req, res) => {
         patch.defaultAssigneeName = asgn.name;
     }
 
-    Object.assign(tpl, patch, { updatedAt: Date.now() });
+    Object.assign(tpl, patch, serviceDept, { updatedAt: Date.now() });
     saveOpsTemplates();
     console.log(`✅ [OPS] Template patched: "${tpl.id}" by ${ctx.opsUser.id}`);
     res.json({ success: true, template: tpl });
@@ -4952,7 +5042,7 @@ app.delete('/api/operations/templates/:id', (req, res) => {
 });
 
 // POST /api/operations/templates/:id/generate-now — force generation immediately (Director, for testing)
-app.post('/api/operations/templates/:id/generate-now', (req, res) => {
+app.post('/api/operations/templates/:id/generate-now', async (req, res) => {
     const ctx = requireOpsAuth(req, res);
     if (!ctx) return;
     if (!opsAuth.canManageUsers(ctx.opsUser)) return res.status(403).json({ error: 'Solo il Direttore può forzare la generazione.' });
@@ -4967,11 +5057,24 @@ app.post('/api/operations/templates/:id/generate-now', (req, res) => {
     const newTasks  = opsRecurring.generateTasksForTemplate(tpl, companyId, existingKeys, usersById, addHistory);
     if (newTasks.length > 0) {
         if (!opsTasksStore[companyId]) opsTasksStore[companyId] = [];
+        const previousGeneratedCount = tpl.generatedCount;
+        const previousLastGeneratedAt = tpl.lastGeneratedAt;
         for (const t of newTasks) opsTasksStore[companyId].push(t);
-        saveOpsTasks();
         tpl.generatedCount  = (tpl.generatedCount || 0) + newTasks.length;
         tpl.lastGeneratedAt = Date.now();
-        saveOpsTemplates();
+        try {
+            await persistOpsRecurringGeneration();
+        } catch (error) {
+            const generatedIds = new Set(newTasks.map(task => task.id));
+            opsTasksStore[companyId] = opsTasksStore[companyId].filter(task => !generatedIds.has(task.id));
+            tpl.generatedCount = previousGeneratedCount;
+            tpl.lastGeneratedAt = previousLastGeneratedAt;
+            console.error('❌ [OPS] Recurring generate-now persistence failed:', error.message);
+            return res.status(500).json({ error: 'Impossibile salvare i compiti ricorrenti. Riprova.' });
+        }
+        for (const task of newTasks) {
+            broadcastOps(companyId, { action: 'OPS_TASK_CREATED', task: opsTaskWithComputedStatus(task) });
+        }
     }
     res.json({ success: true, generated: newTasks.length, tasks: newTasks.map(t => ({ id: t.id, dueDate: t.dueDate, occurrenceKey: t.occurrenceKey })) });
 });
@@ -6696,6 +6799,7 @@ async function initializeDataStores() {
         for (const store of stores) {
             store.setter(loadJSON(store.file));
         }
+        recoverOpsRecurringGenerationJournal();
         recoverOpsNoteConversionJournal();
         return;
     }
@@ -6746,9 +6850,12 @@ const PORT = process.env.PORT || 3000;
 // Idempotent — safe to call repeatedly; each phase guards against duplicates.
 const opsSchedulerInstance = opsScheduler.createScheduler(
     () => ({ opsTasksStore, opsUsersStore, opsTemplatesStore, opsPrefsStore }),
-    () => ({ saveOpsTasks, saveOpsTemplates, saveOpsPrefs }),
+    () => ({ saveOpsTasks, saveOpsTemplates, saveOpsPrefs, saveRecurringGeneration: persistOpsRecurringGeneration }),
     opsEmail,
-    addHistory
+    addHistory,
+    (companyId, task) => {
+        broadcastOps(companyId, { action: 'OPS_TASK_CREATED', task: opsTaskWithComputedStatus(task) });
+    }
 );
 
 initializeDataStores().then(() => {

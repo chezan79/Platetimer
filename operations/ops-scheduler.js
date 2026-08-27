@@ -63,9 +63,9 @@ function getCompanyPrefs(opsPrefsStore, companyId) {
 
 // ── Phase 1: Recurring task generation ─────────────────────────────────────
 // For each active template, generate any missing occurrence tasks up to today.
-async function processRecurring(stores, savers, addHistoryFn) {
+async function processRecurring(stores, savers, addHistoryFn, onTaskCreatedFn) {
     const { opsTasksStore, opsUsersStore, opsTemplatesStore } = stores;
-    const { saveOpsTasks, saveOpsTemplates } = savers;
+    const { saveOpsTasks, saveOpsTemplates, saveRecurringGeneration } = savers;
 
     // Collect all active templates across all companies
     const allTemplates = [];
@@ -79,6 +79,8 @@ async function processRecurring(stores, savers, addHistoryFn) {
     let generated = 0;
     let tasksDirty = false;
     let templatesDirty = false;
+    const generatedTasks = [];
+    const templateSnapshots = [];
 
     for (const { tpl, companyId } of allTemplates) {
         // Build set of existing occurrence keys for this template's company
@@ -98,18 +100,53 @@ async function processRecurring(stores, savers, addHistoryFn) {
         if (!opsTasksStore[companyId]) opsTasksStore[companyId] = [];
         for (const task of newTasks) {
             opsTasksStore[companyId].push(task);
+            generatedTasks.push({ companyId, task });
             generated++;
         }
         tasksDirty = true;
 
         // Update template counters
+        templateSnapshots.push({
+            template: tpl,
+            generatedCount: tpl.generatedCount,
+            lastGeneratedAt: tpl.lastGeneratedAt,
+        });
         tpl.generatedCount = (tpl.generatedCount || 0) + newTasks.length;
         tpl.lastGeneratedAt = Date.now();
         templatesDirty = true;
     }
 
-    if (tasksDirty)     saveOpsTasks();
-    if (templatesDirty) saveOpsTemplates();
+    try {
+        if (tasksDirty && templatesDirty && typeof saveRecurringGeneration === 'function') {
+            await saveRecurringGeneration();
+        } else {
+            if (tasksDirty) await saveOpsTasks();
+            if (templatesDirty) await saveOpsTemplates();
+        }
+    } catch (error) {
+        // Do not leave unpersisted occurrences in memory, otherwise the next
+        // scheduler run would consider them generated and never retry.
+        const generatedIdsByCompany = new Map();
+        for (const { companyId, task } of generatedTasks) {
+            if (!generatedIdsByCompany.has(companyId)) generatedIdsByCompany.set(companyId, new Set());
+            generatedIdsByCompany.get(companyId).add(task.id);
+        }
+        for (const [companyId, ids] of generatedIdsByCompany) {
+            opsTasksStore[companyId] = (opsTasksStore[companyId] || []).filter(task => !ids.has(task.id));
+        }
+        for (const snapshot of templateSnapshots) {
+            snapshot.template.generatedCount = snapshot.generatedCount;
+            snapshot.template.lastGeneratedAt = snapshot.lastGeneratedAt;
+        }
+        throw error;
+    }
+    // Notify only after the task store has been persisted. Existing callers
+    // without a callback retain the original generation-only behavior.
+    if (generated > 0 && typeof onTaskCreatedFn === 'function') {
+        for (const { companyId, task } of generatedTasks) {
+            onTaskCreatedFn(companyId, task);
+        }
+    }
     if (generated > 0)  console.log(`[SCHEDULER] Generati ${generated} compiti ricorrenti`);
     return { generated };
 }
@@ -310,8 +347,9 @@ async function processDailyDigest(stores, savers, email, now) {
 // `getStores`    — () → { opsTasksStore, opsUsersStore, opsTemplatesStore, opsPrefsStore }
 // `getSavers`    — () → { saveOpsTasks, saveOpsTemplates, saveOpsPrefs }
 // `email`        — ops-email module (sendReminderEmail, sendEscalationEmail, sendDailyDigestEmail)
-// `addHistoryFn` — server.js addHistory(task, type, actorId, actorName, data)
-function createScheduler(getStores, getSavers, email, addHistoryFn) {
+// `addHistoryFn`     — server.js addHistory(task, type, actorId, actorName, data)
+// `onTaskCreatedFn`  — optional post-persistence lifecycle publisher
+function createScheduler(getStores, getSavers, email, addHistoryFn, onTaskCreatedFn) {
     async function run({ now } = {}) {
         const stores  = getStores();
         const savers  = getSavers();
@@ -319,7 +357,7 @@ function createScheduler(getStores, getSavers, email, addHistoryFn) {
 
         const opts = nowDate ? { now: nowDate } : {};
 
-        try { await processRecurring(stores, savers, addHistoryFn); } catch (e) { console.error('[SCHEDULER] recurring error:', e.message); }
+        try { await processRecurring(stores, savers, addHistoryFn, onTaskCreatedFn); } catch (e) { console.error('[SCHEDULER] recurring error:', e.message); }
         try { await processReminders(stores, savers, email, opts.now); } catch (e) { console.error('[SCHEDULER] reminders error:', e.message); }
         try { await processEscalation(stores, savers, email, opts.now); } catch (e) { console.error('[SCHEDULER] escalation error:', e.message); }
         try { await processDailyDigest(stores, savers, email, opts.now); } catch (e) { console.error('[SCHEDULER] digest error:', e.message); }
