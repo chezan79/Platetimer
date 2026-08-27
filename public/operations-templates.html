@@ -335,7 +335,7 @@ async function doCreate() {
     body: JSON.stringify(collectForm()),
   });
   btn.disabled = false;
-  if (!data || !data.success) { OpsCommon.showPanelMsg(data && data.error, true); return; }
+  if (!data || !data.success) { panelMsg(data && data.error); return; }
   closePanel();
   await loadTemplates();
 }
@@ -348,7 +348,7 @@ async function doEdit(tplId) {
     body: JSON.stringify(collectForm()),
   });
   btn.disabled = false;
-  if (!data || !data.success) { OpsCommon.showPanelMsg(data && data.error, true); return; }
+  if (!data || !data.success) { panelMsg(data && data.error); return; }
   closePanel();
   await loadTemplates();
 }
@@ -370,6 +370,14 @@ async function deactivate(tplId) {
   if (!data || !data.success) { alert(data && data.error); return; }
   closePanel();
   await loadTemplates();
+}
+
+function panelMsg(message) {
+  const el = document.getElementById('panel-msg');
+  if (!el) return;
+  el.textContent = message || 'Errore durante il salvataggio.';
+  el.className = 'msg msg-error';
+  el.style.display = 'block';
 }
 
 function openPanel() {

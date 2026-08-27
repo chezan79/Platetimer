@@ -11,6 +11,7 @@
 const fs = require('fs');
 const path = require('path');
 const { JSDOM } = require('jsdom');
+const opsRecurring = require('../operations/ops-recurring');
 
 let passed = 0;
 let failed = 0;
@@ -30,7 +31,7 @@ function extractMainScript(html) {
     return scripts.reduce((largest, script) => script.length > largest.length ? script : largest, '');
 }
 
-function pageDom(url) {
+function pageDom(url, config = {}) {
     const dom = new JSDOM(`<!doctype html><html><body>
       <button id="new-tpl-btn"></button>
       <div id="ops-error"></div>
@@ -73,9 +74,8 @@ function pageDom(url) {
         roleLabel: role => role,
         loadMe: async () => ({ user: { id: 'director-1', name: 'Director', role: 'DIRECTOR' } }),
         showError: () => {},
-        showPanelMsg: () => {},
-        api: async (requestPath, options = {}) => {
-            calls.push({ requestPath, options });
+        api: async (requestPath, requestOptions = {}) => {
+            calls.push({ requestPath, options: requestOptions });
             if (requestPath === '/api/operations/assignees') {
                 return { success: true, assignees: [] };
             }
@@ -88,7 +88,9 @@ function pageDom(url) {
                 };
             }
             if (requestPath === '/api/operations/templates') {
-                if (options.method === 'POST') return { success: true, template: templates[0] };
+                if (requestOptions.method === 'POST') {
+                    return config.postResponse || { success: true, template: templates[0] };
+                }
                 return { success: true, templates };
             }
             return { success: true, generated: 1 };
@@ -118,6 +120,7 @@ async function run() {
     const createCalls = route.calls.splice(0);
     const createTitle = route.dom.window.document.getElementById('tpl-title');
     createTitle.value = 'Nightly close';
+    route.dom.window.document.getElementById('tpl-start').value = '2026-08-27';
     createDepartment.value = 'dept-bar';
     await route.dom.window.doCreate();
     const create = route.calls.find(call => call.requestPath === '/api/operations/templates' &&
@@ -129,6 +132,12 @@ async function run() {
         !!create &&
         JSON.parse(create.options.body).serviceDepartmentId === 'dept-bar' &&
         JSON.parse(create.options.body).department === undefined);
+    check('create does not send task-only publishToService',
+        !!create && JSON.parse(create.options.body).publishToService === undefined);
+    check('successful create closes the template panel',
+        !route.dom.window.document.getElementById('side-panel').classList.contains('open'));
+    check('successful create refreshes the template list',
+        route.dom.window.document.getElementById('tpl-list').textContent.includes('Daily close'));
     check('initial loading uses GET options defaults, not a stale mutation call',
         createCalls.some(call => call.requestPath === '/api/operations/templates' &&
             call.options.method === undefined));
@@ -158,6 +167,36 @@ async function run() {
         call.requestPath === '/api/operations/templates/tpl-1' &&
         call.options.method === 'DELETE');
     check('deactivate uses the DELETE options object', !!deactivate);
+
+    const invalid = pageDom('https://example.test/operations-templates.html?action=create', {
+        postResponse: { success: false, error: 'startDate obbligatorio (YYYY-MM-DD)' }
+    });
+    invalid.dom.window.eval(script);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    invalid.dom.window.document.getElementById('tpl-title').value = 'Missing start date';
+    let invalidThrew = false;
+    try {
+        await invalid.dom.window.doCreate();
+    } catch (_) {
+        invalidThrew = true;
+    }
+    const invalidCreate = invalid.calls.find(call =>
+        call.requestPath === '/api/operations/templates' && call.options.method === 'POST');
+    const invalidPayload = invalidCreate ? JSON.parse(invalidCreate.options.body) : {};
+    const validationErrors = opsRecurring.validateTemplateInput(invalidPayload);
+    const panelMessage = invalid.dom.window.document.getElementById('panel-msg');
+    check('empty start date is the first backend validation failure',
+        validationErrors[0] === 'startDate obbligatorio (YYYY-MM-DD)',
+        validationErrors.join('; '));
+    check('invalid create surfaces the backend error without throwing',
+        !invalidThrew &&
+        panelMessage.textContent === 'startDate obbligatorio (YYYY-MM-DD)' &&
+        panelMessage.style.display === 'block');
+    check('invalid create keeps the panel open and re-enables Save',
+        invalid.dom.window.document.getElementById('side-panel').classList.contains('open') &&
+        invalid.dom.window.document.getElementById('tpl-save-btn').disabled === false);
+    check('template page never calls undefined OpsCommon.showPanelMsg',
+        !source.includes('OpsCommon.showPanelMsg'));
 
     console.log(`\nOperations template client regression: ${passed} passed, ${failed} failed.`);
     process.exitCode = failed ? 1 : 0;
