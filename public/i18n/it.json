@@ -1162,6 +1162,8 @@
   "ops.cal.loading": "Caricamento…",
   "ops.cal.error.network": "Errore di rete. Impossibile caricare il calendario.",
   "ops.cal.more": "altri",
+  "ops.cal.planned": "Previsto",
+  "ops.cal.plannedAria": "Occorrenza ricorrente prevista",
   "ops.task.serviceDepartment": "Reparto Service",
   "ops.task.publishToService": "Rendi visibile anche nel reparto Service",
   "ops.task.noServiceDepartment": "Nessun reparto",

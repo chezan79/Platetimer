@@ -52,8 +52,9 @@ function check(name, cond, extra) {
 }
 
 // ── Pure calendar-window logic — the ACTUAL module the page uses (no mirror) ──
-const { startOfDay, addDays, calWindow, dateKey, groupTasksByDate, taskDetailUrl, windowQuery } =
+const { startOfDay, addDays, calWindow, dateKey, groupTasksByDate, groupCalendarEntries, taskDetailUrl, windowQuery } =
     require('../public/js/operations-calendar-core.js');
+const opsRecurring = require('../operations/ops-recurring');
 
 // ── Pure logic tests (no server) ──────────────────────────────────────────────
 function pureTests() {
@@ -92,6 +93,23 @@ function pureTests() {
         (g['2026-08-15'] || []).length === 2 && (g['2026-08-16'] || []).length === 1, g);
     check('P7. tasks without/with invalid dueDate excluded from calendar',
         !Object.values(g).flat().some(t => t.id === 'd' || t.id === 'e'));
+
+    const mixed = groupCalendarEntries(tasks, [
+        { projectionId: 'planned-1', occurrenceDate: '2026-08-15', isPlanned: true },
+        { projectionId: 'planned-invalid', occurrenceDate: 'not-a-date', isPlanned: true },
+    ]);
+    check('P7b. date-only planned occurrence groups without UTC parsing',
+        (mixed['2026-08-15'] || []).some(entry => entry.projectionId === 'planned-1'));
+    check('P7c. invalid planned occurrence date is excluded',
+        !Object.values(mixed).flat().some(entry => entry.projectionId === 'planned-invalid'));
+    const zurichGrouped = groupTasksByDate([{
+        id: 'zurich-key',
+        dueDate: '2026-03-29T22:30:00.000Z',
+        calendarDate: '2026-03-30'
+    }]);
+    check('P7d. authoritative Zurich task date overrides browser-local grouping',
+        (zurichGrouped['2026-03-30'] || []).length === 1 &&
+        !(zurichGrouped['2026-03-29'] || []).length);
 
     // Detail navigation URL
     check('P8. task card links to operations-tasks.html?taskId=<id>',
@@ -137,6 +155,49 @@ function pureTests() {
     const aprWin = calWindow('month', new Date(2026, 3, 15));
     check('P17. month window exact across fall-back DST day',
         dateKey(aprWin.start) === '2026-04-01' && dateKey(new Date(aprWin.end)) === '2026-04-30' && new Date(aprWin.end).getHours() === 23);
+
+    const rangeTemplates = [
+        {
+            frequency: 'EVERY_X_DAYS', interval: 3, startDate: '2020-01-01',
+            workSchedule: [0,1,2,3,4,5,6]
+        },
+        {
+            frequency: 'EVERY_X_WEEKS', interval: 2, startDate: '2020-01-01',
+            daysOfWeek: [1,4], workSchedule: [0,1,2,3,4,5,6]
+        },
+        {
+            frequency: 'EVERY_X_MONTHS', interval: 2, startDate: '2020-01-15',
+            dayOfMonth: 15, workSchedule: [0,1,2,3,4,5,6]
+        },
+    ];
+    for (const [index, template] of rangeTemplates.entries()) {
+        const expected = opsRecurring.getOccurrenceDates(template, new Date(2028, 8, 30))
+            .filter(ds => ds >= '2028-08-20' && ds <= '2028-09-30');
+        const actual = opsRecurring.getOccurrenceDatesInRange(
+            template, '2028-08-20', '2028-09-30'
+        );
+        check(`P${18 + index}. bounded recurrence keeps canonical frequency alignment`,
+            JSON.stringify(actual) === JSON.stringify(expected), { expected, actual });
+    }
+    check('P21. bounded recurrence preserves globally exhausted maxOccurrences',
+        opsRecurring.getOccurrenceDatesInRange({
+            frequency: 'DAILY',
+            startDate: '2020-01-01',
+            maxOccurrences: 2,
+            workSchedule: [0,1,2,3,4,5,6]
+        }, '2028-08-20', '2028-09-30').length === 0);
+    let budgetRejected = false;
+    try {
+        opsRecurring.getOccurrenceDatesInRange({
+            frequency: 'DAILY',
+            startDate: '1000-01-01',
+            maxOccurrences: 9999999,
+            workSchedule: [0,1,2,3,4,5,6]
+        }, '2028-08-20', '2028-09-30');
+    } catch (err) {
+        budgetRejected = err instanceof RangeError;
+    }
+    check('P22. finite historical projection has a strict computation budget', budgetRejected);
 }
 
 // ── Server tests ──────────────────────────────────────────────────────────────
@@ -217,6 +278,170 @@ async function main() {
         const dirBId = r.data.user.id;
         const tB = (await api(dirB, 'POST', '/api/operations/tasks', { title: 'B-company Sat task', assigneeId: dirBId, dueDate: d(15), priority: 'HIGH' })).data.task;
         check('S6. company B task created', !!tB);
+
+        // ── Dedicated read-only Calendar projection endpoint ──
+        console.log('\n── planned recurring occurrence projection ──');
+        r = await api(dirA, 'POST', '/api/departments', { name: 'Future Kitchen' });
+        const futureDept = r.data.department;
+        r = await api(dirA, 'POST', '/api/operations/templates', {
+            title: 'Future SC plan',
+            frequency: 'DAILY',
+            startDate: '2028-08-15',
+            endDate: '2028-08-16',
+            defaultAssigneeId: scInv.id,
+            serviceDepartmentId: futureDept.id,
+            priority: 'HIGH',
+            workSchedule: [0,1,2,3,4,5,6]
+        });
+        const futureAssignedTpl = r.data.template;
+        r = await api(dirA, 'PUT', `/api/departments/${futureDept.id}`, { active: false });
+        check('F0. future assigned template survives department becoming inactive',
+            !!futureAssignedTpl && r.data.success);
+
+        r = await api(dirA, 'POST', '/api/operations/templates', {
+            title: 'Future unassigned plan',
+            frequency: 'DAILY',
+            startDate: '2028-08-15',
+            maxOccurrences: 1,
+            priority: 'LOW',
+            workSchedule: [0,1,2,3,4,5,6]
+        });
+        const futureUnassignedTpl = r.data.template;
+        check('F1. no-department future template created',
+            futureUnassignedTpl && futureUnassignedTpl.serviceDepartmentId === null);
+
+        r = await api(dirB, 'POST', '/api/operations/templates', {
+            title: 'Other company future plan',
+            frequency: 'DAILY',
+            startDate: '2028-08-15',
+            maxOccurrences: 1,
+            defaultAssigneeId: dirBId,
+            workSchedule: [0,1,2,3,4,5,6]
+        });
+        const futureOtherTpl = r.data.template;
+        check('F2. other-company future template created', !!futureOtherTpl);
+
+        const projectionRange = 'startDate=2028-08-15&endDate=2028-08-16';
+        const projectionPath = '/api/operations/calendar?' + projectionRange;
+        const taskStorePath = path.join(DATA_DIR, 'ops-tasks.json');
+        const templateStorePath = path.join(DATA_DIR, 'ops-templates.json');
+        const taskStoreBefore = fs.readFileSync(taskStorePath, 'utf8');
+        const templateStoreBefore = fs.readFileSync(templateStorePath, 'utf8');
+
+        r = await api(dirA, 'GET', projectionPath);
+        const dirPlans = r.data.plannedOccurrences || [];
+        check('F3. dedicated endpoint returns separate task and planned collections',
+            r.status === 200 && Array.isArray(r.data.tasks) && Array.isArray(r.data.plannedOccurrences));
+        check('F4. Director sees assigned and unassigned company projections',
+            dirPlans.filter(p => p.templateId === futureAssignedTpl.id).length === 2 &&
+            dirPlans.filter(p => p.templateId === futureUnassignedTpl.id).length === 1, dirPlans);
+        check('F5. projection preserves inactive historical department metadata',
+            dirPlans.some(p => p.templateId === futureAssignedTpl.id &&
+                p.serviceDepartmentId === futureDept.id &&
+                p.serviceDepartmentName === futureDept.name));
+        check('F6. no-department projection remains null',
+            dirPlans.some(p => p.templateId === futureUnassignedTpl.id &&
+                p.serviceDepartmentId === null && p.serviceDepartmentName === null));
+        check('F7. projected entries are explicitly non-actionable',
+            dirPlans.every(p => p.isPlanned === true && p.actionable === false &&
+                /^\d{4}-\d{2}-\d{2}$/.test(p.occurrenceDate)));
+        check('F8. company A never receives company B projections',
+            !dirPlans.some(p => p.templateId === futureOtherTpl.id));
+
+        r = await api(scTok, 'GET', projectionPath);
+        const scPlans = r.data.plannedOccurrences || [];
+        check('F9. Sous Chef sees future occurrences assigned to them',
+            scPlans.filter(p => p.templateId === futureAssignedTpl.id).length === 2, scPlans);
+        check('F10. Sous Chef does not see unassigned Director-created projections',
+            !scPlans.some(p => p.templateId === futureUnassignedTpl.id), scPlans);
+
+        r = await api(cdbTok, 'GET', projectionPath);
+        check('F11. unrelated CdB does not see SC or unassigned projections',
+            (r.data.plannedOccurrences || []).length === 0, r.data.plannedOccurrences);
+
+        r = await api(dirB, 'GET', projectionPath);
+        check('F12. company B sees only its own future projection',
+            (r.data.plannedOccurrences || []).length === 1 &&
+            r.data.plannedOccurrences[0].templateId === futureOtherTpl.id, r.data.plannedOccurrences);
+
+        check('F13. projection reads do not rewrite task store',
+            fs.readFileSync(taskStorePath, 'utf8') === taskStoreBefore);
+        check('F14. projection reads do not rewrite template counters/store',
+            fs.readFileSync(templateStorePath, 'utf8') === templateStoreBefore);
+
+        r = await api(dirA, 'PATCH', `/api/operations/templates/${futureAssignedTpl.id}`, {
+            title: 'Future SC plan edited'
+        });
+        check('F15. template edit accepted', r.data.success);
+        r = await api(dirA, 'GET', projectionPath);
+        check('F16. next Calendar read reflects template edit',
+            (r.data.plannedOccurrences || []).some(p =>
+                p.templateId === futureAssignedTpl.id && p.title === 'Future SC plan edited'));
+
+        r = await api(dirA, 'DELETE', `/api/operations/templates/${futureUnassignedTpl.id}`);
+        check('F17. template deactivated', r.data.success);
+        r = await api(dirA, 'GET', projectionPath);
+        check('F18. deactivated template no longer projects',
+            !(r.data.plannedOccurrences || []).some(p => p.templateId === futureUnassignedTpl.id));
+
+        r = await api(dirA, 'POST', '/api/operations/templates', {
+            title: 'Already generated occurrence',
+            frequency: 'DAILY',
+            startDate: new Intl.DateTimeFormat('en-CA', {
+                timeZone: 'Europe/Zurich',
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit'
+            }).format(new Date()),
+            maxOccurrences: 1,
+            defaultAssigneeId: scInv.id,
+            workSchedule: [0,1,2,3,4,5,6]
+        });
+        const generatedTpl = r.data.template;
+        r = await api(dirA, 'POST', `/api/operations/templates/${generatedTpl.id}/generate-now`, {});
+        check('F19. real recurring Task generated through existing lifecycle',
+            r.data.success && r.data.generated === 1, r.data);
+        const generatedTaskId = r.data.tasks && r.data.tasks[0] && r.data.tasks[0].id;
+        const generatedDate = generatedTpl.startDate;
+        const dedupPath = '/api/operations/calendar?' +
+            `startDate=${generatedDate}&endDate=${generatedDate}`;
+        r = await api(dirA, 'GET', dedupPath);
+        check('F20. generated Task is returned as a persisted task',
+            (r.data.tasks || []).some(task => task.id === generatedTaskId), r.data.tasks);
+        check('F21. real occurrence suppresses its planned projection',
+            !(r.data.plannedOccurrences || []).some(p => p.templateId === generatedTpl.id),
+            r.data.plannedOccurrences);
+        r = await api(dirA, 'GET', '/api/operations/calendar?startDate=bad&endDate=2028-08-16');
+        check('F22. malformed date-only range is rejected without crashing',
+            r.status === 400 && r.data.success === false, r.data);
+
+        const dstInside = (await api(dirA, 'POST', '/api/operations/tasks', {
+            title: 'Zurich DST opening hour',
+            assigneeId: dirAId,
+            dueDate: '2026-03-28T23:30:00.000Z'
+        })).data.task;
+        const dstOutside = (await api(dirA, 'POST', '/api/operations/tasks', {
+            title: 'Next Zurich day',
+            assigneeId: dirAId,
+            dueDate: '2026-03-29T22:30:00.000Z'
+        })).data.task;
+        r = await api(dirA, 'GET',
+            '/api/operations/calendar?startDate=2026-03-29&endDate=2026-03-29');
+        check('F23. Zurich spring-DST day includes its opening local hour',
+            (r.data.tasks || []).some(task => task.id === dstInside.id), r.data.tasks);
+        check('F24. Zurich spring-DST day excludes the next local date',
+            !(r.data.tasks || []).some(task => task.id === dstOutside.id), r.data.tasks);
+        check('F25. endpoint reports its authoritative business timezone',
+            r.data.timeZone === 'Europe/Zurich', r.data.timeZone);
+
+        r = await api(dirA, 'GET',
+            '/api/operations/calendar?startDate=2028-01-01&endDate=2028-04-01');
+        check('F26. oversized Calendar range is rejected',
+            r.status === 400 && /62/.test(r.data.error || ''), r.data);
+        r = await api(dirA, 'GET',
+            '/api/operations/calendar?startDate=9999-01-01&endDate=9999-01-02');
+        check('F27. abusive far-future projection range is rejected',
+            r.status === 400, r.data);
 
         // ── (a) start/end range filter — using the page's real query contract:
         //     offset-bearing ISO instants from windowQuery(calWindow(...)),
@@ -315,7 +540,8 @@ async function main() {
         // The calendar page never references Service calendar endpoints
         const pageSrc = fs.readFileSync(path.join(__dirname, '..', 'public', 'operations-calendar.html'), 'utf8');
         check('E3. calendar page never calls /api/calendar/*', !pageSrc.includes('/api/calendar'));
-        check('E4. calendar page fetches the Operations task list', pageSrc.includes('/api/operations/tasks'));
+        check('E4. calendar page fetches the dedicated Operations Calendar endpoint',
+            pageSrc.includes('/api/operations/calendar') && !pageSrc.includes("OpsCommon.api('/api/operations/tasks"));
         check('E5. calendar page uses existing OpsRealtime channel (no new WebSocket)',
             pageSrc.includes('operations-realtime.js') && !/new\s+WebSocket/.test(pageSrc));
         check('E6. calendar page listens for task lifecycle events',
@@ -337,12 +563,16 @@ async function main() {
         check('U. calendar cards link to task detail',
             calSrc.includes('taskDetailUrl(') &&
             fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'operations-calendar-core.js'), 'utf8').includes('operations-tasks.html?taskId='));
+        check('U. planned entries are rendered as non-button cards',
+            /function plannedCardHtml[\s\S]*<div class="cal-task cal-planned/.test(calSrc) &&
+            !/function plannedCardHtml[\s\S]*?<button/.test(calSrc));
         check('U. calendar page loads shared core module', calSrc.includes('operations-calendar-core.js'));
 
         // i18n keys present in all three locales
         const KEYS = ['ops.cal.tab.day', 'ops.cal.tab.week', 'ops.cal.tab.month', 'ops.cal.nav.prev', 'ops.cal.nav.today',
             'ops.cal.nav.next', 'ops.cal.empty.day', 'ops.cal.empty.week', 'ops.cal.empty.month', 'ops.cal.loading',
-            'ops.cal.error.network', 'ops.cal.quickAction', 'ops.cal.navLink'];
+            'ops.cal.error.network', 'ops.cal.quickAction', 'ops.cal.navLink',
+            'ops.cal.planned', 'ops.cal.plannedAria'];
         for (const lang of ['it', 'fr', 'en']) {
             const dict = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'public', 'i18n', `${lang}.json`), 'utf8'));
             check(`U. ${lang}.json valid + has all ops.cal.* keys`, KEYS.every(k => typeof dict[k] === 'string' && dict[k].length));

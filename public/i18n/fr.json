@@ -1159,6 +1159,8 @@
   "ops.cal.loading": "Chargement…",
   "ops.cal.error.network": "Erreur réseau. Impossible de charger le calendrier.",
   "ops.cal.more": "autres",
+  "ops.cal.planned": "Prévu",
+  "ops.cal.plannedAria": "Occurrence récurrente prévue",
   "ops.task.serviceDepartment": "Département Service",
   "ops.task.publishToService": "Afficher également dans le département Service",
   "ops.task.noServiceDepartment": "Aucun département",

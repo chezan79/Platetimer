@@ -31,6 +31,10 @@
 .cal-task.prio-high   { border-left-color:#d97706; }
 .cal-task.prio-medium { border-left-color:#2563eb; }
 .cal-task.prio-low    { border-left-color:#64748b; }
+.cal-planned { background:#f8fafc; border-style:dashed; border-left-color:#94a3b8; cursor:default; opacity:.88; }
+.cal-planned:hover { background:#f8fafc; }
+.cal-planned .cal-task-title { color:#475569; }
+.cal-planned-badge { font-size:9px; padding:1px 6px; background:#e2e8f0; color:#475569; border-radius:999px; font-weight:800; }
 .cal-task-title { font-size:12px; font-weight:700; color:var(--text,#0f172a); line-height:1.3; overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
 .cal-task-meta { display:flex; align-items:center; gap:5px; flex-wrap:wrap; margin-top:4px; font-size:11px; color:var(--muted,#64748b); }
 .cal-task .badge { font-size:9px; padding:1px 6px; }
@@ -107,8 +111,8 @@ let anchor = new Date();           // any date inside the visible window
 let meData = null;
 
 // ── Pure window/grouping helpers — shared with tests via operations-calendar-core.js ──
-// DST-safe calendar math + offset-bearing ISO instants for the API.
-const { startOfDay, addDays, calWindow, dateKey, groupTasksByDate, taskDetailUrl, windowQuery } = OpsCalCore;
+// DST-safe calendar math + date-only business-calendar keys for the API.
+const { startOfDay, addDays, calWindow, dateKey, groupCalendarEntries, taskDetailUrl } = OpsCalCore;
 
 // ── Rendering ─────────────────────────────────────────────────────────────────
 function localeCode() {
@@ -121,7 +125,9 @@ function taskCardHtml(tk, users) {
   const st = tk.effectiveStatus || tk.status;
   const due = tk.dueDate ? new Date(tk.dueDate) : null;
   const hasTime = due && tk.dueDate.length > 10 && !(due.getHours() === 0 && due.getMinutes() === 0);
-  const timeStr = hasTime ? due.toLocaleTimeString(localeCode(), { hour: '2-digit', minute: '2-digit' }) : '';
+  const timeStr = hasTime ? due.toLocaleTimeString(localeCode(), {
+    hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Zurich'
+  }) : '';
   return `<button type="button" class="cal-task prio-${(tk.priority || 'medium').toLowerCase()}"
       onclick="location.href=taskDetailUrl('${esc(tk.id)}')">
     <div class="cal-task-title">${timeStr ? '🕐 ' + esc(timeStr) + ' · ' : ''}${esc(tk.title)}</div>
@@ -133,11 +139,27 @@ function taskCardHtml(tk, users) {
   </button>`;
 }
 
+function plannedCardHtml(occurrence) {
+  const assignee = occurrence.assigneeName ? '👤 ' + esc(occurrence.assigneeName) : '';
+  return `<div class="cal-task cal-planned prio-${(occurrence.priority || 'medium').toLowerCase()}"
+      aria-label="${esc(t('ops.cal.plannedAria'))}">
+    <div class="cal-task-title">${esc(occurrence.title)}</div>
+    <div class="cal-task-meta">
+      ${assignee}
+      <span class="cal-planned-badge">${esc(t('ops.cal.planned'))}</span>
+    </div>
+  </div>`;
+}
+
+function entryCardHtml(entry, users) {
+  return entry && entry.isPlanned ? plannedCardHtml(entry) : taskCardHtml(entry, users);
+}
+
 function renderDay(byDate, users) {
   const k = dateKey(startOfDay(anchor));
   const tasks = byDate[k] || [];
   if (!tasks.length) return `<div class="cal-empty">${t('ops.cal.empty.day')}</div>`;
-  return `<div class="cal-day-list card" style="padding:14px">${tasks.map(tk => taskCardHtml(tk, users)).join('')}</div>`;
+   return `<div class="cal-day-list card" style="padding:14px">${tasks.map(tk => entryCardHtml(tk, users)).join('')}</div>`;
 }
 
 function renderWeek(byDate, users, win) {
@@ -150,7 +172,7 @@ function renderWeek(byDate, users, win) {
     const tasks = byDate[k] || [];
     cells += `<div class="cal-cell${k === todayK ? ' cal-today' : ''}">
       <div class="cal-cell-date">${d.getDate()}</div>
-      ${tasks.map(tk => taskCardHtml(tk, users)).join('')}
+       ${tasks.map(tk => entryCardHtml(tk, users)).join('')}
     </div>`;
   }
   const any = Object.keys(byDate).some(k => (byDate[k] || []).length);
@@ -178,7 +200,7 @@ function renderMonth(byDate, users, win) {
     const extra = tasks.length - shown.length;
     cells += `<div class="cal-cell${d.getMonth() !== month ? ' cal-other' : ''}${k === todayK ? ' cal-today' : ''}">
       <div class="cal-cell-date">${d.getDate()}</div>
-      ${shown.map(tk => taskCardHtml(tk, users)).join('')}
+       ${shown.map(tk => entryCardHtml(tk, users)).join('')}
       ${extra > 0 ? `<div class="cal-more">+${extra} ${t('ops.cal.more')}</div>` : ''}
     </div>`;
   }
@@ -200,15 +222,17 @@ function periodLabel(win) {
 async function refresh() {
   const win = calWindow(view, anchor);
   document.getElementById('cal-period').textContent = periodLabel(win);
-  const wq = windowQuery(win);
-  const params = new URLSearchParams({ start: wq.start, end: wq.end, sort: 'dueDate' });
-  const data = await OpsCommon.api('/api/operations/tasks?' + params);
+  const params = new URLSearchParams({
+    startDate: dateKey(win.start),
+    endDate: dateKey(win.end)
+  });
+  const data = await OpsCommon.api('/api/operations/calendar?' + params);
   if (!data || !data.success) {
     if (!data) document.getElementById('cal-content').innerHTML = `<div class="cal-empty">${t('ops.cal.error.network')}</div>`;
     else OpsCommon.showError(data.error);
     return;
   }
-  const byDate = groupTasksByDate(data.tasks);
+   const byDate = groupCalendarEntries(data.tasks, data.plannedOccurrences);
   const content = document.getElementById('cal-content');
   if (view === 'day')       content.innerHTML = renderDay(byDate, data.users);
   else if (view === 'week') content.innerHTML = renderWeek(byDate, data.users, win);

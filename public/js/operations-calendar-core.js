@@ -49,11 +49,26 @@
     function groupTasksByDate(tasks) {
         const map = {};
         for (const tk of tasks || []) {
+            if (/^\d{4}-\d{2}-\d{2}$/.test(tk.calendarDate || '')) {
+                (map[tk.calendarDate] = map[tk.calendarDate] || []).push(tk);
+                continue;
+            }
             if (!tk.dueDate) continue;
             const d = new Date(tk.dueDate);
             if (isNaN(d.getTime())) continue;
             const k = dateKey(d);
             (map[k] = map[k] || []).push(tk);
+        }
+        return map;
+    }
+
+    // Add read-only date-only projections without parsing YYYY-MM-DD as UTC.
+    function groupCalendarEntries(tasks, plannedOccurrences) {
+        const map = groupTasksByDate(tasks);
+        for (const occurrence of plannedOccurrences || []) {
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(occurrence.occurrenceDate || '')) continue;
+            const k = occurrence.occurrenceDate;
+            (map[k] = map[k] || []).push(occurrence);
         }
         return map;
     }
@@ -67,5 +82,5 @@
         return { start: win.start.toISOString(), end: new Date(win.end).toISOString() };
     }
 
-    return { startOfDay, addDays, calWindow, dateKey, groupTasksByDate, taskDetailUrl, windowQuery };
+    return { startOfDay, addDays, calWindow, dateKey, groupTasksByDate, groupCalendarEntries, taskDetailUrl, windowQuery };
 }));

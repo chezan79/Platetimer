@@ -3883,6 +3883,151 @@ app.get('/api/operations/tasks', (req, res) => {
     res.json({ success: true, tasks, users: usersPublic, me: publicOpsUser(actor) });
 });
 
+// ── GET /api/operations/calendar — persisted tasks + read-only projections ──
+// The two collections are intentionally separate: planned occurrences are
+// never Tasks and must not enter the scheduler, persistence, or lifecycle flow.
+function isValidCalendarDateOnly(value) {
+    if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+    const parsed = new Date(`${value}T00:00:00.000Z`);
+    return !isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
+
+function addCalendarDateOnlyDays(value, days) {
+    const [year, month, day] = value.split('-').map(Number);
+    return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
+}
+
+function calendarDateOnlyDiff(from, to) {
+    const [fy, fm, fd] = from.split('-').map(Number);
+    const [ty, tm, td] = to.split('-').map(Number);
+    return Math.floor(
+        (Date.UTC(ty, tm - 1, td) - Date.UTC(fy, fm - 1, fd)) / (24 * 3600 * 1000)
+    );
+}
+
+const MAX_OPS_CALENDAR_RANGE_DAYS = 62;
+const MAX_OPS_CALENDAR_FUTURE_DAYS = 5 * 366;
+
+app.get('/api/operations/calendar', (req, res) => {
+    const ctx = requireOpsAuth(req, res);
+    if (!ctx) return;
+
+    const actor = ctx.opsUser;
+    const companyId = actor.companyId;
+    const byId = opsUsersById(companyId);
+    const { startDate, endDate } = req.query;
+
+    if (!isValidCalendarDateOnly(startDate) ||
+        !isValidCalendarDateOnly(endDate) ||
+        startDate > endDate) {
+        return res.status(400).json({
+            success: false,
+            error: 'startDate e endDate devono essere date valide (YYYY-MM-DD).'
+        });
+    }
+
+    const rangeDays = calendarDateOnlyDiff(startDate, endDate) + 1;
+    if (rangeDays > MAX_OPS_CALENDAR_RANGE_DAYS) {
+        return res.status(400).json({
+            success: false,
+            error: `L'intervallo del calendario non può superare ${MAX_OPS_CALENDAR_RANGE_DAYS} giorni.`
+        });
+    }
+
+    const todayZurich = toZurichDateStr(Date.now());
+    if (endDate > addCalendarDateOnlyDays(todayZurich, MAX_OPS_CALENDAR_FUTURE_DAYS)) {
+        return res.status(400).json({
+            success: false,
+            error: 'L’intervallo richiesto è troppo lontano nel futuro.'
+        });
+    }
+
+    // Date-only values are the authoritative business-calendar contract.
+    // Persisted Task instants are filtered using exact Europe/Zurich day bounds.
+    const startMs = zurichLocalToMs(startDate, '00:00');
+    const endMs = zurichLocalToMs(addCalendarDateOnlyDays(endDate, 1), '00:00') - 1;
+
+    const companyTasks = getOpsTasks(companyId);
+    const tasks = companyTasks
+        .filter(task => opsAuth.canViewTask(actor, task, byId))
+        .map(opsTaskWithComputedStatus)
+        .filter(task => {
+            if (!task.dueDate) return false;
+            const due = new Date(task.dueDate).getTime();
+            return !isNaN(due) && due >= startMs && due <= endMs;
+        })
+        .map(task => ({ ...task, calendarDate: toZurichDateStr(new Date(task.dueDate).getTime()) }))
+        .sort((a, b) => (a.dueDate || '9999').localeCompare(b.dueDate || '9999'));
+
+    // Use all company task metadata for deduplication. Visibility is applied
+    // separately to the planned candidate, so this cannot reveal a hidden task.
+    const existingOccurrenceKeys = new Set(
+        companyTasks
+            .filter(task => task.templateId && task.occurrenceKey)
+            .map(task => task.occurrenceKey)
+    );
+    const plannedOccurrences = [];
+    const projectionStartDate = startDate < todayZurich ? todayZurich : startDate;
+
+    for (const template of endDate < projectionStartDate ? [] : getOpsTemplates(companyId)) {
+        if (template.active === false || !template.id || !template.startDate) continue;
+
+        let dates;
+        try {
+            dates = opsRecurring.getOccurrenceDatesInRange(template, projectionStartDate, endDate);
+        } catch (_) {
+            // A malformed legacy template must not make the Calendar fail.
+            dates = [];
+        }
+
+        for (const occurrenceDate of dates) {
+            const key = opsRecurring.occurrenceKey(template.id, occurrenceDate);
+            if (existingOccurrenceKeys.has(key)) continue;
+
+            const projectedTask = {
+                companyId,
+                assigneeId: template.defaultAssigneeId || null,
+                createdBy: template.createdBy || null,
+            };
+            if (!opsAuth.canViewTask(actor, projectedTask, byId)) continue;
+
+            const assignee = projectedTask.assigneeId ? byId[projectedTask.assigneeId] : null;
+            plannedOccurrences.push({
+                projectionId: `planned_${template.id}_${occurrenceDate}`,
+                templateId: template.id,
+                occurrenceDate,
+                title: template.title || '',
+                description: template.description || '',
+                priority: template.priority || 'MEDIUM',
+                assigneeId: projectedTask.assigneeId,
+                assigneeName: assignee ? (assignee.name || assignee.email || projectedTask.assigneeId) : null,
+                serviceDepartmentId: template.serviceDepartmentId ?? null,
+                serviceDepartmentName: template.serviceDepartmentName ?? null,
+                isPlanned: true,
+                actionable: false,
+            });
+        }
+    }
+    plannedOccurrences.sort((a, b) =>
+        a.occurrenceDate.localeCompare(b.occurrenceDate) ||
+        a.title.localeCompare(b.title) ||
+        a.templateId.localeCompare(b.templateId)
+    );
+
+    const usersPublic = {};
+    Object.values(byId).forEach(u => {
+        usersPublic[u.id] = { id: u.id, name: u.name, role: u.role };
+    });
+    res.json({
+        success: true,
+        tasks,
+        plannedOccurrences,
+        users: usersPublic,
+        me: publicOpsUser(actor),
+        timeZone: CALENDAR_TZ,
+    });
+});
+
 // ── PUT /api/operations/tasks/:id — legacy combined endpoint (kept for backward compat) ──
 // New callers should prefer the explicit action endpoints below.
 app.put('/api/operations/tasks/:id', (req, res) => {

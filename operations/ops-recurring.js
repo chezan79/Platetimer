@@ -46,6 +46,12 @@ function parseLocalDate(str) {
     return new Date(y, m - 1, d);
 }
 
+function calendarDayDiff(from, to) {
+    const fromUtc = Date.UTC(from.getFullYear(), from.getMonth(), from.getDate());
+    const toUtc = Date.UTC(to.getFullYear(), to.getMonth(), to.getDate());
+    return Math.floor((toUtc - fromUtc) / (24 * 3600 * 1000));
+}
+
 // ── Template validation ─────────────────────────────────────────────────────
 function validateTemplateInput(body) {
     const errors = [];
@@ -147,7 +153,7 @@ function sanitizeTemplatePatch(body) {
 // Returns sorted array of 'YYYY-MM-DD' strings for dates that should have
 // tasks generated, from template.startDate up to (and including) `upTo`.
 // Idempotent: calling multiple times returns the same set.
-function getOccurrenceDates(template, upTo) {
+function getOccurrenceDates(template, upTo, fromDate) {
     const upToDate = upTo instanceof Date ? upTo : new Date(upTo || Date.now());
     // Use end of day so a task due "today" is always generated on the run that happens today.
     const ceiling = new Date(upToDate);
@@ -156,6 +162,14 @@ function getOccurrenceDates(template, upTo) {
     const start    = parseLocalDate(template.startDate);
     const end      = template.endDate ? parseLocalDate(template.endDate) : null;
     const maxOcc   = (template.maxOccurrences && template.maxOccurrences > 0) ? template.maxOccurrences : Infinity;
+    const requestedFloor = fromDate
+        ? (fromDate instanceof Date ? new Date(fromDate) : parseLocalDate(fromDate))
+        : null;
+    const floor = requestedFloor && requestedFloor > start ? requestedFloor : start;
+    // A lower-bound jump is safe only without maxOccurrences. With a finite cap,
+    // the canonical count starts at template.startDate, so the existing full
+    // walk is retained to preserve scheduler semantics exactly.
+    const canJumpToFloor = !!requestedFloor && maxOcc === Infinity;
     const workdays = new Set(
         Array.isArray(template.workSchedule) && template.workSchedule.length > 0
             ? template.workSchedule
@@ -168,7 +182,7 @@ function getOccurrenceDates(template, upTo) {
 
     if (freq === 'DAILY') {
         // Every calendar day within workSchedule.
-        let cur = new Date(start);
+        let cur = new Date(canJumpToFloor ? floor : start);
         while (cur <= ceiling && dates.length < maxOcc) {
             if (end && cur > end) break;
             if (workdays.has(cur.getDay())) dates.push(dateStr(cur));
@@ -177,7 +191,8 @@ function getOccurrenceDates(template, upTo) {
 
     } else if (freq === 'EVERY_X_DAYS') {
         const step = Math.max(1, template.interval || 1);
-        let cur = new Date(start);
+        const elapsed = canJumpToFloor ? Math.max(0, calendarDayDiff(start, floor)) : 0;
+        let cur = addDays(start, Math.ceil(elapsed / step) * step);
         while (cur <= ceiling && dates.length < maxOcc) {
             if (end && cur > end) break;
             if (workdays.has(cur.getDay())) dates.push(dateStr(cur));
@@ -194,11 +209,18 @@ function getOccurrenceDates(template, upTo) {
         // Anchor the week iteration on the Sunday of the start date's week.
         const anchorSunday = addDays(start, -start.getDay());
         let weekCur = new Date(anchorSunday);
+        if (canJumpToFloor) {
+            const elapsed = Math.max(0, calendarDayDiff(anchorSunday, floor));
+            const periods = Math.floor(elapsed / weekStep);
+            weekCur = addDays(anchorSunday, periods * weekStep);
+            if (addDays(weekCur, 6) < floor) weekCur = addDays(weekCur, weekStep);
+        }
 
         outer: while (weekCur <= ceiling && dates.length < maxOcc) {
             for (let d = 0; d < 7; d++) {
                 const day = addDays(weekCur, d);
                 if (day < start) continue;
+                if (canJumpToFloor && day < floor) continue;
                 if (day > ceiling) break outer;
                 if (end && day > end) break outer;
                 if (!targetDays.has(day.getDay())) continue;
@@ -216,6 +238,16 @@ function getOccurrenceDates(template, upTo) {
 
         let year  = start.getFullYear();
         let month = start.getMonth(); // 0-based
+        if (canJumpToFloor) {
+            const elapsedMonths = Math.max(
+                0,
+                (floor.getFullYear() - year) * 12 + floor.getMonth() - month
+            );
+            const periods = Math.floor(elapsedMonths / monthStep);
+            month += periods * monthStep;
+            year += Math.floor(month / 12);
+            month %= 12;
+        }
 
         while (dates.length < maxOcc) {
             // new Date(year, month, dom) will roll over if dom > last-day-of-month.
@@ -230,7 +262,9 @@ function getOccurrenceDates(template, upTo) {
             }
             if (candidate > ceiling) break;
             if (end && candidate > end) break;
-            if (candidate >= start && workdays.has(candidate.getDay())) {
+            if (candidate >= start &&
+                (!canJumpToFloor || candidate >= floor) &&
+                workdays.has(candidate.getDay())) {
                 dates.push(dateStr(candidate));
             }
             month += monthStep;
@@ -240,6 +274,47 @@ function getOccurrenceDates(template, upTo) {
     }
 
     return dates;
+}
+
+// Returns only the canonical occurrences inside an inclusive date-only window.
+// This deliberately delegates recurrence semantics to getOccurrenceDates so
+// projection reads cannot drift from scheduler generation. It does not create
+// tasks or occurrence keys; the caller may use occurrenceKey only in memory
+// when comparing against already-generated tasks.
+function getOccurrenceDatesInRange(template, rangeStart, rangeEnd) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(rangeStart || '')) ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(String(rangeEnd || '')) ||
+        String(rangeStart) > String(rangeEnd)) {
+        return [];
+    }
+    if (template.maxOccurrences) {
+        const start = parseLocalDate(template.startDate);
+        const finish = parseLocalDate(rangeEnd);
+        const elapsedDays = Math.max(0, calendarDayDiff(start, finish));
+        const interval = Math.max(1, Number(template.interval) || 1);
+        let estimatedSteps;
+        if (template.frequency === 'WEEKLY' || template.frequency === 'EVERY_X_WEEKS') {
+            estimatedSteps = Math.ceil(elapsedDays / (7 * interval)) * 7;
+        } else if (template.frequency === 'MONTHLY' || template.frequency === 'EVERY_X_MONTHS') {
+            const elapsedMonths = Math.max(
+                0,
+                (finish.getFullYear() - start.getFullYear()) * 12 +
+                finish.getMonth() - start.getMonth()
+            );
+            estimatedSteps = Math.ceil(elapsedMonths / interval);
+        } else {
+            estimatedSteps = Math.ceil(elapsedDays / interval);
+        }
+        if (estimatedSteps > 10000) {
+            throw new RangeError('Recurring projection exceeds its computation budget');
+        }
+    }
+    const dates = getOccurrenceDates(
+        template,
+        parseLocalDate(rangeEnd),
+        template.maxOccurrences ? null : parseLocalDate(rangeStart)
+    );
+    return dates.filter(ds => ds >= rangeStart && ds <= rangeEnd);
 }
 
 // ── Task generation ─────────────────────────────────────────────────────────
@@ -327,5 +402,6 @@ module.exports = {
     sanitizeTemplateInput,
     sanitizeTemplatePatch,
     getOccurrenceDates,
+    getOccurrenceDatesInRange,
     generateTasksForTemplate,
 };
