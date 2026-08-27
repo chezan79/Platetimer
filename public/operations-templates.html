@@ -271,7 +271,7 @@ function tplForm(t) {
       data-edit="${t ? 'true' : 'false'}"
       data-original-value="${esc(t && t.serviceDepartmentId ? t.serviceDepartmentId : '')}">${departmentOpts}</select>
     <label class="form-label">Data inizio *</label>
-    <input id="tpl-start" class="form-input" type="date" value="${esc(t?t.startDate:'')}">
+    <input id="tpl-start" class="form-input" type="date" value="${esc(t?t.startDate:'')}" required>
     <label class="form-label">Data fine (facoltativa)</label>
     <input id="tpl-end" class="form-input" type="date" value="${esc(t&&t.endDate?t.endDate:'')}">
     <label class="form-label">Massimo occorrenze (facoltativo)</label>
@@ -328,11 +328,17 @@ function collectForm() {
 }
 
 async function doCreate() {
+  const form = collectForm();
+  if (!form.startDate) {
+    panelMsg('startDate obbligatorio (YYYY-MM-DD)');
+    document.getElementById('tpl-start').focus();
+    return;
+  }
   const btn = document.getElementById('tpl-save-btn');
   btn.disabled = true;
   const data = await OpsCommon.api('/api/operations/templates', {
     method: 'POST',
-    body: JSON.stringify(collectForm()),
+    body: JSON.stringify(form),
   });
   btn.disabled = false;
   if (!data || !data.success) { panelMsg(data && data.error); return; }

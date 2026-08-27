@@ -168,12 +168,17 @@ async function run() {
         call.options.method === 'DELETE');
     check('deactivate uses the DELETE options object', !!deactivate);
 
-    const invalid = pageDom('https://example.test/operations-templates.html?action=create', {
-        postResponse: { success: false, error: 'startDate obbligatorio (YYYY-MM-DD)' }
-    });
+    const invalid = pageDom('https://example.test/operations-templates.html?action=create');
     invalid.dom.window.eval(script);
     await new Promise(resolve => setTimeout(resolve, 0));
-    invalid.dom.window.document.getElementById('tpl-title').value = 'Missing start date';
+    invalid.calls.splice(0);
+    invalid.dom.window.document.getElementById('tpl-title').value = 'test_78';
+    invalid.dom.window.document.getElementById('tpl-desc').value = 'dfsfs';
+    invalid.dom.window.document.getElementById('tpl-freq').value = 'WEEKLY';
+    invalid.dom.window.toggleFreqFields();
+    invalid.dom.window.document.querySelector('.dow-check[value="0"]').checked = true;
+    invalid.dom.window.document.getElementById('tpl-priority').value = 'LOW';
+    invalid.dom.window.document.getElementById('tpl-service-dept').value = 'dept-bar';
     let invalidThrew = false;
     try {
         await invalid.dom.window.doCreate();
@@ -182,19 +187,47 @@ async function run() {
     }
     const invalidCreate = invalid.calls.find(call =>
         call.requestPath === '/api/operations/templates' && call.options.method === 'POST');
-    const invalidPayload = invalidCreate ? JSON.parse(invalidCreate.options.body) : {};
+    const invalidPayload = invalid.dom.window.collectForm();
     const validationErrors = opsRecurring.validateTemplateInput(invalidPayload);
     const panelMessage = invalid.dom.window.document.getElementById('panel-msg');
-    check('empty start date is the first backend validation failure',
+    check('live Preview payload reproduces the empty start-date validation failure',
+        invalidPayload.title === 'test_78' &&
+        invalidPayload.description === 'dfsfs' &&
+        invalidPayload.frequency === 'WEEKLY' &&
+        invalidPayload.daysOfWeek.join(',') === '0' &&
+        invalidPayload.priority === 'LOW' &&
+        invalidPayload.startDate === '' &&
+        invalidPayload.serviceDepartmentId === 'dept-bar' &&
         validationErrors[0] === 'startDate obbligatorio (YYYY-MM-DD)',
         validationErrors.join('; '));
-    check('invalid create surfaces the backend error without throwing',
+    check('invalid create is stopped before the API request',
+        invalidCreate === undefined);
+    check('invalid create surfaces the matching server-contract error without throwing',
         !invalidThrew &&
         panelMessage.textContent === 'startDate obbligatorio (YYYY-MM-DD)' &&
         panelMessage.style.display === 'block');
-    check('invalid create keeps the panel open and re-enables Save',
+    check('invalid create keeps the panel open and focuses the required date',
         invalid.dom.window.document.getElementById('side-panel').classList.contains('open') &&
-        invalid.dom.window.document.getElementById('tpl-save-btn').disabled === false);
+        invalid.dom.window.document.activeElement === invalid.dom.window.document.getElementById('tpl-start'));
+    check('start date input is marked required',
+        invalid.dom.window.document.getElementById('tpl-start').required === true);
+
+    const backendFailure = pageDom('https://example.test/operations-templates.html?action=create', {
+        postResponse: { success: false, error: 'Backend validation example' }
+    });
+    backendFailure.dom.window.eval(script);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    backendFailure.dom.window.document.getElementById('tpl-title').value = 'Valid request';
+    backendFailure.dom.window.document.getElementById('tpl-start').value = '2026-08-27';
+    let backendFailureThrew = false;
+    try {
+        await backendFailure.dom.window.doCreate();
+    } catch (_) {
+        backendFailureThrew = true;
+    }
+    check('other backend 400 messages still render without throwing',
+        !backendFailureThrew &&
+        backendFailure.dom.window.document.getElementById('panel-msg').textContent === 'Backend validation example');
     check('template page never calls undefined OpsCommon.showPanelMsg',
         !source.includes('OpsCommon.showPanelMsg'));
 

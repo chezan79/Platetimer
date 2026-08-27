@@ -4944,29 +4944,22 @@ app.post('/api/operations/templates', (req, res) => {
     if (!opsAuth.canManageUsers(ctx.opsUser)) return res.status(403).json({ error: 'Solo il Direttore può creare template.' });
     const actor     = ctx.opsUser;
     const companyId = actor.companyId;
-    const rejectBadTemplateRequest = error => {
-        console.warn('[OPS-TEMPLATE-CREATE-400]', JSON.stringify({
-            requestBody: req.body,
-            responseBody: { error },
-        }));
-        return res.status(400).json({ error });
-    };
 
     const errors = opsRecurring.validateTemplateInput(req.body);
-    if (errors.length) return rejectBadTemplateRequest(errors.join('; '));
+    if (errors.length) return res.status(400).json({ error: errors.join('; ') });
 
     // Validate defaultAssigneeId if provided
     if (req.body.defaultAssigneeId) {
         const byId  = opsUsersById(companyId);
         const asgn  = byId[req.body.defaultAssigneeId];
-        if (!asgn || asgn.active === false) return rejectBadTemplateRequest('defaultAssigneeId non valido.');
+        if (!asgn || asgn.active === false) return res.status(400).json({ error: 'defaultAssigneeId non valido.' });
         if (!opsAuth.canAssignTaskTo(actor, asgn)) return res.status(403).json({ error: `Non puoi assegnare compiti a ${asgn.role}.` });
     }
 
     const clean = opsRecurring.sanitizeTemplateInput(req.body);
     let serviceDept;
     try { serviceDept = resolveTemplateDepartment(companyId, req.body, null); }
-    catch (msg) { return rejectBadTemplateRequest(msg); }
+    catch (msg) { return res.status(400).json({ error: msg }); }
     const now   = Date.now();
     const template = {
         id:              genTemplateId(),
