@@ -14,3 +14,9 @@ Recurring task creation lifecycle events must be emitted only after the generate
 **Why:** Emitting before persistence can make open calendars refresh for tasks that were not saved; partial persistence can also prevent a later retry.
 
 **How to apply:** Treat generated tasks and their template bookkeeping as one recoverable commit, and publish lifecycle events only after it succeeds.
+
+Recurring-template panels must preflight the required start date before POSTing, because the dynamic panel is not submitted as a native HTML form.
+
+**Why:** An asterisk and date input alone allowed an empty string to reach the server and produce a live Preview 400; focusing the required date and showing the matching contract error was confirmed to restore the authenticated flow.
+
+**How to apply:** Keep server validation authoritative, but block an empty start date in the create panel before calling the API; preserve backend error rendering for every other rejection.
