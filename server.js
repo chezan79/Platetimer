@@ -9,6 +9,7 @@ const multer = require('multer');
 const { initializeApp: adminInitializeApp, getApps: adminGetApps, cert: adminCert } = require('firebase-admin/app');
 const { getFirestore } = require('firebase-admin/firestore');
 const { getStorage: adminGetStorage } = require('firebase-admin/storage');
+const { normalizeBusinessDate } = require('./operations/business-date');
 
 const app = express();
 const server = http.createServer(app);
@@ -999,33 +1000,30 @@ app.get('/api/service/department', (req, res) => {
     });
 });
 
-// ── [Task 66] GET /api/service/ops-tasks — read-only Operations projection ──
-// Returns the Operations tasks explicitly published to the bound department.
-// [SECURITY] companyId + departmentId derived ENTIRELY from the server-side
-// account record (getBoundDepartmentContext) — no client-supplied filters are
-// accepted. The projection omits companyId, assigneeId, createdBy and every
-// other internal field: the Service side is a read-only viewer.
-app.get('/api/service/ops-tasks', (req, res) => {
+// Resolve the authenticated Service department and its actionable Operations
+// tasks once so every Service task read route applies identical entitlement,
+// live-department, acknowledgement, and projection rules.
+function getServiceActionableOpsTasks(req, res) {
     const session = requireAuth(req, res);
-    if (!session) return;
+    if (!session) return null;
 
     const boundAcct = getBoundDepartmentContext(session);
     if (!boundAcct) {
-        return res.status(403).json({ error: 'No department account binding.', code: 'NOT_BOUND' });
+        res.status(403).json({ error: 'No department account binding.', code: 'NOT_BOUND' });
+        return null;
     }
     if (boundAcct.status !== 'ACTIVE') {
         const e = departmentAccessError(boundAcct);
-        return res.status(e.status).json(e.body);
+        res.status(e.status).json(e.body);
+        return null;
     }
 
-    const companyId    = boundAcct.companyId;      // server-side record only
-    const departmentId = boundAcct.departmentId;   // server-side record only
-
-    // [SECURITY] Live department-activity check (same model as /api/service/department):
-    // a deactivated department must lose access to previously published tasks.
+    const companyId = boundAcct.companyId;
+    const departmentId = boundAcct.departmentId;
     const liveDept = getCompanyDepts(companyId).find(d => d.id === departmentId);
     if (!liveDept || !liveDept.active) {
-        return res.status(410).json({ error: 'Assigned department inactive', code: 'DEPARTMENT_INACTIVE' });
+        res.status(410).json({ error: 'Assigned department inactive', code: 'DEPARTMENT_INACTIVE' });
+        return null;
     }
 
     const tasks = getOpsTasks(companyId)
@@ -1034,10 +1032,35 @@ app.get('/api/service/ops-tasks', (req, res) => {
             t.publishToService === true &&
             t.serviceDepartmentId === departmentId &&
             (t.status === 'OPEN' || t.status === 'IN_PROGRESS') &&
-            !isTaskAcknowledgedBy(companyId, t.id, departmentId))
+            !isTaskAcknowledgedBy(companyId, t.id, departmentId));
+
+    return { companyId, departmentId, tasks };
+}
+
+// ── [Task 66] GET /api/service/ops-tasks — read-only Operations projection ──
+// Returns the Operations tasks explicitly published to the bound department.
+// [SECURITY] companyId + departmentId derived ENTIRELY from the server-side
+// account record (getBoundDepartmentContext) — no client-supplied filters are
+// accepted. The projection omits companyId, assigneeId, createdBy and every
+// other internal field: the Service side is a read-only viewer.
+app.get('/api/service/ops-tasks', (req, res) => {
+    const result = getServiceActionableOpsTasks(req, res);
+    if (!result) return;
+    res.json({ success: true, tasks: result.tasks.map(projectOpsTaskForService) });
+});
+
+// GET /api/service/ops-tasks/today — the same safe Service projection, limited
+// to tasks due on the authoritative PlateTimer business date.
+app.get('/api/service/ops-tasks/today', (req, res) => {
+    const result = getServiceActionableOpsTasks(req, res);
+    if (!result) return;
+
+    const todayDate = todayZurich();
+    const tasks = result.tasks
+        .filter(task => normalizeBusinessDate(task.dueDate) === todayDate)
         .map(projectOpsTaskForService);
 
-    res.json({ success: true, tasks });
+    res.json({ success: true, todayDate, tasks });
 });
 
 // ── [Task 66 Ack] POST /api/service/ops-tasks/:taskId/acknowledge ─────────────
