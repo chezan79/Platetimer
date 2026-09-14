@@ -50,3 +50,4 @@
 - [Operations email test isolation](ops-email-test-isolation.md) — spawned test servers inherit workspace providers unless each fallback suite explicitly clears them.
 - [Operations Quick Notes](ops-quick-notes.md) — note-to-task conversion is a cross-store commit; capture cancellation must invalidate both pending permission and transcription.
 - [Recurring generation parity](recurring-generation-parity.md) — template departments use canonical Service IDs; generated-task events must follow atomic task/template persistence.
+- [Service individual identity target](service-individual-identity.md) — keep department/device auth separate from a short-lived verified worker identity; Operations linking is optional and permission-neutral.
