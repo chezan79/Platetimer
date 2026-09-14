@@ -167,6 +167,46 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 .type-help{font-size:12px;color:var(--muted);margin-top:8px;padding:8px 11px;
   background:rgba(79,70,229,.05);border:1px solid rgba(79,70,229,.18);
   border-radius:7px;line-height:1.5;}
+
+/* ── SERVICE WORKERS ─────────────────────── */
+.worker-section{margin-top:28px;}
+.worker-section .card{padding:22px;}
+.worker-create-form{display:grid;grid-template-columns:1.2fr 1fr;gap:12px 16px;
+  align-items:end;margin-bottom:18px;}
+.worker-field{min-width:0;}
+.worker-field-wide{grid-column:1/-1;}
+.worker-field label{display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px;}
+.worker-field input,.worker-field select{width:100%;padding:9px 11px;border:1.5px solid var(--border-l);
+  border-radius:8px;background:#fff;color:var(--text);font-size:13px;outline:none;}
+.worker-field input:focus,.worker-field select:focus{border-color:var(--accent);}
+.worker-memberships{display:flex;gap:8px;flex-wrap:wrap;max-height:110px;overflow:auto;padding:2px 0;}
+.worker-membership-option{display:inline-flex;align-items:center;gap:5px;font-size:12px;
+  color:var(--text);background:var(--card-h);border:1px solid var(--border);
+  border-radius:7px;padding:6px 8px;cursor:pointer;}
+.worker-membership-option input{width:auto !important;accent-color:var(--accent);}
+.worker-help{font-size:12px;color:var(--muted);line-height:1.45;margin-top:5px;}
+.worker-error{display:none;color:var(--danger);font-size:12px;margin-top:8px;}
+.workers-table{width:100%;border-collapse:collapse;min-width:900px;}
+.workers-table th{background:var(--card-h);padding:11px 12px;text-align:left;font-size:11px;
+  text-transform:uppercase;letter-spacing:.5px;color:var(--muted);border-bottom:1.5px solid var(--border);}
+.workers-table td{padding:12px;border-bottom:1px solid var(--border);font-size:13px;vertical-align:top;}
+.workers-table tbody tr:last-child td{border-bottom:none;}
+.worker-name{font-weight:700;color:var(--text);}
+.worker-sub{font-size:11px;color:var(--muted);margin-top:3px;}
+.worker-members-list{display:flex;gap:4px;flex-wrap:wrap;max-width:250px;}
+.worker-edit-row{background:var(--card-h);}
+.worker-edit-row td{padding:14px 12px;border-top:1px dashed var(--border);}
+.worker-actions{display:flex;gap:6px;flex-wrap:wrap;min-width:210px;}
+.worker-actions .btn{white-space:normal;}
+.worker-empty{text-align:center;padding:28px 16px;color:var(--muted);font-size:13px;}
+.worker-modal{position:fixed;inset:0;z-index:300;background:rgba(15,23,42,.4);
+  display:none;align-items:center;justify-content:center;padding:20px;}
+.worker-modal.open{display:flex;}
+.worker-modal-card{background:#fff;border:1px solid var(--border);border-radius:12px;
+  box-shadow:0 16px 50px rgba(15,23,42,.22);padding:22px;width:min(420px,100%);}
+.worker-modal-card h3{font-size:16px;margin-bottom:7px;}
+.worker-modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:14px;}
+@media(max-width:700px){.worker-create-form{grid-template-columns:1fr;}.worker-field-wide{grid-column:auto;}}
 </style>
 </head>
 <body>
@@ -237,7 +277,64 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
     </table>
   </div>
 
+  <!-- Service worker management -->
+  <section class="worker-section card" aria-labelledby="worker-heading">
+    <p id="worker-heading" class="section-title">Identità Service</p>
+    <p class="worker-help" style="margin-bottom:16px;">
+      Crea e gestisci le identità usate dai dispositivi condivisi dei reparti. Il PIN non viene mai mostrato o conservato dopo l'invio.
+    </p>
+    <div class="worker-create-form">
+      <div class="worker-field">
+        <label for="worker-name-input">Nome visualizzato</label>
+        <input id="worker-name-input" type="text" maxlength="120" placeholder="es. Turno mattina">
+      </div>
+      <div class="worker-field">
+        <label for="worker-pin-input">PIN (almeno 4 cifre, non prevedibile)</label>
+        <input id="worker-pin-input" type="password" inputmode="numeric" autocomplete="new-password"
+               maxlength="32" placeholder="PIN">
+      </div>
+      <div class="worker-field worker-field-wide">
+        <label>Reparti attivi (selezionane almeno uno)</label>
+        <div id="worker-memberships" class="worker-memberships"></div>
+      </div>
+      <div class="worker-field">
+        <label for="worker-operations-link">Collegamento Operations (facoltativo)</label>
+        <select id="worker-operations-link">
+          <option value="">Nessun collegamento</option>
+        </select>
+      </div>
+      <div class="worker-field">
+        <button id="worker-create-btn" class="btn btn-primary" type="button" onclick="createWorker()">Crea identità Service</button>
+        <div id="worker-create-error" class="worker-error"></div>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table class="workers-table">
+        <thead><tr>
+          <th>Identità</th><th>Stato</th><th>Reparti</th><th>Operations</th><th>Azioni</th>
+        </tr></thead>
+        <tbody id="workers-table-body">
+          <tr><td colspan="5" class="worker-empty">Caricamento…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
 </main>
+
+<div id="worker-pin-modal" class="worker-modal" role="dialog" aria-modal="true" aria-labelledby="worker-pin-heading">
+  <div class="worker-modal-card">
+    <h3 id="worker-pin-heading">Reimposta PIN</h3>
+    <p class="worker-help">Inserisci un PIN di almeno 4 cifre, non ripetuto o sequenziale.</p>
+    <input id="worker-reset-pin-input" class="form-input" type="password" inputmode="numeric"
+           autocomplete="new-password" maxlength="32" placeholder="Nuovo PIN" style="margin-top:12px;">
+    <div id="worker-reset-pin-error" class="worker-error"></div>
+    <div class="worker-modal-actions">
+      <button class="btn btn-sm btn-neutral" type="button" onclick="closeWorkerPinModal()">Annulla</button>
+      <button id="worker-reset-pin-btn" class="btn btn-sm btn-primary" type="button" onclick="submitWorkerPin()">Salva PIN</button>
+    </div>
+  </div>
+</div>
 
 <script src="js/i18n.js"></script>
 <script src="js/ws-auth.js"></script>
@@ -258,6 +355,10 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
     let planLimit   = 3;
     let planName    = 'base';
     let editingId   = null;   // deptId currently showing an inline form
+    let workers     = [];
+    let operationsUsers = [];
+    let workerEditingId = null;
+    let resetPinWorkerId = null;
 
     function logout() {
         if (typeof WsAuth !== 'undefined' && WsAuth.clearToken) WsAuth.clearToken();
@@ -278,9 +379,11 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 
     // ── Data loading ──────────────────────────────────────────────────
     async function loadAll() {
-        const [dData, aData] = await Promise.all([
+        const [dData, aData, wData, oData] = await Promise.all([
             apiFetch('/api/departments'),
-            apiFetch('/api/department-accounts')
+            apiFetch('/api/department-accounts'),
+            apiFetch('/api/service/workers'),
+            apiFetch('/api/operations/users?status=all')
         ]);
         if (dData.success) {
             departments = dData.departments || [];
@@ -290,6 +393,8 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
         if (aData.success) {
             accounts = aData.accounts || [];
         }
+        if (wData.success) workers = wData.workers || [];
+        if (oData.success) operationsUsers = oData.users || [];
         renderAll();
     }
 
@@ -336,6 +441,8 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
         }
 
         renderTable();
+        renderWorkerControls();
+        renderWorkers();
     }
 
     function renderTable() {
@@ -414,6 +521,298 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
             if (row) row.style.display = '';
             else editingId = null;
         }
+    }
+
+    // ── Service worker management ──────────────────────────────────────
+    function activeWorkerDepartments() {
+        return departments.filter(d => d.active);
+    }
+
+    function operationsUserLabel(user) {
+        return `${user.name || user.email || user.id || 'Utente'}${user.email && user.name ? ` — ${user.email}` : ''} (${user.status || '—'})`;
+    }
+
+    function renderOperationsOptions(selectedId, selectId) {
+        const select = document.getElementById(selectId);
+        if (!select) return;
+        select.innerHTML = `<option value="">Nessun collegamento</option>` +
+            operationsUsers.map(user => `<option value="${escHtml(user.id)}" ${user.id === selectedId ? 'selected' : ''}>${escHtml(operationsUserLabel(user))}</option>`).join('');
+    }
+
+    function renderMembershipOptions(containerId, selectedIds, namePrefix) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+        const selected = new Set(selectedIds || []);
+        const available = activeWorkerDepartments();
+        container.innerHTML = available.length
+            ? available.map(dept => `
+                <label class="worker-membership-option">
+                  <input type="checkbox" name="${namePrefix}" value="${escHtml(dept.id)}"
+                         ${selected.has(dept.id) ? 'checked' : ''}>
+                  ${escHtml(dept.name)}
+                </label>`).join('')
+            : '<span class="worker-help">Nessun reparto attivo disponibile.</span>';
+    }
+
+    function renderWorkerControls() {
+        renderMembershipOptions('worker-memberships', [], 'worker-new-membership');
+        renderOperationsOptions('', 'worker-operations-link');
+        const createButton = document.getElementById('worker-create-btn');
+        if (createButton) createButton.disabled = activeWorkerDepartments().length === 0;
+    }
+
+    function membershipIdsFrom(container) {
+        return Array.from(document.querySelectorAll(`#${container} input[type="checkbox"]:checked`))
+            .map(input => input.value);
+    }
+
+    function workerDepartmentName(id) {
+        const dept = departments.find(item => item.id === id);
+        return dept ? dept.name : id;
+    }
+
+    function workerStatusBadge(status) {
+        const cls = status === 'ACTIVE' ? 'badge-active' : status === 'SUSPENDED' ? 'badge-susp' : 'badge-inactive';
+        return `<span class="badge ${cls}">${escHtml(status || '—')}</span>`;
+    }
+
+    function linkedOperationsUser(id) {
+        return operationsUsers.find(user => user.id === id) || null;
+    }
+
+    function renderWorkers() {
+        const tbody = document.getElementById('workers-table-body');
+        if (!tbody) return;
+        if (!workers.length) {
+            tbody.innerHTML = '<tr><td colspan="5" class="worker-empty">Nessuna identità Service configurata.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = workers.map(worker => {
+            const memberships = (worker.departmentMemberships || []).map(member =>
+                `<span class="badge badge-dept-on">${escHtml(workerDepartmentName(member.departmentId))}</span>`).join('');
+            const linked = linkedOperationsUser(worker.operationsUserId);
+            const isArchived = worker.status === 'ARCHIVED';
+            const isActive = worker.status === 'ACTIVE';
+            const editRow = workerEditingId === worker.id && !isArchived ? `
+              <tr class="worker-edit-row">
+                <td colspan="5">
+                  <div class="worker-create-form" style="margin:0;">
+                    <div class="worker-field">
+                      <label for="worker-edit-name-${escHtml(worker.id)}">Nome visualizzato</label>
+                      <input id="worker-edit-name-${escHtml(worker.id)}" type="text" maxlength="120" value="${escHtml(worker.displayName || '')}">
+                    </div>
+                    <div class="worker-field">
+                      <label>Reparti attivi</label>
+                      <div id="worker-edit-memberships-${escHtml(worker.id)}" class="worker-memberships"></div>
+                    </div>
+                    <div class="worker-field">
+                      <label for="worker-edit-link-${escHtml(worker.id)}">Collegamento Operations</label>
+                      <select id="worker-edit-link-${escHtml(worker.id)}"></select>
+                    </div>
+                    <div class="worker-field">
+                      <label class="worker-membership-option">
+                        <input id="worker-edit-enabled-${escHtml(worker.id)}" type="checkbox" ${worker.serviceEnabled ? 'checked' : ''}>
+                        Servizio abilitato
+                      </label>
+                    </div>
+                    <div class="worker-field">
+                      <div class="action-group">
+                        <button class="btn btn-sm btn-primary" onclick="saveWorker('${escHtml(worker.id)}')">Salva</button>
+                        <button class="btn btn-sm btn-neutral" onclick="closeWorkerEdit()">Annulla</button>
+                      </div>
+                      <div id="worker-edit-error-${escHtml(worker.id)}" class="worker-error"></div>
+                    </div>
+                  </div>
+                </td>
+              </tr>` : '';
+            return `
+              <tr>
+                <td><div class="worker-name">${escHtml(worker.displayName || '—')}</div>
+                    <div class="worker-sub">${escHtml(worker.id)}</div></td>
+                <td>${workerStatusBadge(worker.status)}
+                    <div class="worker-sub">${worker.serviceEnabled ? 'Servizio abilitato' : 'Servizio disabilitato'}</div></td>
+                <td><div class="worker-members-list">${memberships || '<span class="dash-muted">—</span>'}</div></td>
+                <td>${linked ? escHtml(operationsUserLabel(linked)) : '<span class="dash-muted">Nessuno</span>'}</td>
+                <td><div class="worker-actions">
+                  ${!isArchived ? `<button class="btn btn-sm btn-neutral" onclick="openWorkerEdit('${escHtml(worker.id)}')">Modifica</button>
+                    <button class="btn btn-sm btn-neutral" onclick="resetWorkerPin('${escHtml(worker.id)}')">Reimposta PIN</button>` : ''}
+                  ${!isArchived ? `<button class="btn btn-sm ${isActive ? 'btn-warn' : 'btn-neutral'}"
+                    onclick="setWorkerStatus('${escHtml(worker.id)}','${isActive ? 'SUSPENDED' : 'ACTIVE'}')">${isActive ? 'Sospendi' : 'Riattiva'}</button>
+                    <button class="btn btn-sm btn-danger" onclick="setWorkerStatus('${escHtml(worker.id)}','ARCHIVED')">Archivia</button>` : ''}
+                </div></td>
+              </tr>${editRow}`;
+        }).join('');
+        if (workerEditingId) {
+            const worker = workers.find(item => item.id === workerEditingId);
+            if (worker && worker.status !== 'ARCHIVED') {
+                renderMembershipOptions(`worker-edit-memberships-${worker.id}`,
+                    (worker.departmentMemberships || []).map(member => member.departmentId), `worker-edit-membership-${worker.id}`);
+                renderOperationsOptions(worker.operationsUserId, `worker-edit-link-${worker.id}`);
+            }
+        }
+    }
+
+    function selectedWorkerPinIsWeak(pin) {
+        if (!/^\d{4,}$/.test(pin)) return true;
+        if (/^(\d)\1+$/.test(pin)) return true;
+        const digits = pin.split('').map(Number);
+        return digits.every((digit, index) => index === 0 || digit === digits[index - 1] + 1) ||
+            digits.every((digit, index) => index === 0 || digit === digits[index - 1] - 1);
+    }
+
+    function workerFormError(id, message) {
+        const el = document.getElementById(id);
+        if (el) { el.textContent = message; el.style.display = 'block'; }
+    }
+
+    async function createWorker() {
+        const nameInput = document.getElementById('worker-name-input');
+        const pinInput = document.getElementById('worker-pin-input');
+        const errorId = 'worker-create-error';
+        const name = (nameInput.value || '').trim();
+        const membershipIds = membershipIdsFrom('worker-memberships');
+        const operationsUserId = document.getElementById('worker-operations-link').value || null;
+        document.getElementById(errorId).style.display = 'none';
+        if (!name) return workerFormError(errorId, 'Inserisci un nome visualizzato.');
+        if (!membershipIds.length) return workerFormError(errorId, 'Seleziona almeno un reparto attivo.');
+        let pin = pinInput.value || '';
+        if (selectedWorkerPinIsWeak(pin)) {
+            pin = '';
+            pinInput.value = '';
+            return workerFormError(errorId, 'Il PIN deve avere almeno 4 cifre e non essere ripetuto o sequenziale.');
+        }
+        const button = document.getElementById('worker-create-btn');
+        button.disabled = true;
+        try {
+            const data = await apiFetch('/api/service/workers', {
+                method: 'POST',
+                body: JSON.stringify({ displayName: name, pin, departmentMemberships: membershipIds, operationsUserId })
+            });
+            pin = '';
+            pinInput.value = '';
+            if (!data.success) {
+                workerFormError(errorId, data.error || 'Errore nella creazione.');
+                return;
+            }
+            nameInput.value = '';
+            document.getElementById('worker-operations-link').value = '';
+            document.querySelectorAll('#worker-memberships input[type="checkbox"]').forEach(input => { input.checked = false; });
+            showSuccess('Identità Service creata.');
+            await loadAll();
+        } finally {
+            // Do not leave PINs in the DOM or in a form value after submission.
+            pin = '';
+            pinInput.value = '';
+            button.disabled = false;
+        }
+    }
+
+    function openWorkerEdit(workerId) {
+        workerEditingId = workerEditingId === workerId ? null : workerId;
+        renderWorkers();
+    }
+
+    function closeWorkerEdit() {
+        workerEditingId = null;
+        renderWorkers();
+    }
+
+    async function saveWorker(workerId) {
+        const worker = workers.find(item => item.id === workerId);
+        if (!worker) return;
+        const name = (document.getElementById(`worker-edit-name-${workerId}`).value || '').trim();
+        const serviceEnabled = document.getElementById(`worker-edit-enabled-${workerId}`).checked;
+        const membershipIds = membershipIdsFrom(`worker-edit-memberships-${workerId}`);
+        const operationsUserId = document.getElementById(`worker-edit-link-${workerId}`).value || null;
+        const errorId = `worker-edit-error-${workerId}`;
+        document.getElementById(errorId).style.display = 'none';
+        if (!name) return workerFormError(errorId, 'Inserisci un nome visualizzato.');
+        if (!membershipIds.length) return workerFormError(errorId, 'Seleziona almeno un reparto attivo.');
+        try {
+            const patch = await apiFetch(`/api/service/workers/${workerId}`, {
+                method: 'PATCH', body: JSON.stringify({ displayName: name, serviceEnabled })
+            });
+            if (!patch.success) return workerFormError(errorId, patch.error || 'Errore nel salvataggio.');
+            const memberships = await apiFetch(`/api/service/workers/${workerId}/memberships`, {
+                method: 'PUT', body: JSON.stringify({ departmentMemberships: membershipIds })
+            });
+            if (!memberships.success) return workerFormError(errorId, memberships.error || 'Errore nei reparti.');
+            const link = await apiFetch(`/api/service/workers/${workerId}/operations-link`, {
+                method: 'PUT', body: JSON.stringify({ operationsUserId })
+            });
+            if (!link.success) return workerFormError(errorId, link.error || 'Errore nel collegamento Operations.');
+            workerEditingId = null;
+            showSuccess('Identità Service aggiornata.');
+            await loadAll();
+        } catch (error) {
+            workerFormError(errorId, 'Errore di rete. Riprova.');
+        }
+    }
+
+    function resetWorkerPin(workerId) {
+        resetPinWorkerId = workerId;
+        const input = document.getElementById('worker-reset-pin-input');
+        input.value = '';
+        document.getElementById('worker-reset-pin-error').style.display = 'none';
+        document.getElementById('worker-pin-modal').classList.add('open');
+        input.focus();
+    }
+
+    function closeWorkerPinModal() {
+        resetPinWorkerId = null;
+        const input = document.getElementById('worker-reset-pin-input');
+        input.value = '';
+        document.getElementById('worker-pin-modal').classList.remove('open');
+    }
+
+    async function submitWorkerPin() {
+        const workerId = resetPinWorkerId;
+        if (!workerId) return;
+        const input = document.getElementById('worker-reset-pin-input');
+        let submittedPin = input.value || '';
+        const error = document.getElementById('worker-reset-pin-error');
+        error.style.display = 'none';
+        if (selectedWorkerPinIsWeak(submittedPin)) {
+            submittedPin = '';
+            input.value = '';
+            return workerFormError('worker-reset-pin-error', 'Il PIN deve avere almeno 4 cifre e non essere ripetuto o sequenziale.');
+        }
+        const button = document.getElementById('worker-reset-pin-btn');
+        button.disabled = true;
+        try {
+            const data = await apiFetch(`/api/service/workers/${workerId}/reset-pin`, {
+                method: 'POST', body: JSON.stringify({ pin: submittedPin })
+            });
+            submittedPin = '';
+            input.value = '';
+            if (data.success) {
+                closeWorkerPinModal();
+                showSuccess('PIN reimpostato.');
+                await loadAll();
+            } else {
+                workerFormError('worker-reset-pin-error', data.error || 'Errore nella reimpostazione del PIN.');
+            }
+        } catch (error) {
+            workerFormError('worker-reset-pin-error', 'Errore di rete. Riprova.');
+        } finally {
+            submittedPin = '';
+            input.value = '';
+            button.disabled = false;
+        }
+    }
+
+    async function setWorkerStatus(workerId, status) {
+        if (status === 'ARCHIVED' &&
+            !confirm('Archiviare questa identità Service? Non potrà essere riattivata.')) return;
+        const data = await apiFetch(`/api/service/workers/${workerId}/status`, {
+            method: 'PUT', body: JSON.stringify({ status })
+        });
+        if (data.success) {
+            workerEditingId = null;
+            showSuccess(status === 'ARCHIVED' ? 'Identità Service archiviata.' :
+                status === 'ACTIVE' ? 'Identità Service riattivata.' : 'Identità Service sospesa.');
+            await loadAll();
+        } else showError(data.error || 'Errore nel cambio di stato.');
     }
 
     // ── Inline form helpers ───────────────────────────────────────────

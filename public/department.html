@@ -734,6 +734,60 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
   transition:all .15s;}
 .ops-modal-close:hover{background:var(--card-h);}
 @media(max-width:400px){.ops-modal-grid{grid-template-columns:1fr;}}
+
+/* ── SHARED DEPARTMENT DEVICE / WORKER IDENTITY ─────────────────────────── */
+.worker-identity-banner{display:flex;align-items:center;gap:8px;min-width:0;
+  padding:4px 8px;border:1px solid var(--border-l);border-radius:7px;
+  background:rgba(79,70,229,.06);font-size:11px;line-height:1.2;flex-shrink:1;}
+.worker-identity-copy{display:flex;flex-direction:column;min-width:0;}
+.worker-identity-device{font-size:9px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.5px;color:var(--muted);white-space:nowrap;}
+.worker-current-name{font-size:12px;font-weight:700;color:var(--text);
+  max-width:145px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.worker-identity-status{color:var(--muted);font-size:10px;white-space:nowrap;}
+.worker-identity-banner.has-worker{border-color:rgba(22,163,74,.35);background:rgba(22,163,74,.07);}
+.worker-identity-banner.has-worker .worker-current-name{color:var(--ok);}
+.worker-identity-actions{display:flex;gap:4px;flex-shrink:0;}
+.worker-identity-btn{padding:5px 7px;border:1px solid var(--border-l);border-radius:6px;
+  background:var(--card);color:var(--text);font-size:11px;font-weight:700;cursor:pointer;
+  white-space:nowrap;}
+.worker-identity-btn:hover{background:var(--card-h);}
+.worker-identity-btn.danger{color:var(--danger);border-color:rgba(220,38,38,.3);}
+.worker-identity-btn:disabled{opacity:.45;cursor:not-allowed;}
+.worker-modal-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,.48);
+  z-index:600;align-items:center;justify-content:center;padding:16px;}
+.worker-modal-overlay.open{display:flex;}
+.worker-modal{width:min(400px,100%);max-height:calc(100vh - 32px);overflow:auto;
+  padding:20px;background:var(--card);border:1.5px solid var(--border);
+  border-radius:14px;box-shadow:0 14px 50px rgba(0,0,0,.22);}
+.worker-modal-header{display:flex;align-items:flex-start;justify-content:space-between;
+  gap:12px;margin-bottom:14px;}
+.worker-modal-title{font-size:18px;font-weight:800;color:var(--text);}
+.worker-modal-subtitle{font-size:12px;line-height:1.45;color:var(--muted);margin-top:3px;}
+.worker-modal-close{border:0;background:transparent;color:var(--muted);font-size:23px;
+  line-height:1;cursor:pointer;padding:0 3px;}
+.worker-roster-list{display:flex;flex-direction:column;gap:7px;max-height:220px;overflow:auto;
+  margin-bottom:14px;}
+.worker-roster-item{width:100%;padding:11px 12px;text-align:left;border:1.5px solid var(--border);
+  border-radius:8px;background:var(--card);color:var(--text);font-size:14px;font-weight:650;
+  cursor:pointer;}
+.worker-roster-item:hover,.worker-roster-item.selected{background:rgba(79,70,229,.1);
+  border-color:var(--accent);color:var(--accent);}
+.worker-empty{padding:14px 4px;text-align:center;color:var(--muted);font-size:13px;}
+.worker-empty.error,.worker-verify-error{color:var(--danger);}
+.worker-pin-label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.5px;color:var(--muted);margin-bottom:6px;}
+.worker-pin{width:100%;padding:11px 12px;border:1.5px solid var(--border-l);border-radius:8px;
+  background:var(--card);color:var(--text);font-size:20px;letter-spacing:4px;
+  text-align:center;outline:none;}
+.worker-pin:focus{border-color:var(--accent);}
+.worker-verify-error{min-height:18px;margin-top:6px;font-size:12px;}
+.worker-verify-submit{width:100%;padding:11px;margin-top:5px;border:0;border-radius:8px;
+  background:var(--accent);color:#fff;font-size:14px;font-weight:700;cursor:pointer;}
+@media(max-width:700px){
+  .worker-identity-banner{order:5;flex:1 1 100%;margin:3px 0;}
+  .worker-current-name{max-width:calc(100vw - 175px);}
+}
 </style>
 </head>
 <body>
@@ -747,6 +801,18 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
   <div class="hdr-sep"></div>
   <span class="hdr-dept" id="hdr-dept" data-i18n="dept.loadingDept">Caricamento...</span>
   <span class="conn-badge" id="conn-badge">Disconnesso</span>
+  <div class="worker-identity-banner" id="worker-identity-banner" aria-live="polite" style="display:none;">
+    <div class="worker-identity-copy">
+      <span class="worker-identity-device">Dispositivo reparto</span>
+      <span class="worker-current-name" id="worker-current-name">Nessun lavoratore selezionato</span>
+      <span class="worker-identity-status" id="worker-identity-status">Dispositivo reparto</span>
+    </div>
+    <div class="worker-identity-actions">
+      <button type="button" class="worker-identity-btn" id="worker-open-btn">Scegli operatore</button>
+      <button type="button" class="worker-identity-btn danger" id="worker-clear-btn"
+        style="display:none;">Passaggio</button>
+    </div>
+  </div>
   <button class="hdr-btn" id="btn-calendar" onclick="window.location.href='calendar.html'" style="display:none;">📅 <span data-i18n="dept.calendar">Calendario</span></button>
   <button class="hdr-btn" id="btn-home" onclick="window.location.href='home.html'" data-i18n="dept.home">Home</button>
   <button class="hdr-btn danger" onclick="doLogout()" data-i18n="dept.logout">Esci</button>
@@ -1000,6 +1066,30 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
   <div class="ops-modal" id="ops-detail-content"></div>
 </div>
 
+<!-- Shared-device worker selector.  The proof never appears in this markup. -->
+<div class="worker-modal-overlay" id="worker-roster-modal" role="dialog"
+  aria-modal="true" aria-labelledby="worker-modal-title">
+  <section class="worker-modal">
+    <div class="worker-modal-header">
+      <div>
+        <div class="worker-modal-title" id="worker-modal-title">Scegli operatore</div>
+        <div class="worker-modal-subtitle">Seleziona il tuo nome e inserisci il PIN personale.</div>
+      </div>
+      <button type="button" class="worker-modal-close" id="worker-modal-close" aria-label="Chiudi">×</button>
+    </div>
+    <div class="worker-roster-list" id="worker-roster-list">
+      <div class="worker-empty">Caricamento operatori...</div>
+    </div>
+    <form id="worker-verify-form" autocomplete="off">
+      <label class="worker-pin-label" for="worker-pin">PIN personale</label>
+      <input class="worker-pin" id="worker-pin" name="pin" type="password" inputmode="numeric"
+        autocomplete="off" maxlength="32" required>
+      <div class="worker-verify-error" id="worker-verify-error" role="alert"></div>
+      <button class="worker-verify-submit" type="submit">Verifica e continua</button>
+    </form>
+  </section>
+</div>
+
 <audio id="snd-warn"   src="alerte-346112.mp3"           preload="auto"></audio>
 <audio id="snd-expiry" src="costa-rica-eas-alarm-346194.mp3" preload="auto"></audio>
 
@@ -1007,6 +1097,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 <script src="js/mex-qm.js"></script>
 <script src="js/mex-qr.js"></script>
 <script src="js/i18n.js"></script>
+<script src="js/service-worker-identity.js"></script>
 <script>const i18nReady = I18n.init({ selector: '#i18n-dept-sel' });</script>
 <script>
 'use strict';
@@ -1017,7 +1108,10 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 
 // [S2.1/S2.2] Logout: Service sessions return to service-login.html; legacy
 // sessions return to index.html. Reads destination before clearing token.
-function doLogout() {
+async function doLogout() {
+    if (typeof ServiceWorkerIdentity !== 'undefined' && ServiceWorkerIdentity.clearDevice) {
+        await ServiceWorkerIdentity.clearDevice();
+    }
     const dest = WsAuth.getLoginDestination(); // read while token still present
     WsAuth.clearToken();
     window.location.href = dest;
@@ -1062,6 +1156,12 @@ if (!token) {
     // [S2.2] Routing hint set by WsAuth.storeToken() — no document.referrer dependency.
     // Falls back to 'index.html' when hint is absent (first visit, cleared browser).
     window.location.href = WsAuth.getLoginDestination();
+}
+// Worker identity is an optional shared-device overlay. It authenticates only
+// worker-specific endpoints; existing department reads and realtime channels
+// deliberately continue using the Department Account session token.
+if (typeof ServiceWorkerIdentity !== 'undefined') {
+    ServiceWorkerIdentity.init({ departmentId: myDeptId });
 }
 
 // ── State ────────────────────────────────────────────────────────────────────

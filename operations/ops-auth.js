@@ -80,6 +80,12 @@ function canManageDepartmentAccounts(actor, companyId) {
         actor.companyId === companyId;
 }
 
+// Service workers are company administration records. Linking a worker to an
+// Operations user is attribution-only and never imports that user's role.
+function canManageServiceWorkers(actor, companyId) {
+    return canManageDepartmentAccounts(actor, companyId);
+}
+
 // Self-binding is not an administrative grant: it may only attach the verified
 // session UID to an account in the same tenant. Account lifecycle checks remain
 // in bindFirebaseUid so callers receive the established 409 state errors.
@@ -203,6 +209,7 @@ module.exports = {
     canDeleteTaskPermanently,
     canManageUsers,
     canManageDepartmentAccounts,
+    canManageServiceWorkers,
     canBindDepartmentAccount,
     canManageOpsUser,
     canDeleteOpsUser,

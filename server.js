@@ -153,6 +153,9 @@ if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 const DEPARTMENTS_FILE = path.join(DATA_DIR, 'departments.json');
 const PLANS_FILE = path.join(DATA_DIR, 'plans.json');
 const DEPARTMENT_ACCOUNTS_FILE = path.join(DATA_DIR, 'department-accounts.json');
+const SERVICE_WORKERS_FILE = path.join(DATA_DIR, 'service-workers.json');
+const SERVICE_WORKER_AUDIT_FILE = path.join(DATA_DIR, 'service-worker-audit.json');
+const SERVICE_WORKER_AUTH_FILE = path.join(DATA_DIR, 'service-worker-auth.json');
 const COUNTDOWN_HISTORY_FILE = path.join(DATA_DIR, 'countdown-history.json');
 const PLAN_LIMITS = { base: 3, medium: 5, premium: 10 };
 
@@ -462,6 +465,37 @@ function getBoundDepartmentContext(session) {
     if (!account) return null;
     if (account.companyId !== session.companyName) return null; // company isolation
     return account; // { id, companyId, departmentId, status, … }
+}
+
+function getLiveServiceDeviceContext(session) {
+    const account = getBoundDepartmentContext(session);
+    if (!account || account.status !== 'ACTIVE') return null;
+    const department = getCompanyDepts(account.companyId)
+        .find(d => d.id === account.departmentId && d.active === true);
+    if (!department) return null;
+    return { account, department, companyId: account.companyId, departmentId: department.id };
+}
+
+async function getAuthoritativeServiceDeviceContext(session) {
+    if (!db) return getLiveServiceDeviceContext(session);
+    const accountsRef = db.collection(STORE_COLLECTION).doc('department_accounts');
+    const departmentsRef = db.collection(STORE_COLLECTION).doc('departments');
+    const [accountsSnapshot, departmentsSnapshot] = await db.getAll(accountsRef, departmentsRef);
+    const accountsStore = accountsSnapshot.exists && accountsSnapshot.data().store
+        ? accountsSnapshot.data().store : {};
+    const departments = departmentsSnapshot.exists && departmentsSnapshot.data().store
+        ? departmentsSnapshot.data().store : {};
+    const companyAccounts = Array.isArray(accountsStore[session.companyName])
+        ? accountsStore[session.companyName] : Object.values(accountsStore).flatMap(value =>
+            Array.isArray(value) ? value : []);
+    const account = companyAccounts.find(item =>
+        item.companyId === session.companyName &&
+        (session.uid === item.id || session.uid === item.firebaseUid));
+    if (!account || account.status !== 'ACTIVE') return null;
+    const department = (departments[account.companyId] || [])
+        .find(item => item.id === account.departmentId && item.active === true);
+    if (!department) return null;
+    return { account, department, companyId: account.companyId, departmentId: department.id };
 }
 
 // [S1.4.1] Centralized structured error response for department access checks.
@@ -1069,6 +1103,648 @@ app.get('/api/service/identity', (req, res) => {
     const ctx = resolveDeptAccountContext(session.uid, session.companyName);
     res.json({ success: true, ...ctx });
 });
+
+// ===== Individual Service worker identity (shared department devices) =====
+// Worker proof supplements the Department Account; it never replaces or
+// broadens the existing device/department authorization boundary.
+const WORKER_PROOF_ABSOLUTE_MS = 8 * 60 * 60 * 1000;
+const WORKER_PROOF_INACTIVITY_MS = 5 * 60 * 1000;
+const WORKER_VERIFY_WINDOW_MS = 5 * 60 * 1000;
+const WORKER_VERIFY_MAX_FAILURES = 5;
+const WORKER_VERIFY_LOCK_MS = 30 * 1000;
+const WORKER_PIN_PEPPER = process.env.WORKER_PIN_PEPPER || process.env.SESSION_SECRET || WS_SECRET;
+let serviceWorkerAuthStore = { attempts: {}, proofs: {}, devices: {}, audit: [] };
+const WORKER_AUTH_ATTEMPTS_COLLECTION = 'platetimer_worker_auth_attempts';
+const WORKER_PROOFS_COLLECTION = 'platetimer_worker_proofs';
+const WORKER_DEVICES_COLLECTION = 'platetimer_worker_devices';
+const WORKER_AUTH_AUDIT_COLLECTION = 'platetimer_worker_auth_audit';
+
+function saveServiceWorkerAuth() {
+    saveJSON(SERVICE_WORKER_AUTH_FILE, serviceWorkerAuthStore);
+}
+
+function workerAuthDocId(value) {
+    return crypto.createHash('sha256').update(String(value)).digest('hex');
+}
+
+async function appendWorkerAuthAudit(action, details) {
+    const event = {
+        id: `workerauth_${Date.now()}_${crypto.randomBytes(5).toString('hex')}`,
+        action,
+        at: Date.now(),
+        ...(details || {})
+    };
+    if (db) {
+        await db.collection(WORKER_AUTH_AUDIT_COLLECTION).doc(event.id).set(event);
+        return;
+    }
+    if (!Array.isArray(serviceWorkerAuthStore.audit)) serviceWorkerAuthStore.audit = [];
+    serviceWorkerAuthStore.audit.push(event);
+    if (serviceWorkerAuthStore.audit.length > 2000) serviceWorkerAuthStore.audit.splice(0, 500);
+    saveServiceWorkerAuth();
+}
+
+function workerClientIp(req) {
+    return String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown')
+        .split(',')[0].trim();
+}
+
+function cleanWorkerAuthState(now = Date.now()) {
+    for (const [key, value] of Object.entries(serviceWorkerAuthStore.attempts || {})) {
+        if (!value || now - value.windowStart > WORKER_VERIFY_WINDOW_MS) {
+            delete serviceWorkerAuthStore.attempts[key];
+        }
+    }
+    for (const [id, value] of Object.entries(serviceWorkerAuthStore.proofs || {})) {
+        if (!value || value.revoked || now > value.expiresAt ||
+            now - value.lastUsedAt > WORKER_PROOF_INACTIVITY_MS) {
+            delete serviceWorkerAuthStore.proofs[id];
+        }
+    }
+}
+
+function workerAttemptKeys(device, workerId, req) {
+    const ip = workerClientIp(req);
+    return [
+        `account:${device.account.id}`,
+        `worker:${device.companyId}:${workerId}`,
+        `network:${device.companyId}:${ip}`
+    ];
+}
+
+async function workerVerificationLimited(keys, now = Date.now()) {
+    if (db) {
+        const refs = keys.map(key => db.collection(WORKER_AUTH_ATTEMPTS_COLLECTION).doc(workerAuthDocId(key)));
+        const snapshots = await db.getAll(...refs);
+        return snapshots.some(snapshot => {
+            const entry = snapshot.exists ? snapshot.data() : null;
+            return entry && entry.lockedUntil && entry.lockedUntil > now;
+        });
+    }
+    cleanWorkerAuthState(now);
+    return keys.some(key => {
+        const entry = serviceWorkerAuthStore.attempts[key];
+        return entry && entry.lockedUntil && entry.lockedUntil > now;
+    });
+}
+
+async function recordWorkerVerificationFailure(keys, now = Date.now()) {
+    let limited = false;
+    if (db) {
+        await db.runTransaction(async transaction => {
+            const refs = keys.map(key =>
+                db.collection(WORKER_AUTH_ATTEMPTS_COLLECTION).doc(workerAuthDocId(key)));
+            const snapshots = await transaction.getAll(...refs);
+            for (let index = 0; index < keys.length; index++) {
+                const key = keys[index];
+                const ref = refs[index];
+                const snapshot = snapshots[index];
+                let entry = snapshot.exists ? snapshot.data() : null;
+                if (!entry || now - entry.windowStart > WORKER_VERIFY_WINDOW_MS) {
+                    entry = { count: 0, windowStart: now, lockedUntil: null };
+                }
+                if (entry.lockedUntil && entry.lockedUntil > now) limited = true;
+                entry.count++;
+                if (entry.count >= WORKER_VERIFY_MAX_FAILURES) {
+                    entry.lockedUntil = now + WORKER_VERIFY_LOCK_MS;
+                    limited = true;
+                }
+                transaction.set(ref, { ...entry, keyHash: workerAuthDocId(key), updatedAt: now });
+            }
+        });
+        await appendWorkerAuthAudit(limited ? 'WORKER_VERIFICATION_LOCKED' : 'WORKER_VERIFICATION_FAILED', {
+            companyId: keys[1] ? keys[1].split(':')[1] : null
+        });
+        return limited;
+    }
+    for (const key of keys) {
+        let entry = serviceWorkerAuthStore.attempts[key];
+        if (!entry || now - entry.windowStart > WORKER_VERIFY_WINDOW_MS) {
+            entry = { count: 0, windowStart: now, lockedUntil: null };
+        }
+        entry.count++;
+        if (entry.count >= WORKER_VERIFY_MAX_FAILURES) {
+            entry.lockedUntil = now + WORKER_VERIFY_LOCK_MS;
+            limited = true;
+        }
+        serviceWorkerAuthStore.attempts[key] = entry;
+    }
+    saveServiceWorkerAuth();
+    await appendWorkerAuthAudit(limited ? 'WORKER_VERIFICATION_LOCKED' : 'WORKER_VERIFICATION_FAILED');
+    return limited;
+}
+
+async function clearWorkerVerificationFailures(keys) {
+    if (db) {
+        const batch = db.batch();
+        for (const key of keys) {
+            batch.delete(db.collection(WORKER_AUTH_ATTEMPTS_COLLECTION).doc(workerAuthDocId(key)));
+        }
+        await batch.commit();
+        return;
+    }
+    for (const key of keys) delete serviceWorkerAuthStore.attempts[key];
+    saveServiceWorkerAuth();
+}
+
+async function revokeDeviceWorkerProofs(departmentAccountId, reason) {
+    const now = Date.now();
+    if (db) {
+        const deviceRef = db.collection(WORKER_DEVICES_COLLECTION).doc(workerAuthDocId(departmentAccountId));
+        await db.runTransaction(async transaction => {
+            const snapshot = await transaction.get(deviceRef);
+            const current = snapshot.exists ? snapshot.data() : {};
+            transaction.set(deviceRef, {
+                departmentAccountId,
+                epoch: (Number(current.epoch) || 0) + 1,
+                currentProofId: null,
+                updatedAt: now,
+                revokeReason: reason
+            });
+        });
+    } else {
+        const current = serviceWorkerAuthStore.devices[departmentAccountId] || {};
+        serviceWorkerAuthStore.devices[departmentAccountId] = {
+            departmentAccountId,
+            epoch: (Number(current.epoch) || 0) + 1,
+            currentProofId: null,
+            updatedAt: now,
+            revokeReason: reason
+        };
+        for (const value of Object.values(serviceWorkerAuthStore.proofs || {})) {
+            if (value.departmentAccountId === departmentAccountId && !value.revoked) {
+                value.revoked = true;
+                value.revokedAt = now;
+                value.revokeReason = reason;
+            }
+        }
+        saveServiceWorkerAuth();
+    }
+    await appendWorkerAuthAudit('WORKER_PROOFS_REVOKED', { departmentAccountId, reason });
+}
+
+async function persistWorkerProofState(state) {
+    if (db) {
+        const proofRef = db.collection(WORKER_PROOFS_COLLECTION).doc(state.proofId);
+        const deviceRef = db.collection(WORKER_DEVICES_COLLECTION).doc(workerAuthDocId(state.departmentAccountId));
+        await db.runTransaction(async transaction => {
+            const snapshot = await transaction.get(deviceRef);
+            const current = snapshot.exists ? snapshot.data() : {};
+            state.deviceEpoch = (Number(current.epoch) || 0) + 1;
+            transaction.set(deviceRef, {
+                departmentAccountId: state.departmentAccountId,
+                epoch: state.deviceEpoch,
+                currentProofId: state.proofId,
+                updatedAt: Date.now()
+            });
+            transaction.set(proofRef, state);
+        });
+    } else {
+        const current = serviceWorkerAuthStore.devices[state.departmentAccountId] || {};
+        state.deviceEpoch = (Number(current.epoch) || 0) + 1;
+        serviceWorkerAuthStore.devices[state.departmentAccountId] = {
+            departmentAccountId: state.departmentAccountId,
+            epoch: state.deviceEpoch,
+            currentProofId: state.proofId,
+            updatedAt: Date.now()
+        };
+        serviceWorkerAuthStore.proofs[state.proofId] = state;
+        saveServiceWorkerAuth();
+    }
+}
+
+async function readAndTouchWorkerProof(proofId, tokenHash, touch) {
+    const now = Date.now();
+    if (db) {
+        const ref = db.collection(WORKER_PROOFS_COLLECTION).doc(proofId);
+        return db.runTransaction(async transaction => {
+            const snapshot = await transaction.get(ref);
+            if (!snapshot.exists) return null;
+            const state = snapshot.data();
+            const deviceRef = db.collection(WORKER_DEVICES_COLLECTION).doc(workerAuthDocId(state.departmentAccountId));
+            const deviceSnapshot = await transaction.get(deviceRef);
+            const device = deviceSnapshot.exists ? deviceSnapshot.data() : null;
+            if (state.revoked || state.tokenHash !== tokenHash || now > state.expiresAt ||
+                now - state.lastUsedAt > WORKER_PROOF_INACTIVITY_MS ||
+                !device || device.currentProofId !== proofId || device.epoch !== state.deviceEpoch) return null;
+            if (touch) {
+                state.lastUsedAt = now;
+                transaction.update(ref, { lastUsedAt: now });
+            }
+            return state;
+        });
+    }
+    const state = (serviceWorkerAuthStore.proofs || {})[proofId];
+    const device = state && serviceWorkerAuthStore.devices[state.departmentAccountId];
+    if (!state || state.revoked || state.tokenHash !== tokenHash || now > state.expiresAt ||
+        now - state.lastUsedAt > WORKER_PROOF_INACTIVITY_MS ||
+        !device || device.currentProofId !== proofId || device.epoch !== state.deviceEpoch) return null;
+    if (touch) {
+        state.lastUsedAt = now;
+        saveServiceWorkerAuth();
+    }
+    return state;
+}
+
+async function revokeWorkerProofState(state, reason) {
+    const now = Date.now();
+    if (db) {
+        const proofRef = db.collection(WORKER_PROOFS_COLLECTION).doc(state.proofId);
+        const deviceRef = db.collection(WORKER_DEVICES_COLLECTION).doc(workerAuthDocId(state.departmentAccountId));
+        await db.runTransaction(async transaction => {
+            const deviceSnapshot = await transaction.get(deviceRef);
+            const device = deviceSnapshot.exists ? deviceSnapshot.data() : {};
+            transaction.update(proofRef, { revoked: true, revokedAt: now, revokeReason: reason });
+            if (device.currentProofId === state.proofId) {
+                transaction.set(deviceRef, {
+                    ...device,
+                    departmentAccountId: state.departmentAccountId,
+                    epoch: (Number(device.epoch) || 0) + 1,
+                    currentProofId: null,
+                    updatedAt: now,
+                    revokeReason: reason
+                });
+            }
+        });
+    } else {
+        state.revoked = true;
+        state.revokedAt = now;
+        state.revokeReason = reason;
+        const device = serviceWorkerAuthStore.devices[state.departmentAccountId];
+        if (device && device.currentProofId === state.proofId) {
+            device.epoch = (Number(device.epoch) || 0) + 1;
+            device.currentProofId = null;
+            device.updatedAt = now;
+        }
+        saveServiceWorkerAuth();
+    }
+    await appendWorkerAuthAudit('WORKER_PROOF_REVOKED', {
+        companyId: state.companyId,
+        departmentAccountId: state.departmentAccountId,
+        workerId: state.workerId,
+        reason
+    });
+}
+
+function signWorkerProof(payload) {
+    const encoded = Buffer.from(JSON.stringify(payload)).toString('base64url');
+    const signature = crypto.createHmac('sha256', WS_SECRET)
+        .update(`worker.${encoded}`).digest('hex');
+    return `${encoded}.${signature}`;
+}
+
+function decodeWorkerProof(token) {
+    try {
+        if (!token || typeof token !== 'string') return null;
+        const split = token.lastIndexOf('.');
+        if (split < 1) return null;
+        const encoded = token.slice(0, split);
+        const signature = token.slice(split + 1);
+        const expected = crypto.createHmac('sha256', WS_SECRET)
+            .update(`worker.${encoded}`).digest('hex');
+        const left = Buffer.from(signature.length === expected.length ? signature : '0'.repeat(expected.length), 'hex');
+        const right = Buffer.from(expected, 'hex');
+        if (left.length !== right.length || !crypto.timingSafeEqual(left, right)) return null;
+        const payload = JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8'));
+        return payload && payload.type === 'service-worker' ? payload : null;
+    } catch {
+        return null;
+    }
+}
+
+async function resolveWorkerProof(req, session, { touch = true } = {}) {
+    const device = await getAuthoritativeServiceDeviceContext(session);
+    if (!device) return null;
+    const payload = decodeWorkerProof(req.headers['x-worker-proof']);
+    if (!payload) return null;
+    const rawProof = req.headers['x-worker-proof'];
+    const tokenHash = crypto.createHash('sha256').update(rawProof).digest('hex');
+    const state = await readAndTouchWorkerProof(payload.proofId, tokenHash, touch);
+    const now = Date.now();
+    if (!state) return null;
+    if (payload.companyId !== device.companyId ||
+        payload.departmentAccountId !== device.account.id ||
+        payload.departmentId !== device.departmentId ||
+        state.companyId !== device.companyId ||
+        state.departmentAccountId !== device.account.id ||
+        state.departmentId !== device.departmentId) return null;
+    const worker = await readServiceWorkers(() =>
+        serviceWorkers.getWorker(device.companyId, payload.workerId));
+    if (!worker || worker.status !== 'ACTIVE' || worker.serviceEnabled !== true ||
+        worker.authorizationVersion !== payload.authorizationVersion ||
+        !worker.verifier || worker.verifier.version !== payload.verifierVersion) return null;
+    const membership = worker.departmentMemberships.find(m =>
+        m.departmentId === device.departmentId && m.status === 'ACTIVE' &&
+        (!m.validFrom || now >= Number(m.validFrom)) &&
+        (!m.validUntil || now <= Number(m.validUntil)));
+    if (!membership || membership.authorizationVersion !== payload.membershipAuthorizationVersion) return null;
+    return { device, worker, state, payload, membership };
+}
+
+async function requireServiceWorkerManager(req, res) {
+    const session = requireAuth(req, res);
+    if (!session) return null;
+    let operationsUsers;
+    let departments;
+    if (db) {
+        const usersRef = db.collection(STORE_COLLECTION).doc('ops_users');
+        const departmentsRef = db.collection(STORE_COLLECTION).doc('departments');
+        const [usersSnapshot, departmentsSnapshot] = await db.getAll(usersRef, departmentsRef);
+        const usersStore = usersSnapshot.exists && usersSnapshot.data().store
+            ? usersSnapshot.data().store : {};
+        const departmentsStoreValue = departmentsSnapshot.exists && departmentsSnapshot.data().store
+            ? departmentsSnapshot.data().store : {};
+        operationsUsers = Object.values(usersStore).flatMap(value => Array.isArray(value) ? value : []);
+        departments = departmentsStoreValue;
+    } else {
+        operationsUsers = Object.values(opsUsersStore).flatMap(value => Array.isArray(value) ? value : []);
+        departments = departmentsStore;
+    }
+    const actor = operationsUsers.find(item => item.uid === session.uid);
+    if (!actor || !opsAuth.canManageServiceWorkers(actor, actor.companyId)) {
+        res.status(403).json({ error: 'Only an active Director can manage Service workers.' });
+        return null;
+    }
+    return {
+        session,
+        actor,
+        companyId: actor.companyId,
+        operationsUsers: operationsUsers.filter(item => item.companyId === actor.companyId),
+        departments: departments[actor.companyId] || []
+    };
+}
+
+function workerAsyncRoute(handler) {
+    return (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next);
+}
+
+function workerDomainOptions(companyId, actorId, authoritative = {}) {
+    return {
+        pepper: WORKER_PIN_PEPPER,
+        departments: authoritative.departments || getCompanyDepts(companyId),
+        operationsUsers: authoritative.operationsUsers || getOpsUsers(companyId),
+        updatedBy: actorId,
+        actorId
+    };
+}
+
+async function refreshServiceWorkersFromAuthority() {
+    if (!db) return;
+    const workersRef = db.collection(STORE_COLLECTION).doc('service_workers');
+    const auditRef = db.collection(STORE_COLLECTION).doc('service_worker_audit');
+    const [snapshot, auditSnapshot] = await db.getAll(workersRef, auditRef);
+    const canonical = snapshot.exists && snapshot.data().store &&
+        typeof snapshot.data().store === 'object' ? snapshot.data().store : {};
+    const audit = auditSnapshot.exists && auditSnapshot.data().store &&
+        typeof auditSnapshot.data().store === 'object' ? auditSnapshot.data().store : {};
+    serviceWorkers.setStore(canonical);
+    serviceWorkers.setAuditStore(audit);
+}
+
+let serviceWorkerStateQueue = Promise.resolve();
+function queueServiceWorkerState(operation) {
+    const result = serviceWorkerStateQueue.then(operation, operation);
+    serviceWorkerStateQueue = result.catch(() => {});
+    return result;
+}
+
+function readServiceWorkers(operation) {
+    return queueServiceWorkerState(async () => {
+        await refreshServiceWorkersFromAuthority();
+        return operation();
+    });
+}
+
+async function mutateServiceWorkers(companyId, mutation) {
+    return queueServiceWorkerState(async () => {
+        if (!db) return mutation();
+        const workersRef = db.collection(STORE_COLLECTION).doc('service_workers');
+        const auditRef = db.collection(STORE_COLLECTION).doc('service_worker_audit');
+        return db.runTransaction(async transaction => {
+            const [workersSnapshot, auditSnapshot] = await transaction.getAll(workersRef, auditRef);
+            const canonicalWorkers = workersSnapshot.exists && workersSnapshot.data().store
+                ? workersSnapshot.data().store : {};
+            const canonicalAudit = auditSnapshot.exists && auditSnapshot.data().store
+                ? auditSnapshot.data().store : {};
+            serviceWorkers.setStore(canonicalWorkers);
+            serviceWorkers.setAuditStore(canonicalAudit);
+            const result = mutation();
+            if (result && result.ok) {
+                transaction.set(workersRef, { store: serviceWorkers.getStore(), updatedAt: Date.now() });
+                transaction.set(auditRef, { store: serviceWorkers.getAuditStore(), updatedAt: Date.now() });
+            }
+            return result;
+        });
+    });
+}
+
+app.get('/api/service/workers', workerAsyncRoute(async (req, res) => {
+    const ctx = await requireServiceWorkerManager(req, res);
+    if (!ctx) return;
+    const workers = await readServiceWorkers(() => serviceWorkers.getWorkers(ctx.companyId));
+    res.json({ success: true, workers });
+}));
+
+app.post('/api/service/workers', workerAsyncRoute(async (req, res) => {
+    const ctx = await requireServiceWorkerManager(req, res);
+    if (!ctx) return;
+    const result = await mutateServiceWorkers(ctx.companyId, () => serviceWorkers.createWorker(
+        { ...(req.body || {}), companyId: ctx.companyId, createdBy: ctx.actor.id },
+        workerDomainOptions(ctx.companyId, ctx.actor.id, ctx)
+    ));
+    if (!result.ok) return res.status(result.code).json({ error: result.error });
+    res.status(201).json({ success: true, worker: result.worker });
+}));
+
+app.patch('/api/service/workers/:workerId', workerAsyncRoute(async (req, res) => {
+    const ctx = await requireServiceWorkerManager(req, res);
+    if (!ctx) return;
+    const result = await mutateServiceWorkers(ctx.companyId, () => serviceWorkers.updateWorker(
+        ctx.companyId, req.params.workerId, req.body || {},
+        workerDomainOptions(ctx.companyId, ctx.actor.id, ctx)
+    ));
+    if (!result.ok) return res.status(result.code).json({ error: result.error });
+    res.json({ success: true, worker: result.worker });
+}));
+
+app.put('/api/service/workers/:workerId/status', workerAsyncRoute(async (req, res) => {
+    const ctx = await requireServiceWorkerManager(req, res);
+    if (!ctx) return;
+    const result = await mutateServiceWorkers(ctx.companyId, () => serviceWorkers.setWorkerStatus(
+        ctx.companyId, req.params.workerId,
+        { status: (req.body || {}).status, actorId: ctx.actor.id }
+    ));
+    if (!result.ok) return res.status(result.code).json({ error: result.error });
+    res.json({ success: true, worker: result.worker });
+}));
+
+app.put('/api/service/workers/:workerId/memberships', workerAsyncRoute(async (req, res) => {
+    const ctx = await requireServiceWorkerManager(req, res);
+    if (!ctx) return;
+    const result = await mutateServiceWorkers(ctx.companyId, () => serviceWorkers.setWorkerMemberships(
+        ctx.companyId, req.params.workerId,
+        (req.body || {}).departmentMemberships,
+        workerDomainOptions(ctx.companyId, ctx.actor.id, ctx)
+    ));
+    if (!result.ok) return res.status(result.code).json({ error: result.error });
+    res.json({ success: true, worker: result.worker });
+}));
+
+app.post('/api/service/workers/:workerId/reset-pin', workerAsyncRoute(async (req, res) => {
+    const ctx = await requireServiceWorkerManager(req, res);
+    if (!ctx) return;
+    const result = await mutateServiceWorkers(ctx.companyId, () => serviceWorkers.resetWorkerPin(
+        ctx.companyId, req.params.workerId, (req.body || {}).pin,
+        workerDomainOptions(ctx.companyId, ctx.actor.id, ctx)
+    ));
+    if (!result.ok) return res.status(result.code).json({ error: result.error });
+    res.json({ success: true, worker: result.worker });
+}));
+
+app.put('/api/service/workers/:workerId/operations-link', workerAsyncRoute(async (req, res) => {
+    const ctx = await requireServiceWorkerManager(req, res);
+    if (!ctx) return;
+    const result = await mutateServiceWorkers(ctx.companyId, () => serviceWorkers.linkWorkerOperationsUser(
+        ctx.companyId, req.params.workerId, (req.body || {}).operationsUserId,
+        workerDomainOptions(ctx.companyId, ctx.actor.id, ctx)
+    ));
+    if (!result.ok) return res.status(result.code).json({ error: result.error });
+    res.json({ success: true, worker: result.worker });
+}));
+
+app.get('/api/service/workers/audit', workerAsyncRoute(async (req, res) => {
+    const ctx = await requireServiceWorkerManager(req, res);
+    if (!ctx) return;
+    const audit = await readServiceWorkers(() =>
+        serviceWorkers.getAdministrationAuditRecords(ctx.companyId));
+    res.json({ success: true, audit });
+}));
+
+app.get('/api/service/workers/roster', workerAsyncRoute(async (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const device = await getAuthoritativeServiceDeviceContext(session);
+    if (!device) return res.status(403).json({ error: 'Worker verification unavailable.', code: 'DEVICE_NOT_AUTHORIZED' });
+    const workers = await readServiceWorkers(() =>
+        serviceWorkers.getSelectableWorkers(device.companyId, device.departmentId)
+        .filter(worker => {
+            const membership = worker.departmentMemberships.find(m => m.departmentId === device.departmentId);
+            const now = Date.now();
+            return membership && (!membership.validFrom || now >= Number(membership.validFrom)) &&
+                (!membership.validUntil || now <= Number(membership.validUntil));
+        })
+        .map(worker => ({ id: worker.id, displayName: worker.displayName })));
+    res.json({ success: true, workers });
+}));
+
+app.post('/api/service/workers/verify', workerAsyncRoute(async (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const device = await getAuthoritativeServiceDeviceContext(session);
+    if (!device) return res.status(403).json({ error: 'Worker verification failed.', code: 'VERIFICATION_FAILED' });
+    const workerId = String((req.body || {}).workerId || '');
+    const pin = String((req.body || {}).pin || '');
+    const keys = workerAttemptKeys(device, workerId, req);
+    if (await workerVerificationLimited(keys)) {
+        res.setHeader('Retry-After', String(Math.ceil(WORKER_VERIFY_LOCK_MS / 1000)));
+        return res.status(429).json({ error: 'Worker verification failed.', code: 'VERIFICATION_RATE_LIMITED' });
+    }
+    const now = Date.now();
+    const verification = await readServiceWorkers(() => {
+        const worker = serviceWorkers.getWorker(device.companyId, workerId);
+        const membership = worker && worker.departmentMemberships.find(
+            m => m.departmentId === device.departmentId && m.status === 'ACTIVE');
+        const eligible = worker && membership && worker.status === 'ACTIVE' && worker.serviceEnabled === true &&
+            (!membership.validFrom || now >= Number(membership.validFrom)) &&
+            (!membership.validUntil || now <= Number(membership.validUntil));
+        const verified = eligible &&
+            serviceWorkers.verifyWorkerPin(device.companyId, workerId, pin, WORKER_PIN_PEPPER);
+        return { worker, membership, verified };
+    });
+    const { worker, membership, verified } = verification;
+    if (!verified || !verified.ok) {
+        const limited = await recordWorkerVerificationFailure(keys, now);
+        if (limited) {
+            res.setHeader('Retry-After', String(Math.ceil(WORKER_VERIFY_LOCK_MS / 1000)));
+            return res.status(429).json({ error: 'Worker verification failed.', code: 'VERIFICATION_RATE_LIMITED' });
+        }
+        return res.status(401).json({ error: 'Worker verification failed.', code: 'VERIFICATION_FAILED' });
+    }
+    await clearWorkerVerificationFailures(keys);
+    await revokeDeviceWorkerProofs(device.account.id, 'WORKER_SWITCH');
+    const proofId = crypto.randomBytes(24).toString('hex');
+    const expiresAt = now + WORKER_PROOF_ABSOLUTE_MS;
+    const payload = {
+        type: 'service-worker',
+        proofId,
+        workerId: worker.id,
+        companyId: device.companyId,
+        departmentAccountId: device.account.id,
+        departmentId: device.departmentId,
+        authorizationVersion: worker.authorizationVersion,
+        membershipAuthorizationVersion: membership.authorizationVersion,
+        verifierVersion: worker.verifier.version,
+        iat: now,
+        exp: expiresAt
+    };
+    const proof = signWorkerProof(payload);
+    const proofState = {
+        proofId,
+        workerId: worker.id,
+        companyId: device.companyId,
+        departmentAccountId: device.account.id,
+        departmentId: device.departmentId,
+        tokenHash: crypto.createHash('sha256').update(proof).digest('hex'),
+        createdAt: now,
+        lastUsedAt: now,
+        expiresAt,
+        revoked: false
+    };
+    await persistWorkerProofState(proofState);
+    await appendWorkerAuthAudit('WORKER_VERIFIED', {
+        companyId: device.companyId,
+        departmentAccountId: device.account.id,
+        workerId: worker.id
+    });
+    res.json({
+        success: true,
+        worker: { id: worker.id, displayName: worker.displayName },
+        proof,
+        expiresAt,
+        inactivityExpiresAt: now + WORKER_PROOF_INACTIVITY_MS
+    });
+}));
+
+app.get('/api/service/workers/current', workerAsyncRoute(async (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const ctx = await resolveWorkerProof(req, session);
+    if (!ctx) return res.status(401).json({ error: 'Worker proof invalid or expired.', code: 'WORKER_PROOF_INVALID' });
+    res.json({
+        success: true,
+        worker: { id: ctx.worker.id, displayName: ctx.worker.displayName },
+        expiresAt: ctx.state.expiresAt,
+        inactivityExpiresAt: ctx.state.lastUsedAt + WORKER_PROOF_INACTIVITY_MS
+    });
+}));
+
+app.post('/api/service/workers/clear', workerAsyncRoute(async (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const ctx = await resolveWorkerProof(req, session, { touch: false });
+    if (!ctx) return res.status(401).json({ error: 'Worker proof invalid or expired.', code: 'WORKER_PROOF_INVALID' });
+    await revokeWorkerProofState(ctx.state, 'HANDOFF');
+    res.json({ success: true });
+}));
+
+app.post('/api/service/workers/clear-device', workerAsyncRoute(async (req, res) => {
+    const session = requireAuth(req, res);
+    if (!session) return;
+    const device = await getAuthoritativeServiceDeviceContext(session);
+    if (!device) return res.status(403).json({ error: 'Device not authorized.', code: 'DEVICE_NOT_AUTHORIZED' });
+    await revokeDeviceWorkerProofs(device.account.id, 'DEVICE_LOGOUT');
+    res.json({ success: true });
+}));
 
 // GET /api/voice-recipients — lightweight directory of active departments for messaging.
 // Returns only { id, name } of ACTIVE departments in the authenticated company so
@@ -1753,6 +2429,9 @@ function getStoreNameForFile(filePath) {
     if (filePath === CALENDAR_EVENTS_FILE) return 'calendar_events';
     if (filePath === CALENDAR_NOTIF_FILE)  return 'calendar_notifs';
     if (filePath === DEPARTMENT_ACCOUNTS_FILE) return 'department_accounts';
+    if (filePath === SERVICE_WORKERS_FILE) return 'service_workers';
+    if (filePath === SERVICE_WORKER_AUDIT_FILE) return 'service_worker_audit';
+    if (filePath === SERVICE_WORKER_AUTH_FILE) return 'service_worker_auth';
     if (filePath === COUNTDOWN_HISTORY_FILE)   return 'countdown_history';
     if (filePath === OPS_USERS_FILE)      return 'ops_users';
     if (filePath === OPS_TASKS_FILE)      return 'ops_tasks';
@@ -2508,6 +3187,12 @@ app.patch('/api/calendar/notifications/read-all', (req, res) => {
 // Department Account module (Service side) — S1.1 foundation.
 const departmentAccounts = require('./service/department-accounts');
 departmentAccounts.setPersist(() => saveJSON(DEPARTMENT_ACCOUNTS_FILE, departmentAccounts.getStore()));
+const serviceWorkers = require('./service/service-workers');
+serviceWorkers.setPersist(() => {
+    if (db) return;
+    saveJSON(SERVICE_WORKERS_FILE, serviceWorkers.getStore());
+    saveJSON(SERVICE_WORKER_AUDIT_FILE, serviceWorkers.getAuditStore());
+});
 
 const opsAuth         = require('./operations/ops-auth');
 const opsEmail        = require('./operations/ops-email');
@@ -7084,6 +7769,13 @@ async function initializeDataStores() {
         { name: 'departments',     file: DEPARTMENTS_FILE,     setter: v => { departmentsStore    = v; } },
         { name: 'plans',           file: PLANS_FILE,           setter: v => { plansStore          = v; } },
         { name: 'department_accounts', file: DEPARTMENT_ACCOUNTS_FILE, setter: v => { departmentAccounts.setStore(v); } },
+        { name: 'service_workers', file: SERVICE_WORKERS_FILE, setter: v => { serviceWorkers.setStore(v); } },
+        { name: 'service_worker_audit', file: SERVICE_WORKER_AUDIT_FILE, setter: v => { serviceWorkers.setAuditStore(v); } },
+        { name: 'service_worker_auth', file: SERVICE_WORKER_AUTH_FILE, setter: v => {
+            serviceWorkerAuthStore = v && typeof v === 'object'
+                ? { attempts: v.attempts || {}, proofs: v.proofs || {}, devices: v.devices || {}, audit: v.audit || [] }
+                : { attempts: {}, proofs: {}, devices: {}, audit: [] };
+        } },
         { name: 'countdown_history', file: COUNTDOWN_HISTORY_FILE, setter: v => { countdownHistoryStore = v; } },
         { name: 'calendar_events', file: CALENDAR_EVENTS_FILE, setter: v => { calendarEventsStore = v; } },
         { name: 'calendar_notifs', file: CALENDAR_NOTIF_FILE,  setter: v => { calendarNotifStore  = v; } },
