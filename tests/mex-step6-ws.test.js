@@ -34,8 +34,8 @@ const BASE    = `http://127.0.0.1:${PORT}`;
 const WS_URL  = `ws://127.0.0.1:${PORT}/ws`;
 
 // ─── token helpers ────────────────────────────────────────────────────────────
-function sign(uid, companyName, role = null) {
-    const obj = { uid, companyName, iat: Date.now(), exp: Date.now() + 3_600_000 };
+function sign(uid, companyName, role = null, authSource = 'firebase-profile') {
+    const obj = { uid, companyName, authSource, iat: Date.now(), exp: Date.now() + 3_600_000 };
     if (role) obj.role = role;
     const payload = Buffer.from(JSON.stringify(obj)).toString('base64');
     const sig = nodecrypto.createHmac('sha256', SECRET).update(payload).digest('hex');
@@ -145,7 +145,7 @@ async function run() {
 
     try {
         const CO = 'coA';
-        const tokAdminA = sign('uid-a-admin', CO);
+        const tokAdminA = sign('uid-a-admin', CO, null, 'ops-bootstrap');
         const tokDeptA  = sign('uid-dept-a',  CO);
         const tokDeptB  = sign('uid-dept-b',  CO);
         const tokFloorA = signFloor('uid-floor-a', CO);
@@ -306,7 +306,7 @@ async function run() {
         // ── 9. Security: cross-company still rejected ────────────────────────
         console.log('\n  — 9. Security regression (cross-company) —\n');
         {
-            const tokAdminB = sign('uid-b-admin', 'coB');
+            const tokAdminB = sign('uid-b-admin', 'coB', null, 'ops-bootstrap');
             const tokDeptX  = sign('uid-dept-x',  'coB');
             const r2 = await api(tokAdminB, 'POST', '/api/departments', { name: 'XDept' });
             if (r2.data.department?.id) {

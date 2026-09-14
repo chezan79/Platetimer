@@ -22,8 +22,8 @@ const { spawn } = require('child_process');
 const SECRET = 'test-sprint4-secret';
 const PORT   = 4456;
 
-function sign(uid, companyName) {
-    const payload = Buffer.from(JSON.stringify({ uid, companyName, iat: Date.now(), exp: Date.now() + 3600000 })).toString('base64');
+function sign(uid, companyName, authSource = 'firebase-profile') {
+    const payload = Buffer.from(JSON.stringify({ uid, companyName, authSource, iat: Date.now(), exp: Date.now() + 3600000 })).toString('base64');
     const sig     = crypto.createHmac('sha256', SECRET).update(payload).digest('hex');
     return `${payload}.${sig}`;
 }
@@ -76,8 +76,8 @@ async function run() {
 
     const co  = 'S4Co_'  + crypto.randomBytes(3).toString('hex');
     const co2 = 'S4Co2_' + crypto.randomBytes(3).toString('hex');
-    const dirTok  = sign('s4-dir-a',  co);
-    const dir2Tok = sign('s4-dir-b', co2);
+    const dirTok  = sign('s4-dir-a',  co, 'ops-bootstrap');
+    const dir2Tok = sign('s4-dir-b', co2, 'ops-bootstrap');
 
     // ── Bootstrap directors ──
     let r = await api(dirTok, 'GET', '/api/operations/me');

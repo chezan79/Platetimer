@@ -26,9 +26,9 @@ const SECRET = 'test-sprint62-secret';
 const PORT   = 4462;
 
 // ── HMAC token ────────────────────────────────────────────────────────────────
-function sign(uid, company) {
+function sign(uid, company, authSource = 'firebase-profile') {
     const p = Buffer.from(JSON.stringify({
-        uid, companyName: company, iat: Date.now(), exp: Date.now() + 3_600_000,
+        uid, companyName: company, authSource, iat: Date.now(), exp: Date.now() + 3_600_000,
     })).toString('base64');
     const s = crypto.createHmac('sha256', SECRET).update(p).digest('hex');
     return `${p}.${s}`;
@@ -98,8 +98,8 @@ async function run() {
 
     try {
         // ── Tokens ────────────────────────────────────────────────────────────
-        const dirA  = sign('uid-s62-dirA',  'sprint62-co-a');
-        const dirB  = sign('uid-s62-dirB',  'sprint62-co-b');
+        const dirA  = sign('uid-s62-dirA',  'sprint62-co-a', 'ops-bootstrap');
+        const dirB  = sign('uid-s62-dirB',  'sprint62-co-b', 'ops-bootstrap');
         // We'll register CC/SC/CDB/Adjoint via invite flows (which requires activation)
         // so we use module-level tests for role scoping and HTTP for Director/isolation
 

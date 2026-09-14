@@ -18,8 +18,8 @@ const { spawn } = require('child_process');
 const SECRET = 'test-usermgmt-secret';
 const PORT   = 4457;
 
-function sign(uid, companyName) {
-    const payload = Buffer.from(JSON.stringify({ uid, companyName, iat: Date.now(), exp: Date.now() + 3600000 })).toString('base64');
+function sign(uid, companyName, authSource = 'firebase-profile') {
+    const payload = Buffer.from(JSON.stringify({ uid, companyName, authSource, iat: Date.now(), exp: Date.now() + 3600000 })).toString('base64');
     const sig     = crypto.createHmac('sha256', SECRET).update(payload).digest('hex');
     return `${payload}.${sig}`;
 }
@@ -82,8 +82,8 @@ async function run() {
     // Two companies for isolation tests
     const co  = 'UM_A_' + crypto.randomBytes(3).toString('hex');
     const co2 = 'UM_B_' + crypto.randomBytes(3).toString('hex');
-    const dirTok  = sign('um-dir-a', co);
-    const dir2Tok = sign('um-dir-b', co2);
+    const dirTok  = sign('um-dir-a', co, 'ops-bootstrap');
+    const dir2Tok = sign('um-dir-b', co2, 'ops-bootstrap');
 
     // Bootstrap directors
     let r = await api(dirTok, 'GET', '/api/operations/me');

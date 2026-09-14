@@ -29,8 +29,8 @@ const PORT = 5089;
 const BASE = `http://127.0.0.1:${PORT}`;
 const DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'opstest57-'));
 
-function sign(uid, companyName) {
-    const payload = Buffer.from(JSON.stringify({ uid, companyName, iat: Date.now(), exp: Date.now() + 3600000 })).toString('base64');
+function sign(uid, companyName, authSource = 'firebase-profile') {
+    const payload = Buffer.from(JSON.stringify({ uid, companyName, authSource, iat: Date.now(), exp: Date.now() + 3600000 })).toString('base64');
     const sig = crypto.createHmac('sha256', SECRET).update(payload).digest('hex');
     return `${payload}.${sig}`;
 }
@@ -231,8 +231,8 @@ async function main() {
     try {
         // ── Setup: two companies ──
         const coA = 'cal-co-a', coB = 'cal-co-b';
-        const dirA = sign('uid-cal-dirA', coA);
-        const dirB = sign('uid-cal-dirB', coB);
+        const dirA = sign('uid-cal-dirA', coA, 'ops-bootstrap');
+        const dirB = sign('uid-cal-dirB', coB, 'ops-bootstrap');
         let r = await api(dirA, 'GET', '/api/operations/me?name=DirA');
         check('S0. Director A bootstrapped', r.data.success && r.data.user.role === 'DIRECTOR');
         const dirAId = r.data.user.id;

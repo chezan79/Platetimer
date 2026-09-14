@@ -27,9 +27,9 @@ const { spawn } = require('child_process');
 const SECRET = 'test-sprint63-secret';
 const PORT   = 4463;
 
-function sign(uid, company) {
+function sign(uid, company, authSource = 'firebase-profile') {
     const p = Buffer.from(JSON.stringify({
-        uid, companyName: company, iat: Date.now(), exp: Date.now() + 3_600_000,
+        uid, companyName: company, authSource, iat: Date.now(), exp: Date.now() + 3_600_000,
     })).toString('base64');
     const s = crypto.createHmac('sha256', SECRET).update(p).digest('hex');
     return `${p}.${s}`;
@@ -95,8 +95,8 @@ async function run() {
 
     try {
         // ── Tokens ────────────────────────────────────────────────────────────
-        const dirA = sign('uid-s63-dirA', 'sprint63-co-a');
-        const dirB = sign('uid-s63-dirB', 'sprint63-co-b');
+        const dirA = sign('uid-s63-dirA', 'sprint63-co-a', 'ops-bootstrap');
+        const dirB = sign('uid-s63-dirB', 'sprint63-co-b', 'ops-bootstrap');
 
         // Bootstrap
         let r = await api(dirA, 'GET', '/api/operations/me');

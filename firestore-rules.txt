@@ -3,9 +3,18 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Regole per i documenti degli utenti - solo l'utente autenticato può accedere ai propri dati
+    // User profiles are self-readable, but tenant membership is server-controlled.
+    // Clients may create/update ordinary profile fields; they may never create,
+    // add, remove, or change the company field used by the legacy Service UI.
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null
+                    && request.auth.uid == userId
+                    && !('company' in request.resource.data);
+      allow update: if request.auth != null
+                    && request.auth.uid == userId
+                    && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['company']);
+      allow delete: if request.auth != null && request.auth.uid == userId;
     }
     
     // Regole per i countdown - solo utenti autenticati

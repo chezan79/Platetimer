@@ -28,9 +28,9 @@ const PORT     = 5088;
 const BASE     = `http://127.0.0.1:${PORT}`;
 const DATA_DIR = fs.mkdtempSync(path.join(require('os').tmpdir(), 'mrec-'));
 
-function sign(uid, companyName) {
+function sign(uid, companyName, authSource = 'firebase-profile') {
     const payload = Buffer.from(JSON.stringify({
-        uid, companyName, iat: Date.now(), exp: Date.now() + 3_600_000
+        uid, companyName, authSource, iat: Date.now(), exp: Date.now() + 3_600_000
     })).toString('base64');
     const sig = crypto.createHmac('sha256', SECRET).update(payload).digest('hex');
     return `${payload}.${sig}`;
@@ -103,10 +103,10 @@ async function main() {
 
     try {
         // Tokens — admin unbound sessions + bound dept-account sessions
-        const tokAdmin   = sign('uid-admin',   'ristorante');
+        const tokAdmin   = sign('uid-admin',   'ristorante', 'ops-bootstrap');
         const tokCucina  = sign('uid-cucina',  'ristorante');   // will bind to Cucina
         const tokPizzeria= sign('uid-pizzeria','ristorante');   // will bind to Pizzeria
-        const tokForeign = sign('uid-foreign', 'other-co');     // different company
+        const tokForeign = sign('uid-foreign', 'other-co', 'ops-bootstrap'); // different-company Director
 
         // ── Setup: create departments ──────────────────────────────────────────
         const cucina   = await createDept(tokAdmin, 'Cucina');

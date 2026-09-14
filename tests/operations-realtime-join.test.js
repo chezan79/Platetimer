@@ -20,9 +20,9 @@ const WS     = require('ws');
 const SECRET = 'test-t51-secret';
 const PORT   = 4459;
 
-function sign(uid, companyName) {
+function sign(uid, companyName, authSource = 'firebase-profile') {
     const payload = Buffer.from(JSON.stringify({
-        uid, companyName, iat: Date.now(), exp: Date.now() + 3_600_000
+        uid, companyName, authSource, iat: Date.now(), exp: Date.now() + 3_600_000
     })).toString('base64');
     const sig = crypto.createHmac('sha256', SECRET).update(payload).digest('hex');
     return `${payload}.${sig}`;
@@ -140,9 +140,9 @@ async function run() {
     try {
         const coA  = 'T51_A_' + crypto.randomBytes(3).toString('hex');
         const coB  = 'T51_B_' + crypto.randomBytes(3).toString('hex');
-        const dirA = sign('t51-dir-a', coA);
+        const dirA = sign('t51-dir-a', coA, 'ops-bootstrap');
         const asgA = sign('t51-asg-a', coA);   // assignee in company A
-        const dirB = sign('t51-dir-b', coB);
+        const dirB = sign('t51-dir-b', coB, 'ops-bootstrap');
 
         // Bootstrap ops records
         let r = await api(dirA, 'GET', '/api/operations/me');

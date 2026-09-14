@@ -22,9 +22,9 @@ function check(name, cond, extra) {
     else { failed++; console.error(`  ❌ ${name}${extra !== undefined ? ` — got: ${JSON.stringify(extra)}` : ''}`); }
 }
 
-function sign(uid, companyName) {
+function sign(uid, companyName, authSource = 'firebase-profile') {
     const payload = Buffer.from(JSON.stringify({
-        uid, companyName, iat: Date.now(), exp: Date.now() + 3_600_000
+        uid, companyName, authSource, iat: Date.now(), exp: Date.now() + 3_600_000
     })).toString('base64');
     const sig = crypto.createHmac('sha256', SECRET).update(payload).digest('hex');
     return `${payload}.${sig}`;
@@ -129,8 +129,8 @@ async function run() {
     const server = await startServer();
 
     try {
-        const adminA = sign('firebase-uid-admin', 'company-a');
-        const adminB = sign('firebase-uid-adminb', 'company-b');
+        const adminA = sign('firebase-uid-admin', 'company-a', 'ops-bootstrap');
+        const adminB = sign('firebase-uid-adminb', 'company-b', 'ops-bootstrap');
 
         const deptA  = await createDept(adminA, 'Reparto Test');
         const deptA2 = await createDept(adminA, 'Reparto Alt');

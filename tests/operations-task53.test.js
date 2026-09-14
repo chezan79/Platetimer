@@ -28,9 +28,9 @@ const SECRET = 'test-task53-secret';
 const PORT   = 4462;
 
 // ── HMAC token ───────────────────────────────────────────────────────────────
-function sign(uid, companyName) {
+function sign(uid, companyName, authSource = 'firebase-profile') {
     const payload = Buffer.from(JSON.stringify({
-        uid, companyName, iat: Date.now(), exp: Date.now() + 3_600_000
+        uid, companyName, authSource, iat: Date.now(), exp: Date.now() + 3_600_000
     })).toString('base64');
     const sig = crypto.createHmac('sha256', SECRET).update(payload).digest('hex');
     return `${payload}.${sig}`;
@@ -166,8 +166,8 @@ async function run() {
 
     const co  = 'T53Co_'  + crypto.randomBytes(3).toString('hex');
     const co2 = 'T53Co2_' + crypto.randomBytes(3).toString('hex');
-    const dirTok  = sign('t53-dir-a', co);
-    const dir2Tok = sign('t53-dir-b', co2);
+    const dirTok  = sign('t53-dir-a', co, 'ops-bootstrap');
+    const dir2Tok = sign('t53-dir-b', co2, 'ops-bootstrap');
 
     // Bootstrap directors
     let r = await api(dirTok, 'GET', '/api/operations/me');

@@ -22,9 +22,9 @@ const SECRET  = 'test-sprint6-secret';
 const PORT    = 4460;
 
 // ── HMAC token ────────────────────────────────────────────────────────────────
-function sign(uid, companyName) {
+function sign(uid, companyName, authSource = 'firebase-profile') {
     const payload = Buffer.from(JSON.stringify({
-        uid, companyName, iat: Date.now(), exp: Date.now() + 3_600_000,
+        uid, companyName, authSource, iat: Date.now(), exp: Date.now() + 3_600_000,
     })).toString('base64');
     const sig = crypto.createHmac('sha256', SECRET).update(payload).digest('hex');
     return `${payload}.${sig}`;
@@ -91,8 +91,8 @@ async function run() {
 
     try {
         // ── Tokens ────────────────────────────────────────────────────────────
-        const dirA  = sign('uid-s6-dirA', 'sprint6-co-a');
-        const dirB  = sign('uid-s6-dirB', 'sprint6-co-b');
+        const dirA  = sign('uid-s6-dirA', 'sprint6-co-a', 'ops-bootstrap');
+        const dirB  = sign('uid-s6-dirB', 'sprint6-co-b', 'ops-bootstrap');
 
         // ── S6-0 / S6-1: Bootstrap directors ─────────────────────────────────
         let r = await api(dirA, 'GET', '/api/operations/me');

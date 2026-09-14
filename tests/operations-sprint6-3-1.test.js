@@ -416,8 +416,8 @@ console.log('\n  — cross-source NSV deduplication —\n');
 const SECRET_HTTP = 'test-sprint631-secret';
 const PORT        = 4465;
 
-function sign(uid, company) {
-    const p = Buffer.from(JSON.stringify({ uid, companyName: company, iat: Date.now(), exp: Date.now() + 3_600_000 })).toString('base64');
+function sign(uid, company, authSource = 'firebase-profile') {
+    const p = Buffer.from(JSON.stringify({ uid, companyName: company, authSource, iat: Date.now(), exp: Date.now() + 3_600_000 })).toString('base64');
     const s = crypto.createHmac('sha256', SECRET_HTTP).update(p).digest('hex');
     return `${p}.${s}`;
 }
@@ -454,7 +454,13 @@ async function run() {
 
     const srv = cp.spawn(process.execPath, ['server.js'], {
         cwd: path.join(__dirname, '..'),
-        env: { ...process.env, PORT: String(PORT), WS_SESSION_SECRET: SECRET_HTTP, DATA_DIR },
+        env: {
+            ...process.env,
+            PORT: String(PORT),
+            WS_SESSION_SECRET: SECRET_HTTP,
+            DATA_DIR,
+            FIREBASE_ADMIN_SERVICE_ACCOUNT: ''
+        },
         stdio: 'pipe',
     });
     srv.stderr.on('data', () => {});
@@ -468,8 +474,8 @@ async function run() {
         const ts   = Date.now();
         const coA  = `co631a-${ts}`;
         const coB  = `co631b-${ts}`;
-        const tokA = sign(`uid631a-${ts}`, coA);
-        const tokB = sign(`uid631b-${ts}`, coB);
+        const tokA = sign(`uid631a-${ts}`, coA, 'ops-bootstrap');
+        const tokB = sign(`uid631b-${ts}`, coB, 'ops-bootstrap');
 
         // Bootstrap both companies
         let r;

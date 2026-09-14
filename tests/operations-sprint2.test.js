@@ -15,8 +15,8 @@ const PORT = 5099;
 const BASE = `http://127.0.0.1:${PORT}`;
 const DATA_DIR = fs.mkdtempSync(path.join(require('os').tmpdir(), 'opss2-'));
 
-function sign(uid, companyName) {
-    const payload = Buffer.from(JSON.stringify({ uid, companyName, iat: Date.now(), exp: Date.now() + 3600000 })).toString('base64');
+function sign(uid, companyName, authSource = 'firebase-profile') {
+    const payload = Buffer.from(JSON.stringify({ uid, companyName, authSource, iat: Date.now(), exp: Date.now() + 3600000 })).toString('base64');
     const sig = crypto.createHmac('sha256', SECRET).update(payload).digest('hex');
     return `${payload}.${sig}`;
 }
@@ -59,8 +59,8 @@ async function main() {
 
     try {
         // Tokens
-        const dirA  = sign('uid-s2dirA',  'sprint2-co-a');
-        const dirB  = sign('uid-s2dirB',  'sprint2-co-b');
+        const dirA  = sign('uid-s2dirA',  'sprint2-co-a', 'ops-bootstrap');
+        const dirB  = sign('uid-s2dirB',  'sprint2-co-b', 'ops-bootstrap');
 
         // Bootstrap company A: Director + 4 team members
         let r = await api(dirA, 'GET', '/api/operations/me?name=Anna%20Dir');

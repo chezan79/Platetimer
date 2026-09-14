@@ -13,9 +13,9 @@ const PORT = 5090;
 const BASE = `http://127.0.0.1:${PORT}`;
 const DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'service-today-'));
 
-function sign(uid, companyName) {
+function sign(uid, companyName, authSource = 'firebase-profile') {
     const payload = Buffer.from(JSON.stringify({
-        uid, companyName, iat: Date.now(), exp: Date.now() + 3_600_000
+        uid, companyName, authSource, iat: Date.now(), exp: Date.now() + 3_600_000
     })).toString('base64');
     const sig = crypto.createHmac('sha256', SECRET).update(payload).digest('hex');
     return `${payload}.${sig}`;
@@ -78,34 +78,32 @@ async function run() {
     });
 
     try {
-        const director = sign('today-director', 'today-co');
-        const admin = sign('today-admin', 'today-co');
+        const director = sign('today-director', 'today-co', 'ops-bootstrap');
         const deptToken = sign('today-dept', 'today-co');
         const otherDeptToken = sign('today-other-dept', 'today-co');
-        const otherDirector = sign('other-director', 'other-co');
-        const otherAdmin = sign('other-admin', 'other-co');
+        const otherDirector = sign('other-director', 'other-co', 'ops-bootstrap');
         const otherCompanyDeptToken = sign('other-dept', 'other-co');
         const unbound = sign('unbound', 'today-co');
 
         await api(director, 'GET', '/api/operations/me?name=Director');
-        let r = await api(admin, 'POST', '/api/departments', { name: 'Kitchen' });
+        let r = await api(director, 'POST', '/api/departments', { name: 'Kitchen' });
         const kitchen = r.data.department;
-        r = await api(admin, 'POST', '/api/departments', { name: 'Bar' });
+        r = await api(director, 'POST', '/api/departments', { name: 'Bar' });
         const bar = r.data.department;
-        r = await api(admin, 'POST', '/api/department-accounts', {
+        r = await api(director, 'POST', '/api/department-accounts', {
             departmentId: kitchen.id, displayName: 'Kitchen', loginIdentifier: 'today.kitchen'
         });
         const kitchenAccount = r.data.account;
-        await api(admin, 'POST', '/api/department-accounts', {
+        await api(director, 'POST', '/api/department-accounts', {
             departmentId: bar.id, displayName: 'Bar', loginIdentifier: 'today.bar'
         });
         await api(deptToken, 'POST', '/api/department-accounts/bind', { loginIdentifier: 'today.kitchen' });
         await api(otherDeptToken, 'POST', '/api/department-accounts/bind', { loginIdentifier: 'today.bar' });
 
         await api(otherDirector, 'GET', '/api/operations/me?name=Other');
-        r = await api(otherAdmin, 'POST', '/api/departments', { name: 'Other Kitchen' });
+        r = await api(otherDirector, 'POST', '/api/departments', { name: 'Other Kitchen' });
         const otherKitchen = r.data.department;
-        await api(otherAdmin, 'POST', '/api/department-accounts', {
+        await api(otherDirector, 'POST', '/api/department-accounts', {
             departmentId: otherKitchen.id, displayName: 'Other Kitchen', loginIdentifier: 'other.kitchen'
         });
         await api(otherCompanyDeptToken, 'POST', '/api/department-accounts/bind', {
@@ -186,17 +184,17 @@ async function run() {
         r = await api(unbound, 'GET', '/api/service/ops-tasks/today');
         check('unbound request is rejected', r.status === 403 && r.data.code === 'NOT_BOUND', r);
 
-        await api(admin, 'PUT', `/api/department-accounts/${kitchenAccount.id}/status`, {
+        await api(director, 'PUT', `/api/department-accounts/${kitchenAccount.id}/status`, {
             status: 'SUSPENDED'
         });
         r = await api(deptToken, 'GET', '/api/service/ops-tasks/today');
         check('suspended account is rejected',
             r.status === 403 && r.data.code === 'ACCOUNT_SUSPENDED', r);
-        await api(admin, 'PUT', `/api/department-accounts/${kitchenAccount.id}/status`, {
+        await api(director, 'PUT', `/api/department-accounts/${kitchenAccount.id}/status`, {
             status: 'ACTIVE'
         });
 
-        await api(admin, 'PUT', `/api/departments/${kitchen.id}`, { active: false });
+        await api(director, 'PUT', `/api/departments/${kitchen.id}`, { active: false });
         r = await api(deptToken, 'GET', '/api/service/ops-tasks/today');
         check('inactive or auto-suspended department is rejected',
             (r.status === 403 && r.data.code === 'ACCOUNT_SUSPENDED') ||

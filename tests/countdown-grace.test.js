@@ -33,9 +33,9 @@ const DATA_DIR = fs.mkdtempSync(path.join(require('os').tmpdir(), 'cdgrace-'));
 const GRACE_MS = 4000;
 
 // ── Token helpers ─────────────────────────────────────────────────────────────
-function sign(uid, companyName) {
+function sign(uid, companyName, authSource = 'firebase-profile') {
     const payload = Buffer.from(JSON.stringify({
-        uid, companyName, iat: Date.now(), exp: Date.now() + 3_600_000
+        uid, companyName, authSource, iat: Date.now(), exp: Date.now() + 3_600_000
     })).toString('base64');
     const sig = crypto.createHmac('sha256', SECRET).update(payload).digest('hex');
     return `${payload}.${sig}`;
@@ -147,8 +147,8 @@ async function main() {
 
     const sockets = [];
     try {
-        const tokA = sign('uid-a-admin', 'compa');
-        const tokB = sign('uid-b-admin', 'compb');
+        const tokA = sign('uid-a-admin', 'compa', 'ops-bootstrap');
+        const tokB = sign('uid-b-admin', 'compb', 'ops-bootstrap');
 
         const aDept = await createDept(tokA, 'Cucina');
         const bDept = await createDept(tokB, 'CucinaB');

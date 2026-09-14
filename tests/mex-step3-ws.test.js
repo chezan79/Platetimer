@@ -34,9 +34,9 @@ const BASE   = `http://127.0.0.1:${PORT}`;
 const WS_URL = `ws://127.0.0.1:${PORT}/ws`;
 
 // ── Token signing — must match server.js signSessionToken() exactly ───────────
-function sign(uid, companyName) {
+function sign(uid, companyName, authSource = 'firebase-profile') {
     const payload = Buffer.from(JSON.stringify({
-        uid, companyName, iat: Date.now(), exp: Date.now() + 3_600_000
+        uid, companyName, authSource, iat: Date.now(), exp: Date.now() + 3_600_000
     })).toString('base64');
     const sig = crypto.createHmac('sha256', SECRET).update(payload).digest('hex');
     return `${payload}.${sig}`;
@@ -147,8 +147,8 @@ async function run() {
         const OTHER   = 'other-co';
 
         // Admin tokens (used to create depts + dept accounts)
-        const tokAdmin      = sign('uid-admin',   CO);
-        const tokOtherAdmin = sign('uid-oadmin',  OTHER);
+        const tokAdmin      = sign('uid-admin',   CO, 'ops-bootstrap');
+        const tokOtherAdmin = sign('uid-oadmin',  OTHER, 'ops-bootstrap');
 
         // Proto-dept-account tokens — bound by the API to specific depts
         const tokDeptA   = sign('uid-dept-a',  CO);   // will be bound → Cucina

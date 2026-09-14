@@ -38,8 +38,8 @@ const WS_URL   = `ws://127.0.0.1:${PORT}/ws`;
 
 // ─── token helpers ────────────────────────────────────────────────────────────
 // Must match server.js signSessionToken() exactly.
-function sign(uid, companyName, role = null) {
-    const obj = { uid, companyName, iat: Date.now(), exp: Date.now() + 3_600_000 };
+function sign(uid, companyName, role = null, authSource = 'firebase-profile') {
+    const obj = { uid, companyName, authSource, iat: Date.now(), exp: Date.now() + 3_600_000 };
     if (role) obj.role = role;
     const payload = Buffer.from(JSON.stringify(obj)).toString('base64');
     const sig = crypto.createHmac('sha256', SECRET).update(payload).digest('hex');
@@ -150,8 +150,8 @@ async function run() {
         const CO  = 'coA';
         const CO2 = 'coB';
 
-        const tokAdminA  = sign('uid-admin-a',  CO);
-        const tokAdminB  = sign('uid-admin-b',  CO2);
+        const tokAdminA  = sign('uid-admin-a',  CO, null, 'ops-bootstrap');
+        const tokAdminB  = sign('uid-admin-b',  CO2, null, 'ops-bootstrap');
 
         // Admin tokens to bind as dept accounts
         const tokDeptA   = sign('uid-dept-a',  CO);    // will bind to KitchenA

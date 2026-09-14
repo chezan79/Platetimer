@@ -17,9 +17,9 @@ const BASE     = `http://127.0.0.1:${PORT}`;
 const DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'opstaskdel-'));
 
 // ── HMAC session token (same algorithm as existing sprint tests) ─────────────
-function sign(uid, companyName) {
+function sign(uid, companyName, authSource = 'firebase-profile') {
     const payload = Buffer.from(JSON.stringify({
-        uid, companyName, iat: Date.now(), exp: Date.now() + 3_600_000
+        uid, companyName, authSource, iat: Date.now(), exp: Date.now() + 3_600_000
     })).toString('base64');
     const sig = crypto.createHmac('sha256', SECRET).update(payload).digest('hex');
     return `${payload}.${sig}`;
@@ -69,8 +69,8 @@ async function main() {
 
     try {
         // ── Tokens ────────────────────────────────────────────────────────────
-        const dirA  = sign('uid-del-dirA',  'taskdel-company-a');
-        const dirB  = sign('uid-del-dirB',  'taskdel-company-b');
+        const dirA  = sign('uid-del-dirA',  'taskdel-company-a', 'ops-bootstrap');
+        const dirB  = sign('uid-del-dirB',  'taskdel-company-b', 'ops-bootstrap');
         const ccA   = sign('uid-del-ccA',   'taskdel-company-a');
 
         // ── Bootstrap actors ──────────────────────────────────────────────────

@@ -17,9 +17,9 @@ const BASE     = `http://127.0.0.1:${PORT}`;
 const DATA_DIR = fs.mkdtempSync(path.join(require('os').tmpdir(), 's14test-'));
 
 // ── Token helpers ────────────────────────────────────────────────────────────
-function sign(uid, companyName) {
+function sign(uid, companyName, authSource = 'firebase-profile') {
     const payload = Buffer.from(JSON.stringify({
-        uid, companyName, iat: Date.now(), exp: Date.now() + 3_600_000
+        uid, companyName, authSource, iat: Date.now(), exp: Date.now() + 3_600_000
     })).toString('base64');
     const sig = crypto.createHmac('sha256', SECRET).update(payload).digest('hex');
     return `${payload}.${sig}`;
@@ -102,11 +102,12 @@ async function main() {
 
     try {
         // ── Actors ───────────────────────────────────────────────────────────
-        const tokAdmin   = sign('uid-admin',   'ristorante');   // unbound admin
+        const tokAdmin   = sign('uid-admin',   'ristorante', 'ops-bootstrap'); // unbound Director
         const tokBoundD1 = sign('uid-d1',      'ristorante');   // bound to Dept 1
         const tokSusp    = sign('uid-susp',    'ristorante');   // suspended acct
         const tokLegacy  = sign('uid-legacy',  'ristorante');   // unbound legacy
-        const tokOther   = sign('uid-other',   'other-co');      // other company
+        const tokOther   = sign('uid-other',   'other-co', 'ops-bootstrap'); // other-company Director
+        const tokOtherBound = sign('uid-other-bound', 'other-co');             // Firebase user that binds
 
         // ── Setup ─────────────────────────────────────────────────────────────
         console.log('  — setup —\n');
@@ -133,7 +134,7 @@ async function main() {
         // Other company
         const deptOtherId = await createDept(tokOther, 'Lounge');
         const acctOther   = await createAccount(tokOther, deptOtherId, 'Lounge Display', 'lounge.s14');
-        r = await bindAccount(tokOther, 'lounge.s14');
+        r = await bindAccount(tokOtherBound, 'lounge.s14');
         check('Setup: other-co bound', r.data.success === true, r.data);
 
         // ── 1. Bound D1 → GET /api/departments returns only D1 ───────────────
@@ -161,7 +162,7 @@ async function main() {
         check('S14-9.  other-co dept not in list',         !allDeptIds.includes(deptOtherId), allDeptIds);
 
         // other-co bound account sees only its own dept, not ristorante's
-        r = await api(tokOther, 'GET', '/api/departments');
+        r = await api(tokOtherBound, 'GET', '/api/departments');
         const otherDeptIds = (r.data.departments || []).map(d => d.id);
         check('S14-10. other-co sees only lounge',         otherDeptIds.includes(deptOtherId) && !otherDeptIds.includes(dept1Id), otherDeptIds);
 
@@ -256,14 +257,15 @@ async function main() {
         const dept4Id = r.data?.department?.id;
         check('S14-36. new dept id returned',              !!dept4Id, dept4Id);
 
-        // Legacy can update
+        // Ordinary legacy users can read but cannot administer departments.
         r = await api(tokLegacy, 'PUT', `/api/departments/${dept4Id}`, { name: 'Cocktails' });
-        check('S14-37. legacy PUT → 200',                  r.status === 200, r.status);
-        check('S14-38. name updated',                      r.data.department?.name === 'Cocktails', r.data.department?.name);
+        check('S14-37. legacy non-Director PUT → 403',     r.status === 403, r.status);
+        r = await api(tokAdmin, 'GET', '/api/departments');
+        check('S14-38. name unchanged',                    r.data.departments?.some(d => d.id === dept4Id && d.name === 'Drinks'), r.data);
 
-        // Legacy can delete (no dept accounts bound, no countdowns)
+        // Legacy cannot delete even when no account/countdown dependencies exist.
         r = await api(tokLegacy, 'DELETE', `/api/departments/${dept4Id}`);
-        check('S14-39. legacy DELETE → 200',               r.status === 200, r.status);
+        check('S14-39. legacy non-Director DELETE → 403',  r.status === 403, r.status);
 
         // ── 13. S1.3 identity → redirect data still correct ───────────────────
         console.log('\n  — 13. S1.3 regression: identity still resolves for redirect —\n');

@@ -23,9 +23,9 @@ const BASE     = `http://127.0.0.1:${PORT}`;
 const DATA_DIR = fs.mkdtempSync(path.join(require('os').tmpdir(), 'vrec-'));
 const SALA_ID  = '__sala__';
 
-function sign(uid, companyName) {
+function sign(uid, companyName, authSource = 'firebase-profile') {
     const payload = Buffer.from(JSON.stringify({
-        uid, companyName, iat: Date.now(), exp: Date.now() + 3_600_000
+        uid, companyName, authSource, iat: Date.now(), exp: Date.now() + 3_600_000
     })).toString('base64');
     const sig = crypto.createHmac('sha256', SECRET).update(payload).digest('hex');
     return `${payload}.${sig}`;
@@ -99,12 +99,12 @@ async function main() {
     console.log('Server up. Running voice-recipients checks…\n');
 
     try {
-        const tokAdmin  = sign('uid-admin',  'ristorante');
+        const tokAdmin  = sign('uid-admin',  'ristorante', 'ops-bootstrap');
         const tokPizza  = sign('uid-pizza',  'ristorante');   // bound to Pizzeria
         const tokSusp   = sign('uid-susp',   'ristorante');   // suspended acct
         const tokDead   = sign('uid-dead',   'ristorante');   // bound to dept that will be deactivated
         const tokLegacy = sign('uid-legacy', 'ristorante');   // unbound legacy
-        const tokAdminB = sign('uid-adminB', 'other-co');
+        const tokAdminB = sign('uid-adminB', 'other-co', 'ops-bootstrap');
 
         // ── Setup ─────────────────────────────────────────────────────────────
         const cucina   = await createDept(tokAdmin, 'Cucina');

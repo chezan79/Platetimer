@@ -21,9 +21,9 @@ const SECRET = 'test-sprint5-secret';
 const PORT   = 4458;
 
 // ── HMAC token helper ────────────────────────────────────────────────────────
-function sign(uid, companyName) {
+function sign(uid, companyName, authSource = 'firebase-profile') {
     const payload = Buffer.from(JSON.stringify({
-        uid, companyName, iat: Date.now(), exp: Date.now() + 3_600_000
+        uid, companyName, authSource, iat: Date.now(), exp: Date.now() + 3_600_000
     })).toString('base64');
     const sig = crypto.createHmac('sha256', SECRET).update(payload).digest('hex');
     return `${payload}.${sig}`;
@@ -167,8 +167,8 @@ async function run() {
     // Two companies for isolation tests
     const coA  = 'RT_A_' + crypto.randomBytes(3).toString('hex');
     const coB  = 'RT_B_' + crypto.randomBytes(3).toString('hex');
-    const dirA = sign('rt-dir-a', coA);
-    const dirB = sign('rt-dir-b', coB);
+    const dirA = sign('rt-dir-a', coA, 'ops-bootstrap');
+    const dirB = sign('rt-dir-b', coB, 'ops-bootstrap');
 
     // Bootstrap directors via HTTP (creates their ops records)
     let r = await api(dirA, 'GET', '/api/operations/me');

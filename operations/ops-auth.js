@@ -69,6 +69,28 @@ function canManageUsers(actor) {
     return !!actor && actor.role === 'DIRECTOR';
 }
 
+// Department Accounts are company administration, not ordinary Service data.
+// Only an ACTIVE Director whose server-side Operations record belongs to the
+// target company may create, edit, list, suspend, or otherwise manage them.
+function canManageDepartmentAccounts(actor, companyId) {
+    return !!actor &&
+        actor.role === 'DIRECTOR' &&
+        actor.status === 'ACTIVE' &&
+        actor.active !== false &&
+        actor.companyId === companyId;
+}
+
+// Self-binding is not an administrative grant: it may only attach the verified
+// session UID to an account in the same tenant. Account lifecycle checks remain
+// in bindFirebaseUid so callers receive the established 409 state errors.
+// Callers must still obtain uid and companyId exclusively from the signed session.
+function canBindDepartmentAccount(session, account) {
+    return !!session &&
+        !!session.uid &&
+        !!account &&
+        account.companyId === session.companyName;
+}
+
 // May `actor` edit or perform status actions on `target`?
 // Director + same company + never self (Director cannot manage their own account via these actions).
 function canManageOpsUser(actor, target) {
@@ -180,6 +202,8 @@ module.exports = {
     canCancelTask,
     canDeleteTaskPermanently,
     canManageUsers,
+    canManageDepartmentAccounts,
+    canBindDepartmentAccount,
     canManageOpsUser,
     canDeleteOpsUser,
     hasUserDependencies,

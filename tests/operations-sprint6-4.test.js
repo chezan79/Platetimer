@@ -419,9 +419,9 @@ const TEST_PORT = 4464;
 const SECRET_HTTP = 'test-sprint64-secret';
 
 // Same token format as all prior sprint tests
-function sign(uid, company) {
+function sign(uid, company, authSource = 'firebase-profile') {
     const p = Buffer.from(JSON.stringify({
-        uid, companyName: company, iat: Date.now(), exp: Date.now() + 3_600_000,
+        uid, companyName: company, authSource, iat: Date.now(), exp: Date.now() + 3_600_000,
     })).toString('base64');
     const s = crypto.createHmac('sha256', SECRET_HTTP).update(p).digest('hex');
     return `${p}.${s}`;
@@ -483,10 +483,10 @@ async function run() {
     try {
         // ── Tokens ────────────────────────────────────────────────────────────
         const ts = Date.now();
-        const tokDir = sign(`uid-s64-dir-${ts}`, `perf64-co-a-${ts}`);
+        const tokDir = sign(`uid-s64-dir-${ts}`, `perf64-co-a-${ts}`, 'ops-bootstrap');
         const tokCC  = sign(`uid-s64-cc-${ts}`,  `perf64-co-a-${ts}`);
         const tokSC  = sign(`uid-s64-sc-${ts}`,  `perf64-co-a-${ts}`);
-        const tokCoB = sign(`uid-s64-cob-${ts}`, `perf64-co-b-${ts}`);
+        const tokCoB = sign(`uid-s64-cob-${ts}`, `perf64-co-b-${ts}`, 'ops-bootstrap');
         const coA    = `perf64-co-a-${ts}`;
 
         // Bootstrap Directors

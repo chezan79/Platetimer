@@ -18,7 +18,7 @@ const BASE = `http://127.0.0.1:${PORT}`;
 const DATA_DIR = fs.mkdtempSync(path.join(require('os').tmpdir(), 'deptaccttest-'));
 
 function sign(uid, companyName) {
-    const payload = Buffer.from(JSON.stringify({ uid, companyName, iat: Date.now(), exp: Date.now() + 3600000 })).toString('base64');
+    const payload = Buffer.from(JSON.stringify({ uid, companyName, authSource: 'ops-bootstrap', iat: Date.now(), exp: Date.now() + 3600000 })).toString('base64');
     const sig = crypto.createHmac('sha256', SECRET).update(payload).digest('hex');
     return `${payload}.${sig}`;
 }

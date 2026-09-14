@@ -21,10 +21,11 @@ const BASE = `http://127.0.0.1:${PORT}`;
 const ROOT = path.join(__dirname, '..');
 const DATA_DIR = fs.mkdtempSync(path.join(require('os').tmpdir(), 'opstest-task108-'));
 
-function sign(uid, companyName) {
+function sign(uid, companyName, authSource = 'firebase-profile') {
     const payload = Buffer.from(JSON.stringify({
         uid,
         companyName,
+        authSource,
         iat: Date.now(),
         exp: Date.now() + 3_600_000
     })).toString('base64');
@@ -182,7 +183,7 @@ async function run() {
     const server = await startServer();
     const companyId = `task108-co-${crypto.randomBytes(3).toString('hex')}`;
     const uid = `task108-director-${crypto.randomBytes(3).toString('hex')}`;
-    const token = sign(uid, companyId);
+    const token = sign(uid, companyId, 'ops-bootstrap');
 
     try {
         const me = await api(token, 'GET', '/api/operations/me');

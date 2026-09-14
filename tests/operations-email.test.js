@@ -17,8 +17,8 @@ const PORT = 5098;
 const BASE = `http://127.0.0.1:${PORT}`;
 const DATA_DIR = fs.mkdtempSync(path.join(require('os').tmpdir(), 'opsemail-'));
 
-function sign(uid, companyName) {
-    const payload = Buffer.from(JSON.stringify({ uid, companyName, iat: Date.now(), exp: Date.now() + 3600000 })).toString('base64');
+function sign(uid, companyName, authSource = 'firebase-profile') {
+    const payload = Buffer.from(JSON.stringify({ uid, companyName, authSource, iat: Date.now(), exp: Date.now() + 3600000 })).toString('base64');
     const sig = crypto.createHmac('sha256', SECRET).update(payload).digest('hex');
     return `${payload}.${sig}`;
 }
@@ -70,8 +70,8 @@ async function main() {
     console.log('Server up. Running email checks…\n');
 
     try {
-        const dirA = sign('uid-edirA', 'email-co-a');
-        const dirB = sign('uid-edirB', 'email-co-b');
+        const dirA = sign('uid-edirA', 'email-co-a', 'ops-bootstrap');
+        const dirB = sign('uid-edirB', 'email-co-b', 'ops-bootstrap');
 
         // Bootstrap directors
         await api(dirA, 'GET', '/api/operations/me?name=Elena%20Dir');

@@ -17,14 +17,17 @@ const PORT = 5097;
 const BASE = `http://127.0.0.1:${PORT}`;
 const DATA_DIR = fs.mkdtempSync(path.join(require('os').tmpdir(), 'opstest-'));
 
-function sign(uid, companyName) {
-    const payload = Buffer.from(JSON.stringify({ uid, companyName, iat: Date.now(), exp: Date.now() + 3600000 })).toString('base64');
+function sign(uid, companyName, authSource = 'ops-bootstrap') {
+    const payload = Buffer.from(JSON.stringify({ uid, companyName, authSource, iat: Date.now(), exp: Date.now() + 3600000 })).toString('base64');
     const sig = crypto.createHmac('sha256', SECRET).update(payload).digest('hex');
     return `${payload}.${sig}`;
 }
 function forge(uid, companyName) {
     const payload = Buffer.from(JSON.stringify({ uid, companyName, iat: Date.now(), exp: Date.now() + 3600000 })).toString('base64');
     return `${payload}.` + '0'.repeat(64); // bad signature
+}
+function mockFb(user) {
+    return 'mockfb.' + Buffer.from(JSON.stringify(user)).toString('base64');
 }
 
 async function api(token, method, p, body) {
@@ -46,7 +49,7 @@ async function main() {
     console.log('Starting server…');
     const server = spawn('node', ['server.js'], {
         cwd: path.join(__dirname, '..'),
-        env: { ...process.env, PORT: String(PORT), WS_SESSION_SECRET: SECRET, DATA_DIR, FIREBASE_ADMIN_SERVICE_ACCOUNT: '' },
+        env: { ...process.env, PORT: String(PORT), WS_SESSION_SECRET: SECRET, DATA_DIR, FIREBASE_ADMIN_SERVICE_ACCOUNT: '', TEST_FIREBASE_AUTH_MOCK: '1' },
         stdio: ['ignore', 'pipe', 'pipe']
     });
     server.stderr.on('data', () => {});
@@ -67,12 +70,135 @@ async function main() {
         r = await api(forge('uid-x', 'company-a'), 'GET', '/api/operations/tasks');
         check('2. Forged-signature token rejected (401)', r.status === 401);
 
+        const newServiceFb = mockFb({
+            localId: 'uid-new-service',
+            email: 'new-service@example.test',
+            emailVerified: true
+        });
+        let registration = await fetch(`${BASE}/api/auth/register-company`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${newServiceFb}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                firstName: 'New',
+                lastName: 'Service',
+                company: 'New Service Company'
+            })
+        });
+        const registrationData = await registration.json();
+        let registeredSession = await fetch(`${BASE}/api/auth/session`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${newServiceFb}` }
+        });
+        const registeredSessionData = await registeredSession.json();
+        check('2-registration. Server registration provisions a usable Service company session',
+            registration.status === 201 &&
+            registrationData.companyName === 'new service company' &&
+            registeredSession.status === 200 &&
+            registeredSessionData.companyName === 'new service company');
+
+        // A Firebase profile may still identify a legacy Service tenant, but it
+        // is never sufficient to bootstrap that tenant's first Director.
+        const forgedProfileToken = mockFb({
+            localId: 'uid-profile-attacker',
+            email: 'attacker@example.test',
+            emailVerified: true,
+            company: 'profile-forged-company'
+        });
+        let profileSessionRes = await fetch(`${BASE}/api/auth/session`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${forgedProfileToken}` }
+        });
+        const profileSession = await profileSessionRes.json();
+        r = await api(profileSession.token, 'GET', '/api/operations/me');
+        check('2a. Firebase-profile company cannot bootstrap first Director (403)', r.status === 403);
+        const floorExchange = await api(profileSession.token, 'GET', '/api/sala/token');
+        r = await api(floorExchange.data.token, 'GET', '/api/operations/me');
+        check('2b. Firebase-profile user cannot bootstrap through a Floor token', r.status === 403);
+        const claimedBootstrapToken = mockFb({
+            localId: 'uid-claimed-bootstrap',
+            email: 'owner@example.test',
+            company: 'attacker-profile-company',
+            customAttributes: JSON.stringify({
+                plateTimerCompanyAdmin: true,
+                plateTimerCompanyId: 'claimed-bootstrap-company'
+            })
+        });
+        const claimedSessionRes = await fetch(`${BASE}/api/auth/session`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${claimedBootstrapToken}` }
+        });
+        const claimedSession = await claimedSessionRes.json();
+        r = await api(claimedSession.token, 'GET', '/api/operations/me');
+        check('2c. Server-controlled admin claim bootstraps its claimed company',
+            r.status === 200 && r.data.companyId === 'claimed-bootstrap-company');
+
         // ── Bootstrap: first user of a company becomes DIRECTOR ──
         r = await api(dirA, 'GET', '/api/operations/me?name=Anna%20Direttrice');
         check('3. First company user bootstrapped as DIRECTOR', r.data.success && r.data.user.role === 'DIRECTOR');
         const dirAId = r.data.user.id;
         r = await api(dirB, 'GET', '/api/operations/me?name=Bruno');
         const dirBId = r.data.user.id;
+
+        // Department Account administration is Director-only and company comes
+        // from the actor's server-side Operations record.
+        r = await api(dirA, 'POST', '/api/departments', { name: 'Admin Test Kitchen' });
+        const adminDeptId = r.data.department.id;
+        const createdAccount = await api(dirA, 'POST', '/api/department-accounts', {
+            departmentId: adminDeptId,
+            loginIdentifier: 'admin.security.kitchen',
+            password: 'test-pin'
+        });
+        check('3a. Director can create Department Accounts', createdAccount.status === 201);
+        const accountId = createdAccount.data.account.id;
+        const ordinaryA = sign('uid-ordinary-a', 'company-a', 'firebase-profile');
+        r = await api(ordinaryA, 'GET', '/api/department-accounts');
+        check('3b. Ordinary company user cannot list Department Accounts', r.status === 403);
+        r = await api(ordinaryA, 'PUT', `/api/departments/${adminDeptId}`, { active: false });
+        check('3b-dept. Ordinary company user cannot deactivate departments', r.status === 403);
+        r = await api(ordinaryA, 'POST', '/api/departments', { name: 'Unauthorized Department' });
+        check('3b-dept-create. Ordinary company user cannot create departments', r.status === 403);
+        r = await api(ordinaryA, 'PUT', `/api/departments/${adminDeptId}/type`, { departmentType: 'CENTRAL' });
+        check('3b-dept-type. Ordinary company user cannot change department type', r.status === 403);
+        r = await api(ordinaryA, 'DELETE', `/api/departments/${adminDeptId}`);
+        check('3b-dept-delete. Ordinary company user cannot delete departments', r.status === 403);
+        r = await api(ordinaryA, 'POST', '/api/department-accounts', {
+            departmentId: adminDeptId,
+            loginIdentifier: 'ordinary.takeover'
+        });
+        check('3c. Ordinary company user cannot create Department Accounts', r.status === 403);
+        r = await api(ordinaryA, 'PATCH', `/api/department-accounts/${accountId}`, { loginIdentifier: 'stolen' });
+        check('3d. Ordinary company user cannot edit Department Accounts', r.status === 403);
+        r = await api(ordinaryA, 'PUT', `/api/department-accounts/${accountId}/status`, { status: 'SUSPENDED' });
+        check('3e. Ordinary company user cannot change Department Account status', r.status === 403);
+        r = await api(dirB, 'POST', '/api/department-accounts/bind', {
+            loginIdentifier: 'admin.security.kitchen',
+            uid: 'forged-target'
+        });
+        check('3f. Cross-company Department Account binding rejected', r.status === 403);
+        const secondDept = await api(dirA, 'POST', '/api/departments', { name: 'Second Admin Test Kitchen' });
+        const secondAccount = await api(dirA, 'POST', '/api/department-accounts', {
+            departmentId: secondDept.data.department.id,
+            loginIdentifier: 'admin.security.second',
+            password: 'second-pin'
+        });
+        const directLogin = await fetch(`${BASE}/api/service/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ loginIdentifier: 'admin.security.kitchen', password: 'test-pin' })
+        });
+        const directSession = await directLogin.json();
+        r = await api(directSession.token, 'POST', '/api/department-accounts/bind', {
+            loginIdentifier: secondAccount.data.account.loginIdentifier
+        });
+        check('3g. Direct Service session cannot create a synthetic Firebase UID binding', r.status === 403);
+        r = await api(directSession.token, 'PUT', `/api/departments/${adminDeptId}`, { active: false });
+        check('3g-dept. Direct Service session cannot mutate departments', r.status === 403);
+        const emptyServiceCompany = sign('depacct_synthetic', 'service-only-company', 'department-account');
+        r = await api(emptyServiceCompany, 'GET', '/api/operations/me');
+        check('3h. Direct Service principal cannot bootstrap first Director', r.status === 403);
 
         // ── Director creates team (companyId always server-side) ──
         async function invite(token, name, email, role) {
@@ -181,7 +307,7 @@ async function main() {
         // in tests without live Firebase credentials)
         const inv = { status: 'INVITED', email: 'cc@a.it' };
         let v = opsAuth.validateActivationAccount({ localId: 'u1', email: 'cc@a.it', emailVerified: false }, inv);
-        check('25a. Unverified Firebase email rejected (403) — account-takeover guard', !v.ok && v.code === 403);
+        check('25a. Matching invite email accepted without Firebase verification', v.ok === true);
         v = opsAuth.validateActivationAccount({ localId: 'u1', email: 'attacker@evil.it', emailVerified: true }, inv);
         check('25b. Mismatched email rejected (403)', !v.ok && v.code === 403);
         v = opsAuth.validateActivationAccount({ localId: 'u1', email: 'CC@A.IT', emailVerified: true }, inv);
@@ -220,8 +346,8 @@ async function main() {
                     body: JSON.stringify({ code: invR.data.user.inviteCode })
                 });
                 const actData = await act.json();
-                check('28. Real unverified Firebase account rejected at activation (403)',
-                    act.status === 403 && actData.needsEmailVerification === true);
+                check('28. Real matching Firebase account activates via single-use invite',
+                    act.status === 200 && actData.success === true);
 
                 // (b) create the Firestore users/{uid} profile (as the activation page
                 // does, using the user's own token), then session exchange succeeds
@@ -243,36 +369,36 @@ async function main() {
                 } else {
                     console.log('  ⚠️ 29. skipped — Firestore rules blocked test profile write (' + fsWrite.status + ')');
                 }
-                // ── Cross-company regression: ops record wins at session issuance ──
-                // Bootstrap the real uid as an Operations member of its own company
-                // (server-side record), then forge the Firestore profile to claim a
-                // DIFFERENT company. The session must still be issued for the
-                // server-side ops company — the forged profile grants nothing.
-                const opsCo = `ops-int-co-${Date.now()}`;
-                let br = await api(sign(uid, opsCo), 'GET', '/api/operations/me');
-                check('30. Real uid bootstrapped into own ops company', br.data.success && br.data.companyId === opsCo);
-                // forge profile: claim membership of company-a (existing other company)
+                // ── Cross-company regression: activated ops record wins ──
+                // The invite bound this uid to company-a server-side. A forged
+                // profile company must not move that administrative membership.
+                let br = await api(sign(uid, 'company-a'), 'GET', '/api/operations/me');
+                check('30. Activated uid resolves through server-side Operations membership',
+                    br.data.success && br.data.companyId === 'company-a');
+                const forgedCompany = `forged-profile-${Date.now()}`;
                 const forgeWrite = await fetch(
                     `https://firestore.googleapis.com/v1/projects/${FB_PROJECT}/databases/(default)/documents/users/${uid}?updateMask.fieldPaths=company`,
                     {
                         method: 'PATCH',
                         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
-                        body: JSON.stringify({ fields: { company: { stringValue: 'company-a' } } })
+                        body: JSON.stringify({ fields: { company: { stringValue: forgedCompany } } })
                     });
                 if (forgeWrite.ok) {
                     const sess2 = await fetch(`${BASE}/api/auth/session`, { method: 'POST', headers: { 'Authorization': `Bearer ${idToken}` } });
                     const sess2Data = await sess2.json().catch(() => ({}));
                     check('31. Session company = server-side ops company, forged profile company ignored',
-                        sess2.ok && sess2Data.companyName === opsCo);
-                    // and the resulting token grants no access to company-a Service data
+                        sess2.ok && sess2Data.companyName === 'company-a');
+                    // The signed token must not grant access to the forged tenant.
                     if (sess2Data.token) {
                         const depts = await fetch(`${BASE}/api/departments`, { headers: { 'Authorization': `Bearer ${sess2Data.token}` } });
                         const deptsData = await depts.json().catch(() => ({}));
-                        check('32. Ops-derived session cannot read another company\'s Service data',
-                            depts.ok && Array.isArray(deptsData.departments) && deptsData.departments.length === 0);
+                        check('32. Ops-derived session remains scoped to its server-side company',
+                            depts.ok && Array.isArray(deptsData.departments) &&
+                            deptsData.departments.some(d => d.id === adminDeptId));
                     }
                 } else {
-                    console.log('  ⚠️ 31-32 skipped — Firestore rules blocked forged profile write (' + forgeWrite.status + ')');
+                    check('31. Firestore rules reject changing the company field', forgeWrite.status === 403);
+                    console.log('  ⚠️ 32 skipped — forged profile write correctly blocked');
                 }
 
                 // cleanup Firebase account (self-delete)

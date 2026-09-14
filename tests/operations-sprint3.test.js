@@ -12,8 +12,8 @@ const WebSocket = require('ws');
 // ── HMAC helper (mirrors existing test suite token signing) ──────────────────
 const SECRET = 'test-sprint3-secret';
 
-function makeToken(uid, companyName) {
-    const payload = Buffer.from(JSON.stringify({ uid, companyName, iat: Date.now(), exp: Date.now() + 3600000 })).toString('base64');
+function makeToken(uid, companyName, authSource = 'firebase-profile') {
+    const payload = Buffer.from(JSON.stringify({ uid, companyName, authSource, iat: Date.now(), exp: Date.now() + 3600000 })).toString('base64');
     const sig     = crypto.createHmac('sha256', SECRET).update(payload).digest('hex');
     return `${payload}.${sig}`;
 }
@@ -149,8 +149,8 @@ async function run() {
     const dir2Uid = 'sprint3-dir2-' + crypto.randomBytes(3).toString('hex');
     const co      = 'S3Co_'  + crypto.randomBytes(3).toString('hex');
     const co2     = 'S3Co2_' + crypto.randomBytes(3).toString('hex');
-    const dirA    = makeToken(dirUid,  co);
-    const dir2A   = makeToken(dir2Uid, co2);
+    const dirA    = makeToken(dirUid,  co, 'ops-bootstrap');
+    const dir2A   = makeToken(dir2Uid, co2, 'ops-bootstrap');
 
     // Bootstrap company A director
     let r = await api(dirA, 'GET', '/api/operations/me');

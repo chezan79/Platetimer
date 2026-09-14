@@ -23,9 +23,9 @@ const SECRET = 'test-ops-service-sync-secret';
 const PORT   = 4450;
 const BASE   = `http://127.0.0.1:${PORT}`;
 
-function sign(uid, companyName) {
+function sign(uid, companyName, authSource = 'firebase-profile') {
     const payload = Buffer.from(JSON.stringify({
-        uid, companyName, iat: Date.now(), exp: Date.now() + 3_600_000
+        uid, companyName, authSource, iat: Date.now(), exp: Date.now() + 3_600_000
     })).toString('base64');
     const sig = crypto.createHmac('sha256', SECRET).update(payload).digest('hex');
     return `${payload}.${sig}`;
@@ -115,11 +115,11 @@ async function run() {
 
     try {
         // ── Setup ────────────────────────────────────────────────────────────
-        const tokDir      = sign('uid-director', 'ristorante');   // ops Director (bootstraps)
+        const tokDir      = sign('uid-director', 'ristorante', 'ops-bootstrap');   // ops Director (bootstraps)
         const tokAdmin    = sign('uid-admin',    'ristorante');   // unbound Service admin
         const tokDeptA    = sign('uid-dept-a',   'ristorante');   // bound → Cucina
         const tokDeptB    = sign('uid-dept-b',   'ristorante');   // bound → Pizzeria
-        const tokOtherDir = sign('uid-o-dir',    'other-co');     // other company ops Director
+        const tokOtherDir = sign('uid-o-dir',    'other-co', 'ops-bootstrap');     // other company ops Director
         const tokOtherAdm = sign('uid-o-adm',    'other-co');
         const tokOtherDpt = sign('uid-o-dept',   'other-co');
 
@@ -128,19 +128,19 @@ async function run() {
         check('Setup: ops Director bootstrapped', r.data.success === true, r.data);
         const directorId = r.data.user.id;
 
-        r = await api(tokAdmin, 'POST', '/api/departments', { name: 'Cucina' });
+        r = await api(tokDir, 'POST', '/api/departments', { name: 'Cucina' });
         const deptA = r.data.department;
-        r = await api(tokAdmin, 'POST', '/api/departments', { name: 'Pizzeria' });
+        r = await api(tokDir, 'POST', '/api/departments', { name: 'Pizzeria' });
         const deptB = r.data.department;
-        r = await api(tokAdmin, 'POST', '/api/departments', { name: 'Magazzino' });
+        r = await api(tokDir, 'POST', '/api/departments', { name: 'Magazzino' });
         const deptC = r.data.department;
         check('Setup: departments created', !!(deptA?.id && deptB?.id && deptC?.id));
-        r = await api(tokAdmin, 'PUT', `/api/departments/${deptC.id}`, { active: false });
+        r = await api(tokDir, 'PUT', `/api/departments/${deptC.id}`, { active: false });
         check('Setup: Magazzino deactivated', r.data.success === true, r.data);
 
-        r = await api(tokAdmin, 'POST', '/api/department-accounts', { departmentId: deptA.id, displayName: 'Cucina Display', loginIdentifier: 'cucina.t66' });
+        r = await api(tokDir, 'POST', '/api/department-accounts', { departmentId: deptA.id, displayName: 'Cucina Display', loginIdentifier: 'cucina.t66' });
         check('Setup: acct A', !!r.data?.account?.id, r.data);
-        r = await api(tokAdmin, 'POST', '/api/department-accounts', { departmentId: deptB.id, displayName: 'Pizzeria Display', loginIdentifier: 'pizzeria.t66' });
+        r = await api(tokDir, 'POST', '/api/department-accounts', { departmentId: deptB.id, displayName: 'Pizzeria Display', loginIdentifier: 'pizzeria.t66' });
         check('Setup: acct B', !!r.data?.account?.id, r.data);
         r = await api(tokDeptA, 'POST', '/api/department-accounts/bind', { loginIdentifier: 'cucina.t66' });
         check('Setup: bind A', r.data.success === true, r.data);
@@ -150,9 +150,9 @@ async function run() {
         // other company
         r = await api(tokOtherDir, 'GET', '/api/operations/me?name=OtherDir');
         check('Setup: other-co ops Director', r.data.success === true, r.data);
-        r = await api(tokOtherAdm, 'POST', '/api/departments', { name: 'Lounge' });
+        r = await api(tokOtherDir, 'POST', '/api/departments', { name: 'Lounge' });
         const deptOther = r.data.department;
-        r = await api(tokOtherAdm, 'POST', '/api/department-accounts', { departmentId: deptOther.id, displayName: 'Lounge Display', loginIdentifier: 'lounge.t66' });
+        r = await api(tokOtherDir, 'POST', '/api/department-accounts', { departmentId: deptOther.id, displayName: 'Lounge Display', loginIdentifier: 'lounge.t66' });
         r = await api(tokOtherDpt, 'POST', '/api/department-accounts/bind', { loginIdentifier: 'lounge.t66' });
         check('Setup: other-co dept bound', r.data.success === true, r.data);
 
@@ -450,7 +450,7 @@ async function run() {
         const dT = r.data.task;
         await sub.waitFor('OPS_TASK_CREATED');
         await subA.waitFor('OPS_TASK_CREATED');
-        r = await api(tokAdmin, 'PUT', `/api/departments/${deptA.id}`, { active: false });
+        r = await api(tokDir, 'PUT', `/api/departments/${deptA.id}`, { active: false });
         check('34a. setup: dept A deactivated post-publication', r.data.success === true, r.data);
         r = await api(tokDeptA, 'GET', '/api/service/ops-tasks');
         // Deactivating a department auto-suspends its account, so the account
@@ -466,7 +466,7 @@ async function run() {
         check('34c. WS: inactive bound dept receives NO ops events',
             subA.received.filter(m => m.action.startsWith('OPS_')).length === 0, subA.received);
         // reactivate for any later checks
-        await api(tokAdmin, 'PUT', `/api/departments/${deptA.id}`, { active: true });
+        await api(tokDir, 'PUT', `/api/departments/${deptA.id}`, { active: true });
 
         subA.close(); subB.close();
 

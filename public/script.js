@@ -1,7 +1,6 @@
 // Import Firebase modules
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, deleteUser } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
 // Configurazione Firebase corretta
 const firebaseConfig = {
@@ -17,7 +16,6 @@ const firebaseConfig = {
 // Inizializza Firebase
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-const db = getFirestore(app);
 
 // Selezione del modulo e dei campi
 const form = document.getElementById('form-register');
@@ -80,14 +78,23 @@ form.addEventListener('submit', async (event) => {
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
 
-        // Salva i dati aggiuntivi in Firestore
-        await setDoc(doc(db, "users", user.uid), {
-            firstName: firstName,
-            lastName: lastName,
-            company: company,
-            email: email,
-            createdAt: new Date()
+        // Company membership is written only by the trusted server. Client-side
+        // Firestore rules intentionally reject self-assignment of `company`.
+        const idToken = await user.getIdToken();
+        const registration = await fetch('/api/auth/register-company', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${idToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ firstName, lastName, company })
         });
+        const registrationData = await registration.json().catch(() => ({}));
+        if (!registration.ok) {
+            // Avoid leaving an orphaned Firebase Auth account that cannot retry.
+            await deleteUser(user).catch(() => {});
+            throw new Error(registrationData.error || 'Registrazione azienda non riuscita.');
+        }
 
         alert('Registrazione completata con successo!');
         form.reset();

@@ -143,8 +143,8 @@ const PORT     = 4472;
 const BASE     = `http://127.0.0.1:${PORT}`;
 const DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'ops-attnav-'));
 
-function sign(uid, company) {
-    const payload = Buffer.from(JSON.stringify({ uid, companyName: company, iat: Date.now(), exp: Date.now() + 3600000 })).toString('base64');
+function sign(uid, company, authSource = 'firebase-profile') {
+    const payload = Buffer.from(JSON.stringify({ uid, companyName: company, authSource, iat: Date.now(), exp: Date.now() + 3600000 })).toString('base64');
     const sig = crypto.createHmac('sha256', SECRET).update(payload).digest('hex');
     return `${payload}.${sig}`;
 }
@@ -181,8 +181,8 @@ async function runHttp() {
         server.on('exit', (code) => reject(new Error(`server exited: ${code}`)));
     });
 
-    const dirA = sign('uid-dirA', 'co-alpha');
-    const dirB = sign('uid-dirB', 'co-beta');
+    const dirA = sign('uid-dirA', 'co-alpha', 'ops-bootstrap');
+    const dirB = sign('uid-dirB', 'co-beta', 'ops-bootstrap');
 
     // Bootstrap both directors
     let r = await api(dirA, 'GET', '/api/operations/me?name=AlphaDir');

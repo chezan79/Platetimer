@@ -36,9 +36,9 @@ const SECRET  = 'test-dept-cards-secret';
 const PORT    = 4452;
 const BASE    = `http://127.0.0.1:${PORT}`;
 
-function sign(uid, companyName) {
+function sign(uid, companyName, authSource = 'firebase-profile') {
     const payload = Buffer.from(JSON.stringify({
-        uid, companyName, iat: Date.now(), exp: Date.now() + 3_600_000
+        uid, companyName, authSource, iat: Date.now(), exp: Date.now() + 3_600_000
     })).toString('base64');
     const sig = crypto.createHmac('sha256', SECRET).update(payload).digest('hex');
     return `${payload}.${sig}`;
@@ -124,11 +124,11 @@ async function run() {
 
     try {
         // ── Setup ─────────────────────────────────────────────────────────────
-        const tokDir  = sign('dir1',    'ristorante');   // Ops Director
+        const tokDir  = sign('dir1',    'ristorante', 'ops-bootstrap');   // Ops Director
         const tokAdm  = sign('adm1',    'ristorante');   // Service admin (unbound)
         const tokCuc  = sign('cuc1',    'ristorante');   // bound to Cucina account
         const tokPiz  = sign('piz1',    'ristorante');   // bound to Pizzeria account
-        const tokODir = sign('odir1',   'altra');        // other-company Ops Director
+        const tokODir = sign('odir1',   'altra', 'ops-bootstrap');        // other-company Ops Director
         const tokOAdm = sign('oadm1',   'altra');        // other-company Service admin
 
         // Bootstrap Ops Director
@@ -136,28 +136,28 @@ async function run() {
         check('Setup: ops Director', r.data.success === true, r.data);
 
         // Create departments
-        r = await api(tokAdm, 'POST', '/api/departments', { name: 'Cucina' });
+        r = await api(tokDir, 'POST', '/api/departments', { name: 'Cucina' });
         const deptCucina = r.data.department;
-        r = await api(tokAdm, 'POST', '/api/departments', { name: 'Pizzeria' });
+        r = await api(tokDir, 'POST', '/api/departments', { name: 'Pizzeria' });
         const deptPizzeria = r.data.department;
         check('Setup: departments created', !!(deptCucina?.id && deptPizzeria?.id), r.data);
 
         // Bind department accounts
-        r = await api(tokAdm, 'POST', '/api/department-accounts', { departmentId: deptCucina.id, displayName: 'Cucina', loginIdentifier: 'cucina.dept' });
+        r = await api(tokDir, 'POST', '/api/department-accounts', { departmentId: deptCucina.id, displayName: 'Cucina', loginIdentifier: 'cucina.dept' });
         check('Setup: Cucina acct created', !!r.data?.account?.id, r.data);
         r = await api(tokCuc, 'POST', '/api/department-accounts/bind', { loginIdentifier: 'cucina.dept' });
         check('Setup: Cucina acct bound', r.data.success === true, r.data);
 
-        r = await api(tokAdm, 'POST', '/api/department-accounts', { departmentId: deptPizzeria.id, displayName: 'Pizzeria', loginIdentifier: 'pizzeria.dept' });
+        r = await api(tokDir, 'POST', '/api/department-accounts', { departmentId: deptPizzeria.id, displayName: 'Pizzeria', loginIdentifier: 'pizzeria.dept' });
         r = await api(tokPiz, 'POST', '/api/department-accounts/bind', { loginIdentifier: 'pizzeria.dept' });
         check('Setup: Pizzeria acct bound', r.data.success === true, r.data);
 
         // Other company
         r = await api(tokODir, 'GET', '/api/operations/me?name=AltroDir');
         check('Setup: other-co Ops Director', r.data.success === true, r.data);
-        r = await api(tokOAdm, 'POST', '/api/departments', { name: 'AltroReparto' });
+        r = await api(tokODir, 'POST', '/api/departments', { name: 'AltroReparto' });
         const deptAltro = r.data.department;
-        r = await api(tokOAdm, 'POST', '/api/department-accounts', { departmentId: deptAltro.id, displayName: 'Altro', loginIdentifier: 'altro.dept' });
+        r = await api(tokODir, 'POST', '/api/department-accounts', { departmentId: deptAltro.id, displayName: 'Altro', loginIdentifier: 'altro.dept' });
         const tokOCuc = sign('ocuc1', 'altra');
         r = await api(tokOCuc, 'POST', '/api/department-accounts/bind', { loginIdentifier: 'altro.dept' });
 

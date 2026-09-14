@@ -30,9 +30,9 @@ const BASE     = `http://127.0.0.1:${PORT}`;
 const WS_URL   = `ws://127.0.0.1:${PORT}/ws`;
 const DATA_DIR = fs.mkdtempSync(path.join(require('os').tmpdir(), 'cddest-'));
 
-function sign(uid, companyName) {
+function sign(uid, companyName, authSource = 'firebase-profile') {
     const payload = Buffer.from(JSON.stringify({
-        uid, companyName, iat: Date.now(), exp: Date.now() + 3_600_000
+        uid, companyName, authSource, iat: Date.now(), exp: Date.now() + 3_600_000
     })).toString('base64');
     const sig = crypto.createHmac('sha256', SECRET).update(payload).digest('hex');
     return `${payload}.${sig}`;
@@ -134,10 +134,10 @@ async function main() {
     const sockets = [];
 
     try {
-        const tokAdmin   = sign('uid-admin',   'ristorante');
+        const tokAdmin   = sign('uid-admin',   'ristorante', 'ops-bootstrap');
         const tokPizza   = sign('uid-pizza',   'ristorante');  // STANDARD bound
         const tokCentral = sign('uid-central', 'ristorante');  // CENTRAL bound
-        const tokAdminB  = sign('uid-adminB',  'other-co');
+        const tokAdminB  = sign('uid-adminB',  'other-co', 'ops-bootstrap');
         const tokLegacyB = sign('uid-legacyB', 'other-co');
 
         // ── Setup ─────────────────────────────────────────────────────────────

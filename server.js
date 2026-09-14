@@ -201,7 +201,7 @@ function genDeptId() { return 'dept_' + Date.now() + '_' + crypto.randomBytes(3)
 // The token payload contains uid, companyName, iat, exp — never trust these from the client.
 // Optional role (e.g. 'floor') is embedded in the signed payload for server-side principal
 // resolution only — the client cannot forge or alter this field.
-function signSessionToken(uid, companyName, role = null) {
+function signSessionToken(uid, companyName, role = null, authSource = null) {
     const payloadObj = {
         uid,
         companyName,
@@ -209,6 +209,7 @@ function signSessionToken(uid, companyName, role = null) {
         exp: Date.now() + SESSION_DURATION_MS
     };
     if (role) payloadObj.role = role;
+    if (authSource) payloadObj.authSource = authSource;
     const payload = Buffer.from(JSON.stringify(payloadObj)).toString('base64');
     const sig = crypto.createHmac('sha256', WS_SECRET).update(payload).digest('hex');
     return `${payload}.${sig}`;
@@ -246,6 +247,7 @@ function verifySessionToken(token) {
 // token of the form "mockfb.<base64 JSON>" is decoded locally so the test
 // suite can exercise auth flows without real Firebase accounts.
 const TEST_FIREBASE_AUTH_MOCK = process.env.TEST_FIREBASE_AUTH_MOCK === '1';
+const testRegisteredCompanies = new Map();
 if (TEST_FIREBASE_AUTH_MOCK) console.warn('🧪 [TEST] TEST_FIREBASE_AUTH_MOCK enabled — mock Firebase tokens accepted. NEVER use in production.');
 
 async function lookupFirebaseAccount(idToken) {
@@ -253,7 +255,13 @@ async function lookupFirebaseAccount(idToken) {
         try {
             const u = JSON.parse(Buffer.from(idToken.slice(7), 'base64').toString('utf8'));
             if (!u || !u.localId) return null;
-            return { localId: u.localId, email: u.email || null, emailVerified: u.emailVerified === true, _mockCompany: u.company };
+            return {
+                localId: u.localId,
+                email: u.email || null,
+                emailVerified: u.emailVerified === true,
+                customAttributes: u.customAttributes || null,
+                _mockCompany: u.company
+            };
         } catch { return null; }
     }
     try {
@@ -275,6 +283,33 @@ async function lookupFirebaseAccount(idToken) {
     }
 }
 
+function getOpsBootstrapClaim(fbUser) {
+    if (!fbUser || !fbUser.customAttributes) return null;
+    try {
+        const claims = typeof fbUser.customAttributes === 'string'
+            ? JSON.parse(fbUser.customAttributes)
+            : fbUser.customAttributes;
+        const companyId = String(claims.plateTimerCompanyId || '').trim().toLowerCase();
+        if (claims.plateTimerCompanyAdmin !== true || !companyId) return null;
+        return { companyId };
+    } catch {
+        return null;
+    }
+}
+
+function normalizeRegistrationCompany(value) {
+    const companyId = String(value || '').trim().toLowerCase();
+    if (!companyId || companyId.length > 120 || /[\/\u0000-\u001f]/.test(companyId)) return null;
+    return companyId;
+}
+
+function companyAlreadyExists(companyId) {
+    return Object.prototype.hasOwnProperty.call(departmentsStore, companyId) ||
+        Object.prototype.hasOwnProperty.call(plansStore, companyId) ||
+        Object.prototype.hasOwnProperty.call(departmentAccounts.getStore(), companyId) ||
+        Object.prototype.hasOwnProperty.call(opsUsersStore, companyId);
+}
+
 // Verify a Firebase ID token via Firebase REST API (no Admin SDK required).
 // Returns the Firebase uid or null on failure.
 async function verifyFirebaseIdToken(idToken) {
@@ -288,7 +323,7 @@ async function getCompanyFromFirestore(uid, idToken) {
     // [TEST ONLY] Mock company lookup for the test suite (see lookupFirebaseAccount).
     if (TEST_FIREBASE_AUTH_MOCK && typeof idToken === 'string' && idToken.startsWith('mockfb.')) {
         const fbUser = await lookupFirebaseAccount(idToken);
-        return (fbUser && fbUser._mockCompany) || null;
+        return (fbUser && (testRegisteredCompanies.get(fbUser.localId) || fbUser._mockCompany)) || null;
     }
     try {
         const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/users/${uid}`;
@@ -501,7 +536,8 @@ app.post('/api/auth/session', async (req, res) => {
         }
 
         // [SECURITY] Step 1: Verify the Firebase ID token via Firebase REST API
-        const uid = await verifyFirebaseIdToken(idToken);
+        const fbUser = await lookupFirebaseAccount(idToken);
+        const uid = fbUser && fbUser.localId;
         if (!uid) {
             console.log('⛔ [SECURITY] /api/auth/session rejected: invalid Firebase token');
             return res.status(401).json({ error: 'Invalid or expired Firebase token' });
@@ -516,7 +552,7 @@ app.post('/api/auth/session', async (req, res) => {
         const opsRecord = findOpsUserByUid(uid);
         if (opsRecord && opsRecord.active !== false) {
             const opsCompany = String(opsRecord.companyId).trim().toLowerCase();
-            const opsToken = signSessionToken(uid, opsCompany);
+            const opsToken = signSessionToken(uid, opsCompany, null, 'ops-membership');
             console.log(`✅ [SECURITY] Session token issued from Operations record: uid=${uid}, company="${opsCompany}"`);
             // isOperations lets the client route Operations-only accounts (which may
             // have no Firestore users/{uid} document) to the Operations role router.
@@ -527,6 +563,19 @@ app.post('/api/auth/session', async (req, res) => {
                 isOperations: true,
                 opsRole: opsRecord.role,
                 opsStatus: opsRecord.status
+            });
+        }
+
+        // First-Director provisioning requires a Firebase custom claim set by a
+        // trusted server/Admin SDK. Self-written profile data is never authority.
+        const bootstrapClaim = getOpsBootstrapClaim(fbUser);
+        if (bootstrapClaim) {
+            const bootstrapToken = signSessionToken(uid, bootstrapClaim.companyId, null, 'ops-bootstrap');
+            return res.json({
+                success: true,
+                token: bootstrapToken,
+                companyName: bootstrapClaim.companyId,
+                isOperationsBootstrap: true
             });
         }
 
@@ -541,7 +590,9 @@ app.post('/api/auth/session', async (req, res) => {
         const normalizedCompany = companyName.trim().toLowerCase();
 
         // [SECURITY] Step 3: Issue a server-signed session token
-        const sessionToken = signSessionToken(uid, normalizedCompany);
+        // Legacy Service compatibility only. This source is deliberately marked
+        // so it can never establish or exercise administrative authority.
+        const sessionToken = signSessionToken(uid, normalizedCompany, null, 'firebase-profile');
 
         console.log(`✅ [SECURITY] Session token issued: uid=${uid}, company="${normalizedCompany}"`);
 
@@ -559,6 +610,80 @@ app.post('/api/auth/session', async (req, res) => {
     } catch (error) {
         console.error('❌ [SECURITY] /api/auth/session error:', error);
         res.status(500).json({ error: 'Internal server error during authentication' });
+    }
+});
+
+// Trusted registration boundary. Firebase Auth proves the caller UID; only the
+// Admin SDK writes company membership. The registry transaction prevents a new
+// signup from claiming an existing company name.
+app.post('/api/auth/register-company', async (req, res) => {
+    try {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            return res.status(401).json({ error: 'Firebase ID token required.' });
+        }
+        const idToken = authHeader.substring(7).trim();
+        const fbUser = await lookupFirebaseAccount(idToken);
+        if (!fbUser || !fbUser.localId) return res.status(401).json({ error: 'Invalid Firebase token.' });
+
+        const companyId = normalizeRegistrationCompany(req.body && req.body.company);
+        const firstName = String((req.body && req.body.firstName) || '').trim().substring(0, 80);
+        const lastName = String((req.body && req.body.lastName) || '').trim().substring(0, 80);
+        if (!companyId || !firstName || !lastName) {
+            return res.status(400).json({ error: 'First name, last name, and a valid company are required.' });
+        }
+        if (companyAlreadyExists(companyId)) {
+            return res.status(409).json({ error: 'That company is already registered.' });
+        }
+
+        // Test-only local equivalent of the transaction below.
+        if (!db && TEST_FIREBASE_AUTH_MOCK) {
+            if ([...testRegisteredCompanies.values()].includes(companyId)) {
+                return res.status(409).json({ error: 'That company is already registered.' });
+            }
+            if (testRegisteredCompanies.has(fbUser.localId)) {
+                return res.status(409).json({ error: 'This account is already registered.' });
+            }
+            testRegisteredCompanies.set(fbUser.localId, companyId);
+            return res.status(201).json({ success: true, companyName: companyId });
+        }
+        if (!db) return res.status(503).json({ error: 'Registration service unavailable.' });
+
+        const registryId = crypto.createHash('sha256').update(companyId).digest('hex');
+        const registryRef = db.collection('platetimer_company_registry').doc(registryId);
+        const userRef = db.collection('users').doc(fbUser.localId);
+        await db.runTransaction(async tx => {
+            const [registryDoc, userDoc] = await Promise.all([tx.get(registryRef), tx.get(userRef)]);
+            if (registryDoc.exists) {
+                const err = new Error('COMPANY_EXISTS');
+                err.code = 'COMPANY_EXISTS';
+                throw err;
+            }
+            if (userDoc.exists && userDoc.data().company) {
+                const err = new Error('USER_ALREADY_REGISTERED');
+                err.code = 'USER_ALREADY_REGISTERED';
+                throw err;
+            }
+            const now = Date.now();
+            tx.create(registryRef, { companyId, ownerUid: fbUser.localId, createdAt: now });
+            tx.set(userRef, {
+                firstName,
+                lastName,
+                company: companyId,
+                email: fbUser.email || null,
+                createdAt: now
+            }, { merge: true });
+        });
+        res.status(201).json({ success: true, companyName: companyId });
+    } catch (error) {
+        if (error && error.code === 'COMPANY_EXISTS') {
+            return res.status(409).json({ error: 'That company is already registered.' });
+        }
+        if (error && error.code === 'USER_ALREADY_REGISTERED') {
+            return res.status(409).json({ error: 'This account is already registered.' });
+        }
+        console.error('❌ [SECURITY] company registration failed:', error.message);
+        res.status(500).json({ error: 'Registration could not be completed.' });
     }
 });
 
@@ -699,7 +824,9 @@ app.post('/api/departments', (req, res) => {
     if (!session) return;
     const boundAcct = getBoundDepartmentContext(session);
     if (boundAcct) { const e = departmentAccessError(boundAcct); return res.status(e.status).json(e.body); }
-    const companyId = session.companyName;
+    const adminCtx = requireDepartmentAccountManager(req, res);
+    if (!adminCtx) return;
+    const companyId = adminCtx.companyId;
     const name = (req.body.name || '').trim();
     if (!name) return res.status(400).json({ error: 'Department name is required.' });
 
@@ -729,7 +856,9 @@ app.put('/api/departments/:id', (req, res) => {
     if (!session) return;
     const boundAcct = getBoundDepartmentContext(session);
     if (boundAcct) { const e = departmentAccessError(boundAcct); return res.status(e.status).json(e.body); }
-    const companyId = session.companyName;
+    const adminCtx = requireDepartmentAccountManager(req, res);
+    if (!adminCtx) return;
+    const companyId = adminCtx.companyId;
     const depts = departmentsStore[companyId] || [];
     const idx = depts.findIndex(d => d.id === req.params.id);
     if (idx === -1) return res.status(404).json({ error: 'Department not found.' });
@@ -771,7 +900,9 @@ app.delete('/api/departments/:id', (req, res) => {
     if (!session) return;
     const boundAcct = getBoundDepartmentContext(session);
     if (boundAcct) { const e = departmentAccessError(boundAcct); return res.status(e.status).json(e.body); }
-    const companyId = session.companyName;
+    const adminCtx = requireDepartmentAccountManager(req, res);
+    if (!adminCtx) return;
+    const companyId = adminCtx.companyId;
     const depts = departmentsStore[companyId] || [];
     const idx = depts.findIndex(d => d.id === req.params.id);
     if (idx === -1) return res.status(404).json({ error: 'Department not found.' });
@@ -799,12 +930,9 @@ app.delete('/api/departments/:id', (req, res) => {
     res.json({ success: true });
 });
 
-// ===== Department Account REST API (S1.1 — TRANSITIONAL) =====
-// [TRANSITIONAL] These management endpoints are company-scoped under the
-// existing requireAuth session only. A real Service Admin role/permission
-// model lands in a later sprint; until then ANY authenticated user of the
-// company can manage its Department Accounts. companyId ALWAYS comes from
-// the HMAC session — never from client body/query.
+// ===== Department Account REST API =====
+// Management requires an ACTIVE Operations Director record. The company comes
+// from that server-side record, never from a Firebase profile or request data.
 
 // [S2.0] safeAccount — strips passwordHash before sending to client.
 // Adds hasPassword:bool so the UI knows whether a password has been set
@@ -816,11 +944,22 @@ function safeAccount(a) {
     return rest;
 }
 
+function requireDepartmentAccountManager(req, res) {
+    const opsCtx = requireOpsAuth(req, res);
+    if (!opsCtx) return null;
+    const { session, opsUser: actor } = opsCtx;
+    if (!opsAuth.canManageDepartmentAccounts(actor, actor.companyId)) {
+        res.status(403).json({ error: 'Only an active Director can manage Department Accounts.' });
+        return null;
+    }
+    return { session, actor, companyId: actor.companyId };
+}
+
 // GET /api/department-accounts — list the company's Department Accounts
 app.get('/api/department-accounts', (req, res) => {
-    const session = requireAuth(req, res);
-    if (!session) return;
-    const companyId = session.companyName; // never from client input
+    const ctx = requireDepartmentAccountManager(req, res);
+    if (!ctx) return;
+    const companyId = ctx.companyId;
     const accounts = departmentAccounts.getDepartmentAccounts(companyId).map(safeAccount);
     res.json({ success: true, accounts });
 });
@@ -829,9 +968,9 @@ app.get('/api/department-accounts', (req, res) => {
 // [S2.0] Accepts optional `password`. displayName auto-derived from dept name
 // when not supplied (admin UI does not expose a displayName field).
 app.post('/api/department-accounts', (req, res) => {
-    const session = requireAuth(req, res);
-    if (!session) return;
-    const companyId = session.companyName; // forged companyId in body is ignored
+    const ctx = requireDepartmentAccountManager(req, res);
+    if (!ctx) return;
+    const companyId = ctx.companyId;
     const { departmentId, loginIdentifier, password } = req.body || {};
     // Pass displayName through from body if supplied; createDepartmentAccount auto-derives
     // it from the dept name when absent (defense-in-depth kept here as a secondary hint).
@@ -842,7 +981,7 @@ app.post('/api/department-accounts', (req, res) => {
         // If dept not found here, createDepartmentAccount will re-derive from companyDepts.
     }
     const result = departmentAccounts.createDepartmentAccount(
-        { companyId, departmentId, displayName, loginIdentifier, password, createdBy: session.uid },
+        { companyId, departmentId, displayName, loginIdentifier, password, createdBy: ctx.session.uid },
         getCompanyDepts(companyId)
     );
     if (!result.ok) return res.status(result.code).json({ error: result.error });
@@ -854,9 +993,9 @@ app.post('/api/department-accounts', (req, res) => {
 // Status changes use PUT /:id/status (existing endpoint). Company isolation is
 // structural: account lookup is scoped to session company.
 app.patch('/api/department-accounts/:id', (req, res) => {
-    const session = requireAuth(req, res);
-    if (!session) return;
-    const companyId = session.companyName;
+    const ctx = requireDepartmentAccountManager(req, res);
+    if (!ctx) return;
+    const companyId = ctx.companyId;
     const { loginIdentifier, password } = req.body || {};
     const result = departmentAccounts.updateDepartmentAccount(
         companyId, req.params.id, { loginIdentifier, password }
@@ -867,9 +1006,9 @@ app.patch('/api/department-accounts/:id', (req, res) => {
 
 // PUT /api/department-accounts/:id/status — ACTIVE | SUSPENDED
 app.put('/api/department-accounts/:id/status', (req, res) => {
-    const session = requireAuth(req, res);
-    if (!session) return;
-    const companyId = session.companyName;
+    const ctx = requireDepartmentAccountManager(req, res);
+    if (!ctx) return;
+    const companyId = ctx.companyId;
     const result = departmentAccounts.setDepartmentAccountStatus(companyId, req.params.id, (req.body || {}).status, getCompanyDepts(companyId));
     if (!result.ok) return res.status(result.code).json({ error: result.error });
     res.json({ success: true, account: safeAccount(result.account) });
@@ -890,6 +1029,9 @@ app.post('/api/department-accounts/bind', (req, res) => {
     if (!session) return;
     const companyId = session.companyName;
     const uid = session.uid; // [SECURITY] server-verified — never from client payload
+    if (!['firebase-profile', 'ops-membership'].includes(session.authSource)) {
+        return res.status(403).json({ error: 'A verified Firebase user session is required to bind a Department Account.' });
+    }
 
     const { loginIdentifier } = req.body || {};
     if (!loginIdentifier || typeof loginIdentifier !== 'string') {
@@ -902,8 +1044,8 @@ app.post('/api/department-accounts/bind', (req, res) => {
         return res.status(404).json({ error: 'Department account not found.' });
     }
 
-    // [SECURITY] company isolation — account must belong to the session company.
-    if (account.companyId !== companyId) {
+    // Explicit self-binding permission: verified UID, ACTIVE account, same company.
+    if (!opsAuth.canBindDepartmentAccount(session, account)) {
         return res.status(403).json({ error: 'Department account does not belong to your company.' });
     }
 
@@ -1149,7 +1291,7 @@ app.post('/api/service/ops-tasks/:taskId/acknowledge', (req, res) => {
 app.get('/api/sala/token', (req, res) => {
     const session = requireAuth(req, res);
     if (!session) return;
-    const floorToken = signSessionToken(session.uid, session.companyName, 'floor');
+    const floorToken = signSessionToken(session.uid, session.companyName, 'floor', session.authSource);
     res.json({ success: true, token: floorToken });
 });
 
@@ -1304,7 +1446,7 @@ app.post('/api/service/login', (req, res) => {
     // Issue a Service session token.
     // uid = account.id ('depacct_…') — distinct from Firebase UIDs; getBoundDepartmentContext
     // detects the prefix and routes to findDepartmentAccountById instead of findDepartmentAccountByUid.
-    const token = signSessionToken(account.id, account.companyId);
+    const token = signSessionToken(account.id, account.companyId, null, 'department-account');
     console.log(`✅ [SECURITY] Service login: account=${account.id}, dept=${account.departmentId}, company="${account.companyId}"`);
 
     res.json({
@@ -1325,7 +1467,9 @@ app.put('/api/departments/:id/type', (req, res) => {
     if (!session) return;
     const boundAcct = getBoundDepartmentContext(session);
     if (boundAcct) { const e = departmentAccessError(boundAcct); return res.status(e.status).json(e.body); }
-    const companyId = session.companyName;
+    const adminCtx = requireDepartmentAccountManager(req, res);
+    if (!adminCtx) return;
+    const companyId = adminCtx.companyId;
     const depts = departmentsStore[companyId] || [];
     const result = departmentAccounts.setDepartmentType(depts, req.params.id, (req.body || {}).departmentType);
     if (!result.ok) return res.status(result.code).json({ error: result.error });
@@ -2635,8 +2779,8 @@ function findOpsUserByUid(uid) {
 // [SECURITY] Operations auth guard. Verifies the HMAC session token (shared
 // mechanism with the Service side), then resolves the server-side ops user
 // record. companyId ALWAYS comes from the server-side record — never from the
-// client. Bootstrap rule: if the session's company has no Operations users yet,
-// the authenticated account owner becomes its first DIRECTOR.
+// client. Bootstrap is allowed only for internally signed legacy/provisioning
+// sessions, never for a session whose company came from a writable Firebase profile.
 function requireOpsAuth(req, res) {
     const session = requireAuth(req, res);
     if (!session) return null;
@@ -2644,7 +2788,7 @@ function requireOpsAuth(req, res) {
     let opsUser = findOpsUserByUid(session.uid);
     if (!opsUser) {
         const companyId = session.companyName; // verified server-side at token issue time
-        if (getOpsUsers(companyId).length === 0) {
+        if (getOpsUsers(companyId).length === 0 && session.authSource === 'ops-bootstrap') {
             // Bootstrap: existing account owner becomes the company's first Director
             opsUser = {
                 id: genOpsUserId(),

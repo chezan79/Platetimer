@@ -35,10 +35,11 @@ function check(label, condition, hint) {
     }
 }
 
-function sign(uid, companyName) {
+function sign(uid, companyName, authSource = 'firebase-profile') {
     const payload = Buffer.from(JSON.stringify({
         uid,
         companyName,
+        authSource,
         iat: Date.now(),
         exp: Date.now() + 3_600_000
     })).toString('base64');
@@ -233,7 +234,7 @@ async function runServerTest() {
     const { proc, ready } = startServer(dataDir);
     await ready;
 
-    const adminToken = sign('admin', 'restaurant');
+    const adminToken = sign('admin', 'restaurant', 'ops-bootstrap');
     const senderToken = sign('sender-user', 'restaurant');
     const recipientToken = sign('recipient-user', 'restaurant');
     let sender;

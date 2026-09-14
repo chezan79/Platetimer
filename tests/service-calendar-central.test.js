@@ -19,9 +19,9 @@ const PORT     = 5090;
 const BASE     = `http://127.0.0.1:${PORT}`;
 const DATA_DIR = fs.mkdtempSync(path.join(require('os').tmpdir(), 't33test-'));
 
-function sign(uid, companyName) {
+function sign(uid, companyName, authSource = 'firebase-profile') {
     const payload = Buffer.from(JSON.stringify({
-        uid, companyName, iat: Date.now(), exp: Date.now() + 3_600_000
+        uid, companyName, authSource, iat: Date.now(), exp: Date.now() + 3_600_000
     })).toString('base64');
     const sig = crypto.createHmac('sha256', SECRET).update(payload).digest('hex');
     return `${payload}.${sig}`;
@@ -83,8 +83,8 @@ async function main() {
     console.log('Server up. Running T33 checks…\n');
 
     try {
-        const tokAdminA = sign('uid-admin-a', 'ristorante');
-        const tokAdminB = sign('uid-admin-b', 'other-co');
+        const tokAdminA = sign('uid-admin-a', 'ristorante', 'ops-bootstrap');
+        const tokAdminB = sign('uid-admin-b', 'other-co', 'ops-bootstrap');
 
         // ── Setup ────────────────────────────────────────────────────────────
         console.log('  — setup —\n');

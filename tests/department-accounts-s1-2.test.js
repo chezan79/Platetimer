@@ -25,9 +25,9 @@ const DATA_DIR = fs.mkdtempSync(path.join(require('os').tmpdir(), 's12test-'));
 fs.writeFileSync(path.join(DATA_DIR, 'plans.json'), JSON.stringify({ 'company-a': 'medium', 'company-b': 'medium' }));
 
 // ── Token helpers ────────────────────────────────────────────────────────────
-function sign(uid, companyName) {
+function sign(uid, companyName, authSource = 'firebase-profile') {
     const payload = Buffer.from(JSON.stringify({
-        uid, companyName, iat: Date.now(), exp: Date.now() + 3_600_000
+        uid, companyName, authSource, iat: Date.now(), exp: Date.now() + 3_600_000
     })).toString('base64');
     const sig = crypto.createHmac('sha256', SECRET).update(payload).digest('hex');
     return `${payload}.${sig}`;
@@ -108,11 +108,11 @@ async function main() {
     try {
         // ── Actors ───────────────────────────────────────────────────────────
         // Company A: admin + two regular users + one cross-company user (Company B)
-        const tokAdminA   = sign('uid-admin-a',   'company-a');
+        const tokAdminA   = sign('uid-admin-a',   'company-a', 'ops-bootstrap');
         const tokUserA1   = sign('uid-user-a1',   'company-a');  // will bind to account
         const tokUserA2   = sign('uid-user-a2',   'company-a');  // second user (dup test)
         const tokLegacy   = sign('uid-legacy',    'company-a');  // no dept account
-        const tokAdminB   = sign('uid-admin-b',   'company-b');
+        const tokAdminB   = sign('uid-admin-b',   'company-b', 'ops-bootstrap');
         const tokUserB1   = sign('uid-user-b1',   'company-b');  // cross-company test
 
         // ── Setup: departments ────────────────────────────────────────────────

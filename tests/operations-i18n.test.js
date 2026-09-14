@@ -20,9 +20,9 @@ const { spawn } = require('child_process');
 const SECRET = 'test-i18n-secret';
 const PORT   = 4460;
 
-function sign(uid, company) {
+function sign(uid, company, authSource = 'firebase-profile') {
     const p = Buffer.from(JSON.stringify({
-        uid, companyName: company, iat: Date.now(), exp: Date.now() + 3_600_000,
+        uid, companyName: company, authSource, iat: Date.now(), exp: Date.now() + 3_600_000,
     })).toString('base64');
     const s = crypto.createHmac('sha256', SECRET).update(p).digest('hex');
     return `${p}.${s}`;
@@ -87,7 +87,7 @@ async function run() {
     console.log('Server up. Running I18N-2 checks…\n');
 
     try {
-        const dirToken = sign('uid-i18n-dir', 'i18n-co');
+        const dirToken = sign('uid-i18n-dir', 'i18n-co', 'ops-bootstrap');
 
         // ── Bootstrap director ────────────────────────────────────────────────
         let r = await api(dirToken, 'GET', '/api/operations/me');

@@ -28,9 +28,9 @@ const SECRET = 'test-cal-sync-secret';
 const PORT   = 4451;
 const BASE   = `http://127.0.0.1:${PORT}`;
 
-function sign(uid, companyName) {
+function sign(uid, companyName, authSource = 'firebase-profile') {
     const payload = Buffer.from(JSON.stringify({
-        uid, companyName, iat: Date.now(), exp: Date.now() + 3_600_000
+        uid, companyName, authSource, iat: Date.now(), exp: Date.now() + 3_600_000
     })).toString('base64');
     const sig = crypto.createHmac('sha256', SECRET).update(payload).digest('hex');
     return `${payload}.${sig}`;
@@ -128,40 +128,40 @@ async function run() {
 
     try {
         // ── Setup ─────────────────────────────────────────────────────────────
-        const tokDir  = sign('uid-director', 'ristorante');   // ops Director
+        const tokDir  = sign('uid-director', 'ristorante', 'ops-bootstrap');   // ops Director
         const tokAdm  = sign('uid-admin',    'ristorante');   // unbound Service admin (calendar access)
         const tokCent = sign('uid-central',  'ristorante');   // bound to CENTRAL dept → calendar access
         const tokStd  = sign('uid-std',      'ristorante');   // bound to STANDARD dept → no calendar access
-        const tokODir = sign('uid-o-dir',    'othercorp');    // other company ops Director
+        const tokODir = sign('uid-o-dir',    'othercorp', 'ops-bootstrap');    // other company ops Director
         const tokOAdm = sign('uid-o-adm',    'othercorp');    // other company Service admin
 
         console.log('  — setup —\n');
         let r = await api(tokDir, 'GET', '/api/operations/me?name=Direttore');
         check('Setup: ops Director bootstrapped', r.data.success === true, r.data);
 
-        r = await api(tokAdm, 'POST', '/api/departments', { name: 'Cucina' });
+        r = await api(tokDir, 'POST', '/api/departments', { name: 'Cucina' });
         const deptCucina = r.data.department;
-        r = await api(tokAdm, 'POST', '/api/departments', { name: 'Pizzeria' });
+        r = await api(tokDir, 'POST', '/api/departments', { name: 'Pizzeria' });
         const deptPizzeria = r.data.department;
         check('Setup: departments created', !!(deptCucina?.id && deptPizzeria?.id), r.data);
 
         // Create CENTRAL account for calendar access
-        r = await api(tokAdm, 'POST', '/api/departments', { name: 'Centrale' });
+        r = await api(tokDir, 'POST', '/api/departments', { name: 'Centrale' });
         const deptCentrale = r.data.department;
         // Mark it CENTRAL by creating account and ensuring it's the only one
-        r = await api(tokAdm, 'POST', '/api/department-accounts', { departmentId: deptCentrale.id, displayName: 'Centrale', loginIdentifier: 'centrale.cal' });
+        r = await api(tokDir, 'POST', '/api/department-accounts', { departmentId: deptCentrale.id, displayName: 'Centrale', loginIdentifier: 'centrale.cal' });
         check('Setup: central acct created', !!r.data?.account?.id, r.data);
         r = await api(tokCent, 'POST', '/api/department-accounts/bind', { loginIdentifier: 'centrale.cal' });
         check('Setup: central acct bound', r.data.success === true, r.data);
 
         // Standard account (no calendar access)
-        r = await api(tokAdm, 'POST', '/api/department-accounts', { departmentId: deptCucina.id, displayName: 'Cucina Display', loginIdentifier: 'cucina.cal' });
+        r = await api(tokDir, 'POST', '/api/department-accounts', { departmentId: deptCucina.id, displayName: 'Cucina Display', loginIdentifier: 'cucina.cal' });
         r = await api(tokStd, 'POST', '/api/department-accounts/bind', { loginIdentifier: 'cucina.cal' });
 
         // Other company setup
         r = await api(tokODir, 'GET', '/api/operations/me?name=OtherDir');
         check('Setup: other-co ops Director', r.data.success === true, r.data);
-        r = await api(tokOAdm, 'POST', '/api/departments', { name: 'Bar' });
+        r = await api(tokODir, 'POST', '/api/departments', { name: 'Bar' });
         const deptOther = r.data.department;
         check('Setup: other-co dept created', !!deptOther?.id, r.data);
 

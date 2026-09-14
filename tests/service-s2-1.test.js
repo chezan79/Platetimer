@@ -26,7 +26,8 @@ function check(name, cond, extra) {
 // Sign an HMAC session token (same algorithm as server.js).
 function sign(uid, companyName) {
     const payload = Buffer.from(JSON.stringify({
-        uid, companyName, iat: Date.now(), exp: Date.now() + 3_600_000
+        uid, companyName, authSource: 'ops-bootstrap',
+        iat: Date.now(), exp: Date.now() + 3_600_000
     })).toString('base64');
     const sig = crypto.createHmac('sha256', SECRET).update(payload).digest('hex');
     return `${payload}.${sig}`;

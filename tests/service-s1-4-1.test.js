@@ -22,9 +22,9 @@ const BASE     = `http://127.0.0.1:${PORT}`;
 const DATA_DIR = fs.mkdtempSync(path.join(require('os').tmpdir(), 's141test-'));
 
 // ── Token helpers ────────────────────────────────────────────────────────────
-function sign(uid, companyName) {
+function sign(uid, companyName, authSource = 'firebase-profile') {
     const payload = Buffer.from(JSON.stringify({
-        uid, companyName, iat: Date.now(), exp: Date.now() + 3_600_000
+        uid, companyName, authSource, iat: Date.now(), exp: Date.now() + 3_600_000
     })).toString('base64');
     const sig = crypto.createHmac('sha256', SECRET).update(payload).digest('hex');
     return `${payload}.${sig}`;
@@ -140,7 +140,7 @@ async function main() {
 
     try {
         // ── Actors ───────────────────────────────────────────────────────────
-        const tokAdmin        = sign('uid-admin',   'trattoria');   // unbound
+        const tokAdmin        = sign('uid-admin',   'trattoria', 'ops-bootstrap');   // unbound
         const tokStd          = sign('uid-std',     'trattoria');   // bound to STANDARD dept
         const tokCentral      = sign('uid-central', 'trattoria');   // bound to CENTRAL dept
         const tokSusp         = sign('uid-susp',    'trattoria');   // suspended

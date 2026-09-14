@@ -23,8 +23,8 @@ function check(name, cond, extra) {
     else { failed++; console.error(`  ❌ ${name}${extra !== undefined ? ` — got: ${JSON.stringify(extra)}` : ''}`); }
 }
 
-function sign(uid, company) {
-    const payload = Buffer.from(JSON.stringify({ uid, companyName: company, iat: Date.now(), exp: Date.now() + 3_600_000 })).toString('base64');
+function sign(uid, company, authSource = 'firebase-profile') {
+    const payload = Buffer.from(JSON.stringify({ uid, companyName: company, authSource, iat: Date.now(), exp: Date.now() + 3_600_000 })).toString('base64');
     const sig = crypto.createHmac('sha256', SECRET).update(payload).digest('hex');
     return `${payload}.${sig}`;
 }
@@ -129,7 +129,7 @@ function startServer(port, extraEnv) {
 
 // First call to /api/operations/me auto-creates a DIRECTOR for the company.
 async function setupDirector(port, company, uid, name) {
-    const tok = sign(uid || ('uid-dir-' + company), company);
+    const tok = sign(uid || ('uid-dir-' + company), company, 'ops-bootstrap');
     const r = await api(port, tok, 'GET', `/api/operations/me?name=${encodeURIComponent(name || 'Dir Test')}`);
     if (!r.data.success) throw new Error('setupDirector failed: ' + JSON.stringify(r.data));
     return { token: tok, userId: r.data.user.id };

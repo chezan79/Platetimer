@@ -17,9 +17,9 @@ const BASE     = `http://127.0.0.1:${PORT}`;
 const DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'depttype-'));
 
 // ── HMAC session token ────────────────────────────────────────────────────────
-function sign(uid, companyName) {
+function sign(uid, companyName, authSource = 'firebase-profile') {
     const payload = Buffer.from(JSON.stringify({
-        uid, companyName, iat: Date.now(), exp: Date.now() + 3_600_000
+        uid, companyName, authSource, iat: Date.now(), exp: Date.now() + 3_600_000
     })).toString('base64');
     const sig = crypto.createHmac('sha256', SECRET).update(payload).digest('hex');
     return `${payload}.${sig}`;
@@ -83,8 +83,8 @@ async function main() {
     console.log('Server up. Running checks…\n');
 
     try {
-        const adminA = sign('uid-dta-adminA', 'depttype-co-a');
-        const adminB = sign('uid-dta-adminB', 'depttype-co-b');
+        const adminA = sign('uid-dta-adminA', 'depttype-co-a', 'ops-bootstrap');
+        const adminB = sign('uid-dta-adminB', 'depttype-co-b', 'ops-bootstrap');
 
         // ── Bootstrap ─────────────────────────────────────────────────────────
         // Load departments for company A (bootstraps via /api/departments)

@@ -26,9 +26,9 @@ const BASE     = `http://127.0.0.1:${PORT}`;
 const DATA_DIR = fs.mkdtempSync(path.join(require('os').tmpdir(), 's13test-'));
 
 // ── Token helpers ────────────────────────────────────────────────────────────
-function sign(uid, companyName) {
+function sign(uid, companyName, authSource = 'firebase-profile') {
     const payload = Buffer.from(JSON.stringify({
-        uid, companyName, iat: Date.now(), exp: Date.now() + 3_600_000
+        uid, companyName, authSource, iat: Date.now(), exp: Date.now() + 3_600_000
     })).toString('base64');
     const sig = crypto.createHmac('sha256', SECRET).update(payload).digest('hex');
     return `${payload}.${sig}`;
@@ -109,11 +109,12 @@ async function main() {
 
     try {
         // ── Actors ───────────────────────────────────────────────────────────
-        const tokAdmin    = sign('uid-admin',    'restaurant-co');
+        const tokAdmin    = sign('uid-admin',    'restaurant-co', 'ops-bootstrap');
         const tokBound    = sign('uid-bound',    'restaurant-co');  // will be bound
         const tokLegacy   = sign('uid-legacy',   'restaurant-co');  // no binding
         const tokSusp     = sign('uid-susp',     'restaurant-co');  // suspended account
-        const tokOtherCo  = sign('uid-other',    'other-co');        // different company
+        const tokOtherCo  = sign('uid-other',    'other-co', 'ops-bootstrap'); // different-company Director
+        const tokOtherBound = sign('uid-other-bound', 'other-co');              // Firebase user that binds
 
         // ── Setup ─────────────────────────────────────────────────────────────
         console.log('  — setup —\n');
@@ -144,7 +145,7 @@ async function main() {
         // Bind uid-other (separate company setup)
         const deptOtherCoId = await createDept(tokOtherCo, 'Lounge');
         const acctOther = await createAccount(tokOtherCo, deptOtherCoId, 'Lounge Display', 'lounge.s13');
-        r = await bindAccount(tokOtherCo, 'lounge.s13');
+        r = await bindAccount(tokOtherBound, 'lounge.s13');
         check('Setup: other-co account bound', r.data.success === true, r.data);
 
         // ── 1. ACTIVE bound account resolves departmentId ─────────────────────
@@ -247,14 +248,14 @@ async function main() {
         // ── 8. Company cannot be influenced by client ─────────────────────────
         console.log('\n  — 8. company always from session —\n');
         // other-co user cannot access restaurant-co identity
-        r = await api(tokOtherCo, 'GET', '/api/service/identity');
+        r = await api(tokOtherBound, 'GET', '/api/service/identity');
         check('S13-26. other-co sees their own dept (not restaurant-co)',
             r.data.departmentId === deptOtherCoId, r.data.departmentId);
         check('S13-27. departmentId is not kitchen (company isolation)',
             r.data.departmentId !== deptKitchenId, r.data.departmentId);
 
         // Trying to call /api/departments for other-co returns only other-co's depts
-        r = await api(tokOtherCo, 'GET', '/api/departments');
+        r = await api(tokOtherBound, 'GET', '/api/departments');
         const otherCoActive = (r.data.departments || []).filter(d => d.active).map(d => d.id);
         check('S13-28. other-co sees only its own departments',
             !otherCoActive.includes(deptKitchenId) && !otherCoActive.includes(deptBarId),

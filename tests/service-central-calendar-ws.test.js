@@ -31,9 +31,9 @@ const WS_URL   = `ws://127.0.0.1:${PORT}/ws`;
 const DATA_DIR = fs.mkdtempSync(path.join(require('os').tmpdir(), 'central-cal-'));
 
 // ── Token helpers ─────────────────────────────────────────────────────────────
-function sign(uid, companyName) {
+function sign(uid, companyName, authSource = 'firebase-profile') {
     const payload = Buffer.from(JSON.stringify({
-        uid, companyName, iat: Date.now(), exp: Date.now() + 3_600_000
+        uid, companyName, authSource, iat: Date.now(), exp: Date.now() + 3_600_000
     })).toString('base64');
     const sig = crypto.createHmac('sha256', SECRET).update(payload).digest('hex');
     return `${payload}.${sig}`;
@@ -206,12 +206,12 @@ async function main() {
     try {
         // ── Tokens ──────────────────────────────────────────────────────────
         // Company A
-        const tokAdminA   = sign('uid-admin-a',    'compa');  // unbound admin (calendar REST access)
+        const tokAdminA   = sign('uid-admin-a',    'compa', 'ops-bootstrap');  // unbound Director (calendar REST access)
         const tokCentralA = sign('uid-central-a',  'compa');  // bound to CENTRAL dept
         const tokStdA     = sign('uid-std-a',      'compa');  // bound to STANDARD dept
         const tokLegacyA  = sign('uid-legacy-a',   'compa');  // unbound legacy (no dept account)
         // Company B
-        const tokAdminB   = sign('uid-admin-b',    'compb');  // unbound admin B
+        const tokAdminB   = sign('uid-admin-b',    'compb', 'ops-bootstrap');  // unbound Director B
         const tokCentralB = sign('uid-central-b',  'compb');  // bound to CENTRAL dept B
 
         // ── Setup: Company A ─────────────────────────────────────────────────
@@ -389,7 +389,7 @@ async function main() {
         // ws.boundDepartmentType cached at joinRoom) and passes after the T35 fix
         // (which re-evaluates the live dept type at every broadcast).
         console.log('\n  — CC-9. Socket excluded after dept demoted CENTRAL→STANDARD —\n');
-        const tokAdminRev9    = sign('uid-admin-rev9',   'comprev9');
+        const tokAdminRev9    = sign('uid-admin-rev9',   'comprev9', 'ops-bootstrap');
         const tokCentralRev9  = sign('uid-central-rev9', 'comprev9');
         const dRev9 = await createDept(tokAdminRev9, 'DirezioneDem');
         const setRev9 = await setDeptType(tokAdminRev9, dRev9, 'CENTRAL');
@@ -422,7 +422,7 @@ async function main() {
 
         // ── CC-10. CENTRAL socket is excluded after account is suspended ───────
         console.log('\n  — CC-10. Socket excluded after account suspended —\n');
-        const tokAdminRev10   = sign('uid-admin-rev10',   'comprev10');
+        const tokAdminRev10   = sign('uid-admin-rev10',   'comprev10', 'ops-bootstrap');
         const tokCentralRev10 = sign('uid-central-rev10', 'comprev10');
         const dRev10 = await createDept(tokAdminRev10, 'DirezioneSupp');
         const setRev10 = await setDeptType(tokAdminRev10, dRev10, 'CENTRAL');
@@ -455,7 +455,7 @@ async function main() {
         // Deactivating a department auto-suspends its account (referential integrity).
         // The live lookup must see liveDept.active === false and stop delivery.
         console.log('\n  — CC-11. Socket excluded after department deactivated —\n');
-        const tokAdminRev11   = sign('uid-admin-rev11',   'comprev11');
+        const tokAdminRev11   = sign('uid-admin-rev11',   'comprev11', 'ops-bootstrap');
         const tokCentralRev11 = sign('uid-central-rev11', 'comprev11');
         const dRev11 = await createDept(tokAdminRev11, 'DirezioneDeact');
         const setRev11 = await setDeptType(tokAdminRev11, dRev11, 'CENTRAL');

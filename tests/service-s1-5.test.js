@@ -33,9 +33,9 @@ const WS_URL   = `ws://127.0.0.1:${PORT}/ws`;
 const DATA_DIR = fs.mkdtempSync(path.join(require('os').tmpdir(), 's15test-'));
 
 // ── Token helpers ─────────────────────────────────────────────────────────────
-function sign(uid, companyName) {
+function sign(uid, companyName, authSource = 'firebase-profile') {
     const payload = Buffer.from(JSON.stringify({
-        uid, companyName, iat: Date.now(), exp: Date.now() + 3_600_000
+        uid, companyName, authSource, iat: Date.now(), exp: Date.now() + 3_600_000
     })).toString('base64');
     const sig = crypto.createHmac('sha256', SECRET).update(payload).digest('hex');
     return `${payload}.${sig}`;
@@ -183,12 +183,12 @@ async function main() {
     const openSockets = [];
     try {
         // ── Tokens ──────────────────────────────────────────────────────────
-        const tokAdmin   = sign('uid-admin',   'tratt');   // unbound admin
+        const tokAdmin   = sign('uid-admin',   'tratt', 'ops-bootstrap'); // unbound Director
         const tokD1      = sign('uid-d1',      'tratt');   // bound to D1
         const tokD2      = sign('uid-d2',      'tratt');   // bound to D2
         const tokSusp    = sign('uid-susp',    'tratt');   // suspended bound
         const tokLegacy  = sign('uid-legacy',  'tratt');   // unbound legacy
-        const tokAdminB  = sign('uid-admin-b', 'compb');   // Company B admin
+        const tokAdminB  = sign('uid-admin-b', 'compb', 'ops-bootstrap'); // Company B Director
         const tokD1B     = sign('uid-d1b',     'compb');   // Company B bound D1B
 
         // ── Setup via REST ───────────────────────────────────────────────────

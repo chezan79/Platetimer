@@ -31,9 +31,9 @@ const SECRET = 'test-ops-dept-ack-secret';
 const PORT   = 4448;
 const BASE   = `http://127.0.0.1:${PORT}`;
 
-function sign(uid, companyName) {
+function sign(uid, companyName, authSource = 'firebase-profile') {
     const payload = Buffer.from(JSON.stringify({
-        uid, companyName, iat: Date.now(), exp: Date.now() + 3_600_000
+        uid, companyName, authSource, iat: Date.now(), exp: Date.now() + 3_600_000
     })).toString('base64');
     const sig = crypto.createHmac('sha256', SECRET).update(payload).digest('hex');
     return `${payload}.${sig}`;
@@ -88,11 +88,11 @@ async function run() {
 
     try {
         // ── Setup ───────────────────────────────────────────────────────────────
-        const tokDir      = sign('uid-dir',    'ristorante');
+        const tokDir      = sign('uid-dir',    'ristorante', 'ops-bootstrap');
         const tokAdmin    = sign('uid-adm',    'ristorante');
         const tokDeptA    = sign('uid-dept-a', 'ristorante');  // bound → Cucina
         const tokDeptB    = sign('uid-dept-b', 'ristorante');  // bound → Pizzeria
-        const tokOtherDir = sign('uid-o-dir',  'other-co');
+        const tokOtherDir = sign('uid-o-dir',  'other-co', 'ops-bootstrap');
         const tokOtherAdm = sign('uid-o-adm',  'other-co');
         const tokOtherDpt = sign('uid-o-dpt',  'other-co');
 
@@ -100,15 +100,15 @@ async function run() {
         let r = await api(tokDir, 'GET', '/api/operations/me?name=Direttore');
         check('Setup: ops Director bootstrapped', r.data.success === true, r.data);
 
-        r = await api(tokAdmin, 'POST', '/api/departments', { name: 'Cucina' });
+        r = await api(tokDir, 'POST', '/api/departments', { name: 'Cucina' });
         const deptA = r.data.department;
-        r = await api(tokAdmin, 'POST', '/api/departments', { name: 'Pizzeria' });
+        r = await api(tokDir, 'POST', '/api/departments', { name: 'Pizzeria' });
         const deptB = r.data.department;
         check('Setup: departments created', !!(deptA?.id && deptB?.id));
 
-        r = await api(tokAdmin, 'POST', '/api/department-accounts', { departmentId: deptA.id, displayName: 'Cucina Acc', loginIdentifier: 'cucina.ack' });
+        r = await api(tokDir, 'POST', '/api/department-accounts', { departmentId: deptA.id, displayName: 'Cucina Acc', loginIdentifier: 'cucina.ack' });
         check('Setup: acct A', !!r.data?.account?.id, r.data);
-        r = await api(tokAdmin, 'POST', '/api/department-accounts', { departmentId: deptB.id, displayName: 'Pizzeria Acc', loginIdentifier: 'pizzeria.ack' });
+        r = await api(tokDir, 'POST', '/api/department-accounts', { departmentId: deptB.id, displayName: 'Pizzeria Acc', loginIdentifier: 'pizzeria.ack' });
         check('Setup: acct B', !!r.data?.account?.id, r.data);
         r = await api(tokDeptA, 'POST', '/api/department-accounts/bind', { loginIdentifier: 'cucina.ack' });
         check('Setup: bind A', r.data.success === true, r.data);
@@ -118,9 +118,9 @@ async function run() {
         // other company
         r = await api(tokOtherDir, 'GET', '/api/operations/me?name=OtherDir');
         check('Setup: other-co ops Director', r.data.success === true, r.data);
-        r = await api(tokOtherAdm, 'POST', '/api/departments', { name: 'Lounge' });
+        r = await api(tokOtherDir, 'POST', '/api/departments', { name: 'Lounge' });
         const deptOther = r.data.department;
-        r = await api(tokOtherAdm, 'POST', '/api/department-accounts', { departmentId: deptOther.id, displayName: 'Lounge Acc', loginIdentifier: 'lounge.ack' });
+        r = await api(tokOtherDir, 'POST', '/api/department-accounts', { departmentId: deptOther.id, displayName: 'Lounge Acc', loginIdentifier: 'lounge.ack' });
         r = await api(tokOtherDpt, 'POST', '/api/department-accounts/bind', { loginIdentifier: 'lounge.ack' });
         check('Setup: other-co dept bound', r.data.success === true, r.data);
 
@@ -302,13 +302,13 @@ async function run() {
             title: 'Suspend ack test', serviceDepartmentId: deptB.id, publishToService: true
         });
         const tSusp = r.data.task;
-        r = await api(tokAdmin, 'PUT', `/api/departments/${deptB.id}`, { active: false });
+        r = await api(tokDir, 'PUT', `/api/departments/${deptB.id}`, { active: false });
         check('16a. Setup: dept B deactivated', r.data.success === true, r.data);
         r = await ackTask(tokDeptB, tSusp.id);
         check('16b. Deactivated dept → 403 or 410',
             r.status === 403 || r.status === 410, r.status);
         // Restore
-        await api(tokAdmin, 'PUT', `/api/departments/${deptB.id}`, { active: true });
+        await api(tokDir, 'PUT', `/api/departments/${deptB.id}`, { active: true });
 
         // ── 17. Ack store persists across restart ─────────────────────────────────
         console.log('\n  — 17. persistence across server restart —\n');

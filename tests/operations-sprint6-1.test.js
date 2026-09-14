@@ -24,9 +24,9 @@ const SECRET  = 'test-sprint61-secret';
 const PORT    = 4461;
 
 // ── HMAC token ────────────────────────────────────────────────────────────────
-function sign(uid, company) {
+function sign(uid, company, authSource = 'firebase-profile') {
     const p = Buffer.from(JSON.stringify({
-        uid, companyName: company, iat: Date.now(), exp: Date.now() + 3_600_000,
+        uid, companyName: company, authSource, iat: Date.now(), exp: Date.now() + 3_600_000,
     })).toString('base64');
     const s = crypto.createHmac('sha256', SECRET).update(p).digest('hex');
     return `${p}.${s}`;
@@ -100,8 +100,8 @@ async function run() {
 
     try {
         // ── Tokens & bootstrap ────────────────────────────────────────────────
-        const dirA = sign('uid-s61-dirA', 'sprint61-co-a');
-        const dirB = sign('uid-s61-dirB', 'sprint61-co-b');
+        const dirA = sign('uid-s61-dirA', 'sprint61-co-a', 'ops-bootstrap');
+        const dirB = sign('uid-s61-dirB', 'sprint61-co-b', 'ops-bootstrap');
 
         let r = await api(dirA, 'GET', '/api/operations/me');
         check('S61-0. Director A bootstrapped', r.data && r.data.success, r.data);

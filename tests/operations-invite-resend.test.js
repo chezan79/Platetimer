@@ -25,8 +25,8 @@ const DATA_DIR = fs.mkdtempSync(path.join(require('os').tmpdir(), 'opsresend-'))
 const EXPECTED_FROM = 'PlateTimer Operations <operations@notifications.platetimer.com>';
 const APP_BASE = 'https://ops.platetimer.example';
 
-function sign(uid, companyName) {
-    const payload = Buffer.from(JSON.stringify({ uid, companyName, iat: Date.now(), exp: Date.now() + 3600000 })).toString('base64');
+function sign(uid, companyName, authSource = 'firebase-profile') {
+    const payload = Buffer.from(JSON.stringify({ uid, companyName, authSource, iat: Date.now(), exp: Date.now() + 3600000 })).toString('base64');
     const sig = crypto.createHmac('sha256', SECRET).update(payload).digest('hex');
     return `${payload}.${sig}`;
 }
@@ -105,8 +105,8 @@ async function main() {
     console.log('Server up. Running checks…\n');
 
     try {
-        const dirA = sign('uid-rdirA', 'resend-co-a');
-        const dirB = sign('uid-rdirB', 'resend-co-b');
+        const dirA = sign('uid-rdirA', 'resend-co-a', 'ops-bootstrap');
+        const dirB = sign('uid-rdirB', 'resend-co-b', 'ops-bootstrap');
         await api(dirA, 'GET', '/api/operations/me?name=Rita%20Dir');
         const meA = await api(dirA, 'GET', '/api/operations/me');
         const dirAId = meA.data.user.id;
@@ -272,7 +272,7 @@ async function main() {
     ({ server, up } = spawnServer({ RESEND_API_KEY: '', RESEND_API_BASE: '' }));
     await up;
     try {
-        const dirA = sign('uid-rdirA', 'resend-co-a');
+        const dirA = sign('uid-rdirA', 'resend-co-a', 'ops-bootstrap');
         const nBefore = captured.length;
         const r = await api(dirA, 'POST', '/api/operations/users', {
             name: 'No Config', email: 'noconfig@example.com', role: 'CHEF_DE_BRIGADE'
