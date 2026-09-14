@@ -696,6 +696,12 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
   cursor:pointer;transition:all .15s;}
 .ops-ack-btn:hover{background:rgba(22,163,74,.15);border-color:rgba(22,163,74,.6);}
 .ops-ack-btn:disabled{opacity:.5;cursor:default;}
+.ops-action-btn{min-height:48px;padding:10px 15px;border:1.5px solid rgba(79,70,229,.35);border-radius:9px;
+  background:rgba(79,70,229,.07);color:var(--accent);font-size:14px;font-weight:700;
+  cursor:pointer;transition:all .15s;}
+.ops-action-btn:hover{background:rgba(79,70,229,.15);border-color:var(--accent);}
+.ops-action-btn.danger{border-color:rgba(220,38,38,.3);background:rgba(220,38,38,.06);color:var(--danger);}
+.ops-action-btn:disabled{opacity:.5;cursor:default;}
 .ops-list-state{padding:28px 18px;text-align:center;color:var(--muted);font-size:15px;line-height:1.5;}
 .ops-list-state.error{color:var(--danger);}
 .ops-retry-btn{display:block;margin:14px auto 0;min-height:46px;padding:9px 22px;border:0;border-radius:9px;
@@ -2156,10 +2162,20 @@ function connectWS(){
       const vm = voiceMessages.get(data.messageId);
       if(vm){ if(vm.blobUrl) URL.revokeObjectURL(vm.blobUrl); voiceMessages.delete(data.messageId); renderVoiceMessages(); }
     } else if(['OPS_TASK_CREATED','OPS_TASK_UPDATED','OPS_TASK_REASSIGNED','OPS_TASK_PROGRESS',
+               'OPS_TASK_SERVICE_CLAIMED','OPS_TASK_SERVICE_STARTED','OPS_TASK_SERVICE_RENEWED',
+               'OPS_TASK_SERVICE_RELEASED','OPS_TASK_SERVICE_COMPLETED',
+               'OPS_TASK_SERVICE_OVERRIDE_RELEASED','OPS_TASK_SERVICE_INVALIDATED',
+               'OPS_TASK_SERVICE_EXPIRED',
                'OPS_TASK_SERVICE_REMOVED','OPS_TASK_COMPLETED','OPS_TASK_DELETED'].includes(data.action)){
       // Realtime payloads only invalidate the view. The endpoint decides daily
       // membership, publication, department, acknowledgement and canonical status.
-      if(WsAuth.isServiceSession()) scheduleOpsTasksRefresh();
+      if(WsAuth.isServiceSession()){
+        if(data.action === 'OPS_TASK_SERVICE_OVERRIDE_RELEASED' ||
+           data.action === 'OPS_TASK_SERVICE_INVALIDATED'){
+          opsTasks.delete(data.task && data.task.id);
+        }
+        scheduleOpsTasksRefresh();
+      }
     } else if(data.action === 'mexIncoming'){
       // [MEX Step 3] Server delivers incoming message to participant sockets only.
       // Guard: only bound service sessions are participants; unbound sessions are
@@ -2386,6 +2402,38 @@ function _opsFmtDue(dueDate){
   }catch{ return d.toLocaleString(); }
 }
 
+function _opsCurrentWorker(){
+  return window.ServiceWorkerIdentity && ServiceWorkerIdentity.getState
+    ? ServiceWorkerIdentity.getState() : null;
+}
+
+function _opsClaimIsActive(claim){
+  if(!claim || claim.status !== 'ACTIVE') return false;
+  const expiresAt = Number(claim.expiresAt || 0);
+  return !expiresAt || expiresAt > Date.now();
+}
+
+function _opsActionButtons(tk){
+  const current = _opsCurrentWorker();
+  const workerId = current && current.worker && current.worker.id;
+  const claim = tk.claim || null;
+  const claimActive = _opsClaimIsActive(claim);
+  const mine = !!(claimActive && workerId && claim.workerId === workerId);
+  const active = tk.status === 'OPEN' || tk.status === 'IN_PROGRESS';
+  if(!active) return '';
+  if(!claimActive){
+    return `<button class="ops-action-btn" onclick="serviceTaskAction('${esc(tk.id)}','claim')">👋 Prendi in carico</button>`;
+  }
+  if(!mine) return `<span class="ops-status-pill">In carico a ${esc(claim.workerName || 'un operatore')}</span>`;
+  if(tk.status === 'OPEN'){
+    return `<button class="ops-action-btn" onclick="serviceTaskAction('${esc(tk.id)}','start')">▶ Avvia</button>
+      <button class="ops-action-btn danger" onclick="serviceTaskAction('${esc(tk.id)}','release')">Rilascia</button>`;
+  }
+  return `<button class="ops-action-btn" onclick="serviceTaskAction('${esc(tk.id)}','complete')">✓ Completa</button>
+    <button class="ops-action-btn" onclick="serviceTaskAction('${esc(tk.id)}','renew')">↻ Rinnova</button>
+    <button class="ops-action-btn danger" onclick="serviceTaskAction('${esc(tk.id)}','release')">Rilascia</button>`;
+}
+
 function renderOpsTasks(){
   const sec  = document.getElementById('ops-tasks-section');
   const list = document.getElementById('ops-task-list');
@@ -2437,12 +2485,58 @@ function renderOpsTasks(){
         <span class="ops-status-pill">${esc(statusLabel)}</span>
         ${tk.assigneeName ? `<span>👤 ${esc(tk.assigneeName)}</span>` : ''}
       </div>
-      <div class="ops-task-footer">
-        <button class="ops-ack-btn" onclick="acknowledgeOpsTask('${esc(tk.id)}')">${esc(_ot('service.opsTaskAck'))}</button>
+       <div class="ops-task-footer">
+         ${_opsActionButtons(tk)}
+         ${_opsClaimIsActive(tk.claim) ? '' : `<button class="ops-ack-btn" onclick="acknowledgeOpsTask('${esc(tk.id)}')">${esc(_ot('service.opsTaskAck'))}</button>`}
         <button class="ops-detail-btn" onclick="openOpsDetailModal('${esc(tk.id)}')">${esc(_ot('service.opsTaskDetails'))}</button>
       </div>
     </div>`;
   }).join('');
+}
+
+async function serviceTaskAction(taskId, action){
+  const identity = _opsCurrentWorker();
+  if(!identity || !identity.proof || !identity.worker) {
+    alert('Seleziona e verifica un operatore prima di agire sul compito.');
+    return;
+  }
+  const task = opsTasks.get(taskId);
+  if(!task) return;
+  const key = `service-${action}-${taskId}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    'Content-Type': 'application/json',
+    'Idempotency-Key': key,
+    'X-Worker-Proof': identity.proof
+  };
+  const button = document.querySelector(`.ops-task-card[data-task-id="${CSS.escape(taskId)}"] .ops-action-btn`);
+  if(button) button.disabled = true;
+  try{
+    const response = await fetch(`/api/service/ops-tasks/${encodeURIComponent(taskId)}/${action}`, {
+      method:'POST', headers,
+      body: JSON.stringify({
+        expectedRevision: Number(task.serviceActionRevision || 0),
+        leaseId: task.claim && task.claim.leaseId || undefined
+      })
+    });
+    const data = await response.json().catch(() => ({}));
+    if(!response.ok){
+      if(response.status === 409) await loadOpsTasks();
+      else if(response.status === 401 || response.status === 403) {
+        if(ServiceWorkerIdentity.clearLocal) ServiceWorkerIdentity.clearLocal();
+        renderOpsTasks();
+      }
+      return;
+    }
+    if(data.task) {
+      opsTasks.set(taskId, data.task);
+      renderOpsTasks();
+    } else {
+      await loadOpsTasks();
+    }
+  }catch(_){
+    await loadOpsTasks();
+  }
 }
 
 function openOpsDetailModal(taskId){
@@ -2514,7 +2608,8 @@ async function acknowledgeOpsTask(taskId){
     console.log('[OPS-ACK-DIAG] request sent');
     const r = await fetch(`/api/service/ops-tasks/${encodeURIComponent(taskId)}/acknowledge`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${token}` }
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idempotencyKey: `ack:${taskId}:${Date.now()}` })
     });
     console.log(`[OPS-ACK-DIAG] response status=${r.status}`);
     if(!r.ok){

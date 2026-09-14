@@ -51,3 +51,4 @@
 - [Operations Quick Notes](ops-quick-notes.md) — note-to-task conversion is a cross-store commit; capture cancellation must invalidate both pending permission and transcription.
 - [Recurring generation parity](recurring-generation-parity.md) — template departments use canonical Service IDs; generated-task events must follow atomic task/template persistence.
 - [Service individual identity target](service-individual-identity.md) — keep department/device auth separate from a short-lived verified worker identity; Operations linking is optional and permission-neutral.
+- [Service task action authority](service-task-action-authority.md) — claims, acknowledgements, leases, revisions, idempotency, and full task recovery share one transaction record.
