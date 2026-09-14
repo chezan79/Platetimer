@@ -11,4 +11,8 @@ description: Authorization model for projecting Ops tasks onto Service departmen
 
 **Rule 3 — live authorization, not join-time.** Both the Service HTTP read and the WS delivery re-check that the bound department is still ACTIVE at request/delivery time; deactivating a department (which also auto-suspends its account → 403 ACCOUNT_SUSPENDED wins over 410 DEPARTMENT_INACTIVE) revokes access immediately.
 
-**Why:** a completion code review rejected earlier iterations for cross-department data exposure over WS and post-deactivation access — the HTTP filter alone is not a security boundary when broadcasts fan out company-wide.
+**Rule 4 — the Service daily UI reconciles, it does not merge.** Realtime changes and reconnects invalidate the current daily view and refresh it from the canonical daily source. Realtime payloads must not determine daily membership.
+
+**Why:** delivery filtering is a security boundary, while daily membership depends on several mutable fields and the current business date. A canonical refresh preserves both authorization and consistency.
+
+**How to apply:** preserve explicit revocation signals for secure delivery, but treat entitled task changes as refresh signals in daily Service views. Never calculate recurrence or daily membership in the browser.

@@ -639,12 +639,13 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
   .vc-sep  { margin: 0; }
 }
 
-/* ── OPERATIONS TASK CARDS (Task 66 enhancement) ────────────────────────── */
-/* Container section reuses .vm-section; cards go into #ops-task-list (.cd-list).
-   Cards must NOT look like countdown cards — no timer, no table number, no controls. */
+#ops-tasks-section{display:block;background:rgba(79,70,229,.035);border:1.5px solid rgba(79,70,229,.14);
+  border-radius:16px;padding:18px;margin-top:28px;}
+#ops-tasks-section .ra-hdr{margin-bottom:14px;}
+#ops-tasks-section .ra-title{font-size:22px;}
 .ops-task-card{
   background:var(--card);border:1.5px solid var(--border);border-radius:12px;
-  padding:14px 16px;position:relative;overflow:hidden;transition:border-color .2s;}
+  padding:18px 20px;position:relative;overflow:hidden;transition:border-color .2s;}
 /* Left accent bar — colour driven by priority class */
 .ops-task-card::before{
   content:'';position:absolute;left:0;top:0;bottom:0;width:4px;
@@ -657,7 +658,8 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 
 /* Card header row */
 .ops-task-hdr{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px;}
-.ops-task-title{font-size:14px;font-weight:700;color:var(--text);line-height:1.3;flex:1;}
+.ops-task-title{font-size:19px;font-weight:750;color:var(--text);line-height:1.3;flex:1;}
+.ops-task-description{font-size:15px;color:var(--text);line-height:1.5;margin-top:9px;white-space:pre-wrap;}
 
 /* Operations source badge (small pill top-right) */
 .ops-src-badge{display:inline-flex;align-items:center;gap:3px;
@@ -668,7 +670,9 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 .ops-src-badge.high  {background:rgba(217,119,6,.1); color:var(--warn);  border-color:rgba(217,119,6,.3);}
 
 /* Meta row */
-.ops-task-meta{display:flex;flex-wrap:wrap;gap:7px;align-items:center;margin-top:7px;font-size:12px;color:var(--muted);}
+.ops-task-meta{display:flex;flex-wrap:wrap;gap:9px;align-items:center;margin-top:10px;font-size:14px;color:var(--muted);}
+.ops-status-pill{font-size:12px;font-weight:700;padding:3px 8px;border-radius:6px;
+  background:#eef2ff;color:#4338ca;border:1px solid #c7d2fe;}
 
 /* Priority pill */
 .ops-prio-pill{font-size:11px;font-weight:600;padding:2px 7px;border-radius:5px;}
@@ -682,16 +686,25 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
   background:rgba(220,38,38,.1);color:var(--danger);border:1px solid rgba(220,38,38,.25);}
 
 /* Details + Acknowledge buttons */
-.ops-task-footer{display:flex;justify-content:flex-end;gap:8px;margin-top:10px;}
-.ops-detail-btn{padding:5px 14px;border:1.5px solid var(--border-l);border-radius:7px;
-  background:rgba(0,0,0,.03);color:var(--text);font-size:12px;font-weight:600;
+.ops-task-footer{display:flex;justify-content:flex-end;gap:10px;margin-top:16px;}
+.ops-detail-btn{min-height:48px;padding:10px 18px;border:1.5px solid var(--border-l);border-radius:9px;
+  background:rgba(0,0,0,.03);color:var(--text);font-size:15px;font-weight:650;
   cursor:pointer;transition:all .15s;}
 .ops-detail-btn:hover{background:var(--card-h);border-color:var(--accent);color:var(--accent);}
-.ops-ack-btn{padding:5px 14px;border:1.5px solid rgba(22,163,74,.35);border-radius:7px;
-  background:rgba(22,163,74,.07);color:#15803d;font-size:12px;font-weight:600;
+.ops-ack-btn{min-height:48px;padding:10px 18px;border:1.5px solid rgba(22,163,74,.35);border-radius:9px;
+  background:rgba(22,163,74,.07);color:#15803d;font-size:15px;font-weight:700;
   cursor:pointer;transition:all .15s;}
 .ops-ack-btn:hover{background:rgba(22,163,74,.15);border-color:rgba(22,163,74,.6);}
 .ops-ack-btn:disabled{opacity:.5;cursor:default;}
+.ops-list-state{padding:28px 18px;text-align:center;color:var(--muted);font-size:15px;line-height:1.5;}
+.ops-list-state.error{color:var(--danger);}
+.ops-retry-btn{display:block;margin:14px auto 0;min-height:46px;padding:9px 22px;border:0;border-radius:9px;
+  background:var(--accent);color:#fff;font-size:15px;font-weight:700;cursor:pointer;}
+@media(max-width:520px){
+  #ops-tasks-section{padding:14px 12px;}
+  .ops-task-footer{display:grid;grid-template-columns:1fr;}
+  .ops-ack-btn,.ops-detail-btn{width:100%;}
+}
 
 /* ── OPERATIONS TASK DETAIL MODAL ─────────────────────────────────────────── */
 .ops-modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);
@@ -975,10 +988,10 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
   <!-- [Task 66] Read-only Operations tasks published to this department -->
   <div id="ops-tasks-section" class="vm-section" style="display:none;">
     <div class="ra-hdr">
-      <span class="ra-title" data-i18n="service.opsTasksSection">Attività Operations</span>
+      <span class="ra-title" data-i18n="service.todayTasksSection">Compiti di oggi</span>
       <span class="ra-count" id="ops-task-count">0</span>
     </div>
-    <div class="cd-list" id="ops-task-list"></div>
+    <div class="cd-list" id="ops-task-list" aria-live="polite"></div>
   </div>
 </main>
 
@@ -1064,6 +1077,11 @@ const pendingSends = new Set();   // table numbers recently sent by this page; t
 let countdowns    = new Map();
 // [Task 66] Operations tasks published to this department (id → projected task)
 let opsTasks      = new Map();
+let opsTasksState = 'idle';
+let opsTasksErrorKey = '';
+let opsTodayDate  = '';
+let opsRefreshTimer = null;
+let opsRequestGeneration = 0;
 let ws            = null;
 let wsConnected   = false;
 let tickTimer     = null;
@@ -1993,6 +2011,7 @@ function connectWS(){
     setConnBadge(true);
     WsAuth.joinRoom(ws, myDeptId, () => {
       console.log('[dept] joined room + page', myDeptId);
+      if(WsAuth.isServiceSession()) loadOpsTasks();
       // [MEX Step 3] Backfill open conversations after reconnect/reload.
       if(WsAuth.isServiceSession()) loadMexInbox();
     });
@@ -2036,35 +2055,11 @@ function connectWS(){
     } else if(data.action === 'deleteVoiceMessage'){
       const vm = voiceMessages.get(data.messageId);
       if(vm){ if(vm.blobUrl) URL.revokeObjectURL(vm.blobUrl); voiceMessages.delete(data.messageId); renderVoiceMessages(); }
-    } else if(['OPS_TASK_CREATED','OPS_TASK_UPDATED','OPS_TASK_REASSIGNED','OPS_TASK_PROGRESS'].includes(data.action)){
-      // [Task 66] Upsert-only: the card appears/refreshes when the task is
-      // published to THIS department with an active status. Removal is NEVER
-      // inferred from an updated payload — it is driven exclusively by the
-      // explicit server event OPS_TASK_SERVICE_REMOVED below.
-      // [OPS-ACK-AUTH] Guard: only a bound Service dept account session can
-      // receive and acknowledge ops tasks. Unbound admin/Firebase sessions that
-      // happen to share the WS room are filtered out here so no cards appear
-      // and no 403 is ever triggered on the acknowledge endpoint.
-      if(!WsAuth.isServiceSession()) return;
-      const tk = data.task;
-      if(tk && tk.publishToService === true && tk.serviceDepartmentId === myDeptId &&
-         (tk.status === 'OPEN' || tk.status === 'IN_PROGRESS')){
-        opsTasks.set(tk.id, tk);
-        renderOpsTasks();
-      }
-    } else if(data.action === 'OPS_TASK_SERVICE_REMOVED'){
-      // [Task 66] The single deterministic removal path (server-originated):
-      // dept move, unpublish, completion, cancellation, deletion.
-      if(!WsAuth.isServiceSession()) return;
-      if(data.prevServiceDepartmentId === myDeptId){
-        opsTasks.delete(data.taskId);
-        renderOpsTasks();
-      }
-    } else if(data.action === 'OPS_TASK_COMPLETED' || data.action === 'OPS_TASK_DELETED'){
-      // [Task 66] Secondary safety net only — primary removal is the event above.
-      if(!WsAuth.isServiceSession()) return;
-      const tid = data.taskId || (data.task && data.task.id);
-      if(tid && opsTasks.delete(tid)) renderOpsTasks();
+    } else if(['OPS_TASK_CREATED','OPS_TASK_UPDATED','OPS_TASK_REASSIGNED','OPS_TASK_PROGRESS',
+               'OPS_TASK_SERVICE_REMOVED','OPS_TASK_COMPLETED','OPS_TASK_DELETED'].includes(data.action)){
+      // Realtime payloads only invalidate the view. The endpoint decides daily
+      // membership, publication, department, acknowledgement and canonical status.
+      if(WsAuth.isServiceSession()) scheduleOpsTasksRefresh();
     } else if(data.action === 'mexIncoming'){
       // [MEX Step 3] Server delivers incoming message to participant sockets only.
       // Guard: only bound service sessions are participants; unbound sessions are
@@ -2273,16 +2268,21 @@ function _ot(k){ return (window.I18n && I18n.t) ? I18n.t(k) : k; }
 function _opsIsOverdue(tk){
   if(!tk.dueDate) return false;
   if(tk.status !== 'OPEN' && tk.status !== 'IN_PROGRESS') return false;
+  // Date-only values are all-day business dates, not midnight instants.
+  if(/^\d{4}-\d{2}-\d{2}$/.test(tk.dueDate)) return false;
   return new Date(tk.dueDate).getTime() < Date.now();
 }
 
 function _opsFmtDue(dueDate){
   if(!dueDate) return '';
+  if(/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) return _ot('service.todayTasksAllDay');
   const d = new Date(dueDate);
   if(isNaN(d.getTime())) return dueDate;
-  const lang = (window.I18n && I18n.currentLocale) ? I18n.currentLocale() : navigator.language || 'it';
+  const lang = (window.I18n && I18n.getLanguage) ? I18n.getLanguage() : 'it';
   try{
-    return d.toLocaleString(lang, { dateStyle:'short', timeStyle:'short' });
+    return d.toLocaleTimeString(lang, {
+      hour:'2-digit', minute:'2-digit', timeZone:'Europe/Zurich'
+    });
   }catch{ return d.toLocaleString(); }
 }
 
@@ -2291,21 +2291,33 @@ function renderOpsTasks(){
   const list = document.getElementById('ops-task-list');
   const cnt  = document.getElementById('ops-task-count');
   if(!sec || !list) return;
+  sec.style.display = WsAuth.isServiceSession() ? '' : 'none';
+  if(!WsAuth.isServiceSession()) return;
+  if(opsTasksState === 'loading'){
+    if(cnt) cnt.textContent = '…';
+    list.innerHTML = `<div class="ops-list-state">${esc(_ot('service.todayTasksLoading'))}</div>`;
+    return;
+  }
+  if(opsTasksState === 'error'){
+    if(cnt) cnt.textContent = '—';
+    list.innerHTML = `<div class="ops-list-state error">${esc(_ot(opsTasksErrorKey || 'service.todayTasksError'))}
+      <button class="ops-retry-btn" onclick="loadOpsTasks()">${esc(_ot('service.todayTasksRetry'))}</button></div>`;
+    return;
+  }
   const arr = Array.from(opsTasks.values())
     .sort((a,b) => (a.dueDate || '9999') < (b.dueDate || '9999') ? -1 : 1);
   if(cnt) cnt.textContent = arr.length;
   if(arr.length === 0){
-    sec.style.display = 'none';
-    list.innerHTML = `<div class="empty-state">${esc(_ot('service.opsTasksEmpty'))}</div>`;
+    list.innerHTML = `<div class="ops-list-state">${esc(_ot('service.todayTasksEmpty'))}</div>`;
     return;
   }
-  sec.style.display = '';
   list.innerHTML = arr.map(tk => {
     const prio    = (tk.priority || 'MEDIUM').toUpperCase();
     const prioLow = prio.toLowerCase();
     const overdue = _opsIsOverdue(tk);
     const dueStr  = _opsFmtDue(tk.dueDate);
-    const prioLabel = _ot(`ops.priority.${prio}`) || prioLow;
+    const prioLabel = _ot(`ops.priority.${prioLow}`);
+    const statusLabel = _ot(`ops.status.${String(tk.status || 'OPEN').toLowerCase()}`);
     // Badge intensity: stronger colour for urgent/high
     const badgeCls = (prio === 'URGENT' || prio === 'HIGH') ? ` ${prioLow}` : '';
 
@@ -2314,6 +2326,7 @@ function renderOpsTasks(){
         <span class="ops-task-title">${esc(tk.title || '')}</span>
         <span class="ops-src-badge${badgeCls}">⚙ ${esc(_ot('service.opsSource'))}</span>
       </div>
+      ${tk.description ? `<div class="ops-task-description">${esc(tk.description)}</div>` : ''}
       <div class="ops-task-meta">
         ${dueStr
           ? overdue
@@ -2321,6 +2334,7 @@ function renderOpsTasks(){
             : `<span>📅 ${esc(dueStr)}</span>`
           : ''}
         <span class="ops-prio-pill ${prioLow}">${esc(prioLabel)}</span>
+        <span class="ops-status-pill">${esc(statusLabel)}</span>
         ${tk.assigneeName ? `<span>👤 ${esc(tk.assigneeName)}</span>` : ''}
       </div>
       <div class="ops-task-footer">
@@ -2336,10 +2350,10 @@ function openOpsDetailModal(taskId){
   if(!tk){ return; }
   const prio     = (tk.priority || 'MEDIUM').toUpperCase();
   const prioLow  = prio.toLowerCase();
-  const prioLabel = _ot(`ops.priority.${prio}`) || prioLow;
+  const prioLabel = _ot(`ops.priority.${prioLow}`);
   const overdue  = _opsIsOverdue(tk);
   const dueStr   = _opsFmtDue(tk.dueDate);
-  const statusLabel = _ot(`ops.status.${tk.status}`) || tk.status || '';
+  const statusLabel = _ot(`ops.status.${String(tk.status || '').toLowerCase()}`);
   const badgeCls = (prio === 'URGENT' || prio === 'HIGH') ? ` ${prioLow}` : '';
 
   document.getElementById('ops-detail-content').innerHTML = `
@@ -2406,7 +2420,7 @@ async function acknowledgeOpsTask(taskId){
     if(!r.ok){
       const body = await r.json().catch(() => ({}));
       console.log(`[OPS-ACK-DIAG] error body=${JSON.stringify(body)}`);
-      if(card){ const btn = card.querySelector('.ops-ack-btn'); if(btn) btn.disabled = false; }
+      if(card){ const btn = card.querySelector('.ops-ack-btn'); if(btn){ btn.disabled = false; btn.textContent = _ot('service.todayTasksAckError'); } }
       return;
     }
     const data = await r.json().catch(() => ({}));
@@ -2417,8 +2431,23 @@ async function acknowledgeOpsTask(taskId){
     renderOpsTasks();
   }catch(err){
     console.log(`[OPS-ACK-DIAG] exception=${err && err.message}`);
-    if(card){ const btn = card.querySelector('.ops-ack-btn'); if(btn) btn.disabled = false; }
+    if(card){ const btn = card.querySelector('.ops-ack-btn'); if(btn){ btn.disabled = false; btn.textContent = _ot('service.todayTasksAckError'); } }
   }
+}
+
+function scheduleOpsTasksRefresh(){
+  clearTimeout(opsRefreshTimer);
+  opsRefreshTimer = setTimeout(loadOpsTasks, 120);
+}
+
+function _opsZurichDate(){
+  try{
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone:'Europe/Zurich', year:'numeric', month:'2-digit', day:'2-digit'
+    }).formatToParts(new Date());
+    const get = type => parts.find(p => p.type === type)?.value;
+    return `${get('year')}-${get('month')}-${get('day')}`;
+  }catch{ return ''; }
 }
 
 async function loadOpsTasks(){
@@ -2426,14 +2455,34 @@ async function loadOpsTasks(){
   // ops tasks. Unbound admin/Firebase sessions are silently skipped — the section
   // stays hidden and the acknowledge endpoint is never reachable from this session.
   if(!WsAuth.isServiceSession()) return;
+  const requestGeneration = ++opsRequestGeneration;
+  opsTasksState = 'loading';
+  opsTasksErrorKey = '';
+  renderOpsTasks();
   try{
-    const r = await fetch('/api/service/ops-tasks', { headers: { Authorization: `Bearer ${token}` } });
-    if(!r.ok) return; // suspended / inactive — section stays hidden
-    const d = await r.json();
-    if(!d.success || !Array.isArray(d.tasks)) return;
+    const r = await fetch('/api/service/ops-tasks/today', { headers: { Authorization: `Bearer ${token}` } });
+    const d = await r.json().catch(() => ({}));
+    if(requestGeneration !== opsRequestGeneration) return;
+    if(!r.ok){
+      opsTasksState = 'error';
+      if(r.status === 401) opsTasksErrorKey = 'service.todayTasksAuthError';
+      else if(d.code === 'ACCOUNT_SUSPENDED') opsTasksErrorKey = 'service.todayTasksSuspended';
+      else if(d.code === 'DEPARTMENT_INACTIVE') opsTasksErrorKey = 'service.todayTasksInactive';
+      else opsTasksErrorKey = 'service.todayTasksError';
+      renderOpsTasks();
+      return;
+    }
+    if(!d.success || !Array.isArray(d.tasks)) throw new Error('Invalid today tasks response');
     opsTasks = new Map(d.tasks.map(tk => [tk.id, tk]));
+    opsTodayDate = d.todayDate || opsTodayDate;
+    opsTasksState = 'ready';
     renderOpsTasks();
-  }catch{ /* network error — leave hidden */ }
+  }catch{
+    if(requestGeneration !== opsRequestGeneration) return;
+    opsTasksState = 'error';
+    opsTasksErrorKey = 'service.todayTasksError';
+    renderOpsTasks();
+  }
 }
 
 // ── Mex Step 3 ────────────────────────────────────────────────────────────────
@@ -3074,6 +3123,9 @@ Promise.all([loadDepts(), i18nReady]).then(() => {
   connectWS();
   tickTimer = setInterval(tick, 1000);
   loadOpsTasks();
+  setInterval(() => {
+    if(WsAuth.isServiceSession() && opsTodayDate && _opsZurichDate() !== opsTodayDate) loadOpsTasks();
+  }, 60000);
   buildMexRecipientList();  // populate Mex recipient list after depts are loaded
   buildMexQmButtons();       // [Step 6] both depts AND i18n are now ready
   // Rebuild QM button labels whenever the operator switches language (buttons are
