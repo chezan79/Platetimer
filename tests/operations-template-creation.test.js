@@ -83,7 +83,7 @@ function pageDom(url, config = {}) {
                 return {
                     success: true,
                     departments: [
-                        { id: 'dept-bar', name: 'Bar' }
+                        { id: 'dept-bar', name: 'North Prep' }
                     ]
                 };
             }

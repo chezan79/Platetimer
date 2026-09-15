@@ -59,7 +59,9 @@ window.OpsCommon = {
     })[char]),
     roleLabel: role => role || '',
     priorityLabel: priority => priority || '',
-    api: async () => ({ success: true, departments: [] })
+    api: async requestPath => requestPath.startsWith('/api/operations/service-workers')
+        ? { success: true, workers: [{ id: 'worker-canonical', displayName: 'Verified Worker' }] }
+        : { success: true, departments: [{ id: 'dept-canonical', name: 'North Prep' }] }
 };
 window.I18n = {
     t: key => key,
@@ -68,10 +70,12 @@ window.I18n = {
 };
 window.OpsRealtime = { init() {}, on() {} };
 
+async function run() {
 try {
     window.eval(extractMainScript(page));
     const button = window.document.getElementById('new-task-btn');
     button.click();
+    await new Promise(resolve => setTimeout(resolve, 0));
 
     const panel = window.document.getElementById('side-panel');
     const overlay = window.document.getElementById('panel-overlay');
@@ -80,6 +84,22 @@ try {
     check('Clicking Create opens the side panel', panel.classList.contains('open'));
     check('Clicking Create activates the panel overlay', overlay.classList.contains('active'));
     check('Clicking Create renders the task title field', !!title);
+    const department = window.document.getElementById('c-dept');
+    check('Manual form renders a canonical department without relying on its name',
+        department.options.length === 2 &&
+        department.options[1].value === 'dept-canonical' &&
+        department.options[1].textContent === 'North Prep');
+    department.value = 'dept-canonical';
+    department.dispatchEvent(new window.Event('change'));
+    const targetType = window.document.getElementById('c-target-type');
+    targetType.value = 'PERSON';
+    targetType.dispatchEvent(new window.Event('change'));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    const worker = window.document.getElementById('c-worker');
+    check('Manual PERSON control loads the eligible worker by canonical department ID',
+        worker.options.length === 2 &&
+        worker.options[1].value === 'worker-canonical' &&
+        worker.options[1].textContent === 'Verified Worker');
 
     const note = { id: 'opsn-client-test', text: 'Prepare pastry station\nBefore lunch' };
     window.openCreatePanel(note);
@@ -95,3 +115,6 @@ try {
 
 console.log(`\nOperations create-panel binding: ${passed} passed, ${failed} failed.`);
 process.exitCode = failed ? 1 : 0;
+}
+
+run();

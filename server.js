@@ -1561,6 +1561,13 @@ async function refreshServiceWorkersFromAuthority() {
     serviceWorkers.setAuditStore(audit);
 }
 
+async function refreshDepartmentsFromAuthority() {
+    if (!db) return;
+    const snapshot = await db.collection(STORE_COLLECTION).doc('departments').get();
+    departmentsStore = snapshot.exists && snapshot.data().store &&
+        typeof snapshot.data().store === 'object' ? snapshot.data().store : {};
+}
+
 let serviceWorkerStateQueue = Promise.resolve();
 function queueServiceWorkerState(operation) {
     const result = serviceWorkerStateQueue.then(operation, operation);
@@ -4513,18 +4520,18 @@ app.get('/api/operations/assignees', (req, res) => {
 // Active Service departments of the actor's company, for the task-form dropdown.
 // [SECURITY] companyId ALWAYS from the server-side ops record — never from the
 // request. Returns only {id, name}, sorted by name.
-app.get('/api/operations/service-departments', (req, res) => {
+app.get('/api/operations/service-departments', workerAsyncRoute(async (req, res) => {
     const ctx = requireOpsAuth(req, res);
     if (!ctx) return;
+    await refreshDepartmentsFromAuthority();
     const companyId = ctx.opsUser.companyId;
     const allDepts = getCompanyDepts(companyId);
     const activeDepts = allDepts.filter(d => d.active === true);
-    console.log(`[SVCdept-DIAG] companyId=${JSON.stringify(companyId)} storeKeys=${JSON.stringify(Object.keys(departmentsStore))} total=${allDepts.length} active=${activeDepts.length} names=${JSON.stringify(activeDepts.map(d=>d.name))}`);
     const departments = activeDepts
         .map(d => ({ id: d.id, name: d.name }))
         .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
     res.json({ success: true, departments });
-});
+}));
 
 // Eligible Service execution targets for the Operations task form.  This is
 // intentionally separate from /assignees: an Operations user is not a Service
@@ -4532,7 +4539,10 @@ app.get('/api/operations/service-departments', (req, res) => {
 app.get('/api/operations/service-workers', workerAsyncRoute(async (req, res) => {
     const ctx = requireOpsAuth(req, res);
     if (!ctx) return;
-    await refreshServiceWorkersFromAuthority();
+    await Promise.all([
+        refreshDepartmentsFromAuthority(),
+        refreshServiceWorkersFromAuthority()
+    ]);
     const companyId = ctx.opsUser.companyId;
     const departmentId = String(req.query.departmentId || '').trim();
     const department = getCompanyDepts(companyId).find(d => d.id === departmentId && d.active === true);
@@ -5426,7 +5436,10 @@ app.post('/api/operations/tasks', async (req, res) => {
     // [Task 66] Validate optional Service publication fields
     let svc;
     try {
-        await refreshServiceWorkersFromAuthority();
+        await Promise.all([
+            refreshDepartmentsFromAuthority(),
+            refreshServiceWorkersFromAuthority()
+        ]);
         svc = resolveServicePublication(companyId, req.body, null);
     }
     catch (msg) { return sendServiceTargetError(res, msg); }
@@ -5808,7 +5821,10 @@ app.put('/api/operations/tasks/:id', async (req, res) => {
             return res.status(403).json({ error: 'Non autorizzato a modificare questo compito.' });
         }
         try {
-            await refreshServiceWorkersFromAuthority();
+            await Promise.all([
+                refreshDepartmentsFromAuthority(),
+                refreshServiceWorkersFromAuthority()
+            ]);
             validatedServicePublication = resolveServicePublication(companyId, req.body, task);
         }
         catch (msg) { return sendServiceTargetError(res, msg); }
@@ -5980,7 +5996,10 @@ app.patch('/api/operations/tasks/:id', async (req, res) => {
     let svc = null;
     if (svcFieldsPresent) {
     try {
-        await refreshServiceWorkersFromAuthority();
+        await Promise.all([
+            refreshDepartmentsFromAuthority(),
+            refreshServiceWorkersFromAuthority()
+        ]);
         svc = resolveServicePublication(actor.companyId, req.body, task);
     }
         catch (msg) { return sendServiceTargetError(res, msg); }
@@ -6957,7 +6976,10 @@ app.post('/api/operations/templates', async (req, res) => {
     const clean = opsRecurring.sanitizeTemplateInput(req.body);
     let serviceDept;
     try {
-        await refreshServiceWorkersFromAuthority();
+        await Promise.all([
+            refreshDepartmentsFromAuthority(),
+            refreshServiceWorkersFromAuthority()
+        ]);
         serviceDept = resolveTemplateDepartment(companyId, req.body, null);
     }
     catch (msg) { return sendServiceTargetError(res, msg); }
@@ -7026,7 +7048,10 @@ app.patch('/api/operations/templates/:id', async (req, res) => {
     catch (msg) { return sendServiceTargetError(res, msg); }
     let serviceDept;
     try {
-        await refreshServiceWorkersFromAuthority();
+        await Promise.all([
+            refreshDepartmentsFromAuthority(),
+            refreshServiceWorkersFromAuthority()
+        ]);
         serviceDept = resolveTemplateDepartment(companyId, req.body, tpl);
     }
     catch (msg) { return sendServiceTargetError(res, msg); }

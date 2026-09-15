@@ -13,4 +13,4 @@ Worker authorization changes must advance an authoritative fence in the same tra
 
 **Why:** Resolving a proof before the task transaction leaves a suspension, membership change, PIN reset, or proof revocation race where a stale action can still commit. Checking revisions first can also disclose PERSON task details.
 
-**How to apply:** Keep worker and membership authorization versions plus proof revocation epoch in the action repository's transactional authority. Materialize time-based membership expiry on the next authoritative read/action. Refresh canonical worker state before manual target writes and recurring generation.
+**How to apply:** Keep worker and membership authorization versions plus proof revocation epoch in the action repository's transactional authority. Materialize time-based membership expiry on the next authoritative read/action. Refresh both canonical worker and department state before selector reads, manual target writes, and recurring generation; startup-loaded department state can become stale while Firestore remains authoritative.

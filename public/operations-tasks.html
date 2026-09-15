@@ -749,9 +749,7 @@ let _serviceDepts = null;
 async function loadServiceDepts() {
   if (_serviceDepts) return _serviceDepts;
   const r = await OpsCommon.api('/api/operations/service-departments');
-  console.log('[SVCdept-DIAG] raw response:', JSON.stringify(r));
   _serviceDepts = (r && r.success && Array.isArray(r.departments)) ? r.departments : [];
-  console.log('[SVCdept-DIAG] depts stored:', _serviceDepts.length, JSON.stringify(_serviceDepts.map(d=>d.name)));
   return _serviceDepts;
 }
 async function initServiceDeptControls(selId, cbId, selectedId, publish) {
