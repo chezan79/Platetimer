@@ -100,6 +100,78 @@ async function main() {
     ]);
     assert.strictEqual(fsAckClaim.filter(result => result.ok).length, 1);
 
+    // A stale metadata writer must not restore publication after another
+    // writer has committed a newer Service targeting revision.
+    await firestoreRepo.ensureTask({
+        ...task(), id: 'task-target-race',
+        serviceExecutionTarget: {
+            type: 'DEPARTMENT', departmentId: 'kitchen', roleId: null, workerId: null
+        },
+        serviceExecutionTargetVersion: 0
+    });
+    await firestoreRepo.syncTask({
+        ...task(), id: 'task-target-race', publishToService: false,
+        serviceExecutionTarget: {
+            type: 'DEPARTMENT', departmentId: 'kitchen', roleId: null, workerId: null
+        },
+        serviceExecutionTargetVersion: 1
+    }, {
+        expectedServiceExecutionTargetVersion: 0,
+        targetChanged: true
+    });
+    const staleMetadataCommit = await firestoreRepo.syncTask({
+        ...task(), id: 'task-target-race', title: 'Metadata edit',
+        serviceExecutionTarget: {
+            type: 'DEPARTMENT', departmentId: 'kitchen', roleId: null, workerId: null
+        },
+        serviceExecutionTargetVersion: 0
+    }, {
+        expectedServiceExecutionTargetVersion: 0,
+        targetChanged: false,
+        allowMetadataOverwrite: true
+    });
+    assert.strictEqual(staleMetadataCommit.committedTask.publishToService, false);
+    assert.strictEqual(staleMetadataCommit.committedTask.serviceExecutionTargetVersion, 1);
+    await assert.rejects(
+        firestoreRepo.syncTask({
+            ...task(), id: 'task-target-race', publishToService: true,
+            serviceExecutionTarget: {
+                type: 'DEPARTMENT', departmentId: 'kitchen', roleId: null, workerId: null
+            },
+            serviceExecutionTargetVersion: 0
+        }, {
+            expectedServiceExecutionTargetVersion: 0,
+            targetChanged: true,
+            allowMetadataOverwrite: true
+        }),
+        error => error.code === 'SERVICE_TARGET_VERSION_CONFLICT' && error.version === 1
+    );
+
+    await firestoreRepo.ensureTask({
+        ...task(), id: 'task-delete-race',
+        serviceExecutionTarget: {
+            type: 'DEPARTMENT', departmentId: 'kitchen', roleId: null, workerId: null
+        },
+        serviceExecutionTargetVersion: 0
+    });
+    const deleted = await firestoreRepo.removeTask('co', 'task-delete-race');
+    assert.strictEqual(deleted.committedTask.operationsDeleted, true);
+    assert.strictEqual(deleted.committedTask.serviceExecutionTargetVersion, 1);
+    await assert.rejects(
+        firestoreRepo.syncTask({
+            ...task(), id: 'task-delete-race', title: 'Stale metadata',
+            serviceExecutionTarget: {
+                type: 'DEPARTMENT', departmentId: 'kitchen', roleId: null, workerId: null
+            },
+            serviceExecutionTargetVersion: 0
+        }, {
+            expectedServiceExecutionTargetVersion: 0,
+            targetChanged: false,
+            allowMetadataOverwrite: true
+        }),
+        error => error.code === 'SERVICE_TARGET_VERSION_CONFLICT' && error.version === 1
+    );
+
     // Atomic first-writer-wins race.
     let repo = await fresh();
     const race = await Promise.all([

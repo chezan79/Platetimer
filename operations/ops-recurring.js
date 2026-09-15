@@ -4,6 +4,7 @@
 // All generation is idempotent — occurrenceKey prevents duplicates across server restarts.
 
 const crypto = require('crypto');
+const executionTargets = require('../service/execution-target');
 
 // ── Constants ───────────────────────────────────────────────────────────────
 const VALID_FREQUENCIES = [
@@ -93,6 +94,13 @@ function validateTemplateInput(body) {
         typeof serviceDepartmentId !== 'string' && typeof serviceDepartmentId !== 'number') {
         errors.push('serviceDepartmentId non valido');
     }
+    try {
+        if (body.defaultServiceExecutionTarget !== undefined) {
+            executionTargets.parseDepartmentTarget(body.defaultServiceExecutionTarget, 'defaultServiceExecutionTarget');
+        }
+    } catch (error) {
+        errors.push(typeof error === 'string' ? error : error.message);
+    }
     return errors;
 }
 
@@ -109,6 +117,7 @@ function sanitizeTemplateInput(body) {
         serviceDepartmentId: body.serviceDepartmentId
             ? String(body.serviceDepartmentId).trim().slice(0, 120)
             : null,
+        defaultServiceExecutionTarget: body.defaultServiceExecutionTarget,
         notes:              String(body.notes || '').trim().slice(0, 5000),
         defaultAssigneeId:  typeof body.defaultAssigneeId === 'string' ? body.defaultAssigneeId : null,
         frequency:          body.frequency,
@@ -136,6 +145,9 @@ function sanitizeTemplatePatch(body) {
         if (body.serviceDepartmentId !== null && typeof body.serviceDepartmentId !== 'string' && typeof body.serviceDepartmentId !== 'number')
             throw 'serviceDepartmentId non valido.';
         out.serviceDepartmentId = body.serviceDepartmentId ? String(body.serviceDepartmentId).trim().slice(0, 120) : null;
+    }
+    if (body.defaultServiceExecutionTarget !== undefined) {
+        out.defaultServiceExecutionTarget = body.defaultServiceExecutionTarget;
     }
     if (body.defaultAssigneeId !== undefined) out.defaultAssigneeId = body.defaultAssigneeId || null;
     if (body.startDate !== undefined) { if (!/^\d{4}-\d{2}-\d{2}$/.test(body.startDate)) throw 'startDate non valido.'; out.startDate = body.startDate; }
@@ -321,7 +333,7 @@ function getOccurrenceDatesInRange(template, rangeStart, rangeEnd) {
 // Returns an array of NEW task objects that are missing from the store.
 // `existingKeysSet` = Set of occurrenceKey strings already persisted.
 // `addHistoryFn`    = server.js `addHistory` — keeps history write in one place.
-function generateTasksForTemplate(template, companyId, existingKeysSet, usersById, addHistoryFn) {
+function generateTasksForTemplate(template, companyId, existingKeysSet, usersById, addHistoryFn, options = {}) {
     const now  = new Date();
     const dates = getOccurrenceDates(template, now);
 
@@ -333,6 +345,14 @@ function generateTasksForTemplate(template, companyId, existingKeysSet, usersByI
     }
 
     const newTasks = [];
+    let target = executionTargets.effectiveTarget({
+        serviceExecutionTarget: template.defaultServiceExecutionTarget,
+        serviceDepartmentId: template.serviceDepartmentId
+    });
+    if (target && typeof options.isDepartmentActive === 'function' &&
+        !options.isDepartmentActive(target.departmentId, companyId)) {
+        target = null;
+    }
     for (const ds of dates) {
         const key = occurrenceKey(template.id, ds);
         if (existingKeysSet.has(key)) continue; // idempotent guard
@@ -345,9 +365,11 @@ function generateTasksForTemplate(template, companyId, existingKeysSet, usersByI
             description:      template.description || '',
             priority:         template.priority || 'MEDIUM',
             department:       template.department || '',
-            serviceDepartmentId:   template.serviceDepartmentId ?? null,
-            serviceDepartmentName: template.serviceDepartmentName ?? null,
-            publishToService:      template.publishToService === true,
+            serviceDepartmentId:   target ? target.departmentId : null,
+            serviceExecutionTarget: target,
+            serviceExecutionTargetVersion: 0,
+            serviceDepartmentName: target ? (template.serviceDepartmentName ?? null) : null,
+            publishToService:      !!target && template.publishToService === true,
             notes:            template.notes || '',
             status:           'OPEN',
             assigneeId:       assigneeId,

@@ -14,6 +14,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const executionTargets = require('./execution-target');
 
 const ACTIVE_STATUSES = new Set(['OPEN', 'IN_PROGRESS']);
 const TERMINAL_STATUSES = new Set(['COMPLETED', 'CANCELLED']);
@@ -95,6 +96,9 @@ class TaskActionRepository {
     _ref(companyId, taskId) {
         return this.db.collection(this.collectionName).doc(taskKey(companyId, taskId));
     }
+    taskRef(companyId, taskId) {
+        return this.db ? this._ref(companyId, taskId) : null;
+    }
     _indexRef(companyId, taskId, kind, value) {
         return this.db.collection(`${this.collectionName}_active_leases`)
             .doc(`${companyId}::${kind}::${value}::${taskId}`);
@@ -125,6 +129,10 @@ class TaskActionRepository {
 
     _stateFor(task, previous, options = {}) {
         const value = clone(task || {});
+        const target = executionTargets.effectiveTarget(value);
+        value.serviceExecutionTarget = target;
+        value.serviceDepartmentId = target ? target.departmentId : null;
+        value.serviceExecutionTargetVersion = Number(value.serviceExecutionTargetVersion || 0);
         const old = previous || {};
         const incomingRevision = Number(value.serviceActionRevision || 0);
         const oldRevision = Number(old.serviceActionRevision || 0);
@@ -201,6 +209,8 @@ class TaskActionRepository {
             priority: task.priority,
             status: task.status,
             serviceDepartmentId: task.serviceDepartmentId,
+            serviceExecutionTarget: executionTargets.effectiveTarget(task),
+            serviceExecutionTargetVersion: Number(task.serviceExecutionTargetVersion || 0),
             serviceDepartmentName: task.serviceDepartmentName,
             source: 'OPERATIONS',
             createdAt: task.createdAt,
@@ -225,9 +235,10 @@ class TaskActionRepository {
     }
 
     _entitled(task, context) {
+        const target = executionTargets.effectiveTarget(task);
         return task && task.companyId === context.companyId &&
             task.publishToService === true &&
-            task.serviceDepartmentId === context.departmentId &&
+            target && target.departmentId === context.departmentId &&
             ACTIVE_STATUSES.has(task.status);
     }
 
@@ -745,14 +756,31 @@ class TaskActionRepository {
             if (!task || !task.companyId || !task.id) return fail(400, 'A canonical company task is required.');
             const key = taskKey(task.companyId, task.id);
             const old = this.db ? null : this.state.tasks[key];
-            const value = this._stateFor({ ...task }, old, {
+            if (old && options.expectedServiceExecutionTargetVersion !== undefined &&
+                Number(old.serviceExecutionTargetVersion || 0) !== Number(options.expectedServiceExecutionTargetVersion)) {
+                if (options.targetChanged) {
+                    const error = new Error('Service execution target version conflict.');
+                    error.code = 'SERVICE_TARGET_VERSION_CONFLICT';
+                    error.version = Number(old.serviceExecutionTargetVersion || 0);
+                    throw error;
+                }
+                task = {
+                    ...task,
+                    serviceExecutionTarget: clone(old.serviceExecutionTarget),
+                    serviceDepartmentId: old.serviceDepartmentId || null,
+                    serviceDepartmentName: old.serviceDepartmentName || null,
+                    serviceExecutionTargetVersion: Number(old.serviceExecutionTargetVersion || 0),
+                    publishToService: old.publishToService === true
+                };
+            }
+            let value = this._stateFor({ ...task }, old, {
                 ...options,
                 allowMetadataOverwrite: options.allowMetadataOverwrite !== false
             });
             const now = nowValue(this.clock);
             const lost = old && old.claimLeaseStatus === 'ACTIVE' &&
                 (value.publishToService !== true ||
-                 value.serviceDepartmentId !== old.serviceDepartmentId ||
+                 executionTargets.effectiveTarget(value)?.departmentId !== executionTargets.effectiveTarget(old)?.departmentId ||
                  !ACTIVE_STATUSES.has(value.status));
             if (lost) {
                 value.claimLeaseStatus = 'INVALIDATED';
@@ -766,53 +794,18 @@ class TaskActionRepository {
                 }, { reason: value.claimLeaseCloseReason, fromStatus: old.status, toStatus: value.status });
             } else if (old && JSON.stringify({ status: old.status, title: old.title, description: old.description,
                 priority: old.priority, dueDate: old.dueDate, assigneeId: old.assigneeId,
-                publishToService: old.publishToService, serviceDepartmentId: old.serviceDepartmentId }) !==
+                publishToService: old.publishToService, serviceExecutionTarget: executionTargets.effectiveTarget(old) }) !==
                 JSON.stringify({ status: value.status, title: value.title, description: value.description,
                     priority: value.priority, dueDate: value.dueDate, assigneeId: value.assigneeId,
-                    publishToService: value.publishToService, serviceDepartmentId: value.serviceDepartmentId })) {
+                    publishToService: value.publishToService, serviceExecutionTarget: executionTargets.effectiveTarget(value) })) {
                 value.serviceActionRevision++;
             }
             if (this.db) {
                 const ref = this._ref(task.companyId, task.id);
-                let committedValue = null;
                 await this.db.runTransaction(async transaction => {
                     const snapshot = await transaction.get(ref);
-                    const current = snapshot.exists ? (snapshot.data().task || snapshot.data()) : null;
-                    committedValue = this._stateFor({ ...task }, current, {
-                        ...options,
-                        allowMetadataOverwrite: options.allowMetadataOverwrite !== false
-                    });
-                    const currentRevision = Number(current && current.serviceActionRevision || 0);
-                    const committedLost = current && current.claimLeaseStatus === 'ACTIVE' &&
-                        (committedValue.publishToService !== true ||
-                         committedValue.serviceDepartmentId !== current.serviceDepartmentId ||
-                         !ACTIVE_STATUSES.has(committedValue.status));
-                    const metadataChanged = current && JSON.stringify({
-                        status: current.status, title: current.title, description: current.description,
-                        priority: current.priority, dueDate: current.dueDate, assigneeId: current.assigneeId,
-                        publishToService: current.publishToService, serviceDepartmentId: current.serviceDepartmentId
-                    }) !== JSON.stringify({
-                        status: committedValue.status, title: committedValue.title, description: committedValue.description,
-                        priority: committedValue.priority, dueDate: committedValue.dueDate, assigneeId: committedValue.assigneeId,
-                        publishToService: committedValue.publishToService, serviceDepartmentId: committedValue.serviceDepartmentId
-                    });
-                    if (committedLost) {
-                        committedValue.claimLeaseStatus = 'INVALIDATED';
-                        committedValue.claimLeaseClosedAt = now;
-                        committedValue.claimLeaseCloseReason = options.reason || 'OPERATIONS_MUTATION';
-                        committedValue.serviceActionRevision = currentRevision + 1;
-                        this._recordHistory(committedValue, 'SERVICE_CLAIM_INVALIDATED', {
-                            actorKind: options.actorKind || 'OPERATIONS_USER',
-                            actorId: options.actorId, actorName: options.actorName,
-                            departmentId: current.claimDepartmentId
-                        }, { reason: committedValue.claimLeaseCloseReason });
-                    } else if (metadataChanged) {
-                        committedValue.serviceActionRevision = currentRevision + 1;
-                    }
-                    transaction.set(ref, { task: committedValue, idempotency: snapshot.exists ? snapshot.data().idempotency || {} : {}, updatedAt: now });
-                    this._transactionIndexUpdate(transaction, task.companyId, task.id, current, committedValue);
+                    value = this.syncTaskFromSnapshot(transaction, task, snapshot, options);
                 });
-                value = committedValue;
             } else {
                 const next = clone(this.state); next.tasks[key] = value;
                 next.history[key] = clone(value.history || []);
@@ -826,6 +819,106 @@ class TaskActionRepository {
             }
             return { ok: true, task: this._safeTask(value), committedTask: clone(value), invalidated: !!lost };
         });
+    }
+
+    syncTaskFromSnapshot(transaction, task, snapshot, options = {}) {
+        const current = snapshot && snapshot.exists ? (snapshot.data().task || snapshot.data()) : null;
+        if (current && current.operationsDeleted === true &&
+            options.expectedServiceExecutionTargetVersion !== undefined) {
+            const error = new Error('Service execution target version conflict.');
+            error.code = 'SERVICE_TARGET_VERSION_CONFLICT';
+            error.version = Number(current.serviceExecutionTargetVersion || 0);
+            throw error;
+        }
+        if (current && options.expectedServiceExecutionTargetVersion !== undefined &&
+            Number(current.serviceExecutionTargetVersion || 0) !== Number(options.expectedServiceExecutionTargetVersion)) {
+            if (options.targetChanged) {
+                const error = new Error('Service execution target version conflict.');
+                error.code = 'SERVICE_TARGET_VERSION_CONFLICT';
+                error.version = Number(current.serviceExecutionTargetVersion || 0);
+                throw error;
+            }
+            task = {
+                ...task,
+                serviceExecutionTarget: clone(current.serviceExecutionTarget),
+                serviceDepartmentId: current.serviceDepartmentId || null,
+                serviceDepartmentName: current.serviceDepartmentName || null,
+                serviceExecutionTargetVersion: Number(current.serviceExecutionTargetVersion || 0),
+                publishToService: current.publishToService === true
+            };
+        }
+        const committed = this._stateFor({ ...task }, current, {
+            ...options,
+            allowMetadataOverwrite: options.allowMetadataOverwrite !== false
+        });
+        const currentRevision = Number(current && current.serviceActionRevision || 0);
+        const lost = current && current.claimLeaseStatus === 'ACTIVE' &&
+            (committed.publishToService !== true ||
+             executionTargets.effectiveTarget(committed)?.departmentId !== executionTargets.effectiveTarget(current)?.departmentId ||
+             !ACTIVE_STATUSES.has(committed.status));
+        const metadataChanged = current && JSON.stringify({
+            status: current.status, title: current.title, description: current.description,
+            priority: current.priority, dueDate: current.dueDate, assigneeId: current.assigneeId,
+            publishToService: current.publishToService, serviceExecutionTarget: executionTargets.effectiveTarget(current)
+        }) !== JSON.stringify({
+            status: committed.status, title: committed.title, description: committed.description,
+            priority: committed.priority, dueDate: committed.dueDate, assigneeId: committed.assigneeId,
+            publishToService: committed.publishToService, serviceExecutionTarget: executionTargets.effectiveTarget(committed)
+        });
+        const now = nowValue(this.clock);
+        if (lost) {
+            committed.claimLeaseStatus = 'INVALIDATED';
+            committed.claimLeaseClosedAt = now;
+            committed.claimLeaseCloseReason = options.reason || 'OPERATIONS_MUTATION';
+            committed.serviceActionRevision = currentRevision + 1;
+            this._recordHistory(committed, 'SERVICE_CLAIM_INVALIDATED', {
+                actorKind: options.actorKind || 'OPERATIONS_USER',
+                actorId: options.actorId, actorName: options.actorName,
+                departmentId: current.claimDepartmentId
+            }, { reason: committed.claimLeaseCloseReason });
+        } else if (metadataChanged) {
+            committed.serviceActionRevision = currentRevision + 1;
+        }
+        const ref = this._ref(task.companyId, task.id);
+        transaction.set(ref, {
+            task: committed,
+            idempotency: snapshot && snapshot.exists ? snapshot.data().idempotency || {} : {},
+            updatedAt: now
+        });
+        this._transactionIndexUpdate(transaction, task.companyId, task.id, current, committed);
+        return committed;
+    }
+
+    removeTaskFromSnapshot(transaction, companyId, taskId, snapshot, options = {}) {
+        if (!snapshot || !snapshot.exists) return { ok: true, removed: false };
+        const current = snapshot.data().task || snapshot.data();
+        const next = clone(current);
+        const now = nowValue(this.clock);
+        if (next.claimLeaseStatus === 'ACTIVE') {
+            next.claimLeaseStatus = 'INVALIDATED';
+            next.claimLeaseClosedAt = now;
+            next.claimLeaseCloseReason = options.reason || 'OPERATIONS_DELETED';
+            next.serviceActionRevision = Number(next.serviceActionRevision || 0) + 1;
+            this._recordHistory(next, 'SERVICE_CLAIM_INVALIDATED', {
+                actorKind: options.actorKind || 'OPERATIONS_USER',
+                actorId: options.actorId, actorName: options.actorName,
+                departmentId: next.claimDepartmentId
+            }, { reason: next.claimLeaseCloseReason });
+        }
+        if (next.publishToService === true) {
+            next.serviceExecutionTargetVersion =
+                Number(next.serviceExecutionTargetVersion || 0) + 1;
+        }
+        next.publishToService = false;
+        next.operationsDeleted = true;
+        const ref = this._ref(companyId, taskId);
+        transaction.set(ref, {
+            task: next,
+            idempotency: snapshot.data().idempotency || {},
+            updatedAt: now
+        }, { merge: true });
+        this._transactionIndexUpdate(transaction, companyId, taskId, current, next);
+        return { ok: true, removed: true, committedTask: next };
     }
 
     async invalidateClaim(input = {}) {
@@ -1060,7 +1153,12 @@ class TaskActionRepository {
                         departmentId: next.claimDepartmentId
                     }, { reason: next.claimLeaseCloseReason });
                 }
+                if (next.publishToService === true) {
+                    next.serviceExecutionTargetVersion =
+                        Number(next.serviceExecutionTargetVersion || 0) + 1;
+                }
                 next.publishToService = false;
+                next.operationsDeleted = true;
                 return next;
             };
             if (this.db) {

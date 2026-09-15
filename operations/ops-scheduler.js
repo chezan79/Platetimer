@@ -64,7 +64,7 @@ function getCompanyPrefs(opsPrefsStore, companyId) {
 // ── Phase 1: Recurring task generation ─────────────────────────────────────
 // For each active template, generate any missing occurrence tasks up to today.
 async function processRecurring(stores, savers, addHistoryFn, onTaskCreatedFn) {
-    const { opsTasksStore, opsUsersStore, opsTemplatesStore } = stores;
+    const { opsTasksStore, opsUsersStore, opsTemplatesStore, departmentsStore } = stores;
     const { saveOpsTasks, saveOpsTemplates, saveRecurringGeneration } = savers;
 
     // Collect all active templates across all companies
@@ -94,7 +94,14 @@ async function processRecurring(stores, savers, addHistoryFn, onTaskCreatedFn) {
         const usersById = {};
         for (const u of (opsUsersStore[companyId] || [])) usersById[u.id] = u;
 
-        const newTasks = opsRecurring.generateTasksForTemplate(tpl, companyId, existingKeys, usersById, addHistoryFn);
+        const newTasks = opsRecurring.generateTasksForTemplate(
+            tpl, companyId, existingKeys, usersById, addHistoryFn,
+            {
+                isDepartmentActive: departmentId =>
+                    !departmentsStore || (departmentsStore[companyId] || [])
+                        .some(department => department.id === departmentId && department.active === true)
+            }
+        );
         if (!newTasks.length) continue;
 
         if (!opsTasksStore[companyId]) opsTasksStore[companyId] = [];
@@ -198,7 +205,7 @@ async function processReminders(stores, savers, email, now) {
         }
     }
 
-    if (dirty) saveOpsTasks();
+    if (dirty) await saveOpsTasks();
     return { sent };
 }
 
@@ -281,7 +288,7 @@ async function processEscalation(stores, savers, email, now) {
         }
     }
 
-    if (dirty) saveOpsTasks();
+    if (dirty) await saveOpsTasks();
     return { escalated };
 }
 

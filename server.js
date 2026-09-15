@@ -923,7 +923,7 @@ app.put('/api/departments/:id', async (req, res) => {
                 companyId, departmentId: depts[idx].id,
                 actorId: adminCtx.session.uid, reason: 'DEPARTMENT_INACTIVE'
             });
-            broadcastServiceInvalidations(companyId, invalidated);
+            await broadcastServiceInvalidations(companyId, invalidated);
         }
         depts[idx].active = active;
     }
@@ -1055,7 +1055,7 @@ app.put('/api/department-accounts/:id/status', workerAsyncRoute(async (req, res)
             companyId, departmentId: result.account.departmentId,
             actorId: ctx.session.uid, reason: 'DEPARTMENT_ACCOUNT_SUSPENDED'
         });
-        broadcastServiceInvalidations(companyId, invalidated);
+        await broadcastServiceInvalidations(companyId, invalidated);
     }
     res.json({ success: true, account: safeAccount(result.account) });
 }));
@@ -1581,7 +1581,7 @@ app.patch('/api/service/workers/:workerId', workerAsyncRoute(async (req, res) =>
         actorId: ctx.actor.id, actorName: ctx.actor.name,
         reason: 'WORKER_AUTHORIZATION_CHANGED'
     });
-    broadcastServiceInvalidations(ctx.companyId, invalidated);
+    await broadcastServiceInvalidations(ctx.companyId, invalidated);
     res.json({ success: true, worker: result.worker });
 }));
 
@@ -1598,7 +1598,7 @@ app.put('/api/service/workers/:workerId/status', workerAsyncRoute(async (req, re
         actorId: ctx.actor.id, actorName: ctx.actor.name,
         reason: 'WORKER_STATUS_CHANGED'
     });
-    broadcastServiceInvalidations(ctx.companyId, invalidated);
+    await broadcastServiceInvalidations(ctx.companyId, invalidated);
     res.json({ success: true, worker: result.worker });
 }));
 
@@ -1616,7 +1616,7 @@ app.put('/api/service/workers/:workerId/memberships', workerAsyncRoute(async (re
         actorId: ctx.actor.id, actorName: ctx.actor.name,
         reason: 'WORKER_MEMBERSHIP_CHANGED'
     });
-    broadcastServiceInvalidations(ctx.companyId, invalidated);
+    await broadcastServiceInvalidations(ctx.companyId, invalidated);
     res.json({ success: true, worker: result.worker });
 }));
 
@@ -1633,7 +1633,7 @@ app.post('/api/service/workers/:workerId/reset-pin', workerAsyncRoute(async (req
         actorId: ctx.actor.id, actorName: ctx.actor.name,
         reason: 'WORKER_PIN_VERIFIER_CHANGED'
     });
-    broadcastServiceInvalidations(ctx.companyId, invalidated);
+    await broadcastServiceInvalidations(ctx.companyId, invalidated);
     res.json({ success: true, worker: result.worker });
 }));
 
@@ -1650,7 +1650,7 @@ app.put('/api/service/workers/:workerId/operations-link', workerAsyncRoute(async
         actorId: ctx.actor.id, actorName: ctx.actor.name,
         reason: 'WORKER_AUTHORIZATION_CHANGED'
     });
-    broadcastServiceInvalidations(ctx.companyId, invalidated);
+    await broadcastServiceInvalidations(ctx.companyId, invalidated);
     res.json({ success: true, worker: result.worker });
 }));
 
@@ -1883,7 +1883,7 @@ async function hydrateCanonicalTaskFromService(companyId, task) {
     );
     if (differs) {
         applyServiceActionTask(task, committed);
-        saveJSON(OPS_TASKS_FILE, opsTasksStore);
+        await persistCanonicalOpsTaskProjection([{ companyId, taskId: task.id }]);
         if (previousLeaseStatus === 'ACTIVE' && committed.claimLeaseStatus === 'EXPIRED') {
             broadcastOps(companyId, {
                 action: 'OPS_TASK_SERVICE_EXPIRED',
@@ -1907,11 +1907,16 @@ async function migrateLegacyOpsAcknowledgements() {
         }
     }
 }
-function broadcastServiceInvalidations(companyId, result) {
+async function broadcastServiceInvalidations(companyId, result) {
     let changed = false;
+    const changedTasks = [];
     for (const committed of (result && result.committedTasks) || []) {
         const canonical = getOpsTasks(companyId).find(task => task.id === committed.id);
-        if (canonical) { applyServiceActionTask(canonical, committed); changed = true; }
+        if (canonical) {
+            applyServiceActionTask(canonical, committed);
+            changed = true;
+            changedTasks.push({ companyId, taskId: committed.id });
+        }
         broadcastOps(companyId, {
             action: 'OPS_TASK_SERVICE_INVALIDATED',
             task: opsTaskWithComputedStatus(committed),
@@ -1920,8 +1925,7 @@ function broadcastServiceInvalidations(companyId, result) {
         broadcastOpsServiceRemoved(companyId, committed.id, committed.serviceDepartmentId);
     }
     if (changed) {
-        saveJSON(OPS_TASKS_FILE, opsTasksStore);
-        opsTasksCommittedSnapshot = JSON.parse(JSON.stringify(opsTasksStore));
+        await persistCanonicalOpsTaskProjection(changedTasks);
     }
 }
 
@@ -1954,7 +1958,7 @@ async function getServiceEntitledOpsTasks(req, res) {
         .filter(t =>
             t.companyId === companyId &&
             t.publishToService === true &&
-            t.serviceDepartmentId === departmentId &&
+            executionTargets.effectiveTarget(t)?.departmentId === departmentId &&
             !isTaskAcknowledgedBy(companyId, t.id, departmentId) &&
             !(t.acknowledgements && t.acknowledgements[departmentId]));
 
@@ -2164,8 +2168,9 @@ app.post('/api/service/ops-tasks/:taskId/acknowledge', workerAsyncRoute(async (r
     const actionTask = await serviceTaskActions.readTask(companyId, taskId);
     if (actionTask) applyServiceActionTask(rawTask, actionTask);
     const taskFound       = !!rawTask;
-    const taskPublished   = taskFound && rawTask.publishToService === true;
-    const departmentMatch = taskFound && rawTask.serviceDepartmentId === departmentId;
+    const taskTarget      = taskFound && executionTargets.effectiveTarget(rawTask);
+    const taskPublished   = taskFound && rawTask.publishToService === true && !!taskTarget;
+    const departmentMatch = taskFound && taskTarget?.departmentId === departmentId;
     const taskActive      = taskFound && (rawTask.status === 'OPEN' || rawTask.status === 'IN_PROGRESS');
     console.log(`[OPS-ACK-AUTH] taskFound=${taskFound} taskPublished=${taskPublished} departmentMatch=${departmentMatch} taskActive=${taskActive}`);
 
@@ -3428,6 +3433,7 @@ const departmentAccounts = require('./service/department-accounts');
 departmentAccounts.setPersist(() => saveJSON(DEPARTMENT_ACCOUNTS_FILE, departmentAccounts.getStore()));
 const serviceWorkers = require('./service/service-workers');
 const { TaskActionRepository } = require('./service/task-action-repository');
+const executionTargets = require('./service/execution-target');
 serviceWorkers.setPersist(() => {
     if (db) return;
     saveJSON(SERVICE_WORKERS_FILE, serviceWorkers.getStore());
@@ -3567,8 +3573,11 @@ function getOpsTasks(companyId)     { return opsTasksStore[companyId]     || [];
 function getOpsAcks(companyId)      { return opsAckStore[companyId]       || []; }
 function getOpsNotes(companyId)     { return opsNotesStore[companyId]     || []; }
 function saveOpsUsers()     { saveJSON(OPS_USERS_FILE,     opsUsersStore);     }
-async function saveOpsTasks() {
+async function saveOpsTasks(options = {}) {
     const previous = JSON.parse(JSON.stringify(opsTasksCommittedSnapshot || {}));
+    const liveTasksByKey = new Map(Object.values(opsTasksStore || {})
+        .flatMap(value => Array.isArray(value) ? value : [])
+        .map(task => [`${task.companyId}::${task.id}`, task]));
     const proposed = JSON.parse(JSON.stringify(opsTasksStore || {}));
     // Keep the transaction-addressable Service lifecycle document aligned with
     // Operations mutations.  The repository performs the compare-and-set and
@@ -3576,14 +3585,137 @@ async function saveOpsTasks() {
     // entitlement is lost.  Realtime delivery remains downstream of HTTP state.
     const commits = [];
     const proposedTasks = Object.values(proposed).flatMap(value => Array.isArray(value) ? value : []);
+    const previousTasksByKey = new Map(Object.values(previous)
+        .flatMap(value => Array.isArray(value) ? value : [])
+        .map(task => [`${task.companyId}::${task.id}`, task]));
+    if (db) {
+        const proposedByKey = new Map(proposedTasks.map(task => [`${task.companyId}::${task.id}`, task]));
+        const changedKeys = new Set();
+        for (const [key, task] of proposedByKey) {
+            const oldTask = previousTasksByKey.get(key);
+            if (!oldTask || JSON.stringify(oldTask) !== JSON.stringify(task)) changedKeys.add(key);
+        }
+        for (const key of previousTasksByKey.keys()) {
+            if (!proposedByKey.has(key)) changedKeys.add(key);
+        }
+        try {
+            const storeRef = db.collection(STORE_COLLECTION).doc('ops_tasks');
+            const outcome = await db.runTransaction(async transaction => {
+                const storeSnapshot = await transaction.get(storeRef);
+                const actionSnapshots = new Map();
+                for (const key of changedKeys) {
+                    const task = proposedByKey.get(key) || previousTasksByKey.get(key);
+                    const ref = serviceTaskActions.taskRef(task.companyId, task.id);
+                    actionSnapshots.set(key, await transaction.get(ref));
+                }
+                const committedStore = mergeAuthoritativeTargetStores(
+                    storeSnapshot.exists && storeSnapshot.data().store
+                        ? storeSnapshot.data().store : {},
+                    proposed,
+                    'task'
+                );
+                const transactionResults = [];
+                for (const key of changedKeys) {
+                    const task = proposedByKey.get(key);
+                    const previousTask = previousTasksByKey.get(key);
+                    const snapshot = actionSnapshots.get(key);
+                    if (!task) {
+                        transactionResults.push(serviceTaskActions.removeTaskFromSnapshot(
+                            transaction,
+                            previousTask.companyId,
+                            previousTask.id,
+                            snapshot,
+                            { actorKind: 'OPERATIONS_USER', reason: 'OPERATIONS_DELETED' }
+                        ));
+                        continue;
+                    }
+                    const lastHistory = Array.isArray(task.history) && task.history.length
+                        ? task.history[task.history.length - 1] : null;
+                    const targetChanged = previousTask && (
+                        JSON.stringify(executionTargets.effectiveTarget(previousTask)) !==
+                            JSON.stringify(executionTargets.effectiveTarget(task)) ||
+                        (previousTask.publishToService === true) !== (task.publishToService === true)
+                    );
+                    const requestedVersion = options.serviceTargetExpectedVersions &&
+                        options.serviceTargetExpectedVersions[key];
+                    const committed = serviceTaskActions.syncTaskFromSnapshot(
+                        transaction,
+                        task,
+                        snapshot,
+                        {
+                            actorKind: 'OPERATIONS_USER',
+                            actorId: lastHistory && lastHistory.actorId,
+                            actorName: lastHistory && lastHistory.actorName,
+                            allowMetadataOverwrite: true,
+                            ...(previousTask ? {
+                                expectedServiceExecutionTargetVersion:
+                                    requestedVersion !== undefined
+                                        ? requestedVersion
+                                        : Number(previousTask.serviceExecutionTargetVersion || 0),
+                                targetChanged: targetChanged || requestedVersion !== undefined
+                            } : {})
+                        }
+                    );
+                    const companyTasks = committedStore[committed.companyId] || [];
+                    const index = companyTasks.findIndex(item => item.id === committed.id);
+                    if (index === -1) companyTasks.push(JSON.parse(JSON.stringify(committed)));
+                    else companyTasks[index] = JSON.parse(JSON.stringify(committed));
+                    committedStore[committed.companyId] = companyTasks;
+                    transactionResults.push({
+                        ok: true,
+                        task: committed,
+                        committedTask: JSON.parse(JSON.stringify(committed))
+                    });
+                }
+                for (const [companyId, tasks] of Object.entries(committedStore)) {
+                    committedStore[companyId] = (tasks || []).filter(task => {
+                        const key = `${companyId}::${task.id}`;
+                        return !previousTasksByKey.has(key) || proposedByKey.has(key);
+                    });
+                }
+                transaction.set(storeRef, { store: committedStore, updatedAt: Date.now() });
+                return { results: transactionResults, committedStore };
+            });
+            for (const [key, liveTask] of liveTasksByKey) {
+                const [companyId, taskId] = key.split('::');
+                const committedTask = (outcome.committedStore[companyId] || [])
+                    .find(task => task.id === taskId);
+                if (!committedTask) continue;
+                Object.keys(liveTask).forEach(field => delete liveTask[field]);
+                Object.assign(liveTask, JSON.parse(JSON.stringify(committedTask)));
+            }
+            opsTasksStore = JSON.parse(JSON.stringify(outcome.committedStore));
+            opsTasksCommittedSnapshot = JSON.parse(JSON.stringify(outcome.committedStore));
+            return outcome.results;
+        } catch (error) {
+            opsTasksStore = previous;
+            throw error;
+        }
+    }
     for (const task of proposedTasks) {
         const lastHistory = Array.isArray(task.history) && task.history.length
             ? task.history[task.history.length - 1] : null;
+        const previousTask = previousTasksByKey.get(`${task.companyId}::${task.id}`);
+        const targetChanged = previousTask && (
+            JSON.stringify(executionTargets.effectiveTarget(previousTask)) !==
+                JSON.stringify(executionTargets.effectiveTarget(task)) ||
+            (previousTask.publishToService === true) !== (task.publishToService === true)
+        );
+        const taskKey = `${task.companyId}::${task.id}`;
+        const requestedVersion = options.serviceTargetExpectedVersions &&
+            options.serviceTargetExpectedVersions[taskKey];
         commits.push(serviceTaskActions.syncTask(task, {
             actorKind: 'OPERATIONS_USER',
             actorId: lastHistory && lastHistory.actorId,
             actorName: lastHistory && lastHistory.actorName,
-            allowMetadataOverwrite: true
+            allowMetadataOverwrite: true,
+            ...(previousTask ? {
+                expectedServiceExecutionTargetVersion:
+                    requestedVersion !== undefined
+                        ? requestedVersion
+                        : Number(previousTask.serviceExecutionTargetVersion || 0),
+                targetChanged: targetChanged || requestedVersion !== undefined
+            } : {})
         }).catch(error => {
             console.error('[SERVICE-ACTIONS] Operations sync failed:', error.message);
             throw error;
@@ -3612,26 +3744,166 @@ async function saveOpsTasks() {
             if (proposedTask) applyServiceActionTask(proposedTask, committed);
         });
         saveJSON(OPS_TASKS_FILE, proposed);
-        opsTasksCommittedSnapshot = proposed;
+        opsTasksCommittedSnapshot = JSON.parse(JSON.stringify(proposed));
         return results;
     } catch (error) {
         // Do not report a successful Operations mutation while the
-        // transaction-addressable Service record rejected it. Restore both
-        // projections; the repository state is also rolled back best-effort.
+        // transaction-addressable Service record rejected it. Restore only
+        // process-local memory: authoritative persistence may contain a newer
+        // target committed by another server and must never be overwritten.
         opsTasksStore = previous;
-        try {
-            const rollback = Object.values(previous).flatMap(value => Array.isArray(value) ? value : []);
-            await Promise.all(rollback.map(task => serviceTaskActions.syncTask(task, {
-                actorKind: 'SYSTEM', reason: 'OPERATIONS_MUTATION_ROLLBACK'
-            })));
-            saveJSON(OPS_TASKS_FILE, previous);
-        } catch (rollbackError) {
-            console.error('[SERVICE-ACTIONS] rollback failed:', rollbackError.message);
-        }
         throw error;
     }
 }
 function saveOpsTemplates() { saveJSON(OPS_TEMPLATES_FILE, opsTemplatesStore); }
+function mergeAuthoritativeTargetStores(authoritative, proposed, kind) {
+    const merged = JSON.parse(JSON.stringify(proposed || {}));
+    for (const [companyId, currentItems] of Object.entries(authoritative || {})) {
+        const nextItems = Array.isArray(merged[companyId]) ? merged[companyId] : [];
+        const byId = new Map(nextItems.map(item => [item.id, item]));
+        for (const current of Array.isArray(currentItems) ? currentItems : []) {
+            const next = byId.get(current.id);
+            if (!next) {
+                nextItems.push(JSON.parse(JSON.stringify(current)));
+                continue;
+            }
+            const currentVersion = Number(kind === 'template'
+                ? current.defaultServiceExecutionTargetVersion : current.serviceExecutionTargetVersion || 0);
+            const nextVersion = Number(kind === 'template'
+                ? next.defaultServiceExecutionTargetVersion : next.serviceExecutionTargetVersion || 0);
+            if (currentVersion > nextVersion) {
+                if (kind === 'template') {
+                    next.defaultServiceExecutionTarget = current.defaultServiceExecutionTarget || null;
+                    next.defaultServiceExecutionTargetVersion = currentVersion;
+                } else {
+                    next.serviceExecutionTarget = current.serviceExecutionTarget || null;
+                    next.serviceExecutionTargetVersion = currentVersion;
+                }
+                next.serviceDepartmentId = current.serviceDepartmentId || null;
+                next.serviceDepartmentName = current.serviceDepartmentName || null;
+                next.publishToService = current.publishToService === true;
+            }
+        }
+        merged[companyId] = nextItems;
+    }
+    return merged;
+}
+
+async function persistCanonicalOpsTaskProjection(changedTasks = []) {
+    if (!db) {
+        saveJSON(OPS_TASKS_FILE, opsTasksStore);
+        opsTasksCommittedSnapshot = JSON.parse(JSON.stringify(opsTasksStore));
+        return;
+    }
+    const storeRef = db.collection(STORE_COLLECTION).doc('ops_tasks');
+    await db.runTransaction(async transaction => {
+        const storeSnapshot = await transaction.get(storeRef);
+        const actionSnapshots = [];
+        for (const changed of changedTasks) {
+            const ref = serviceTaskActions.taskRef(changed.companyId, changed.taskId);
+            if (ref) actionSnapshots.push({
+                ...changed,
+                snapshot: await transaction.get(ref)
+            });
+        }
+        const committedStore = mergeAuthoritativeTargetStores(
+            storeSnapshot.exists && storeSnapshot.data().store
+                ? storeSnapshot.data().store : {},
+            opsTasksStore,
+            'task'
+        );
+        for (const changed of actionSnapshots) {
+            const authoritativeTask = changed.snapshot.exists
+                ? (changed.snapshot.data().task || changed.snapshot.data()) : null;
+            if (!authoritativeTask) continue;
+            const committedTask = (committedStore[changed.companyId] || [])
+                .find(task => task.id === changed.taskId);
+            if (!committedTask) continue;
+            committedTask.serviceExecutionTarget =
+                JSON.parse(JSON.stringify(authoritativeTask.serviceExecutionTarget || null));
+            committedTask.serviceExecutionTargetVersion =
+                Number(authoritativeTask.serviceExecutionTargetVersion || 0);
+            committedTask.serviceDepartmentId = authoritativeTask.serviceDepartmentId || null;
+            committedTask.serviceDepartmentName = authoritativeTask.serviceDepartmentName || null;
+            committedTask.publishToService = authoritativeTask.publishToService === true;
+        }
+        transaction.set(storeRef, { store: committedStore, updatedAt: Date.now() });
+        opsTasksStore = committedStore;
+    });
+    opsTasksCommittedSnapshot = JSON.parse(JSON.stringify(opsTasksStore));
+}
+
+async function saveOpsTemplateCreate(template) {
+    if (!db) return saveOpsTemplates();
+    const ref = db.collection(STORE_COLLECTION).doc('ops_templates');
+    await db.runTransaction(async transaction => {
+        const snapshot = await transaction.get(ref);
+        const store = snapshot.exists && snapshot.data().store
+            ? JSON.parse(JSON.stringify(snapshot.data().store)) : {};
+        if (!Array.isArray(store[template.companyId])) store[template.companyId] = [];
+        if (!store[template.companyId].some(item => item.id === template.id)) {
+            store[template.companyId].push(JSON.parse(JSON.stringify(template)));
+        }
+        transaction.set(ref, { store, updatedAt: Date.now() });
+    });
+}
+
+async function saveOpsTemplateDeactivate(companyId, templateId) {
+    if (!db) return saveOpsTemplates();
+    const ref = db.collection(STORE_COLLECTION).doc('ops_templates');
+    await db.runTransaction(async transaction => {
+        const snapshot = await transaction.get(ref);
+        const store = snapshot.exists && snapshot.data().store
+            ? JSON.parse(JSON.stringify(snapshot.data().store)) : {};
+        const current = (store[companyId] || []).find(item => item.id === templateId);
+        if (current) {
+            current.active = false;
+            current.updatedAt = Date.now();
+        }
+        transaction.set(ref, { store, updatedAt: Date.now() });
+    });
+}
+async function saveOpsTemplateTargetMutation(companyId, template, expectedVersion, targetChanged) {
+    if (!db) {
+        saveOpsTemplates();
+        return;
+    }
+    const ref = db.collection(STORE_COLLECTION).doc('ops_templates');
+    await db.runTransaction(async transaction => {
+        const snapshot = await transaction.get(ref);
+        const store = snapshot.exists && snapshot.data().store
+            ? JSON.parse(JSON.stringify(snapshot.data().store)) : {};
+        const templates = Array.isArray(store[companyId]) ? store[companyId] : [];
+        const index = templates.findIndex(candidate => candidate.id === template.id);
+        if (index === -1) {
+            const error = new Error('La destinazione Service del template è stata modificata. Ricarica e riprova.');
+            error.code = 'SERVICE_TARGET_VERSION_CONFLICT';
+            error.version = null;
+            throw error;
+        }
+        const current = templates[index];
+        const currentVersion = Number(current.defaultServiceExecutionTargetVersion || 0);
+        if (currentVersion !== Number(expectedVersion) && targetChanged) {
+            const error = new Error('La destinazione Service del template è stata modificata. Ricarica e riprova.');
+            error.code = 'SERVICE_TARGET_VERSION_CONFLICT';
+            error.version = currentVersion;
+            throw error;
+        }
+        const committed = JSON.parse(JSON.stringify(template));
+        if (currentVersion !== Number(expectedVersion)) {
+            committed.defaultServiceExecutionTarget = current.defaultServiceExecutionTarget || null;
+            committed.defaultServiceExecutionTargetVersion = currentVersion;
+            committed.serviceDepartmentId = current.serviceDepartmentId || null;
+            committed.serviceDepartmentName = current.serviceDepartmentName || null;
+            committed.publishToService = current.publishToService === true;
+            Object.keys(template).forEach(key => delete template[key]);
+            Object.assign(template, JSON.parse(JSON.stringify(committed)));
+        }
+        templates[index] = committed;
+        store[companyId] = templates;
+        transaction.set(ref, { store, updatedAt: Date.now() });
+    });
+}
 function saveOpsPrefs()     { saveJSON(OPS_PREFS_FILE,     opsPrefsStore);     }
 function saveOpsAcks()      { saveJSON(OPS_ACK_FILE,       opsAckStore);       }
 function saveOpsNotes()     { saveJSON(OPS_NOTES_FILE,      opsNotesStore);      }
@@ -3658,18 +3930,51 @@ function recoverOpsRecurringGenerationJournal() {
 // has a recoverable journal-backed replacement, so lifecycle events cannot
 // precede durable, internally consistent state.
 async function persistOpsRecurringGeneration() {
-    await Promise.all(Object.values(opsTasksStore)
+    const previousByKey = new Map(Object.values(opsTasksCommittedSnapshot || {})
         .flatMap(value => Array.isArray(value) ? value : [])
-        .map(task => serviceTaskActions.syncTask(task, { actorKind: 'SYSTEM', reason: 'RECURRING_GENERATED' })));
+        .map(task => [`${task.companyId}::${task.id}`, task]));
+    const recurringTasks = Object.values(opsTasksStore)
+        .flatMap(value => Array.isArray(value) ? value : []);
+    const syncResults = await Promise.all(recurringTasks.map(task => {
+        const previous = previousByKey.get(`${task.companyId}::${task.id}`);
+        const targetChanged = previous && (
+            JSON.stringify(executionTargets.effectiveTarget(previous)) !==
+                JSON.stringify(executionTargets.effectiveTarget(task)) ||
+            (previous.publishToService === true) !== (task.publishToService === true)
+        );
+        return serviceTaskActions.syncTask(task, {
+            actorKind: 'SYSTEM',
+            reason: 'RECURRING_GENERATED',
+            ...(previous ? {
+                expectedServiceExecutionTargetVersion: Number(previous.serviceExecutionTargetVersion || 0),
+                targetChanged
+            } : {})
+        });
+    }));
+    syncResults.forEach(result => {
+        const committed = result && result.committedTask;
+        if (!committed) return;
+        const canonical = getOpsTasks(committed.companyId).find(task => task.id === committed.id);
+        if (canonical) applyServiceActionTask(canonical, committed);
+    });
     if (db) {
-        const batch = db.batch();
-        batch.set(db.collection(STORE_COLLECTION).doc('ops_tasks'), {
-            store: opsTasksStore, updatedAt: Date.now()
+        const tasksRef = db.collection(STORE_COLLECTION).doc('ops_tasks');
+        const templatesRef = db.collection(STORE_COLLECTION).doc('ops_templates');
+        await db.runTransaction(async transaction => {
+            const [tasksSnapshot, templatesSnapshot] = await Promise.all([
+                transaction.get(tasksRef), transaction.get(templatesRef)
+            ]);
+            const taskStore = mergeAuthoritativeTargetStores(
+                tasksSnapshot.exists ? tasksSnapshot.data().store : {}, opsTasksStore, 'task'
+            );
+            const templateStore = mergeAuthoritativeTargetStores(
+                templatesSnapshot.exists ? templatesSnapshot.data().store : {}, opsTemplatesStore, 'template'
+            );
+            transaction.set(tasksRef, { store: taskStore, updatedAt: Date.now() });
+            transaction.set(templatesRef, { store: templateStore, updatedAt: Date.now() });
+            opsTasksStore = taskStore;
+            opsTemplatesStore = templateStore;
         });
-        batch.set(db.collection(STORE_COLLECTION).doc('ops_templates'), {
-            store: opsTemplatesStore, updatedAt: Date.now()
-        });
-        await batch.commit();
         opsTasksCommittedSnapshot = JSON.parse(JSON.stringify(opsTasksStore));
         return;
     }
@@ -3725,22 +4030,46 @@ async function persistOpsTaskAndNoteConversion() {
     // The task action record is part of the conversion commit boundary.  A
     // Service worker must never observe a task that only exists in the legacy
     // Operations store.
-    await Promise.all(Object.values(opsTasksStore)
+    const previousByKey = new Map(Object.values(opsTasksCommittedSnapshot || {})
         .flatMap(value => Array.isArray(value) ? value : [])
-        .map(task => serviceTaskActions.syncTask(task, {
+        .map(task => [`${task.companyId}::${task.id}`, task]));
+    const conversionTasks = Object.values(opsTasksStore)
+        .flatMap(value => Array.isArray(value) ? value : []);
+    const conversionResults = await Promise.all(conversionTasks.map(task => {
+        const previous = previousByKey.get(`${task.companyId}::${task.id}`);
+        const targetChanged = previous && (
+            JSON.stringify(executionTargets.effectiveTarget(previous)) !==
+                JSON.stringify(executionTargets.effectiveTarget(task)) ||
+            (previous.publishToService === true) !== (task.publishToService === true)
+        );
+        return serviceTaskActions.syncTask(task, {
             actorKind: 'OPERATIONS_USER',
             actorId: task.history && task.history.length ? task.history[task.history.length - 1].actorId : null,
-            actorName: task.history && task.history.length ? task.history[task.history.length - 1].actorName : null
-        })));
+            actorName: task.history && task.history.length ? task.history[task.history.length - 1].actorName : null,
+            ...(previous ? {
+                expectedServiceExecutionTargetVersion: Number(previous.serviceExecutionTargetVersion || 0),
+                targetChanged
+            } : {})
+        });
+    }));
+    conversionResults.forEach(result => {
+        const committed = result && result.committedTask;
+        if (!committed) return;
+        const canonical = getOpsTasks(committed.companyId).find(task => task.id === committed.id);
+        if (canonical) applyServiceActionTask(canonical, committed);
+    });
     if (db) {
-        const batch = db.batch();
-        batch.set(db.collection(STORE_COLLECTION).doc('ops_tasks'), {
-            store: opsTasksStore, updatedAt: Date.now()
+        const tasksRef = db.collection(STORE_COLLECTION).doc('ops_tasks');
+        const notesRef = db.collection(STORE_COLLECTION).doc('ops_notes');
+        await db.runTransaction(async transaction => {
+            const tasksSnapshot = await transaction.get(tasksRef);
+            const taskStore = mergeAuthoritativeTargetStores(
+                tasksSnapshot.exists ? tasksSnapshot.data().store : {}, opsTasksStore, 'task'
+            );
+            transaction.set(tasksRef, { store: taskStore, updatedAt: Date.now() });
+            transaction.set(notesRef, { store: opsNotesStore, updatedAt: Date.now() });
+            opsTasksStore = taskStore;
         });
-        batch.set(db.collection(STORE_COLLECTION).doc('ops_notes'), {
-            store: opsNotesStore, updatedAt: Date.now()
-        });
-        await batch.commit();
         opsTasksCommittedSnapshot = JSON.parse(JSON.stringify(opsTasksStore));
         return;
     }
@@ -4000,6 +4329,7 @@ app.post('/api/operations/notes/:id/dismiss', (req, res) => {
 
 // Compute effective status. OVERDUE if not completed/cancelled and dueDate passed.
 function opsTaskWithComputedStatus(t) {
+    const effectiveServiceTarget = executionTargets.effectiveTarget(t);
     let effectiveStatus = t.status;
     if (t.status !== 'COMPLETED' && t.status !== 'CANCELLED' && t.dueDate) {
         const due = new Date(t.dueDate).getTime();
@@ -4009,6 +4339,8 @@ function opsTaskWithComputedStatus(t) {
         ...t,
         // [Task 66] Service publication fields — always present with defaults
         serviceDepartmentId:   t.serviceDepartmentId ?? null,
+        serviceExecutionTarget: effectiveServiceTarget,
+        serviceExecutionTargetVersion: Number(t.serviceExecutionTargetVersion || 0),
         publishToService:      t.publishToService === true,
         serviceDepartmentName: t.serviceDepartmentName ?? null,
         effectiveStatus
@@ -4671,29 +5003,32 @@ function sanitizeOpsTaskPatch(body) {
 // client. publishToService is coerced to false when no valid department is set.
 // Throws a user-facing message (→ 400) when an explicitly provided ID is invalid.
 function resolveServicePublication(companyId, body, existing) {
-    const hasDeptField = body.serviceDepartmentId !== undefined;
-    const hasPubField  = body.publishToService !== undefined;
-
-    let deptId, deptName;
-    if (hasDeptField) {
-        deptId = body.serviceDepartmentId ? body.serviceDepartmentId.toString().trim() : null;
-        deptName = null;
-        if (deptId) {
-            const dept = getCompanyDepts(companyId).find(d => d.id === deptId && d.active === true);
-            if (!dept) throw 'Reparto Service non valido o non attivo.';
-            deptName = dept.name; // server-derived display snapshot
-        }
-    } else {
-        deptId   = (existing && existing.serviceDepartmentId) || null;
-        deptName = (existing && existing.serviceDepartmentName) || null;
+    const normalized = executionTargets.normalizeWrite(body, existing);
+    const deptId = normalized.target && normalized.target.departmentId;
+    let deptName = null;
+    if (deptId) {
+        const dept = getCompanyDepts(companyId).find(d => d.id === deptId && d.active === true);
+        if (!dept) throw 'Reparto Service non valido o non attivo.';
+        deptName = dept.name;
     }
+    return {
+        serviceDepartmentId: deptId || null,
+        serviceExecutionTarget: normalized.target,
+        serviceExecutionTargetVersion: normalized.version,
+        publishToService: normalized.publish,
+        serviceDepartmentName: deptName
+    };
+}
 
-    let publish = hasPubField
-        ? body.publishToService === true
-        : !!(existing && existing.publishToService === true);
-    if (!deptId) { publish = false; deptName = null; }
-
-    return { serviceDepartmentId: deptId, publishToService: publish, serviceDepartmentName: deptName };
+function sendServiceTargetError(res, error) {
+    if (error && error.code === 'SERVICE_TARGET_VERSION_CONFLICT') {
+        return res.status(409).json({
+            error: error.message,
+            code: error.code,
+            serviceExecutionTargetVersion: error.version
+        });
+    }
+    return res.status(400).json({ error: typeof error === 'string' ? error : error.message });
 }
 
 // Resolve the optional Service department on a recurring template. Templates
@@ -4702,20 +5037,47 @@ function resolveServicePublication(companyId, body, existing) {
 // When the field is absent on a patch, preserve the existing template fields
 // so legacy templates and already-generated tasks remain unchanged.
 function resolveTemplateDepartment(companyId, body, existing) {
-    const hasDeptField = body.serviceDepartmentId !== undefined;
-    if (!hasDeptField) {
+    const hasTargetFields = body.serviceDepartmentId !== undefined ||
+        body.defaultServiceExecutionTarget !== undefined ||
+        body.publishToService !== undefined;
+    if (existing && !hasTargetFields) {
+        const target = executionTargets.effectiveTarget({
+            serviceExecutionTarget: existing.defaultServiceExecutionTarget,
+            serviceDepartmentId: existing.serviceDepartmentId
+        });
         return {
-            serviceDepartmentId: (existing && existing.serviceDepartmentId) || null,
-            serviceDepartmentName: (existing && existing.serviceDepartmentName) || null,
+            serviceDepartmentId: target ? target.departmentId : null,
+            serviceDepartmentName: existing.serviceDepartmentName || null,
+            defaultServiceExecutionTarget: target,
+            defaultServiceExecutionTargetVersion: Number(existing.defaultServiceExecutionTargetVersion || 0),
+            publishToService: existing.publishToService === true
         };
     }
-
-    const deptId = body.serviceDepartmentId ? body.serviceDepartmentId.toString().trim() : null;
-    if (!deptId) return { serviceDepartmentId: null, serviceDepartmentName: null };
-
+    const normalized = executionTargets.normalizeWrite({
+        ...body,
+        serviceExecutionTarget: body.defaultServiceExecutionTarget,
+        serviceExecutionTargetVersion: body.defaultServiceExecutionTargetVersion
+    }, existing && {
+        ...existing,
+        serviceExecutionTarget: existing.defaultServiceExecutionTarget,
+        serviceExecutionTargetVersion: existing.defaultServiceExecutionTargetVersion
+    });
+    const deptId = normalized.target && normalized.target.departmentId;
+    if (!deptId) return {
+        serviceDepartmentId: null, serviceDepartmentName: null,
+        defaultServiceExecutionTarget: null,
+        defaultServiceExecutionTargetVersion: normalized.version,
+        publishToService: false
+    };
     const dept = getCompanyDepts(companyId).find(d => d.id === deptId && d.active === true);
     if (!dept) throw 'Reparto Service non valido o non attivo.';
-    return { serviceDepartmentId: dept.id, serviceDepartmentName: dept.name };
+    return {
+        serviceDepartmentId: dept.id,
+        serviceDepartmentName: dept.name,
+        defaultServiceExecutionTarget: normalized.target,
+        defaultServiceExecutionTargetVersion: normalized.version,
+        publishToService: normalized.publish
+    };
 }
 
 // Explicit server-originated removal signal for the Service view.
@@ -4726,6 +5088,7 @@ function resolveTemplateDepartment(companyId, body, existing) {
 // Omits companyId, assigneeId, createdBy, notes, history, comments,
 // attachments and every other internal field.
 function projectOpsTaskForService(t) {
+    const target = executionTargets.effectiveTarget(t);
     return {
         id:                    t.id,
         title:                 t.title,
@@ -4734,7 +5097,9 @@ function projectOpsTaskForService(t) {
         priority:              t.priority,
         status:                t.status,
         assigneeName:          t.assigneeName,
-        serviceDepartmentId:   t.serviceDepartmentId,
+        serviceDepartmentId:   target ? target.departmentId : null,
+        serviceExecutionTarget: target,
+        serviceExecutionTargetVersion: Number(t.serviceExecutionTargetVersion || 0),
         serviceDepartmentName: t.serviceDepartmentName,
         source:                'OPERATIONS',
         createdAt:             t.createdAt,
@@ -4768,7 +5133,7 @@ function broadcastOpsServiceRemoved(companyId, taskId, prevServiceDepartmentId) 
 function opsServiceEntitlementLost(task, prevPublish, prevDeptId) {
     if (!prevPublish) return false;
     return task.publishToService !== true ||
-           task.serviceDepartmentId !== prevDeptId ||
+           executionTargets.effectiveTarget(task)?.departmentId !== prevDeptId ||
            (task.status !== 'OPEN' && task.status !== 'IN_PROGRESS');
 }
 
@@ -4793,8 +5158,9 @@ async function syncOpsTaskToCalendar(companyId, task) {
     const events = calendarEventsStore[companyId];
     const existingIdx = events.findIndex(e => e.id === mirrorId);
 
+    const target = executionTargets.effectiveTarget(task);
     const entitled = task.publishToService === true &&
-                     !!task.serviceDepartmentId &&
+                     !!target &&
                      (task.status === 'OPEN' || task.status === 'IN_PROGRESS');
 
     if (!entitled) {
@@ -4827,7 +5193,7 @@ async function syncOpsTaskToCalendar(companyId, task) {
         priority:         mapOpsPriorityToCalendar(task.priority),
         status:           'scheduled',
         description:      task.description || '',
-        departmentIds:    [task.serviceDepartmentId],
+        departmentIds:    [target.departmentId],
         assigneeName:     task.assigneeName || '',
         visibility:       'all_company',
         recurrence:       { type: 'none', interval: 1, weekdays: [], endDate: null },
@@ -4886,12 +5252,12 @@ app.post('/api/operations/tasks', async (req, res) => {
 
     let clean;
     try { clean = sanitizeOpsTaskInput(req.body); }
-    catch (msg) { return res.status(400).json({ error: msg }); }
+    catch (msg) { return sendServiceTargetError(res, msg); }
 
     // [Task 66] Validate optional Service publication fields
     let svc;
     try { svc = resolveServicePublication(companyId, req.body, null); }
-    catch (msg) { return res.status(400).json({ error: msg }); }
+    catch (msg) { return sendServiceTargetError(res, msg); }
 
     const assigneeId = (req.body.assigneeId || actor.id).toString();
     const byId = opsUsersById(companyId); // only own-company users resolvable
@@ -5237,6 +5603,7 @@ app.put('/api/operations/tasks/:id', async (req, res) => {
     const companyId = actor.companyId;
     const tasks = getOpsTasks(companyId);
     const task = tasks.find(t => t.id === req.params.id);
+    const taskBefore = task ? JSON.parse(JSON.stringify(task)) : null;
     const byId = opsUsersById(companyId);
     if (!task || !opsAuth.canViewTask(actor, task, byId)) {
         return res.status(404).json({ error: 'Compito non trovato.' });
@@ -5250,6 +5617,17 @@ app.put('/api/operations/tasks/:id', async (req, res) => {
     const wantsStatus = typeof req.body.status === 'string' && !wantsComplete;
     const wantsEdit = ['title', 'description', 'priority', 'dueDate', 'assigneeId', 'department']
         .some(k => req.body[k] !== undefined);
+    const svcFieldsPresent = req.body.serviceDepartmentId !== undefined ||
+        req.body.publishToService !== undefined || req.body.serviceExecutionTarget !== undefined ||
+        req.body.serviceExecutionTargetVersion !== undefined;
+    let validatedServicePublication = null;
+    if (svcFieldsPresent) {
+        if (!opsAuth.canEditTask(actor, task, byId)) {
+            return res.status(403).json({ error: 'Non autorizzato a modificare questo compito.' });
+        }
+        try { validatedServicePublication = resolveServicePublication(companyId, req.body, task); }
+        catch (msg) { return sendServiceTargetError(res, msg); }
+    }
 
     if (wantsComplete) {
         if (!opsAuth.canCompleteTask(actor, task)) {
@@ -5326,16 +5704,24 @@ app.put('/api/operations/tasks/:id', async (req, res) => {
     }
 
     // [Task 66] Service publication changes (edit-rights required)
-    if (req.body.serviceDepartmentId !== undefined || req.body.publishToService !== undefined) {
-        if (!opsAuth.canEditTask(actor, task, byId)) {
-            return res.status(403).json({ error: 'Non autorizzato a modificare questo compito.' });
-        }
-        try { Object.assign(task, resolveServicePublication(companyId, req.body, task)); }
-        catch (msg) { return res.status(400).json({ error: msg }); }
-    }
+    if (validatedServicePublication) Object.assign(task, validatedServicePublication);
 
     task.updatedAt = Date.now();
-    await saveOpsTasks();
+    try {
+        await saveOpsTasks(req.body.serviceExecutionTargetVersion !== undefined ? {
+            serviceTargetExpectedVersions: {
+                [`${companyId}::${task.id}`]: req.body.serviceExecutionTargetVersion
+            }
+        } : {});
+    }
+    catch (error) {
+        if (taskBefore) {
+            Object.keys(task).forEach(key => delete task[key]);
+            Object.assign(task, taskBefore);
+        }
+        if (error.code === 'SERVICE_TARGET_VERSION_CONFLICT') return sendServiceTargetError(res, error);
+        throw error;
+    }
     broadcastOps(companyId, { action: 'OPS_TASK_UPDATED', task: opsTaskWithComputedStatus(task) });
     // [Task 66] Explicit removal signal to the previously-entitled department
     if (opsServiceEntitlementLost(task, prevPublish, prevServiceDepartmentId))
@@ -5382,6 +5768,7 @@ app.patch('/api/operations/tasks/:id', async (req, res) => {
     const r = requireOpsTask(req, res, ctx);
     if (!r) return;
     const { task, byId } = r;
+    const taskBefore = JSON.parse(JSON.stringify(task));
 
     if (!opsAuth.canEditTask(actor, task, byId)) {
         console.log(`⛔ [OPS-SECURITY] PATCH rejected — ${actor.role} ${actor.id} cannot edit task ${task.id}`);
@@ -5395,11 +5782,13 @@ app.patch('/api/operations/tasks/:id', async (req, res) => {
     // [Task 66] Snapshot Service entitlement BEFORE any mutation
     const prevServiceDepartmentId = task.serviceDepartmentId ?? null;
     const prevPublish = task.publishToService === true;
-    const svcFieldsPresent = req.body.serviceDepartmentId !== undefined || req.body.publishToService !== undefined;
+    const svcFieldsPresent = req.body.serviceDepartmentId !== undefined ||
+        req.body.publishToService !== undefined || req.body.serviceExecutionTarget !== undefined ||
+        req.body.serviceExecutionTargetVersion !== undefined;
     let svc = null;
     if (svcFieldsPresent) {
         try { svc = resolveServicePublication(actor.companyId, req.body, task); }
-        catch (msg) { return res.status(400).json({ error: msg }); }
+        catch (msg) { return sendServiceTargetError(res, msg); }
     }
 
     if (Object.keys(patch).length === 0 && !svcFieldsPresent)
@@ -5426,7 +5815,19 @@ app.patch('/api/operations/tasks/:id', async (req, res) => {
     Object.assign(task, patch, svc || {});
     addHistory(task, 'TASK_EDITED', actor.id, actor.name, histData);
     task.updatedAt = Date.now();
-    await saveOpsTasks();
+    try {
+        await saveOpsTasks(req.body.serviceExecutionTargetVersion !== undefined ? {
+            serviceTargetExpectedVersions: {
+                [`${actor.companyId}::${task.id}`]: req.body.serviceExecutionTargetVersion
+            }
+        } : {});
+    }
+    catch (error) {
+        Object.keys(task).forEach(key => delete task[key]);
+        Object.assign(task, taskBefore);
+        if (error.code === 'SERVICE_TARGET_VERSION_CONFLICT') return sendServiceTargetError(res, error);
+        throw error;
+    }
     console.log(`✅ [OPS] Task patched: ${task.id} by ${actor.id} — fields: ${Object.keys(patch).join(',')}`);
     broadcastOps(actor.companyId, { action: 'OPS_TASK_UPDATED', task: opsTaskWithComputedStatus(task) });
     // [Task 66] Explicit removal signal to the previously-entitled department
@@ -6328,7 +6729,7 @@ app.get('/api/operations/templates', (req, res) => {
 });
 
 // POST /api/operations/templates — Director only: create recurring template
-app.post('/api/operations/templates', (req, res) => {
+app.post('/api/operations/templates', async (req, res) => {
     const ctx = requireOpsAuth(req, res);
     if (!ctx) return;
     if (!opsAuth.canManageUsers(ctx.opsUser)) return res.status(403).json({ error: 'Solo il Direttore può creare template.' });
@@ -6349,7 +6750,7 @@ app.post('/api/operations/templates', (req, res) => {
     const clean = opsRecurring.sanitizeTemplateInput(req.body);
     let serviceDept;
     try { serviceDept = resolveTemplateDepartment(companyId, req.body, null); }
-    catch (msg) { return res.status(400).json({ error: msg }); }
+    catch (msg) { return sendServiceTargetError(res, msg); }
     const now   = Date.now();
     const template = {
         id:              genTemplateId(),
@@ -6371,7 +6772,7 @@ app.post('/api/operations/templates', (req, res) => {
     };
     if (!opsTemplatesStore[companyId]) opsTemplatesStore[companyId] = [];
     opsTemplatesStore[companyId].push(template);
-    saveOpsTemplates();
+    await saveOpsTemplateCreate(template);
     console.log(`✅ [OPS] Template created: "${template.title}" (${template.frequency}) by ${actor.id} in "${companyId}"`);
     res.status(201).json({ success: true, template });
 });
@@ -6387,20 +6788,35 @@ app.get('/api/operations/templates/:id', (req, res) => {
 });
 
 // PATCH /api/operations/templates/:id — affects future occurrences only; never modifies past tasks
-app.patch('/api/operations/templates/:id', (req, res) => {
+app.patch('/api/operations/templates/:id', async (req, res) => {
     const ctx = requireOpsAuth(req, res);
     if (!ctx) return;
     if (!opsAuth.canManageUsers(ctx.opsUser)) return res.status(403).json({ error: 'Solo il Direttore può modificare i template.' });
     const companyId = ctx.opsUser.companyId;
     const tpl = getOpsTemplates(companyId).find(t => t.id === req.params.id);
     if (!tpl) return res.status(404).json({ error: 'Template non trovato.' });
+    const targetFieldsPresent = req.body.serviceDepartmentId !== undefined ||
+        req.body.defaultServiceExecutionTarget !== undefined ||
+        req.body.publishToService !== undefined;
+    const hasExpectedTargetVersion = req.body.defaultServiceExecutionTargetVersion !== undefined;
+    if (hasExpectedTargetVersion && !targetFieldsPresent) {
+        return res.status(400).json({
+            error: 'defaultServiceExecutionTargetVersion richiede una modifica della destinazione Service.'
+        });
+    }
+    const requestTargetVersion = req.body.defaultServiceExecutionTargetVersion;
+    if (hasExpectedTargetVersion &&
+        (typeof requestTargetVersion !== 'number' ||
+         !Number.isInteger(requestTargetVersion) || requestTargetVersion < 0)) {
+        return res.status(400).json({ error: 'defaultServiceExecutionTargetVersion non valido.' });
+    }
 
     let patch;
     try { patch = opsRecurring.sanitizeTemplatePatch(req.body); }
-    catch (msg) { return res.status(400).json({ error: msg }); }
+    catch (msg) { return sendServiceTargetError(res, msg); }
     let serviceDept;
     try { serviceDept = resolveTemplateDepartment(companyId, req.body, tpl); }
-    catch (msg) { return res.status(400).json({ error: msg }); }
+    catch (msg) { return sendServiceTargetError(res, msg); }
 
     // Validate defaultAssigneeId if changing
     if (patch.defaultAssigneeId) {
@@ -6411,14 +6827,42 @@ app.patch('/api/operations/templates/:id', (req, res) => {
         patch.defaultAssigneeName = asgn.name;
     }
 
+    const before = JSON.parse(JSON.stringify(tpl));
     Object.assign(tpl, patch, serviceDept, { updatedAt: Date.now() });
-    saveOpsTemplates();
+    try {
+        await saveOpsTemplateTargetMutation(
+            companyId, tpl, hasExpectedTargetVersion
+                ? requestTargetVersion
+                : Number(before.defaultServiceExecutionTargetVersion || 0),
+            hasExpectedTargetVersion || (targetFieldsPresent && (
+                JSON.stringify(executionTargets.effectiveTarget({
+                    serviceExecutionTarget: before.defaultServiceExecutionTarget,
+                    serviceDepartmentId: before.serviceDepartmentId
+                })) !== JSON.stringify(executionTargets.effectiveTarget({
+                    serviceExecutionTarget: tpl.defaultServiceExecutionTarget,
+                    serviceDepartmentId: tpl.serviceDepartmentId
+                })) ||
+                (before.publishToService === true) !== (tpl.publishToService === true)
+            ))
+        );
+    } catch (error) {
+        Object.keys(tpl).forEach(key => delete tpl[key]);
+        Object.assign(tpl, before);
+        if (error.code === 'SERVICE_TARGET_VERSION_CONFLICT') {
+            return res.status(409).json({
+                error: error.message,
+                code: error.code,
+                defaultServiceExecutionTargetVersion: error.version
+            });
+        }
+        throw error;
+    }
     console.log(`✅ [OPS] Template patched: "${tpl.id}" by ${ctx.opsUser.id}`);
     res.json({ success: true, template: tpl });
 });
 
 // DELETE /api/operations/templates/:id — soft-deactivate; keeps all generated tasks
-app.delete('/api/operations/templates/:id', (req, res) => {
+app.delete('/api/operations/templates/:id', async (req, res) => {
     const ctx = requireOpsAuth(req, res);
     if (!ctx) return;
     if (!opsAuth.canManageUsers(ctx.opsUser)) return res.status(403).json({ error: 'Solo il Direttore può eliminare i template.' });
@@ -6426,7 +6870,7 @@ app.delete('/api/operations/templates/:id', (req, res) => {
     if (!tpl) return res.status(404).json({ error: 'Template non trovato.' });
     tpl.active    = false;
     tpl.updatedAt = Date.now();
-    saveOpsTemplates();
+    await saveOpsTemplateDeactivate(ctx.opsUser.companyId, tpl.id);
     console.log(`✅ [OPS] Template deactivated: "${tpl.id}" by ${ctx.opsUser.id}`);
     res.json({ success: true, message: 'Template disattivato. I compiti già generati rimangono invariati.' });
 });
@@ -6444,7 +6888,10 @@ app.post('/api/operations/templates/:id/generate-now', async (req, res) => {
         getOpsTasks(companyId).filter(t => t.templateId === tpl.id && t.occurrenceKey).map(t => t.occurrenceKey)
     );
     const usersById = opsUsersById(companyId);
-    const newTasks  = opsRecurring.generateTasksForTemplate(tpl, companyId, existingKeys, usersById, addHistory);
+    const newTasks  = opsRecurring.generateTasksForTemplate(
+        tpl, companyId, existingKeys, usersById, addHistory,
+        { isDepartmentActive: departmentId => getCompanyDepts(companyId).some(d => d.id === departmentId && d.active === true) }
+    );
     if (newTasks.length > 0) {
         if (!opsTasksStore[companyId]) opsTasksStore[companyId] = [];
         const previousGeneratedCount = tpl.generatedCount;
@@ -6670,8 +7117,9 @@ function opsPayloadForBoundSocket(payload, boundDepartmentId, companyId) {
     }
     if (OPS_TASK_PAYLOAD_ACTIONS.has(payload.action) && payload.task) {
         const t = payload.task;
+        const target = executionTargets.effectiveTarget(t);
         const entitled = t.publishToService === true &&
-                         t.serviceDepartmentId === boundDepartmentId &&
+                         target?.departmentId === boundDepartmentId &&
                          (t.status === 'OPEN' || t.status === 'IN_PROGRESS');
         return entitled
             ? JSON.stringify({ action: payload.action, task: projectOpsTaskForService(t) })
@@ -8260,8 +8708,9 @@ async function initializeDataStores() {
         applyServiceActionTask(startupTasks[index], reconciledTasks[index]);
     }
     await migrateLegacyOpsAcknowledgements();
-    saveJSON(OPS_TASKS_FILE, opsTasksStore);
-    opsTasksCommittedSnapshot = JSON.parse(JSON.stringify(opsTasksStore));
+    await persistCanonicalOpsTaskProjection(startupTasks.map(task => ({
+        companyId: task.companyId, taskId: task.id
+    })));
 }
 
 // Avvia il server (unica versione corretta per Railway)
@@ -8270,7 +8719,7 @@ const PORT = process.env.PORT || 3000;
 // ── Sprint 3 scheduler ───────────────────────────────────────────────────────
 // Idempotent — safe to call repeatedly; each phase guards against duplicates.
 const opsSchedulerInstance = opsScheduler.createScheduler(
-    () => ({ opsTasksStore, opsUsersStore, opsTemplatesStore, opsPrefsStore }),
+    () => ({ opsTasksStore, opsUsersStore, opsTemplatesStore, opsPrefsStore, departmentsStore }),
     () => ({ saveOpsTasks, saveOpsTemplates, saveOpsPrefs, saveRecurringGeneration: persistOpsRecurringGeneration }),
     opsEmail,
     addHistory,

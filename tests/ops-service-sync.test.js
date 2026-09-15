@@ -179,6 +179,43 @@ async function run() {
             title: 'Unpublished', serviceDepartmentId: deptA.id, publishToService: false });
         check('2. dept set but publishToService=false → not returned',
             r.data.success === true && (await svcTasks(tokDeptA)).length === 0, r.data);
+        check('legacy-only write dual-writes a typed DEPARTMENT target',
+            r.data.task?.serviceExecutionTarget?.type === 'DEPARTMENT' &&
+            r.data.task.serviceExecutionTarget.departmentId === deptA.id &&
+            r.data.task.serviceExecutionTargetVersion === 0, r.data.task);
+
+        r = await api(tokDir, 'POST', '/api/operations/tasks', {
+            title: 'Typed only',
+            serviceExecutionTarget: { type: 'DEPARTMENT', departmentId: deptA.id },
+            publishToService: true
+        });
+        const typedOnly = r.data.task;
+        check('new-only write derives matching legacy fields',
+            r.status === 201 && typedOnly.serviceDepartmentId === deptA.id &&
+            typedOnly.serviceDepartmentName === 'Cucina' &&
+            typedOnly.serviceExecutionTarget.departmentId === deptA.id, typedOnly);
+        check('new-only task is entitled through the unchanged department flow',
+            (await svcTasks(tokDeptA)).some(task => task.id === typedOnly.id));
+        r = await api(tokDir, 'POST', '/api/operations/tasks', {
+            title: 'Mismatched mixed write',
+            serviceDepartmentId: deptA.id,
+            serviceExecutionTarget: { type: 'DEPARTMENT', departmentId: deptB.id },
+            publishToService: true
+        });
+        check('mixed representations cannot disagree', r.status === 400, r.data);
+        r = await api(tokDir, 'POST', '/api/operations/tasks', {
+            title: 'Typed inactive',
+            serviceExecutionTarget: { type: 'DEPARTMENT', departmentId: deptC.id },
+            publishToService: true
+        });
+        check('typed target rejects inactive department', r.status === 400, r.data);
+        r = await api(tokDir, 'POST', '/api/operations/tasks', {
+            title: 'Typed foreign',
+            serviceExecutionTarget: { type: 'DEPARTMENT', departmentId: deptOther.id },
+            publishToService: true
+        });
+        check('typed target rejects cross-company department', r.status === 400, r.data);
+        await api(tokDir, 'DELETE', `/api/operations/tasks/${typedOnly.id}`);
 
         r = await api(tokDir, 'POST', '/api/operations/tasks', {
             title: 'Prep cucina', description: 'Mise en place', priority: 'HIGH',
@@ -225,14 +262,62 @@ async function run() {
             r.data.success === true &&
             (await svcTasks(tokDeptA)).length === 0 &&
             (await svcTasks(tokDeptB)).some(t => t.id === tPub.id), r.data);
+        const movedVersion = r.data.task.serviceExecutionTargetVersion;
+        check('legacy department move advances and dual-writes target revision',
+            movedVersion === 1 &&
+            r.data.task.serviceExecutionTarget.departmentId === deptB.id, r.data.task);
+        r = await api(tokDir, 'PATCH', `/api/operations/tasks/${tPub.id}`, {
+            serviceExecutionTarget: { type: 'DEPARTMENT', departmentId: deptA.id },
+            serviceExecutionTargetVersion: 0
+        });
+        check('stale target-aware writer loses to legacy writer',
+            r.status === 409 && r.data.code === 'SERVICE_TARGET_VERSION_CONFLICT' &&
+            r.data.serviceExecutionTargetVersion === movedVersion, r.data);
+        r = await api(tokDir, 'PATCH', `/api/operations/tasks/${tPub.id}`, {
+            serviceExecutionTarget: { type: 'DEPARTMENT', departmentId: deptB.id },
+            serviceExecutionTargetVersion: movedVersion
+        });
+        check('fresh target-aware writer preserves matching representations',
+            r.status === 200 && r.data.task.serviceDepartmentId === deptB.id &&
+            r.data.task.serviceExecutionTarget.departmentId === deptB.id, r.data.task);
 
         // ── 14/15: publish toggles ────────────────────────────────────────────
         r = await api(tokDir, 'PATCH', `/api/operations/tasks/${tPub.id}`, { publishToService: false });
         check('14. publish true→false removes from Service GET',
             r.data.success === true && (await svcTasks(tokDeptB)).length === 0, r.data);
-        r = await api(tokDir, 'PATCH', `/api/operations/tasks/${tPub.id}`, { publishToService: true });
+        check('unpublish advances the versioned Service targeting state',
+            r.data.task.serviceExecutionTargetVersion > movedVersion, r.data.task);
+        const unpublishedVersion = r.data.task.serviceExecutionTargetVersion;
+        r = await api(tokDir, 'PATCH', `/api/operations/tasks/${tPub.id}`, {
+            publishToService: true,
+            serviceExecutionTargetVersion: movedVersion
+        });
+        check('stale target-aware publication-only writer is rejected',
+            r.status === 409 && r.data.code === 'SERVICE_TARGET_VERSION_CONFLICT' &&
+            r.data.serviceExecutionTargetVersion === unpublishedVersion &&
+            (await svcTasks(tokDeptB)).length === 0, r.data);
+        r = await api(tokDir, 'PATCH', `/api/operations/tasks/${tPub.id}`, {
+            publishToService: true,
+            serviceExecutionTargetVersion: unpublishedVersion
+        });
         check('15. publish false→true re-appears in Service GET',
             r.data.success === true && (await svcTasks(tokDeptB)).length === 1, r.data);
+        const republishedVersion = r.data.task.serviceExecutionTargetVersion;
+        for (const invalidVersion of ['1', -1, 1.5]) {
+            r = await api(tokDir, 'PATCH', `/api/operations/tasks/${tPub.id}`, {
+                title: 'Must not persist',
+                serviceExecutionTargetVersion: invalidVersion
+            });
+            check(`metadata rejects invalid target revision ${JSON.stringify(invalidVersion)}`,
+                r.status === 400, r.data);
+        }
+        r = await api(tokDir, 'PATCH', `/api/operations/tasks/${tPub.id}`, {
+            title: 'Prep cucina v2',
+            serviceExecutionTargetVersion: republishedVersion
+        });
+        check('metadata accepts a valid numeric target revision without advancing it',
+            r.status === 200 && r.data.task.title === 'Prep cucina v2' &&
+            r.data.task.serviceExecutionTargetVersion === republishedVersion, r.data);
 
         // ── 16–18: lifecycle removals ─────────────────────────────────────────
         r = await api(tokDir, 'POST', `/api/operations/tasks/${tPub.id}/complete`);
@@ -278,6 +363,36 @@ async function run() {
             proj.createdBy === undefined && proj.history === undefined &&
             proj.comments === undefined && proj.attachments === undefined &&
             proj.escalation === undefined, proj);
+        check('Service projection exposes the effective typed target without changing entitlement',
+            proj.serviceExecutionTarget?.type === 'DEPARTMENT' &&
+            proj.serviceExecutionTarget.departmentId === deptA.id, proj);
+
+        const today = new Date();
+        const todayDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+        r = await api(tokDir, 'POST', '/api/operations/templates', {
+            title: 'Typed recurring target',
+            frequency: 'DAILY',
+            startDate: todayDate,
+            maxOccurrences: 1,
+            defaultServiceExecutionTarget: { type: 'DEPARTMENT', departmentId: deptA.id },
+            publishToService: true
+        });
+        const typedTemplate = r.data.template;
+        check('recurring template stores typed and legacy target representations',
+            r.status === 201 && typedTemplate.serviceDepartmentId === deptA.id &&
+            typedTemplate.defaultServiceExecutionTarget?.departmentId === deptA.id &&
+            typedTemplate.publishToService === true, typedTemplate);
+        r = await api(tokDir, 'POST', `/api/operations/templates/${typedTemplate.id}/generate-now`);
+        const generatedId = r.data.tasks?.[0]?.id;
+        const generated = generatedId
+            ? (await api(tokDir, 'GET', `/api/operations/tasks/${generatedId}`)).data.task
+            : null;
+        check('generated occurrence has target parity with its template',
+            r.status === 200 && generated &&
+            generated.serviceDepartmentId === deptA.id &&
+            generated.serviceExecutionTarget?.departmentId === deptA.id &&
+            generated.publishToService === true, { response: r.data, generated });
+        if (generatedId) await api(tokDir, 'DELETE', `/api/operations/tasks/${generatedId}`);
 
         // ── WS: explicit removal events ───────────────────────────────────────
         console.log('\n  — WebSocket explicit removal events —\n');
@@ -365,7 +480,8 @@ async function run() {
         r = await api(tokDir, 'POST', '/api/operations/tasks', {
             title: 'CRUD check', serviceDepartmentId: deptA.id, publishToService: true, priority: 'LOW' });
         const wsT5 = r.data.task;
-        const evCr = await sub.waitFor('OPS_TASK_CREATED');
+        let evCr = await sub.waitFor('OPS_TASK_CREATED');
+        while (evCr && evCr.task?.id !== wsT5.id) evCr = await sub.waitFor('OPS_TASK_CREATED');
         check('28a. OPS_TASK_CREATED carries service fields',
             evCr && evCr.task.id === wsT5.id && evCr.task.serviceDepartmentId === deptA.id &&
             evCr.task.publishToService === true && evCr.task.serviceDepartmentName === 'Cucina' &&
