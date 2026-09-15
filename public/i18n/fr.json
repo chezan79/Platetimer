@@ -1184,6 +1184,7 @@
   "service.todayTasksStart": "Démarrer",
   "service.todayTasksComplete": "Terminer",
   "service.todayTasksRenew": "Renouveler",
+  "service.todayTasksLeaseWarning": "La prise en charge expire dans {time}.",
   "service.todayTasksRelease": "Libérer",
   "service.todayTasksOwnedBy": "Prise en charge par",
   "service.todayTasksCompletedAt": "Terminée à",

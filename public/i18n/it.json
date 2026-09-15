@@ -1187,6 +1187,7 @@
   "service.todayTasksStart": "Avvia",
   "service.todayTasksComplete": "Completa",
   "service.todayTasksRenew": "Rinnova",
+  "service.todayTasksLeaseWarning": "La presa in carico scade tra {time}.",
   "service.todayTasksRelease": "Rilascia",
   "service.todayTasksOwnedBy": "In carico a",
   "service.todayTasksCompletedAt": "Completato alle",

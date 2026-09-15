@@ -1184,6 +1184,7 @@
   "service.todayTasksStart": "Start",
   "service.todayTasksComplete": "Complete",
   "service.todayTasksRenew": "Renew",
+  "service.todayTasksLeaseWarning": "Your claim expires in {time}.",
   "service.todayTasksRelease": "Release",
   "service.todayTasksOwnedBy": "Owned by",
   "service.todayTasksCompletedAt": "Completed at",

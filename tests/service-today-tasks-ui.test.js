@@ -34,6 +34,7 @@ check('acknowledgement uses existing department route and removes only local dai
   html.includes('/acknowledge') && html.includes('opsTasks.delete(taskId)'));
 check('task events invalidate and refresh instead of upserting event payloads',
   html.includes("scheduleOpsTasksRefresh()") &&
+  html.includes("_opsHideLeaseWarning(data.task && data.task.id)") &&
   !html.slice(html.indexOf("} else if(['OPS_TASK_CREATED'"), html.indexOf("} else if(data.action === 'mexIncoming'")).includes('opsTasks.set'));
 check('reconnect refreshes today list', html.includes('if(WsAuth.isServiceSession()) loadOpsTasks();'));
 check('worker identity lifecycle emits changes consumed by the workspace',
@@ -54,7 +55,7 @@ for (const { locale, data } of dictionaries) {
     'service.todayTasks.inProgress', 'service.todayTasks.inProgressEmpty',
     'service.todayTasks.completed', 'service.todayTasks.completedEmpty',
     'service.todayTasksClaim', 'service.todayTasksStart', 'service.todayTasksComplete',
-    'service.todayTasksRenew', 'service.todayTasksRelease', 'service.todayTasksOwnedBy',
+    'service.todayTasksRenew', 'service.todayTasksLeaseWarning', 'service.todayTasksRelease', 'service.todayTasksOwnedBy',
     'service.todayTasksCompletedAt', 'service.todayTasksDue'
   ]) check(`${locale} contains ${key}`, typeof data[key] === 'string' && data[key].length > 0);
 }
@@ -151,8 +152,76 @@ async function behaviorChecks() {
   check('mutation controls are hidden without verified worker context',
     buttonContext._opsActionButtons({id:'open',status:'OPEN'}) === '');
 
+  classifyContext.ServiceWorkerIdentity.getState = () => ({ worker: { id: 'worker-me' }, proof: 'proof' });
+  const leaseContext = {
+    window: {}, ServiceWorkerIdentity: classifyContext.ServiceWorkerIdentity,
+    Date, Number, String, Math, OPS_LEASE_WARNING_MS: 300000
+  };
+  leaseContext.window.ServiceWorkerIdentity = leaseContext.ServiceWorkerIdentity;
+  vm.createContext(leaseContext);
+  vm.runInContext([
+    extractFunction('_opsCurrentWorker'), extractFunction('_opsLeaseWarningState'),
+    extractFunction('_opsFmtLeaseRemaining')
+  ].join(';'), leaseContext);
+  const now = Date.now();
+  check('warning selects only the verified worker active actionable claim near expiry',
+    leaseContext._opsLeaseWarningState({
+      status:'OPEN', claim:{status:'ACTIVE',workerId:'worker-me',expiresAt:now + 65_000}
+    }, now).remainingSeconds === 65 &&
+    leaseContext._opsLeaseWarningState({
+      status:'IN_PROGRESS', claim:{status:'ACTIVE',workerId:'worker-other',expiresAt:now + 65_000}
+    }, now) === null &&
+    leaseContext._opsLeaseWarningState({
+      status:'IN_PROGRESS', claim:{status:'ACTIVE',workerId:'worker-me',expiresAt:now + 600_000}
+    }, now) === null);
+  check('display formatting is presentation-only minutes and seconds',
+    leaseContext._opsFmtLeaseRemaining(65) === '1:05');
+  check('warning markup contains no security metadata',
+    html.includes('ops-lease-warning') &&
+    !extractFunction('_opsLeaseWarning').includes('leaseId') &&
+    !extractFunction('_opsLeaseWarning').includes('workerId') &&
+    !extractFunction('_opsLeaseWarning').includes('proof') &&
+    !extractFunction('_opsLeaseWarning').includes('serviceActionRevision'));
+  check('display expiry reconciles through canonical today refresh without local mutation',
+    extractFunction('_opsScheduleLeaseWarnings').includes('loadOpsTasks()') &&
+    !extractFunction('_opsScheduleLeaseWarnings').includes('opsTasks.delete') &&
+    !extractFunction('_opsScheduleLeaseWarnings').includes("claim.status ="));
+  let canonicalRefreshes = 0;
+  const expiryContext = {
+    window: {}, ServiceWorkerIdentity: classifyContext.ServiceWorkerIdentity,
+    Date: { now: () => now }, Number, Math, Infinity, Map,
+    OPS_LEASE_WARNING_MS: 300000,
+    opsTasksState: 'ready',
+    opsTasks: new Map([['claimed-open', {
+      id:'claimed-open', status:'OPEN',
+      claim:{status:'ACTIVE',workerId:'worker-me',expiresAt:now}
+    }]]),
+    opsLeaseTimer: null,
+    opsLeaseReconcileKey: '',
+    clearTimeout() {},
+    setTimeout() { throw new Error('expired claim must reconcile immediately'); },
+    loadOpsTasks() { canonicalRefreshes++; }
+  };
+  expiryContext.window.ServiceWorkerIdentity = expiryContext.ServiceWorkerIdentity;
+  vm.createContext(expiryContext);
+  vm.runInContext([
+    extractFunction('_opsCurrentWorker'), extractFunction('_opsClearLeaseTimer'),
+    extractFunction('_opsScheduleLeaseWarnings')
+  ].join(';'), expiryContext);
+  expiryContext._opsScheduleLeaseWarnings();
+  expiryContext._opsScheduleLeaseWarnings();
+  check('an expired claimed OPEN task requests canonical reconciliation only once',
+    canonicalRefreshes === 1 && expiryContext.opsTasks.get('claimed-open').claim.status === 'ACTIVE');
+  check('successful action consumes authoritative task before canonical list refresh',
+    extractFunction('serviceTaskAction').includes('opsTasks.set(taskId, data.task)'));
+
   let identityRenders = 0;
-  const identityContext = { renderOpsTasks: () => { identityRenders++; } };
+  let identityClears = 0;
+  const identityContext = {
+    renderOpsTasks: () => { identityRenders++; },
+    _opsClearLeaseTimer: () => { identityClears++; },
+    opsLeaseReconcileKey: 'old'
+  };
   vm.createContext(identityContext);
   vm.runInContext(extractFunction('_opsHandleWorkerIdentityChange'), identityContext);
   identityContext._opsHandleWorkerIdentityChange();
@@ -160,7 +229,7 @@ async function behaviorChecks() {
   identityContext._opsHandleWorkerIdentityChange();
   identityContext._opsHandleWorkerIdentityChange();
   check('verify, handoff, clear and expiry events can rerender controls without a task reload',
-    identityRenders === 4);
+    identityRenders === 4 && identityClears === 4 && identityContext.opsLeaseReconcileKey === '');
 
   const pending = [];
   const requestContext = {

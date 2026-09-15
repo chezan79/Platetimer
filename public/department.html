@@ -683,6 +683,10 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 
 /* Meta row */
 .ops-task-meta{display:flex;flex-wrap:wrap;gap:9px;align-items:center;margin-top:10px;font-size:14px;color:var(--muted);}
+.ops-lease-warning{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px;
+  padding:10px 12px;border:1px solid rgba(217,119,6,.35);border-radius:9px;
+  background:rgba(217,119,6,.08);color:#92400e;font-size:14px;font-weight:650;}
+.ops-lease-warning .ops-action-btn{min-height:40px;padding:7px 12px;flex-shrink:0;}
 .ops-status-pill{font-size:12px;font-weight:700;padding:3px 8px;border-radius:6px;
   background:#eef2ff;color:#4338ca;border:1px solid #c7d2fe;}
 
@@ -1201,8 +1205,13 @@ let opsTasksErrorKey = '';
 let opsTodayDate  = '';
 let opsRefreshTimer = null;
 let opsRequestGeneration = 0;
+let opsLeaseTimer = null;
+let opsLeaseReconcileKey = '';
+const OPS_LEASE_WARNING_MS = 5 * 60 * 1000;
 
 function _opsHandleWorkerIdentityChange(){
+  _opsClearLeaseTimer();
+  opsLeaseReconcileKey = '';
   renderOpsTasks();
 }
 window.addEventListener('service-worker-identity-change', _opsHandleWorkerIdentityChange);
@@ -2189,6 +2198,7 @@ function connectWS(){
       // Realtime payloads only invalidate the view. The endpoint decides daily
       // membership, publication, department, acknowledgement and canonical status.
       if(WsAuth.isServiceSession()){
+        _opsHideLeaseWarning(data.task && data.task.id);
         if(data.action === 'OPS_TASK_SERVICE_OVERRIDE_RELEASED' ||
            data.action === 'OPS_TASK_SERVICE_INVALIDATED'){
           opsTasks.delete(data.task && data.task.id);
@@ -2427,9 +2437,87 @@ function _opsCurrentWorker(){
 }
 
 function _opsClaimIsActive(claim){
-  if(!claim || claim.status !== 'ACTIVE') return false;
-  const expiresAt = Number(claim.expiresAt || 0);
-  return !expiresAt || expiresAt > Date.now();
+  return !!(claim && claim.status === 'ACTIVE');
+}
+
+function _opsLeaseWarningState(tk, now = Date.now()){
+  const current = _opsCurrentWorker();
+  const workerId = current && current.worker && current.worker.id;
+  const claim = tk && tk.claim;
+  const expiresAt = Number(claim && claim.expiresAt || 0);
+  if(!current || !current.proof || !workerId || !claim ||
+     claim.status !== 'ACTIVE' || claim.workerId !== workerId ||
+     (tk.status !== 'OPEN' && tk.status !== 'IN_PROGRESS') ||
+     !Number.isFinite(expiresAt) || expiresAt <= 0) return null;
+  const remainingMs = Math.max(0, expiresAt - now);
+  if(remainingMs > OPS_LEASE_WARNING_MS) return null;
+  return { expiresAt, remainingSeconds: Math.ceil(remainingMs / 1000) };
+}
+
+function _opsFmtLeaseRemaining(seconds){
+  const total = Math.max(0, Number(seconds) || 0);
+  const minutes = Math.floor(total / 60);
+  const secs = total % 60;
+  return `${minutes}:${String(secs).padStart(2,'0')}`;
+}
+
+function _opsLeaseWarning(tk){
+  const state = _opsLeaseWarningState(tk);
+  if(!state) return '';
+  const text = _ot('service.todayTasksLeaseWarning')
+    .replace('{time}', _opsFmtLeaseRemaining(state.remainingSeconds));
+  return `<div class="ops-lease-warning" role="status" aria-live="polite">
+    <span>${esc(text)}</span>
+    <button class="ops-action-btn" onclick="serviceTaskAction('${esc(tk.id)}','renew')">${esc(_ot('service.todayTasksRenew'))}</button>
+  </div>`;
+}
+
+function _opsClearLeaseTimer(){
+  if(opsLeaseTimer) clearTimeout(opsLeaseTimer);
+  opsLeaseTimer = null;
+}
+
+function _opsHideLeaseWarning(taskId){
+  _opsClearLeaseTimer();
+  if(!taskId) return;
+  const card = document.querySelector(`.ops-task-card[data-task-id="${CSS.escape(taskId)}"]`);
+  const warning = card && card.querySelector('.ops-lease-warning');
+  if(warning) warning.remove();
+}
+
+function _opsScheduleLeaseWarnings(){
+  _opsClearLeaseTimer();
+  if(opsTasksState !== 'ready') return;
+  const now = Date.now();
+  let nextDelay = Infinity;
+  let expiredKey = '';
+  for(const task of opsTasks.values()){
+    const current = _opsCurrentWorker();
+    const claim = task && task.claim;
+    if(!current || !current.proof || !current.worker || !claim ||
+       claim.status !== 'ACTIVE' || claim.workerId !== current.worker.id ||
+       (task.status !== 'OPEN' && task.status !== 'IN_PROGRESS')) continue;
+    const expiresAt = Number(claim.expiresAt || 0);
+    if(!Number.isFinite(expiresAt) || expiresAt <= 0) continue;
+    const remaining = expiresAt - now;
+    if(remaining <= 0){
+      expiredKey = `${task.id}:${expiresAt}`;
+      break;
+    }
+    nextDelay = Math.min(nextDelay, remaining <= OPS_LEASE_WARNING_MS
+      ? Math.min(1000, remaining) : remaining - OPS_LEASE_WARNING_MS);
+  }
+  if(expiredKey){
+    if(opsLeaseReconcileKey !== expiredKey){
+      opsLeaseReconcileKey = expiredKey;
+      loadOpsTasks();
+    }
+    return;
+  }
+  opsLeaseReconcileKey = '';
+  if(Number.isFinite(nextDelay)){
+    opsLeaseTimer = setTimeout(() => renderOpsTasks(), Math.max(25, nextDelay));
+  }
 }
 
 function _opsPriorityRank(task){
@@ -2514,6 +2602,7 @@ function _opsTaskCard(tk, section){
     ${tk.description ? `<div class="ops-task-description">${esc(tk.description)}</div>` : ''}
     <div class="ops-task-meta">${dueStr ? `<span>${esc(_ot('service.todayTasksDue'))} ${esc(dueStr)}</span>` : ''}</div>
     ${owner}${completion}
+    ${_opsLeaseWarning(tk)}
     <div class="ops-task-footer">${_opsActionButtons(tk)}
       ${section === 'todo' ? `<button class="ops-ack-btn" onclick="acknowledgeOpsTask('${esc(tk.id)}')">${esc(_ot('service.opsTaskAck'))}</button>` : ''}
       <button class="ops-detail-btn" onclick="openOpsDetailModal('${esc(tk.id)}')">${esc(_ot('service.opsTaskDetails'))}</button>
@@ -2526,6 +2615,7 @@ function renderOpsTasks(){
   const list = document.getElementById('ops-task-list');
   const cnt  = document.getElementById('ops-task-count');
   if(!sec || !list) return;
+  _opsClearLeaseTimer();
   sec.style.display = WsAuth.isServiceSession() ? '' : 'none';
   if(!WsAuth.isServiceSession()) return;
   if(opsTasksState === 'loading'){
@@ -2551,6 +2641,7 @@ function renderOpsTasks(){
       <div class="ops-workspace-count"><strong>${sections.inProgress.length}</strong><span>${esc(_ot('service.todayTasks.inProgress'))}</span></div>
       <div class="ops-workspace-count"><strong>${sections.completed.length}</strong><span>${esc(_ot('service.todayTasks.completed'))}</span></div>
     </div>${block('todo',sections.todo)}${block('inProgress',sections.inProgress)}${block('completed',sections.completed)}`;
+  _opsScheduleLeaseWarnings();
 }
 
 async function serviceTaskAction(taskId, action){
@@ -2586,6 +2677,11 @@ async function serviceTaskAction(taskId, action){
         renderOpsTasks();
       }
       return;
+    }
+    if(data.task && data.task.id === taskId){
+      opsTasks.set(taskId, data.task);
+      opsLeaseReconcileKey = '';
+      renderOpsTasks();
     }
     await loadOpsTasks();
   }catch(_){

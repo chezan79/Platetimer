@@ -14,3 +14,9 @@ Worker identity verification, handoff, clear, expiry, and server invalidation mu
 **Why:** Tasks can load before a worker is selected, and stale controls after identity changes either remain hidden or predictably fail authorization.
 
 **How to apply:** Subscribe the workspace to the identity module's safe state-change notification; do not require an unrelated HTTP or realtime task refresh.
+
+Lease countdowns are display-only. The browser may schedule and format time from the projected canonical expiry, but reaching zero must trigger one canonical HTTP reconciliation rather than locally expiring or reclassifying the claim.
+
+**Why:** Client clocks and delayed tabs cannot authoritatively determine a claim lifecycle transition.
+
+**How to apply:** Remove stale warnings immediately on identity or realtime invalidation, consume successful action responses, and let the next canonical read determine whether a claim renewed, expired, released, or completed.
