@@ -1925,7 +1925,7 @@ function broadcastServiceInvalidations(companyId, result) {
     }
 }
 
-async function getServiceActionableOpsTasks(req, res) {
+async function getServiceEntitledOpsTasks(req, res) {
     const session = requireAuth(req, res);
     if (!session) return null;
 
@@ -1955,11 +1955,24 @@ async function getServiceActionableOpsTasks(req, res) {
             t.companyId === companyId &&
             t.publishToService === true &&
             t.serviceDepartmentId === departmentId &&
-            (t.status === 'OPEN' || t.status === 'IN_PROGRESS') &&
             !isTaskAcknowledgedBy(companyId, t.id, departmentId) &&
             !(t.acknowledgements && t.acknowledgements[departmentId]));
 
     return { companyId, departmentId, tasks };
+}
+
+async function getServiceActionableOpsTasks(req, res) {
+    const result = await getServiceEntitledOpsTasks(req, res);
+    if (!result) return null;
+    return {
+        ...result,
+        tasks: result.tasks.filter(t => t.status === 'OPEN' || t.status === 'IN_PROGRESS')
+    };
+}
+
+function normalizeCompletionBusinessDate(value) {
+    if (typeof value === 'string') return normalizeBusinessDate(value);
+    return Number.isFinite(value) ? toZurichDateStr(value) : null;
 }
 
 // ── [Task 66] GET /api/service/ops-tasks — read-only Operations projection ──
@@ -1977,12 +1990,17 @@ app.get('/api/service/ops-tasks', async (req, res) => {
 // GET /api/service/ops-tasks/today — the same safe Service projection, limited
 // to tasks due on the authoritative PlateTimer business date.
 app.get('/api/service/ops-tasks/today', async (req, res) => {
-    const result = await getServiceActionableOpsTasks(req, res);
+    const result = await getServiceEntitledOpsTasks(req, res);
     if (!result) return;
 
     const todayDate = todayZurich();
     const tasks = result.tasks
-        .filter(task => normalizeBusinessDate(task.dueDate) === todayDate)
+        .filter(task => (
+            ((task.status === 'OPEN' || task.status === 'IN_PROGRESS') &&
+                normalizeBusinessDate(task.dueDate) === todayDate) ||
+            (task.status === 'COMPLETED' &&
+                normalizeCompletionBusinessDate(task.completedAt) === todayDate)
+        ))
         .map(projectOpsTaskForService);
 
     res.json({ success: true, todayDate, tasks });
@@ -4726,6 +4744,8 @@ function projectOpsTaskForService(t) {
         claimLeaseId:          t.claimLeaseId || null,
         claimLeaseExpiresAt:   t.claimLeaseExpiresAt || null,
         claimedByWorkerName:   t.claimedByWorkerName || null,
+        completedAt:           t.completedAt || null,
+        completedByWorkerName: t.completedByWorkerName || null,
         claim: t.claimLeaseStatus ? {
             workerId: t.claimedByWorkerId || null,
             workerName: t.claimedByWorkerName || null,

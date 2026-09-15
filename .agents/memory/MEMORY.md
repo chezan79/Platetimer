@@ -52,3 +52,4 @@
 - [Recurring generation parity](recurring-generation-parity.md) — template departments use canonical Service IDs; generated-task events must follow atomic task/template persistence.
 - [Service individual identity target](service-individual-identity.md) — keep department/device auth separate from a short-lived verified worker identity; Operations linking is optional and permission-neutral.
 - [Service task action authority](service-task-action-authority.md) — claims, acknowledgements, leases, revisions, idempotency, and full task recovery share one transaction record.
+- [Service Today workspace](service-today-workspace.md) — released/expired IN_PROGRESS tasks remain reclaimable; completion attribution never falls back to claim ownership.

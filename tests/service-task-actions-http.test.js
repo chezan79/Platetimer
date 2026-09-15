@@ -299,6 +299,14 @@ async function run() {
             response.data.task?.status === 'COMPLETED' &&
             response.data.task?.claimLeaseStatus === 'COMPLETED', response.data);
 
+        const todayWorkspace = await api(serviceToken, 'GET', '/api/service/ops-tasks/today');
+        const completedToday = todayWorkspace.data.tasks?.find(item => item.id === task.id);
+        check('daily workspace returns canonical same-day completion with safe worker context',
+            todayWorkspace.status === 200 && completedToday?.status === 'COMPLETED' &&
+            completedToday.completedAt && completedToday.completedByWorkerName === 'Bob' &&
+            !('completedByWorkerId' in completedToday) && !('history' in completedToday),
+            completedToday);
+
         response = await action(serviceToken, bobProof, task.id, 'complete', 'task127-complete',
             { expectedRevision: completionRevision, leaseId: completionLeaseId });
         check('completion replay is idempotent', response.status === 200 && response.data.idempotent === true, response.data);

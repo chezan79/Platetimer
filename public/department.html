@@ -643,6 +643,18 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
   border-radius:16px;padding:18px;margin-top:28px;}
 #ops-tasks-section .ra-hdr{margin-bottom:14px;}
 #ops-tasks-section .ra-title{font-size:22px;}
+.ops-workspace-counts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:0 0 16px;}
+.ops-workspace-count{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:9px 8px;text-align:center;}
+.ops-workspace-count strong{display:block;font-size:20px;color:var(--text);}
+.ops-workspace-count span{display:block;font-size:11px;color:var(--muted);margin-top:2px;}
+.ops-workspace-section{margin-top:18px;}
+.ops-workspace-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:9px;
+  font-size:16px;font-weight:750;color:var(--text);}
+.ops-workspace-heading .ra-count{font-size:12px;}
+.ops-workspace-list{display:grid;gap:10px;}
+.ops-section-empty{padding:15px;border:1px dashed var(--border-l);border-radius:10px;color:var(--muted);text-align:center;}
+.ops-owner-line{font-size:13px;color:var(--muted);margin-top:8px;}
+.ops-task-card.ops-completed{opacity:.84;--ops-prio-clr:var(--ok);}
 .ops-task-card{
   background:var(--card);border:1.5px solid var(--border);border-radius:12px;
   padding:18px 20px;position:relative;overflow:hidden;transition:border-color .2s;}
@@ -710,6 +722,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
   #ops-tasks-section{padding:14px 12px;}
   .ops-task-footer{display:grid;grid-template-columns:1fr;}
   .ops-ack-btn,.ops-detail-btn{width:100%;}
+  .ops-workspace-count span{font-size:10px;}
 }
 
 /* ── OPERATIONS TASK DETAIL MODAL ─────────────────────────────────────────── */
@@ -1188,6 +1201,12 @@ let opsTasksErrorKey = '';
 let opsTodayDate  = '';
 let opsRefreshTimer = null;
 let opsRequestGeneration = 0;
+
+function _opsHandleWorkerIdentityChange(){
+  renderOpsTasks();
+}
+window.addEventListener('service-worker-identity-change', _opsHandleWorkerIdentityChange);
+
 let ws            = null;
 let wsConnected   = false;
 let tickTimer     = null;
@@ -2413,6 +2432,50 @@ function _opsClaimIsActive(claim){
   return !expiresAt || expiresAt > Date.now();
 }
 
+function _opsPriorityRank(task){
+  return ({URGENT:0,HIGH:1,MEDIUM:2,LOW:3})[String(task.priority || 'MEDIUM').toUpperCase()] ?? 2;
+}
+
+function _opsDueRank(task){
+  if(!task.dueDate || /^\d{4}-\d{2}-\d{2}$/.test(task.dueDate)) return Number.MAX_SAFE_INTEGER;
+  const value = new Date(task.dueDate).getTime();
+  return Number.isFinite(value) ? value : Number.MAX_SAFE_INTEGER;
+}
+
+function _opsStableCompare(a,b){
+  return String(a.id || '').localeCompare(String(b.id || ''));
+}
+
+function _opsClassifyTasks(tasks){
+  const current = _opsCurrentWorker();
+  const workerId = current && current.worker && current.worker.id;
+  const sections = { todo:[], inProgress:[], completed:[] };
+  for(const task of tasks){
+    if(task.status === 'COMPLETED') sections.completed.push(task);
+    else if(_opsClaimIsActive(task.claim)) sections.inProgress.push(task);
+    else if(task.status === 'OPEN' || task.status === 'IN_PROGRESS') sections.todo.push(task);
+  }
+  sections.todo.sort((a,b) =>
+    _opsPriorityRank(a)-_opsPriorityRank(b) || _opsDueRank(a)-_opsDueRank(b) || _opsStableCompare(a,b));
+  sections.inProgress.sort((a,b) => {
+    const aMine = !!(workerId && a.claim && a.claim.workerId === workerId);
+    const bMine = !!(workerId && b.claim && b.claim.workerId === workerId);
+    return Number(bMine)-Number(aMine) ||
+      _opsPriorityRank(a)-_opsPriorityRank(b) || _opsDueRank(a)-_opsDueRank(b) || _opsStableCompare(a,b);
+  });
+  sections.completed.sort((a,b) =>
+    Number(b.completedAt || 0)-Number(a.completedAt || 0) || _opsStableCompare(a,b));
+  return sections;
+}
+
+function _opsFmtCompleted(value){
+  if(!value) return '';
+  const d = new Date(value);
+  if(isNaN(d.getTime())) return '';
+  const lang = (window.I18n && I18n.getLanguage) ? I18n.getLanguage() : 'it';
+  return d.toLocaleTimeString(lang, {hour:'2-digit',minute:'2-digit',timeZone:'Europe/Zurich'});
+}
+
 function _opsActionButtons(tk){
   const current = _opsCurrentWorker();
   const workerId = current && current.worker && current.worker.id;
@@ -2420,18 +2483,42 @@ function _opsActionButtons(tk){
   const claimActive = _opsClaimIsActive(claim);
   const mine = !!(claimActive && workerId && claim.workerId === workerId);
   const active = tk.status === 'OPEN' || tk.status === 'IN_PROGRESS';
-  if(!active) return '';
+  if(!active || !workerId || !current.proof) return '';
   if(!claimActive){
-    return `<button class="ops-action-btn" onclick="serviceTaskAction('${esc(tk.id)}','claim')">👋 Prendi in carico</button>`;
+    return `<button class="ops-action-btn" onclick="serviceTaskAction('${esc(tk.id)}','claim')">${esc(_ot('service.todayTasksClaim'))}</button>`;
   }
-  if(!mine) return `<span class="ops-status-pill">In carico a ${esc(claim.workerName || 'un operatore')}</span>`;
+  if(!mine) return '';
   if(tk.status === 'OPEN'){
-    return `<button class="ops-action-btn" onclick="serviceTaskAction('${esc(tk.id)}','start')">▶ Avvia</button>
-      <button class="ops-action-btn danger" onclick="serviceTaskAction('${esc(tk.id)}','release')">Rilascia</button>`;
+    return `<button class="ops-action-btn" onclick="serviceTaskAction('${esc(tk.id)}','start')">${esc(_ot('service.todayTasksStart'))}</button>
+      <button class="ops-action-btn danger" onclick="serviceTaskAction('${esc(tk.id)}','release')">${esc(_ot('service.todayTasksRelease'))}</button>`;
   }
-  return `<button class="ops-action-btn" onclick="serviceTaskAction('${esc(tk.id)}','complete')">✓ Completa</button>
-    <button class="ops-action-btn" onclick="serviceTaskAction('${esc(tk.id)}','renew')">↻ Rinnova</button>
-    <button class="ops-action-btn danger" onclick="serviceTaskAction('${esc(tk.id)}','release')">Rilascia</button>`;
+  return `<button class="ops-action-btn" onclick="serviceTaskAction('${esc(tk.id)}','complete')">${esc(_ot('service.todayTasksComplete'))}</button>
+    <button class="ops-action-btn" onclick="serviceTaskAction('${esc(tk.id)}','renew')">${esc(_ot('service.todayTasksRenew'))}</button>
+    <button class="ops-action-btn danger" onclick="serviceTaskAction('${esc(tk.id)}','release')">${esc(_ot('service.todayTasksRelease'))}</button>`;
+}
+
+function _opsTaskCard(tk, section){
+  const prio = (tk.priority || 'MEDIUM').toUpperCase();
+  const prioLow = prio.toLowerCase();
+  const dueStr = _opsFmtDue(tk.dueDate);
+  const claimName = tk.claim && tk.claim.workerName || tk.claimedByWorkerName;
+  const completedTime = _opsFmtCompleted(tk.completedAt);
+  const completedName = tk.completedByWorkerName;
+  const owner = section === 'inProgress' && claimName
+    ? `<div class="ops-owner-line">${esc(_ot('service.todayTasksOwnedBy'))} <strong>${esc(claimName)}</strong></div>` : '';
+  const completion = section === 'completed'
+    ? `<div class="ops-owner-line">${esc(_ot('service.todayTasksCompletedAt'))} <strong>${esc(completedTime)}</strong>${completedName ? ` · ${esc(completedName)}` : ''}</div>` : '';
+  return `<article class="ops-task-card ops-prio-${prioLow}${section === 'completed' ? ' ops-completed' : ''}" data-task-id="${esc(tk.id)}">
+    <div class="ops-task-hdr"><span class="ops-task-title">${esc(tk.title || '')}</span>
+      <span class="ops-prio-pill ${prioLow}">${esc(_ot(`ops.priority.${prioLow}`))}</span></div>
+    ${tk.description ? `<div class="ops-task-description">${esc(tk.description)}</div>` : ''}
+    <div class="ops-task-meta">${dueStr ? `<span>${esc(_ot('service.todayTasksDue'))} ${esc(dueStr)}</span>` : ''}</div>
+    ${owner}${completion}
+    <div class="ops-task-footer">${_opsActionButtons(tk)}
+      ${section === 'todo' ? `<button class="ops-ack-btn" onclick="acknowledgeOpsTask('${esc(tk.id)}')">${esc(_ot('service.opsTaskAck'))}</button>` : ''}
+      <button class="ops-detail-btn" onclick="openOpsDetailModal('${esc(tk.id)}')">${esc(_ot('service.opsTaskDetails'))}</button>
+    </div>
+  </article>`;
 }
 
 function renderOpsTasks(){
@@ -2452,46 +2539,18 @@ function renderOpsTasks(){
       <button class="ops-retry-btn" onclick="loadOpsTasks()">${esc(_ot('service.todayTasksRetry'))}</button></div>`;
     return;
   }
-  const arr = Array.from(opsTasks.values())
-    .sort((a,b) => (a.dueDate || '9999') < (b.dueDate || '9999') ? -1 : 1);
+  const arr = Array.from(opsTasks.values());
+  const sections = _opsClassifyTasks(arr);
   if(cnt) cnt.textContent = arr.length;
-  if(arr.length === 0){
-    list.innerHTML = `<div class="ops-list-state">${esc(_ot('service.todayTasksEmpty'))}</div>`;
-    return;
-  }
-  list.innerHTML = arr.map(tk => {
-    const prio    = (tk.priority || 'MEDIUM').toUpperCase();
-    const prioLow = prio.toLowerCase();
-    const overdue = _opsIsOverdue(tk);
-    const dueStr  = _opsFmtDue(tk.dueDate);
-    const prioLabel = _ot(`ops.priority.${prioLow}`);
-    const statusLabel = _ot(`ops.status.${String(tk.status || 'OPEN').toLowerCase()}`);
-    // Badge intensity: stronger colour for urgent/high
-    const badgeCls = (prio === 'URGENT' || prio === 'HIGH') ? ` ${prioLow}` : '';
-
-    return `<div class="ops-task-card ops-prio-${prioLow}${overdue ? ' ops-overdue' : ''}" data-task-id="${esc(tk.id)}">
-      <div class="ops-task-hdr">
-        <span class="ops-task-title">${esc(tk.title || '')}</span>
-        <span class="ops-src-badge${badgeCls}">⚙ ${esc(_ot('service.opsSource'))}</span>
-      </div>
-      ${tk.description ? `<div class="ops-task-description">${esc(tk.description)}</div>` : ''}
-      <div class="ops-task-meta">
-        ${dueStr
-          ? overdue
-            ? `<span class="ops-overdue-tag">⚠ ${esc(_ot('service.opsTaskOverdue'))} · ${esc(dueStr)}</span>`
-            : `<span>📅 ${esc(dueStr)}</span>`
-          : ''}
-        <span class="ops-prio-pill ${prioLow}">${esc(prioLabel)}</span>
-        <span class="ops-status-pill">${esc(statusLabel)}</span>
-        ${tk.assigneeName ? `<span>👤 ${esc(tk.assigneeName)}</span>` : ''}
-      </div>
-       <div class="ops-task-footer">
-         ${_opsActionButtons(tk)}
-         ${_opsClaimIsActive(tk.claim) ? '' : `<button class="ops-ack-btn" onclick="acknowledgeOpsTask('${esc(tk.id)}')">${esc(_ot('service.opsTaskAck'))}</button>`}
-        <button class="ops-detail-btn" onclick="openOpsDetailModal('${esc(tk.id)}')">${esc(_ot('service.opsTaskDetails'))}</button>
-      </div>
-    </div>`;
-  }).join('');
+  const block = (key, items) => `<section class="ops-workspace-section" data-section="${key}">
+    <div class="ops-workspace-heading"><span>${esc(_ot(`service.todayTasks.${key}`))}</span><span class="ra-count">${items.length}</span></div>
+    <div class="ops-workspace-list">${items.length ? items.map(t => _opsTaskCard(t,key)).join('') :
+      `<div class="ops-section-empty">${esc(_ot(`service.todayTasks.${key}Empty`))}</div>`}</div></section>`;
+  list.innerHTML = `<div class="ops-workspace-counts">
+      <div class="ops-workspace-count"><strong>${sections.todo.length}</strong><span>${esc(_ot('service.todayTasks.todo'))}</span></div>
+      <div class="ops-workspace-count"><strong>${sections.inProgress.length}</strong><span>${esc(_ot('service.todayTasks.inProgress'))}</span></div>
+      <div class="ops-workspace-count"><strong>${sections.completed.length}</strong><span>${esc(_ot('service.todayTasks.completed'))}</span></div>
+    </div>${block('todo',sections.todo)}${block('inProgress',sections.inProgress)}${block('completed',sections.completed)}`;
 }
 
 async function serviceTaskAction(taskId, action){
@@ -2528,12 +2587,7 @@ async function serviceTaskAction(taskId, action){
       }
       return;
     }
-    if(data.task) {
-      opsTasks.set(taskId, data.task);
-      renderOpsTasks();
-    } else {
-      await loadOpsTasks();
-    }
+    await loadOpsTasks();
   }catch(_){
     await loadOpsTasks();
   }
@@ -2623,7 +2677,7 @@ async function acknowledgeOpsTask(taskId){
     const before = opsTasks.size;
     opsTasks.delete(taskId);
     console.log(`[OPS-ACK-DIAG] map size before=${before} after=${opsTasks.size}`);
-    renderOpsTasks();
+    await loadOpsTasks();
   }catch(err){
     console.log(`[OPS-ACK-DIAG] exception=${err && err.message}`);
     if(card){ const btn = card.querySelector('.ops-ack-btn'); if(btn){ btn.disabled = false; btn.textContent = _ot('service.todayTasksAckError'); } }

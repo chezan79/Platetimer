@@ -6,6 +6,7 @@ const path = require('path');
 const vm = require('vm');
 
 const html = fs.readFileSync(path.join(__dirname, '../public/department.html'), 'utf8');
+const identityModule = fs.readFileSync(path.join(__dirname, '../public/js/service-worker-identity.js'), 'utf8');
 const dictionaries = ['it', 'fr', 'en'].map(locale => ({
   locale,
   data: JSON.parse(fs.readFileSync(path.join(__dirname, `../public/i18n/${locale}.json`), 'utf8'))
@@ -26,12 +27,18 @@ check('renders title, description, due time, priority, canonical status and ackn
   html.includes('ops-status-pill') && html.includes('acknowledgeOpsTask'));
 check('does not inspect recurrence provenance or filter by createdAt',
   !/templateId|recurrence|createdAt/.test(html.slice(html.indexOf('function renderOpsTasks'), html.indexOf('function openOpsDetailModal'))));
+check('completed attribution never falls back to a former claimant',
+  html.includes('const completedName = tk.completedByWorkerName;') &&
+  !html.includes('const completedName = tk.completedByWorkerName || claimName;'));
 check('acknowledgement uses existing department route and removes only local daily item',
   html.includes('/acknowledge') && html.includes('opsTasks.delete(taskId)'));
 check('task events invalidate and refresh instead of upserting event payloads',
   html.includes("scheduleOpsTasksRefresh()") &&
   !html.slice(html.indexOf("} else if(['OPS_TASK_CREATED'"), html.indexOf("} else if(data.action === 'mexIncoming'")).includes('opsTasks.set'));
 check('reconnect refreshes today list', html.includes('if(WsAuth.isServiceSession()) loadOpsTasks();'));
+check('worker identity lifecycle emits changes consumed by the workspace',
+  identityModule.includes("new root.CustomEvent('service-worker-identity-change'") &&
+  html.includes("window.addEventListener('service-worker-identity-change', _opsHandleWorkerIdentityChange)"));
 check('date rollover compares Zurich date to authoritative todayDate',
   html.includes("timeZone:'Europe/Zurich'") && html.includes('_opsZurichDate() !== opsTodayDate'));
 check('Mex and countdown handlers remain present',
@@ -42,7 +49,13 @@ for (const { locale, data } of dictionaries) {
     'service.todayTasksSection', 'service.todayTasksLoading', 'service.todayTasksEmpty',
     'service.todayTasksAllDay',
     'service.todayTasksAuthError', 'service.todayTasksSuspended', 'service.todayTasksInactive',
-    'service.todayTasksError', 'service.todayTasksRetry', 'service.todayTasksAckError'
+    'service.todayTasksError', 'service.todayTasksRetry', 'service.todayTasksAckError',
+    'service.todayTasks.todo', 'service.todayTasks.todoEmpty',
+    'service.todayTasks.inProgress', 'service.todayTasks.inProgressEmpty',
+    'service.todayTasks.completed', 'service.todayTasks.completedEmpty',
+    'service.todayTasksClaim', 'service.todayTasksStart', 'service.todayTasksComplete',
+    'service.todayTasksRenew', 'service.todayTasksRelease', 'service.todayTasksOwnedBy',
+    'service.todayTasksCompletedAt', 'service.todayTasksDue'
   ]) check(`${locale} contains ${key}`, typeof data[key] === 'string' && data[key].length > 0);
 }
 
@@ -78,6 +91,76 @@ async function behaviorChecks() {
     formatContext._opsIsOverdue({ dueDate: '2026-09-14', status: 'OPEN' }) === false);
   const timed = formatContext._opsFmtDue('2026-09-14T10:30:00.000Z');
   check('timed tasks render in the Zurich timezone', /12[.:]30/.test(timed), timed);
+
+  const classifyContext = {
+    window: {},
+    ServiceWorkerIdentity: { getState: () => ({ worker: { id: 'worker-me' }, proof: 'proof' }) },
+    Date, Number, String, Map
+  };
+  classifyContext.window.ServiceWorkerIdentity = classifyContext.ServiceWorkerIdentity;
+  vm.createContext(classifyContext);
+  vm.runInContext([
+    extractFunction('_opsCurrentWorker'), extractFunction('_opsClaimIsActive'),
+    extractFunction('_opsPriorityRank'), extractFunction('_opsDueRank'),
+    extractFunction('_opsStableCompare'), extractFunction('_opsClassifyTasks')
+  ].join(';'), classifyContext);
+  const farFuture = Date.now() + 60_000;
+  const sections = classifyContext._opsClassifyTasks([
+    { id:'low', status:'OPEN', priority:'LOW', dueDate:'2026-09-14' },
+    { id:'urgent-late', status:'OPEN', priority:'URGENT', dueDate:'2026-09-14T12:00:00Z' },
+    { id:'urgent-early', status:'OPEN', priority:'URGENT', dueDate:'2026-09-14T10:00:00Z' },
+    { id:'other', status:'IN_PROGRESS', priority:'URGENT',
+      claim:{ status:'ACTIVE', expiresAt:farFuture, workerId:'worker-other', workerName:'Other' } },
+    { id:'mine', status:'OPEN', priority:'LOW',
+      claim:{ status:'ACTIVE', expiresAt:farFuture, workerId:'worker-me', workerName:'Me' } },
+    { id:'released', status:'IN_PROGRESS', priority:'HIGH',
+      claim:{ status:'RELEASED', expiresAt:0, workerId:'worker-other', workerName:'Other' } },
+    { id:'older', status:'COMPLETED', completedAt:100 },
+    { id:'newer', status:'COMPLETED', completedAt:200 }
+  ]);
+  check('workspace classifies canonical claim and completion states',
+    sections.todo.length === 4 && sections.inProgress.length === 2 && sections.completed.length === 2);
+  check('to-do ordering is priority, due time, then stable ID',
+    sections.todo.map(t => t.id).join(',') === 'urgent-early,urgent-late,released,low');
+  check('current worker claims sort before other active claims',
+    sections.inProgress.map(t => t.id).join(',') === 'mine,other');
+  check('completed tasks sort newest first',
+    sections.completed.map(t => t.id).join(',') === 'newer,older');
+
+  const buttonContext = {
+    window: {}, ServiceWorkerIdentity: classifyContext.ServiceWorkerIdentity,
+    Date, esc: value => String(value), _ot: key => key
+  };
+  buttonContext.window.ServiceWorkerIdentity = buttonContext.ServiceWorkerIdentity;
+  vm.createContext(buttonContext);
+  vm.runInContext([
+    extractFunction('_opsCurrentWorker'), extractFunction('_opsClaimIsActive'),
+    extractFunction('_opsActionButtons')
+  ].join(';'), buttonContext);
+  check('current worker gets lifecycle controls on their active task',
+    buttonContext._opsActionButtons({
+      id:'mine', status:'IN_PROGRESS',
+      claim:{status:'ACTIVE',expiresAt:farFuture,workerId:'worker-me'}
+    }).includes("serviceTaskAction('mine','complete')"));
+  check('another worker task and completed task are read-only',
+    buttonContext._opsActionButtons({
+      id:'other', status:'IN_PROGRESS',
+      claim:{status:'ACTIVE',expiresAt:farFuture,workerId:'worker-other'}
+    }) === '' && buttonContext._opsActionButtons({id:'done',status:'COMPLETED'}) === '');
+  buttonContext.ServiceWorkerIdentity.getState = () => null;
+  check('mutation controls are hidden without verified worker context',
+    buttonContext._opsActionButtons({id:'open',status:'OPEN'}) === '');
+
+  let identityRenders = 0;
+  const identityContext = { renderOpsTasks: () => { identityRenders++; } };
+  vm.createContext(identityContext);
+  vm.runInContext(extractFunction('_opsHandleWorkerIdentityChange'), identityContext);
+  identityContext._opsHandleWorkerIdentityChange();
+  identityContext._opsHandleWorkerIdentityChange();
+  identityContext._opsHandleWorkerIdentityChange();
+  identityContext._opsHandleWorkerIdentityChange();
+  check('verify, handoff, clear and expiry events can rerender controls without a task reload',
+    identityRenders === 4);
 
   const pending = [];
   const requestContext = {

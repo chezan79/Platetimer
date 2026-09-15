@@ -164,8 +164,13 @@ async function run() {
             normalizeBusinessDate('not-a-date') === null &&
             normalizeBusinessDate(impossibleValue) === null &&
             normalizeBusinessDate('2026-02-30T10:00:00Z') === null, [...ids]);
-        check('excludes unpublished and terminal tasks',
-            !ids.has(unpublished.id) && !ids.has(completed.id) && !ids.has(cancelled.id), [...ids]);
+        check('includes same-day completed tasks and excludes unpublished or cancelled tasks',
+            !ids.has(unpublished.id) && ids.has(completed.id) && !ids.has(cancelled.id), [...ids]);
+        const completedProjection = (r.data.tasks || []).find(task => task.id === completed.id);
+        check('completed projection exposes only safe completion context',
+            completedProjection?.completedAt && 'completedByWorkerName' in completedProjection &&
+            !('completedByWorkerId' in completedProjection) && !('history' in completedProjection),
+            completedProjection);
         check('excludes acknowledged task', !ids.has(acknowledged.id), [...ids]);
         check('enforces department and company isolation',
             !ids.has(wrongDept.id) && !ids.has(otherCompanyTask.id), [...ids]);

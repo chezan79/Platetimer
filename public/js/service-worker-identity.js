@@ -137,18 +137,34 @@
     }
   }
 
+  function emitChange(current) {
+    if (typeof root.dispatchEvent !== 'function') return;
+    const detail = {
+      worker: current && current.worker
+        ? { id: current.worker.id, displayName: current.worker.displayName }
+        : null
+    };
+    if (typeof root.CustomEvent === 'function') {
+      root.dispatchEvent(new root.CustomEvent('service-worker-identity-change', { detail: detail }));
+    }
+  }
+
   function render(current) {
     const banner = document.getElementById('worker-identity-banner');
     const name = document.getElementById('worker-current-name');
     const status = document.getElementById('worker-identity-status');
     const clear = document.getElementById('worker-clear-btn');
-    if (!banner) return;
+    if (!banner) {
+      emitChange(current);
+      return;
+    }
     banner.classList.toggle('has-worker', !!current);
     if (name) name.textContent = current && current.worker
       ? current.worker.displayName : 'Nessun lavoratore selezionato';
     if (status) status.textContent = current
       ? 'Operatore attivo' : (disabled ? 'Identità non disponibile' : 'Dispositivo reparto');
     if (clear) clear.style.display = current ? '' : 'none';
+    emitChange(current);
   }
 
   function closeModal() {
