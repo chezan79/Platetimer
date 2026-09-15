@@ -54,6 +54,8 @@ for (const { locale, data } of dictionaries) {
     'service.todayTasks.todo', 'service.todayTasks.todoEmpty',
     'service.todayTasks.inProgress', 'service.todayTasks.inProgressEmpty',
     'service.todayTasks.completed', 'service.todayTasks.completedEmpty',
+    'service.todayTasksViewLabel', 'service.todayTasksAllWork',
+    'service.todayTasksMyWork', 'service.todayTasksMyWorkEmpty',
     'service.todayTasksClaim', 'service.todayTasksStart', 'service.todayTasksComplete',
     'service.todayTasksRenew', 'service.todayTasksLeaseWarning', 'service.todayTasksRelease', 'service.todayTasksOwnedBy',
     'service.todayTasksCompletedAt', 'service.todayTasksDue'
@@ -127,6 +129,22 @@ async function behaviorChecks() {
     sections.inProgress.map(t => t.id).join(',') === 'mine,other');
   check('completed tasks sort newest first',
     sections.completed.map(t => t.id).join(',') === 'newer,older');
+
+  vm.runInContext(extractFunction('_opsMyActiveTasks'), classifyContext);
+  const myTasks = classifyContext._opsMyActiveTasks([
+    { id:'mine-open', status:'OPEN', claim:{status:'ACTIVE',workerId:'worker-me'} },
+    { id:'mine-progress', status:'IN_PROGRESS', claim:{status:'ACTIVE',workerId:'worker-me'} },
+    { id:'other', status:'IN_PROGRESS', claim:{status:'ACTIVE',workerId:'worker-other'} },
+    { id:'mine-released', status:'IN_PROGRESS', claim:{status:'RELEASED',workerId:'worker-me'} },
+    { id:'mine-done', status:'COMPLETED', claim:{status:'ACTIVE',workerId:'worker-me'} }
+  ]);
+  check('my-work filter includes only the verified worker active actionable claims',
+    myTasks.map(t => t.id).join(',') === 'mine-open,mine-progress');
+  classifyContext.ServiceWorkerIdentity.getState = () => ({ worker:{id:'worker-me'} });
+  check('my-work filter requires verified proof', classifyContext._opsMyActiveTasks([
+    { id:'mine', status:'OPEN', claim:{status:'ACTIVE',workerId:'worker-me'} }
+  ]).length === 0);
+  classifyContext.ServiceWorkerIdentity.getState = () => ({ worker: { id: 'worker-me' }, proof: 'proof' });
 
   const buttonContext = {
     window: {}, ServiceWorkerIdentity: classifyContext.ServiceWorkerIdentity,
@@ -218,18 +236,26 @@ async function behaviorChecks() {
   let identityRenders = 0;
   let identityClears = 0;
   const identityContext = {
+    window: {},
+    ServiceWorkerIdentity: { getState: () => null },
     renderOpsTasks: () => { identityRenders++; },
     _opsClearLeaseTimer: () => { identityClears++; },
-    opsLeaseReconcileKey: 'old'
+    opsLeaseReconcileKey: 'old',
+    opsTasksView: 'mine'
   };
+  identityContext.window.ServiceWorkerIdentity = identityContext.ServiceWorkerIdentity;
   vm.createContext(identityContext);
-  vm.runInContext(extractFunction('_opsHandleWorkerIdentityChange'), identityContext);
+  vm.runInContext([
+    extractFunction('_opsCurrentWorker'), extractFunction('_opsHandleWorkerIdentityChange')
+  ].join(';'), identityContext);
   identityContext._opsHandleWorkerIdentityChange();
   identityContext._opsHandleWorkerIdentityChange();
   identityContext._opsHandleWorkerIdentityChange();
   identityContext._opsHandleWorkerIdentityChange();
   check('verify, handoff, clear and expiry events can rerender controls without a task reload',
     identityRenders === 4 && identityClears === 4 && identityContext.opsLeaseReconcileKey === '');
+  check('losing verified identity restores the complete workspace view',
+    identityContext.opsTasksView === 'all');
 
   const pending = [];
   const requestContext = {

@@ -644,6 +644,13 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 #ops-tasks-section .ra-hdr{margin-bottom:14px;}
 #ops-tasks-section .ra-title{font-size:22px;}
 .ops-workspace-counts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:0 0 16px;}
+.ops-view-switch{display:flex;align-items:center;gap:8px;margin:0 0 14px;padding:4px;background:rgba(79,70,229,.07);
+  border:1px solid rgba(79,70,229,.14);border-radius:11px;width:fit-content;}
+.ops-view-btn{min-height:42px;padding:8px 14px;border:0;border-radius:8px;background:transparent;color:var(--muted);
+  font-size:14px;font-weight:700;cursor:pointer;}
+.ops-view-btn.active{background:var(--card);color:var(--accent);box-shadow:0 1px 3px rgba(0,0,0,.1);}
+.ops-view-btn:disabled{opacity:.48;cursor:not-allowed;}
+.ops-view-empty{padding:28px 18px;border:1px dashed var(--border-l);border-radius:10px;color:var(--muted);text-align:center;}
 .ops-workspace-count{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:9px 8px;text-align:center;}
 .ops-workspace-count strong{display:block;font-size:20px;color:var(--text);}
 .ops-workspace-count span{display:block;font-size:11px;color:var(--muted);margin-top:2px;}
@@ -727,6 +734,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
   .ops-task-footer{display:grid;grid-template-columns:1fr;}
   .ops-ack-btn,.ops-detail-btn{width:100%;}
   .ops-workspace-count span{font-size:10px;}
+  .ops-view-switch{display:grid;grid-template-columns:1fr 1fr;width:100%;}
 }
 
 /* ── OPERATIONS TASK DETAIL MODAL ─────────────────────────────────────────── */
@@ -1207,11 +1215,14 @@ let opsRefreshTimer = null;
 let opsRequestGeneration = 0;
 let opsLeaseTimer = null;
 let opsLeaseReconcileKey = '';
+let opsTasksView = 'all';
 const OPS_LEASE_WARNING_MS = 5 * 60 * 1000;
 
 function _opsHandleWorkerIdentityChange(){
   _opsClearLeaseTimer();
   opsLeaseReconcileKey = '';
+  const identity = _opsCurrentWorker();
+  if(!identity || !identity.proof || !identity.worker) opsTasksView = 'all';
   renderOpsTasks();
 }
 window.addEventListener('service-worker-identity-change', _opsHandleWorkerIdentityChange);
@@ -2556,6 +2567,22 @@ function _opsClassifyTasks(tasks){
   return sections;
 }
 
+function _opsMyActiveTasks(tasks){
+  const current = _opsCurrentWorker();
+  const workerId = current && current.proof && current.worker && current.worker.id;
+  if(!workerId) return [];
+  return tasks.filter(task =>
+    (task.status === 'OPEN' || task.status === 'IN_PROGRESS') &&
+    _opsClaimIsActive(task.claim) && task.claim.workerId === workerId);
+}
+
+function setOpsTasksView(view){
+  const current = _opsCurrentWorker();
+  const verified = !!(current && current.proof && current.worker);
+  opsTasksView = view === 'mine' && verified ? 'mine' : 'all';
+  renderOpsTasks();
+}
+
 function _opsFmtCompleted(value){
   if(!value) return '';
   const d = new Date(value);
@@ -2630,13 +2657,30 @@ function renderOpsTasks(){
     return;
   }
   const arr = Array.from(opsTasks.values());
-  const sections = _opsClassifyTasks(arr);
-  if(cnt) cnt.textContent = arr.length;
+  const current = _opsCurrentWorker();
+  const verified = !!(current && current.proof && current.worker);
+  if(opsTasksView === 'mine' && !verified) opsTasksView = 'all';
+  const mine = _opsMyActiveTasks(arr);
+  const displayed = opsTasksView === 'mine' ? mine : arr;
+  const sections = _opsClassifyTasks(displayed);
+  if(cnt) cnt.textContent = displayed.length;
+  const switcher = `<div class="ops-view-switch" role="group" aria-label="${esc(_ot('service.todayTasksViewLabel'))}">
+    <button class="ops-view-btn${opsTasksView === 'all' ? ' active' : ''}" type="button"
+      aria-pressed="${opsTasksView === 'all'}" onclick="setOpsTasksView('all')">${esc(_ot('service.todayTasksAllWork'))} (${arr.length})</button>
+    <button class="ops-view-btn${opsTasksView === 'mine' ? ' active' : ''}" type="button"
+      aria-pressed="${opsTasksView === 'mine'}" onclick="setOpsTasksView('mine')"${verified ? '' : ' disabled'}>
+      ${esc(_ot('service.todayTasksMyWork'))} (${mine.length})</button>
+  </div>`;
   const block = (key, items) => `<section class="ops-workspace-section" data-section="${key}">
     <div class="ops-workspace-heading"><span>${esc(_ot(`service.todayTasks.${key}`))}</span><span class="ra-count">${items.length}</span></div>
     <div class="ops-workspace-list">${items.length ? items.map(t => _opsTaskCard(t,key)).join('') :
       `<div class="ops-section-empty">${esc(_ot(`service.todayTasks.${key}Empty`))}</div>`}</div></section>`;
-  list.innerHTML = `<div class="ops-workspace-counts">
+  if(opsTasksView === 'mine' && !mine.length){
+    list.innerHTML = `${switcher}<div class="ops-view-empty">${esc(_ot('service.todayTasksMyWorkEmpty'))}</div>`;
+    _opsScheduleLeaseWarnings();
+    return;
+  }
+  list.innerHTML = `${switcher}<div class="ops-workspace-counts">
       <div class="ops-workspace-count"><strong>${sections.todo.length}</strong><span>${esc(_ot('service.todayTasks.todo'))}</span></div>
       <div class="ops-workspace-count"><strong>${sections.inProgress.length}</strong><span>${esc(_ot('service.todayTasks.inProgress'))}</span></div>
       <div class="ops-workspace-count"><strong>${sections.completed.length}</strong><span>${esc(_ot('service.todayTasks.completed'))}</span></div>
