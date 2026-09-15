@@ -53,3 +53,4 @@
 - [Service individual identity target](service-individual-identity.md) — keep department/device auth separate from a short-lived verified worker identity; Operations linking is optional and permission-neutral.
 - [Service task action authority](service-task-action-authority.md) — claims, acknowledgements, leases, revisions, idempotency, and full task recovery share one transaction record.
 - [Service Today workspace](service-today-workspace.md) — released/expired IN_PROGRESS tasks remain reclaimable; completion attribution never falls back to claim ownership.
+- [Service execution targeting](service-execution-targeting.md) — keep Operations assignment separate; typed Service targets always retain a department boundary, and ROLE needs its own canonical model.
