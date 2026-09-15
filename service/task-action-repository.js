@@ -54,7 +54,13 @@ class TaskActionRepository {
         this.completionFreshnessMs = Number(options.completionFreshnessMs) > 0
             ? Number(options.completionFreshnessMs) : 5 * 60 * 1000;
         this.persist = typeof options.persist === 'function' ? options.persist : null;
-        this.state = { tasks: {}, idempotency: {}, history: {}, activeLeases: {} };
+        this.state = {
+            tasks: {},
+            idempotency: {},
+            history: {},
+            activeLeases: {},
+            authorizationFences: {}
+        };
         this.queue = Promise.resolve();
     }
 
@@ -83,7 +89,9 @@ class TaskActionRepository {
             tasks: value.tasks && typeof value.tasks === 'object' ? value.tasks : {},
             idempotency: value.idempotency && typeof value.idempotency === 'object' ? value.idempotency : {},
             history: value.history && typeof value.history === 'object' ? value.history : {},
-            activeLeases: value.activeLeases && typeof value.activeLeases === 'object' ? value.activeLeases : {}
+            activeLeases: value.activeLeases && typeof value.activeLeases === 'object' ? value.activeLeases : {},
+            authorizationFences: value.authorizationFences && typeof value.authorizationFences === 'object'
+                ? value.authorizationFences : {}
         };
     }
 
@@ -102,6 +110,13 @@ class TaskActionRepository {
     _indexRef(companyId, taskId, kind, value) {
         return this.db.collection(`${this.collectionName}_active_leases`)
             .doc(`${companyId}::${kind}::${value}::${taskId}`);
+    }
+    _fenceKey(companyId, workerId) {
+        return `${String(companyId)}::${String(workerId)}`;
+    }
+    _fenceRef(companyId, workerId) {
+        return this.db.collection(`${this.collectionName}_authorization_fences`)
+            .doc(this._fenceKey(companyId, workerId));
     }
     _leaseIndex(task) {
         if (!task || task.claimLeaseStatus !== 'ACTIVE') return [];
@@ -127,6 +142,74 @@ class TaskActionRepository {
         }
     }
 
+    _fenceFromWorker(input) {
+        const worker = input.worker || input;
+        const memberships = {};
+        for (const member of worker.departmentMemberships || []) {
+            if (member && member.departmentId) {
+                memberships[member.departmentId] = {
+                    authorizationVersion: Number(member.authorizationVersion || 0),
+                    validFrom: member.validFrom == null ? null : Number(member.validFrom),
+                    validUntil: member.validUntil == null ? null : Number(member.validUntil)
+                };
+            }
+        }
+        return {
+            companyId: input.companyId || worker.companyId,
+            workerId: input.workerId || worker.id || worker.workerId,
+            authorizationVersion: Number(worker.authorizationVersion || input.authorizationVersion || 0),
+            membershipAuthorizationVersions: memberships,
+            revocationEpoch: Number(input.revocationEpoch || 0),
+            updatedAt: nowValue(this.clock),
+            reason: input.reason || 'WORKER_AUTHORIZATION_CHANGED'
+        };
+    }
+
+    _fenceAllows(context, fence) {
+        if (!fence) return true; // legacy tasks/workers are fenced on next mutation
+        if (!context || context.authorizationVersion == null ||
+            Number(context.authorizationVersion) !== Number(fence.authorizationVersion)) return false;
+        const membership = fence.membershipAuthorizationVersions &&
+            fence.membershipAuthorizationVersions[context.departmentId];
+        if (!membership || context.membershipAuthorizationVersion == null ||
+            Number(context.membershipAuthorizationVersion) !== Number(membership.authorizationVersion)) return false;
+        if (fence.revocationEpoch != null &&
+            Number(context.proofEpoch || 0) !== Number(fence.revocationEpoch)) return false;
+        const now = nowValue(this.clock);
+        if (membership.validFrom != null && now < Number(membership.validFrom)) return false;
+        if (membership.validUntil != null && now > Number(membership.validUntil)) return false;
+        return true;
+    }
+
+    _authorizationDenied() {
+        // Never attach a task, revision, claimant, or idempotency outcome to
+        // an authorization failure. This is used before all replay/CAS paths.
+        return fail(403, 'Worker is not authorized for this task.', {
+            code: 'WORKER_NOT_AUTHORIZED'
+        });
+    }
+
+    _authorizationGate(input, task, fence) {
+        if (input.action === 'override' || (input.context && input.context.actorKind === 'OPERATIONS_USER')) {
+            return null;
+        }
+        const context = input.context || {};
+        const target = executionTargets.effectiveTarget(task);
+        const identityMatchesTarget = task && task.companyId === context.companyId &&
+            target && target.type !== executionTargets.ROLE &&
+            target.departmentId === context.departmentId &&
+            (target.type !== executionTargets.PERSON || target.workerId === context.workerId);
+        const entitled = input.allowAuthorizedReplay
+            ? identityMatchesTarget
+            : this._entitled(task, context);
+        if (!this._workerValid(context, task, false) ||
+            !this._fenceAllows(context, fence) ||
+            !entitled) {
+            return this._authorizationDenied();
+        }
+        return null;
+    }
+
     _stateFor(task, previous, options = {}) {
         const value = clone(task || {});
         const target = executionTargets.effectiveTarget(value);
@@ -136,8 +219,13 @@ class TaskActionRepository {
         const old = previous || {};
         const incomingRevision = Number(value.serviceActionRevision || 0);
         const oldRevision = Number(old.serviceActionRevision || 0);
-        const preserveServiceState = previous && incomingRevision <= oldRevision;
-        if (previous && incomingRevision < oldRevision) {
+        // A target mutation is itself an authoritative Service-state change.
+        // Do not let a stale action revision discard it before the invalidation
+        // check can close an incompatible active lease.
+        const targetChanged = previous &&
+            JSON.stringify(target) !== JSON.stringify(executionTargets.effectiveTarget(old));
+        const preserveServiceState = previous && incomingRevision <= oldRevision && !targetChanged;
+        if (previous && incomingRevision < oldRevision && !targetChanged) {
             return clone(old);
         }
         if (previous && preserveServiceState && !options.allowMetadataOverwrite) {
@@ -158,6 +246,7 @@ class TaskActionRepository {
             'claimLeaseExpiresAt', 'claimLeaseAbsoluteExpiresAt',
             'claimLeaseStatus', 'claimLeaseClosedAt', 'claimLeaseCloseReason',
             'claimWorkerAuthorizationVersion', 'claimMembershipAuthorizationVersion',
+            'claimMembershipValidFrom', 'claimMembershipValidUntil',
             'startedByWorkerId', 'startedByWorkerName', 'completedByWorkerId',
             'completedByWorkerName'
         ]) {
@@ -236,9 +325,12 @@ class TaskActionRepository {
 
     _entitled(task, context) {
         const target = executionTargets.effectiveTarget(task);
+        const targetWorkerAllowed = target && target.type !== executionTargets.ROLE &&
+            (target.type !== executionTargets.PERSON || target.workerId === context.workerId);
         return task && task.companyId === context.companyId &&
             task.publishToService === true &&
             target && target.departmentId === context.departmentId &&
+            targetWorkerAllowed &&
             ACTIVE_STATUSES.has(task.status);
     }
 
@@ -247,6 +339,9 @@ class TaskActionRepository {
         if (context.accountStatus && context.accountStatus !== 'ACTIVE') return false;
         if (context.departmentActive === false || context.membershipActive === false ||
             context.workerActive === false || context.serviceEnabled === false) return false;
+        const now = nowValue(this.clock);
+        if (context.membershipValidFrom != null && now < Number(context.membershipValidFrom)) return false;
+        if (context.membershipValidUntil != null && now > Number(context.membershipValidUntil)) return false;
         if (task && task.claimWorkerAuthorizationVersion != null &&
             context.authorizationVersion != null &&
             task.claimWorkerAuthorizationVersion !== context.authorizationVersion && requireClaim) return false;
@@ -288,6 +383,33 @@ class TaskActionRepository {
 
     _expired(task, now) {
         return task.claimLeaseStatus === 'ACTIVE' && Number(task.claimLeaseExpiresAt) <= now;
+    }
+
+    _membershipExpired(task, fence, now) {
+        if (!task || task.claimLeaseStatus !== 'ACTIVE') return false;
+        const member = fence && fence.membershipAuthorizationVersions &&
+            fence.membershipAuthorizationVersions[task.claimDepartmentId];
+        const until = member && member.validUntil != null
+            ? member.validUntil : task.claimMembershipValidUntil;
+        return until != null && Number(until) <= now;
+    }
+
+    _closeMembershipExpired(task, now) {
+        if (!task || task.claimLeaseStatus !== 'ACTIVE') return false;
+        const from = task.claimLeaseStatus;
+        task.claimLeaseStatus = 'INVALIDATED';
+        task.claimLeaseClosedAt = now;
+        task.claimLeaseCloseReason = 'MEMBERSHIP_EXPIRED';
+        task.serviceActionRevision = Number(task.serviceActionRevision || 0) + 1;
+        this._recordHistory(task, 'SERVICE_CLAIM_INVALIDATED', {
+            actorKind: 'SYSTEM',
+            departmentId: task.claimDepartmentId
+        }, {
+            reason: 'MEMBERSHIP_EXPIRED',
+            fromLeaseStatus: from,
+            toLeaseStatus: 'INVALIDATED'
+        });
+        return true;
     }
 
     _closeExpired(task, context, now) {
@@ -394,6 +516,8 @@ class TaskActionRepository {
             task.claimLeaseCloseReason = null;
             task.claimWorkerAuthorizationVersion = context.authorizationVersion ?? null;
             task.claimMembershipAuthorizationVersion = context.membershipAuthorizationVersion ?? null;
+            task.claimMembershipValidFrom = context.membershipValidFrom ?? null;
+            task.claimMembershipValidUntil = context.membershipValidUntil ?? null;
             task.serviceActionRevision++;
             this._recordHistory(task, 'SERVICE_CLAIMED', context, {
                 fromStatus: task.status, toStatus: task.status, leaseId,
@@ -547,27 +671,30 @@ class TaskActionRepository {
         if (this.db) return this._actionFirestore(input);
         const key = this._key(input);
         const requestHash = this._requestFingerprint(input);
-        let task;
-        if (this.db) {
-            const ref = this._ref(input.companyId, input.taskId);
-            const snapshot = await ref.get();
-            task = snapshot.exists ? (snapshot.data().task || snapshot.data()) : null;
-            const oldIdempotency = snapshot.exists ? snapshot.data().idempotency || {} : {};
-            if (oldIdempotency[key]) {
-                return oldIdempotency[key].fingerprint === requestHash
-                    ? { ...clone(oldIdempotency[key].outcome), idempotent: true }
-                    : fail(409, 'Idempotency key was already used with another request.', { code: 'IDEMPOTENCY_CONFLICT' });
-            }
-        } else {
-            const existing = this.state.idempotency[key];
-            if (existing) {
-                return existing.fingerprint === requestHash
-                    ? { ...clone(existing.outcome), idempotent: true }
-                    : fail(409, 'Idempotency key was already used with another request.', { code: 'IDEMPOTENCY_CONFLICT' });
-            }
-            task = clone(this.state.tasks[taskKey(input.companyId, input.taskId)]);
-        }
+        const existing = this.state.idempotency[key];
+        const task = clone(this.state.tasks[taskKey(input.companyId, input.taskId)]);
         if (!task) return fail(404, 'Task not found.', { code: 'TASK_NOT_FOUND' });
+        const fence = this.state.authorizationFences[this._fenceKey(input.companyId, input.workerId)];
+        if (this._membershipExpired(task, fence, nowValue(this.clock))) {
+            const before = clone(task);
+            this._closeMembershipExpired(task, nowValue(this.clock));
+            const denied = this._authorizationDenied();
+            await this._commit({
+                ...input,
+                idempotencyKey: `${input.idempotencyKey}:membership-expiry`
+            }, task, before, denied);
+            return denied;
+        }
+        const denied = this._authorizationGate({
+            ...input,
+            allowAuthorizedReplay: !!existing && existing.fingerprint === requestHash
+        }, task, fence);
+        if (denied) return denied;
+        if (existing) {
+            return existing.fingerprint === requestHash
+                ? { ...clone(existing.outcome), idempotent: true }
+                : fail(409, 'Idempotency key was already used with another request.', { code: 'IDEMPOTENCY_CONFLICT' });
+        }
         const before = clone(task);
         const result = this._perform(input, task);
         if (!result.ok) {
@@ -607,13 +734,35 @@ class TaskActionRepository {
             const snapshot = await transaction.get(ref);
             if (!snapshot.exists) return fail(404, 'Task not found.', { code: 'TASK_NOT_FOUND' });
             const data = snapshot.data() || {};
+            const fenceSnapshot = input.workerId
+                ? await transaction.get(this._fenceRef(input.companyId, input.workerId))
+                : null;
+            const fence = fenceSnapshot && fenceSnapshot.exists ? fenceSnapshot.data() : null;
+            const task = clone(data.task || data);
             const idempotency = data.idempotency || {};
+            const now = nowValue(this.clock);
+            if (this._membershipExpired(task, fence, now)) {
+                const before = clone(task);
+                this._closeMembershipExpired(task, now);
+                transaction.set(ref, {
+                    task,
+                    idempotency,
+                    updatedAt: now
+                }, { merge: true });
+                this._transactionIndexUpdate(transaction, input.companyId, input.taskId, before, task);
+                return this._authorizationDenied();
+            }
+            const denied = this._authorizationGate({
+                ...input,
+                allowAuthorizedReplay: !!idempotency[key] &&
+                    idempotency[key].fingerprint === requestHash
+            }, task, fence);
+            if (denied) return denied;
             if (idempotency[key]) {
                 return idempotency[key].fingerprint === requestHash
                     ? { ...clone(idempotency[key].outcome), idempotent: true }
                     : fail(409, 'Idempotency key was already used with another request.', { code: 'IDEMPOTENCY_CONFLICT' });
             }
-            const task = clone(data.task || data);
             const before = clone(task);
             const result = this._perform(input, task);
             const changed = Number(task.serviceActionRevision || 0) !== Number(before.serviceActionRevision || 0);
@@ -642,6 +791,196 @@ class TaskActionRepository {
     renew(input) { return this.action({ ...input, action: 'renew' }); }
     release(input) { return this.action({ ...input, action: 'release' }); }
     complete(input) { return this.action({ ...input, action: 'complete' }); }
+
+    _invalidateWorkerLeasesLocal(fence, options = {}) {
+        const invalidated = [];
+        const now = nowValue(this.clock);
+        for (const task of Object.values(this.state.tasks)) {
+            if (!task || task.companyId !== fence.companyId ||
+                task.claimLeaseStatus !== 'ACTIVE' ||
+                task.claimedByWorkerId !== fence.workerId) continue;
+            task.claimLeaseStatus = 'INVALIDATED';
+            task.claimLeaseClosedAt = now;
+            task.claimLeaseCloseReason = options.reason || fence.reason;
+            task.serviceActionRevision = Number(task.serviceActionRevision || 0) + 1;
+            this._recordHistory(task, 'SERVICE_CLAIM_INVALIDATED', {
+                actorKind: options.actorKind || 'SYSTEM',
+                actorId: options.actorId,
+                actorName: options.actorName,
+                departmentId: task.claimDepartmentId
+            }, { reason: task.claimLeaseCloseReason });
+            invalidated.push(clone(task));
+        }
+        return invalidated;
+    }
+
+    // Local persistence has no cross-process transaction. The fence is applied
+    // synchronously before the returned persistence promise, so an action
+    // cannot enter this process after the worker mutation and before the fence.
+    async advanceWorkerFence(input = {}) {
+        if (!input.companyId || !input.workerId) {
+            throw new Error('companyId and workerId are required for an authorization fence.');
+        }
+        if (this.db) {
+            const result = await this._enqueue(() => this.db.runTransaction(transaction =>
+                this.writeWorkerFenceInTransaction(transaction, input)
+            ));
+            // Keep the process-local mirror useful for diagnostics and for
+            // callers that inspect repository state after a Firestore commit.
+            const key = this._fenceKey(result.fence.companyId, result.fence.workerId);
+            this.state.authorizationFences[key] = clone(result.fence);
+            for (const task of result.invalidated || []) {
+                const taskKeyValue = taskKey(task.companyId, task.id);
+                this.state.tasks[taskKeyValue] = clone(task);
+                for (const [indexKey, entry] of Object.entries(this.state.activeLeases)) {
+                    if (entry && entry.companyId === task.companyId && entry.taskId === task.id) {
+                        delete this.state.activeLeases[indexKey];
+                    }
+                }
+            }
+            return result;
+        }
+        const oldFence = this.state.authorizationFences[this._fenceKey(input.companyId, input.workerId)];
+        const fence = this._fenceFromWorker({
+            ...input,
+            revocationEpoch: input.revocationEpoch == null
+                ? Number(oldFence && oldFence.revocationEpoch || 0) : input.revocationEpoch
+        });
+        const apply = () => {
+            this.state.authorizationFences[this._fenceKey(fence.companyId, fence.workerId)] = fence;
+            const invalidated = this._invalidateWorkerLeasesLocal(fence, input);
+            return { fence: clone(fence), invalidated };
+        };
+        const result = apply();
+        return this._enqueue(async () => {
+            if (this.persist) await this.persist(clone(this.state));
+            else if (this.filePath) {
+                const tmp = `${this.filePath}.tmp-${process.pid}-${Date.now()}`;
+                fs.mkdirSync(path.dirname(this.filePath), { recursive: true });
+                fs.writeFileSync(tmp, JSON.stringify(this.state, null, 2));
+                fs.renameSync(tmp, this.filePath);
+            }
+            return result;
+        });
+    }
+
+    async revokeWorkerFence(input = {}) {
+        if (this.db) {
+            return this.advanceWorkerFence({ ...input, incrementRevocationEpoch: true });
+        }
+        const old = this.state.authorizationFences[this._fenceKey(input.companyId, input.workerId)];
+        return this.advanceWorkerFence({
+            ...input,
+            revocationEpoch: Number(old && old.revocationEpoch || 0) + 1
+        });
+    }
+
+    // Create the initial worker authorization fence without treating
+    // verification itself as a revocation event. This is intentionally
+    // create-if-missing: an existing epoch/version fence is authoritative and
+    // must survive repeated proof issuance and process restarts unchanged.
+    async ensureWorkerFence(input = {}) {
+        if (!input.companyId || !input.workerId) {
+            throw new Error('companyId and workerId are required for an authorization fence.');
+        }
+        if (this.db) {
+            const result = await this._enqueue(() => this.db.runTransaction(async transaction => {
+                const fenceRef = this._fenceRef(input.companyId, input.workerId);
+                const snapshot = await transaction.get(fenceRef);
+                if (snapshot && snapshot.exists) {
+                    return { fence: clone(snapshot.data()), created: false };
+                }
+                const fence = this._fenceFromWorker({
+                    ...input,
+                    revocationEpoch: 0
+                });
+                transaction.set(fenceRef, fence);
+                return { fence, created: true };
+            }));
+            this.state.authorizationFences[
+                this._fenceKey(result.fence.companyId, result.fence.workerId)
+            ] = clone(result.fence);
+            return result;
+        }
+        return this._enqueue(async () => {
+            const key = this._fenceKey(input.companyId, input.workerId);
+            const existing = this.state.authorizationFences[key];
+            if (existing) return { fence: clone(existing), created: false };
+            const fence = this._fenceFromWorker({ ...input, revocationEpoch: 0 });
+            this.state.authorizationFences[key] = fence;
+            if (this.persist) await this.persist(clone(this.state));
+            else if (this.filePath) {
+                const tmp = `${this.filePath}.tmp-${process.pid}-${Date.now()}`;
+                fs.mkdirSync(path.dirname(this.filePath), { recursive: true });
+                fs.writeFileSync(tmp, JSON.stringify(this.state, null, 2));
+                fs.renameSync(tmp, this.filePath);
+            }
+            return { fence: clone(fence), created: true };
+        });
+    }
+
+    async readWorkerFence(companyId, workerId) {
+        if (!companyId || !workerId) return null;
+        if (!this.db) return clone(this.state.authorizationFences[this._fenceKey(companyId, workerId)] || null);
+        const snapshot = await this._fenceRef(companyId, workerId).get();
+        return snapshot.exists ? clone(snapshot.data()) : null;
+    }
+
+    async writeWorkerFenceInTransaction(transaction, input = {}) {
+        const fenceRef = this._fenceRef(input.companyId, input.workerId);
+        const previous = await transaction.get(fenceRef);
+        const old = previous && previous.exists ? previous.data() : null;
+        const fence = this._fenceFromWorker({
+            ...input,
+            revocationEpoch: input.revocationEpoch == null
+                ? Number(old && old.revocationEpoch || 0) +
+                    (input.incrementRevocationEpoch ? 1 : 0)
+                : input.revocationEpoch
+        });
+        const leaseQuery = this.db.collection(`${this.collectionName}_active_leases`)
+            .where('companyId', '==', fence.companyId);
+        const leaseSnapshot = await transaction.get(leaseQuery);
+        const invalidated = [];
+        const taskWrites = [];
+        for (const lease of leaseSnapshot.docs || []) {
+            if (lease.data().workerId !== fence.workerId) continue;
+            const taskRef = this._ref(fence.companyId, lease.data().taskId);
+            const taskSnapshot = await transaction.get(taskRef);
+            if (!taskSnapshot.exists) continue;
+            const data = taskSnapshot.data() || {};
+            const task = clone(data.task || data);
+            if (task.claimLeaseStatus !== 'ACTIVE' ||
+                task.claimedByWorkerId !== fence.workerId) continue;
+            task.claimLeaseStatus = 'INVALIDATED';
+            task.claimLeaseClosedAt = nowValue(this.clock);
+            task.claimLeaseCloseReason = input.reason || fence.reason;
+            task.serviceActionRevision = Number(task.serviceActionRevision || 0) + 1;
+            this._recordHistory(task, 'SERVICE_CLAIM_INVALIDATED', {
+                actorKind: input.actorKind || 'SYSTEM',
+                actorId: input.actorId,
+                actorName: input.actorName,
+                departmentId: task.claimDepartmentId
+            }, { reason: task.claimLeaseCloseReason });
+            taskWrites.push({
+                taskRef,
+                task,
+                idempotency: data.idempotency || {},
+                updatedAt: nowValue(this.clock)
+                , before: data.task || data
+            });
+            invalidated.push(clone(task));
+        }
+        for (const write of taskWrites) {
+            transaction.set(write.taskRef, {
+                task: write.task,
+                idempotency: write.idempotency,
+                updatedAt: write.updatedAt
+            }, { merge: true });
+            this._transactionIndexUpdate(transaction, fence.companyId, write.task.id, write.before, write.task);
+        }
+        transaction.set(fenceRef, fence, { merge: true });
+        return { fence, previous: old, invalidated };
+    }
 
     async registerTask(task) {
         if (!task || !task.companyId || !task.id) return fail(400, 'A canonical company task is required.');
@@ -780,7 +1119,8 @@ class TaskActionRepository {
             const now = nowValue(this.clock);
             const lost = old && old.claimLeaseStatus === 'ACTIVE' &&
                 (value.publishToService !== true ||
-                 executionTargets.effectiveTarget(value)?.departmentId !== executionTargets.effectiveTarget(old)?.departmentId ||
+                 JSON.stringify(executionTargets.effectiveTarget(value)) !==
+                     JSON.stringify(executionTargets.effectiveTarget(old)) ||
                  !ACTIVE_STATUSES.has(value.status));
             if (lost) {
                 value.claimLeaseStatus = 'INVALIDATED';
@@ -854,7 +1194,8 @@ class TaskActionRepository {
         const currentRevision = Number(current && current.serviceActionRevision || 0);
         const lost = current && current.claimLeaseStatus === 'ACTIVE' &&
             (committed.publishToService !== true ||
-             executionTargets.effectiveTarget(committed)?.departmentId !== executionTargets.effectiveTarget(current)?.departmentId ||
+             JSON.stringify(executionTargets.effectiveTarget(committed)) !==
+                 JSON.stringify(executionTargets.effectiveTarget(current)) ||
              !ACTIVE_STATUSES.has(committed.status));
         const metadataChanged = current && JSON.stringify({
             status: current.status, title: current.title, description: current.description,
@@ -1221,7 +1562,7 @@ class TaskActionRepository {
         return clone(value ? this._safeTask(value) : null);
     }
     async readTask(companyId, taskId, options = {}) {
-        if (!options.materializeExpiry) {
+        if (options.materializeExpiry === false) {
             if (!this.db) return this.getRawTask(companyId, taskId);
             const snapshot = await this._ref(companyId, taskId).get();
             if (!snapshot.exists) return null;
@@ -1235,9 +1576,16 @@ class TaskActionRepository {
                     const snapshot = await transaction.get(ref);
                     if (!snapshot.exists) return null;
                     const current = clone(snapshot.data().task || snapshot.data());
-                    if (!this._expired(current, now)) return current;
+                    const fenceSnapshot = current.claimLeaseStatus === 'ACTIVE' &&
+                        current.claimedByWorkerId
+                        ? await transaction.get(this._fenceRef(companyId, current.claimedByWorkerId))
+                        : null;
+                    const fence = fenceSnapshot && fenceSnapshot.exists ? fenceSnapshot.data() : null;
+                    const membershipExpired = this._membershipExpired(current, fence, now);
+                    if (!this._expired(current, now) && !membershipExpired) return current;
                     const next = clone(current);
-                    this._closeExpired(next, { actorKind: 'SYSTEM' }, now);
+                    if (membershipExpired) this._closeMembershipExpired(next, now);
+                    else this._closeExpired(next, { actorKind: 'SYSTEM' }, now);
                     transaction.set(ref, {
                         task: next,
                         idempotency: snapshot.data().idempotency || {},
@@ -1249,9 +1597,14 @@ class TaskActionRepository {
             }
             const key = taskKey(companyId, taskId);
             const current = clone(this.state.tasks[key]);
-            if (!current || !this._expired(current, now)) return current;
+            const fence = current && current.claimedByWorkerId
+                ? this.state.authorizationFences[this._fenceKey(companyId, current.claimedByWorkerId)]
+                : null;
+            const membershipExpired = this._membershipExpired(current, fence, now);
+            if (!current || (!this._expired(current, now) && !membershipExpired)) return current;
             const nextTask = clone(current);
-            this._closeExpired(nextTask, { actorKind: 'SYSTEM' }, now);
+            if (membershipExpired) this._closeMembershipExpired(nextTask, now);
+            else this._closeExpired(nextTask, { actorKind: 'SYSTEM' }, now);
             const next = clone(this.state);
             next.tasks[key] = nextTask;
             next.history[key] = clone(nextTask.history || []);

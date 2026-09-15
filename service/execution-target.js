@@ -1,35 +1,61 @@
 'use strict';
 
 const DEPARTMENT = 'DEPARTMENT';
+const PERSON = 'PERSON';
+const ROLE = 'ROLE';
 
 function cloneTarget(target) {
     if (!target) return null;
     return {
         type: target.type,
         departmentId: target.departmentId,
-        roleId: null,
-        workerId: null
+        roleId: target.roleId || null,
+        workerId: target.workerId || null
     };
 }
 
-function parseDepartmentTarget(value, fieldName = 'serviceExecutionTarget') {
+function parseTarget(value, fieldName = 'serviceExecutionTarget') {
     if (value === null) return null;
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
         throw `${fieldName} non valido.`;
     }
-    if (value.type !== DEPARTMENT ||
-        typeof value.departmentId !== 'string' || !value.departmentId.trim() ||
-        (value.roleId !== undefined && value.roleId !== null) ||
-        (value.workerId !== undefined && value.workerId !== null)) {
-        throw `${fieldName} deve essere un target DEPARTMENT con departmentId canonico.`;
+    if (value.type === ROLE) {
+        // There is deliberately no Service role registry yet.  Do not infer
+        // Service qualifications from Operations roles or display labels.
+        throw `${fieldName} ROLE non supportato.`;
     }
-    return {
-        type: DEPARTMENT,
-        departmentId: value.departmentId.trim(),
-        roleId: null,
-        workerId: null
-    };
+    if (typeof value.departmentId !== 'string' || !value.departmentId.trim()) {
+        throw `${fieldName} deve contenere un departmentId canonico.`;
+    }
+    if (value.type === DEPARTMENT) {
+        if ((value.roleId !== undefined && value.roleId !== null) ||
+            (value.workerId !== undefined && value.workerId !== null)) {
+            throw `${fieldName} deve essere un target DEPARTMENT con departmentId canonico.`;
+        }
+        return {
+            type: DEPARTMENT,
+            departmentId: value.departmentId.trim(),
+            roleId: null,
+            workerId: null
+        };
+    }
+    if (value.type === PERSON) {
+        if (typeof value.workerId !== 'string' || !value.workerId.trim() ||
+            (value.roleId !== undefined && value.roleId !== null)) {
+            throw `${fieldName} deve essere un target PERSON con workerId canonico.`;
+        }
+        return {
+            type: PERSON,
+            departmentId: value.departmentId.trim(),
+            roleId: null,
+            workerId: value.workerId.trim()
+        };
+    }
+    throw `${fieldName} ha un tipo non supportato.`;
 }
+
+// Backward-compatible name retained for callers and older integrations.
+const parseDepartmentTarget = parseTarget;
 
 function effectiveTarget(record, targetField = 'serviceExecutionTarget') {
     const legacyDepartmentId = record && typeof record.serviceDepartmentId === 'string'
@@ -38,7 +64,7 @@ function effectiveTarget(record, targetField = 'serviceExecutionTarget') {
     if (hasTypedField && record[targetField] === null) return null;
     try {
         if (hasTypedField && record[targetField] !== undefined) {
-            const typed = parseDepartmentTarget(record[targetField], targetField);
+            const typed = parseTarget(record[targetField], targetField);
             if (legacyDepartmentId && typed.departmentId !== legacyDepartmentId) return null;
             return typed;
         }
@@ -80,7 +106,7 @@ function normalizeWrite(body, existing, options = {}) {
         }
     }
 
-    const typedTarget = hasTarget ? parseDepartmentTarget(body[targetField], targetField) : null;
+    const typedTarget = hasTarget ? parseTarget(body[targetField], targetField) : null;
     const legacyId = hasLegacyDepartment
         ? (body.serviceDepartmentId ? String(body.serviceDepartmentId).trim() : null)
         : undefined;
@@ -114,7 +140,10 @@ function normalizeWrite(body, existing, options = {}) {
 
 module.exports = {
     DEPARTMENT,
+    PERSON,
+    ROLE,
     effectiveTarget,
     normalizeWrite,
+    parseTarget,
     parseDepartmentTarget
 };

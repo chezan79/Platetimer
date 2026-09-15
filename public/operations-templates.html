@@ -196,6 +196,7 @@ function openCreatePanel() {
     </div>`;
   openPanel();
   toggleFreqFields();
+  initTemplateTargetControls(null);
 }
 
 function openEditMode(tplId) {
@@ -221,6 +222,7 @@ function openEditMode(tplId) {
     </div>`;
   openPanel();
   toggleFreqFields();
+  initTemplateTargetControls(t.defaultServiceExecutionTarget || null);
 }
 
 function tplForm(t) {
@@ -270,6 +272,14 @@ function tplForm(t) {
     <select id="tpl-service-dept" class="form-select"
       data-edit="${t ? 'true' : 'false'}"
       data-original-value="${esc(t && t.serviceDepartmentId ? t.serviceDepartmentId : '')}">${departmentOpts}</select>
+     <label class="form-label">Destinazione esecuzione Service</label>
+     <select id="tpl-target-type" class="form-select">
+       <option value="DEPARTMENT"${t && t.defaultServiceExecutionTarget && t.defaultServiceExecutionTarget.type === 'PERSON' ? '' : ' selected'}>Qualsiasi operatore del reparto</option>
+       <option value="PERSON"${t && t.defaultServiceExecutionTarget && t.defaultServiceExecutionTarget.type === 'PERSON' ? ' selected' : ''}>Operatore specifico</option>
+     </select>
+     <select id="tpl-worker" class="form-select" style="display:none;margin-top:6px">
+       <option value="">Seleziona operatore verificato</option>
+     </select>
     <label class="form-label">Data inizio *</label>
     <input id="tpl-start" class="form-input" type="date" value="${esc(t?t.startDate:'')}" required>
     <label class="form-label">Data fine (facoltativa)</label>
@@ -296,7 +306,33 @@ function toggleFreqFields() {
   document.getElementById('dayofmonth-row').style.display  = ['MONTHLY','EVERY_X_MONTHS'].includes(freq) ? '' : 'none';
 }
 
-function collectForm() {
+async function initTemplateTargetControls(target) {
+  const dept = document.getElementById('tpl-service-dept');
+  const type = document.getElementById('tpl-target-type');
+  const workers = document.getElementById('tpl-worker');
+  if (!dept || !type || !workers) return;
+  const refresh = async () => {
+    const person = type.value === 'PERSON';
+    workers.style.display = person ? '' : 'none';
+    workers.required = person;
+    workers.innerHTML = '<option value="">Seleziona operatore verificato</option>';
+    if (!person || !dept.value) return;
+    const response = await OpsCommon.api('/api/operations/service-workers?departmentId=' +
+      encodeURIComponent(dept.value));
+    (response && response.success ? response.workers : []).forEach(worker => {
+      const option = document.createElement('option');
+      option.value = worker.id;
+      option.textContent = worker.displayName;
+      if (target && target.workerId === worker.id) option.selected = true;
+      workers.appendChild(option);
+    });
+  };
+  dept.addEventListener('change', refresh);
+  type.addEventListener('change', refresh);
+  await refresh();
+}
+
+ function collectForm(existing) {
   const freq = document.getElementById('tpl-freq').value;
   const daysOfWeek = [...document.querySelectorAll('.dow-check:checked')].map(c => Number(c.value));
   const workSchedule = [...document.querySelectorAll('.ws-check:checked')].map(c => Number(c.value));
@@ -324,18 +360,43 @@ function collectForm() {
       departmentSelect.value !== departmentSelect.dataset.originalValue) {
     form.serviceDepartmentId = departmentSelect.value || null;
   }
+  if (document.getElementById('tpl-target-type').value === 'PERSON') {
+    const workerId = document.getElementById('tpl-worker').value;
+    if (!workerId) throw new Error('Seleziona un operatore verificato.');
+    form.defaultServiceExecutionTarget = {
+      type: 'PERSON', departmentId: departmentSelect.value, workerId
+    };
+  } else if (departmentSelect.dataset.edit !== 'true' ||
+      document.getElementById('tpl-target-type').value === 'DEPARTMENT') {
+    form.defaultServiceExecutionTarget = departmentSelect.value
+      ? { type: 'DEPARTMENT', departmentId: departmentSelect.value }
+      : null;
+  }
+  const version = existing && existing.defaultServiceExecutionTargetVersion;
+  if (version !== undefined) form.defaultServiceExecutionTargetVersion = Number(version || 0);
   return form;
 }
 
 async function doCreate() {
-  const form = collectForm();
+  const btn = document.getElementById('tpl-save-btn');
+  btn.disabled = true;
+  let form;
+  try {
+    form = collectForm();
+  } catch (error) {
+    btn.disabled = false;
+    panelMsg(error && error.message ? error.message : String(error));
+    if (error && /operatore/i.test(error.message || '')) {
+      document.getElementById('tpl-worker').focus();
+    }
+    return;
+  }
   if (!form.startDate) {
+    btn.disabled = false;
     panelMsg('startDate obbligatorio (YYYY-MM-DD)');
     document.getElementById('tpl-start').focus();
     return;
   }
-  const btn = document.getElementById('tpl-save-btn');
-  btn.disabled = true;
   const data = await OpsCommon.api('/api/operations/templates', {
     method: 'POST',
     body: JSON.stringify(form),
@@ -349,9 +410,21 @@ async function doCreate() {
 async function doEdit(tplId) {
   const btn = document.getElementById('tpl-save-btn');
   btn.disabled = true;
+  const existing = allTemplates.find(template => template.id === tplId) || {};
+  let form;
+  try {
+    form = collectForm(existing);
+  } catch (error) {
+    btn.disabled = false;
+    panelMsg(error && error.message ? error.message : String(error));
+    if (error && /operatore/i.test(error.message || '')) {
+      document.getElementById('tpl-worker').focus();
+    }
+    return;
+  }
   const data = await OpsCommon.api('/api/operations/templates/' + tplId, {
     method: 'PATCH',
-    body: JSON.stringify(collectForm()),
+    body: JSON.stringify(form),
   });
   btn.disabled = false;
   if (!data || !data.success) { panelMsg(data && data.error); return; }

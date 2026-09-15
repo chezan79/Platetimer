@@ -1221,9 +1221,17 @@ const OPS_LEASE_WARNING_MS = 5 * 60 * 1000;
 function _opsHandleWorkerIdentityChange(){
   _opsClearLeaseTimer();
   opsLeaseReconcileKey = '';
+  // A shared device may hand off between workers. Remove the previous
+  // proof-scoped queue immediately, then reconcile through the authoritative
+  // HTTP endpoint for the newly selected identity.
+  opsTasks.clear();
+  opsTasksState = 'loading';
+  opsTasksErrorKey = '';
+  opsRequestGeneration++;
   const identity = _opsCurrentWorker();
   if(!identity || !identity.proof || !identity.worker) opsTasksView = 'all';
   renderOpsTasks();
+  if(WsAuth.isServiceSession()) loadOpsTasks();
 }
 window.addEventListener('service-worker-identity-change', _opsHandleWorkerIdentityChange);
 
@@ -2205,7 +2213,8 @@ function connectWS(){
                'OPS_TASK_SERVICE_RELEASED','OPS_TASK_SERVICE_COMPLETED',
                'OPS_TASK_SERVICE_OVERRIDE_RELEASED','OPS_TASK_SERVICE_INVALIDATED',
                'OPS_TASK_SERVICE_EXPIRED',
-               'OPS_TASK_SERVICE_REMOVED','OPS_TASK_COMPLETED','OPS_TASK_DELETED'].includes(data.action)){
+               'OPS_TASK_SERVICE_REMOVED','OPS_TASK_SERVICE_RECONCILE',
+               'OPS_TASK_COMPLETED','OPS_TASK_DELETED'].includes(data.action)){
       // Realtime payloads only invalidate the view. The endpoint decides daily
       // membership, publication, department, acknowledgement and canonical status.
       if(WsAuth.isServiceSession()){
@@ -2849,7 +2858,10 @@ async function loadOpsTasks(){
   opsTasksErrorKey = '';
   renderOpsTasks();
   try{
-    const r = await fetch('/api/service/ops-tasks/today', { headers: { Authorization: `Bearer ${token}` } });
+    const identity = _opsCurrentWorker();
+    const headers = { Authorization: `Bearer ${token}` };
+    if(identity && identity.proof) headers['X-Worker-Proof'] = identity.proof;
+    const r = await fetch('/api/service/ops-tasks/today', { headers });
     const d = await r.json().catch(() => ({}));
     if(requestGeneration !== opsRequestGeneration) return;
     if(!r.ok){

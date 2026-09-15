@@ -100,6 +100,121 @@ async function main() {
     ]);
     assert.strictEqual(fsAckClaim.filter(result => result.ok).length, 1);
 
+    // Firestore authorization fences are authoritative transactions: revoking
+    // a worker advances the epoch and closes its active lease in the same
+    // transaction, so an already-resolved proof cannot act afterward.
+    await firestoreRepo.ensureTask({ ...task(), id: 'task-fs-revocation' });
+    const fsRevocationClaim = await firestoreRepo.claim({
+        companyId: 'co', taskId: 'task-fs-revocation',
+        idempotencyKey: 'claim-fs-revocation', context: context('alice')
+    });
+    assert.strictEqual(fsRevocationClaim.ok, true);
+    const fsRevocation = await firestoreRepo.revokeWorkerFence({
+        companyId: 'co', workerId: 'alice',
+        worker: {
+            id: 'alice', companyId: 'co', authorizationVersion: 2,
+            departmentMemberships: [{
+                departmentId: 'kitchen', authorizationVersion: 2,
+                validUntil: null
+            }]
+        },
+        reason: 'WORKER_SWITCH'
+    });
+    assert.strictEqual(fsRevocation.fence.revocationEpoch, 1);
+    assert.ok(fsRevocation.invalidated.some(item => item.id === 'task-fs-revocation'));
+    assert.strictEqual(
+        (await firestoreRepo.readWorkerFence('co', 'alice')).revocationEpoch, 1);
+    const invalidatedFirestoreTask = await firestoreRepo.readTask('co', 'task-fs-revocation');
+    assert.strictEqual(invalidatedFirestoreTask.claimLeaseStatus, 'INVALIDATED');
+    assert.strictEqual(
+        [...firestore.docs.keys()].some(key =>
+            key.startsWith('service_task_actions_active_leases/') &&
+            key.includes('task-fs-revocation')), false);
+    const staleFirestoreAction = await firestoreRepo.start({
+        companyId: 'co', taskId: 'task-fs-revocation',
+        idempotencyKey: 'start-stale-fs-revocation',
+        leaseId: fsRevocationClaim.task.claim.leaseId,
+        context: context('alice', {
+            authorizationVersion: 1,
+            membershipAuthorizationVersion: 1,
+            proofEpoch: 0
+        })
+    });
+    assert.strictEqual(staleFirestoreAction.ok, false);
+    assert.strictEqual(staleFirestoreAction.code, 'WORKER_NOT_AUTHORIZED');
+    await firestoreRepo.ensureTask({ ...task(), id: 'task-fs-fresh-epoch' });
+    const freshFirestoreClaim = await firestoreRepo.claim({
+        companyId: 'co', taskId: 'task-fs-fresh-epoch',
+        idempotencyKey: 'claim-fs-fresh-epoch',
+        context: context('alice', {
+            authorizationVersion: 2,
+            membershipAuthorizationVersion: 2,
+            proofEpoch: 1
+        })
+    });
+    assert.strictEqual(freshFirestoreClaim.ok, true);
+
+    // Fence bootstrap is a non-revoking create-if-missing operation. It must
+    // preserve an existing authoritative epoch and active lease exactly.
+    const localFenceRepo = await fresh();
+    const localWorker = {
+        id: 'alice', companyId: 'co', authorizationVersion: 4,
+        departmentMemberships: [{
+            departmentId: 'kitchen', authorizationVersion: 7,
+            validUntil: null
+        }]
+    };
+    const localFence = await localFenceRepo.ensureWorkerFence({
+        companyId: 'co', workerId: 'alice', worker: localWorker
+    });
+    assert.strictEqual(localFence.created, true);
+    assert.strictEqual(localFence.fence.revocationEpoch, 0);
+    const localClaim = await localFenceRepo.claim({
+        companyId: 'co', taskId: 'task-1', idempotencyKey: 'fence-local-claim',
+        context: context('alice', {
+            authorizationVersion: 4,
+            membershipAuthorizationVersion: 7
+        })
+    });
+    assert.strictEqual(localClaim.ok, true);
+    const localAgain = await localFenceRepo.ensureWorkerFence({
+        companyId: 'co', workerId: 'alice',
+        worker: { ...localWorker, authorizationVersion: 99 }
+    });
+    assert.strictEqual(localAgain.created, false);
+    assert.strictEqual(localAgain.fence.revocationEpoch, 0);
+    assert.strictEqual(localAgain.fence.authorizationVersion, 4);
+    assert.strictEqual((await localFenceRepo.readTask('co', 'task-1')).claimLeaseStatus, 'ACTIVE');
+    await localFenceRepo.revokeWorkerFence({
+        companyId: 'co', workerId: 'alice', worker: localWorker,
+        reason: 'TEST_REVOCATION'
+    });
+    const localPreserved = await localFenceRepo.ensureWorkerFence({
+        companyId: 'co', workerId: 'alice', worker: localWorker
+    });
+    assert.strictEqual(localPreserved.created, false);
+    assert.strictEqual(localPreserved.fence.revocationEpoch, 1);
+
+    const firestoreFenceRepo = new TaskActionRepository({ firestore, clock: () => now });
+    const firestoreFence = await firestoreFenceRepo.ensureWorkerFence({
+        companyId: 'co', workerId: 'new-worker',
+        worker: {
+            id: 'new-worker', companyId: 'co', authorizationVersion: 3,
+            departmentMemberships: [{ departmentId: 'kitchen', authorizationVersion: 8 }]
+        }
+    });
+    assert.strictEqual(firestoreFence.created, true);
+    const firestoreFenceAgain = await firestoreFenceRepo.ensureWorkerFence({
+        companyId: 'co', workerId: 'new-worker',
+        worker: {
+            id: 'new-worker', companyId: 'co', authorizationVersion: 99,
+            departmentMemberships: [{ departmentId: 'kitchen', authorizationVersion: 99 }]
+        }
+    });
+    assert.strictEqual(firestoreFenceAgain.created, false);
+    assert.strictEqual(firestoreFenceAgain.fence.authorizationVersion, 3);
+    assert.strictEqual(firestoreFenceAgain.fence.revocationEpoch, 0);
+
     // A stale metadata writer must not restore publication after another
     // writer has committed a newer Service targeting revision.
     await firestoreRepo.ensureTask({
@@ -182,7 +297,8 @@ async function main() {
     assert.strictEqual(race.filter(item => item.code === 'ALREADY_CLAIMED').length, 1);
 
     // Same request replays the committed result; a reused key with another
-    // payload is rejected without changing task state.
+    // payload is rejected without changing task state. A caller with stale
+    // department/entitlement is denied before the idempotency lookup.
     const winner = race.find(item => item.ok);
     const worker = winner.task.claim.workerId;
     const replay = await repo.claim({
@@ -194,7 +310,7 @@ async function main() {
         companyId: 'co', taskId: 'task-1', idempotencyKey: worker === 'alice' ? 'a' : 'b',
         context: context(worker, { departmentId: 'other' })
     });
-    assert.strictEqual(idemConflict.code, 'IDEMPOTENCY_CONFLICT');
+    assert.strictEqual(idemConflict.code, 'WORKER_NOT_AUTHORIZED');
 
     // Stale revisions, start, completion freshness and terminal replay.
     const stale = await repo.start({

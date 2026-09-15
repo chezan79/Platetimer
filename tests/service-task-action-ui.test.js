@@ -17,7 +17,12 @@ assert.match(department, /service\.todayTasksLeaseWarning/);
 assert.match(department, /role="status" aria-live="polite"/);
 assert.match(department, /opsLeaseReconcileKey/);
 assert.match(department, /idempotencyKey/);
+assert.match(department, /X-Worker-Proof/);
+assert.match(department, /opsTasks\.clear\(\)/);
+assert.match(department, /OPS_TASK_SERVICE_RECONCILE/);
+assert.match(department, /service-worker-identity-change/);
 assert.match(server, /serviceTaskActions\.acknowledge\(/);
 assert.match(server, /migrateLegacyOpsAcknowledgements\(/);
+assert.match(server, /OPS_TASK_SERVICE_RECONCILE/);
 
 console.log('Service task action UI/static checks passed');

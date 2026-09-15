@@ -1263,6 +1263,18 @@ async function revokeDeviceWorkerProofs(departmentAccountId, reason) {
     const now = Date.now();
     if (db) {
         const deviceRef = db.collection(WORKER_DEVICES_COLLECTION).doc(workerAuthDocId(departmentAccountId));
+        const deviceSnapshot = await deviceRef.get();
+        const currentProofId = deviceSnapshot.exists && deviceSnapshot.data().currentProofId;
+        if (currentProofId) {
+            const proofSnapshot = await db.collection(WORKER_PROOFS_COLLECTION).doc(currentProofId).get();
+            const proof = proofSnapshot.exists ? proofSnapshot.data() : null;
+            const worker = proof && await readServiceWorkers(() =>
+                serviceWorkers.getWorker(proof.companyId, proof.workerId));
+            if (worker) await serviceTaskActions.revokeWorkerFence({
+                companyId: proof.companyId, workerId: proof.workerId, worker,
+                reason: reason || 'WORKER_PROOFS_REVOKED'
+            });
+        }
         await db.runTransaction(async transaction => {
             const snapshot = await transaction.get(deviceRef);
             const current = snapshot.exists ? snapshot.data() : {};
@@ -1276,6 +1288,14 @@ async function revokeDeviceWorkerProofs(departmentAccountId, reason) {
         });
     } else {
         const current = serviceWorkerAuthStore.devices[departmentAccountId] || {};
+        const currentProof = current.currentProofId &&
+            serviceWorkerAuthStore.proofs && serviceWorkerAuthStore.proofs[current.currentProofId];
+        const worker = currentProof && serviceWorkers.getWorker(
+            currentProof.companyId, currentProof.workerId);
+        if (worker) await serviceTaskActions.revokeWorkerFence({
+            companyId: currentProof.companyId, workerId: currentProof.workerId, worker,
+            reason: reason || 'WORKER_PROOFS_REVOKED'
+        });
         serviceWorkerAuthStore.devices[departmentAccountId] = {
             departmentAccountId,
             epoch: (Number(current.epoch) || 0) + 1,
@@ -1360,6 +1380,19 @@ async function readAndTouchWorkerProof(proofId, tokenHash, touch) {
 
 async function revokeWorkerProofState(state, reason) {
     const now = Date.now();
+    const worker = await readServiceWorkers(() =>
+        serviceWorkers.getWorker(state.companyId, state.workerId));
+    if (worker) {
+        // Advance the task-action fence before revoking the proof. This closes
+        // the resolve-proof/action race even when the proof store and task
+        // repository use different persistence documents.
+        await serviceTaskActions.revokeWorkerFence({
+            companyId: state.companyId,
+            workerId: state.workerId,
+            worker,
+            reason: reason || 'WORKER_PROOF_REVOKED'
+        });
+    }
     if (db) {
         const proofRef = db.collection(WORKER_PROOFS_COLLECTION).doc(state.proofId);
         const deviceRef = db.collection(WORKER_DEVICES_COLLECTION).doc(workerAuthDocId(state.departmentAccountId));
@@ -1450,6 +1483,21 @@ async function resolveWorkerProof(req, session, { touch = true } = {}) {
         (!m.validFrom || now >= Number(m.validFrom)) &&
         (!m.validUntil || now <= Number(m.validUntil)));
     if (!membership || membership.authorizationVersion !== payload.membershipAuthorizationVersion) return null;
+    // Proof validity is also bounded by the worker-wide Service authorization
+    // fence. A device-local proof may remain syntactically valid after another
+    // device switches or clears the same worker, so never trust its embedded
+    // epoch without reading the authoritative fence.
+    const fence = await serviceTaskActions.readWorkerFence(
+        device.companyId, worker.id);
+    const fenceMembership = fence && fence.membershipAuthorizationVersions &&
+        fence.membershipAuthorizationVersions[device.departmentId];
+    if (!fence ||
+        Number(payload.revocationEpoch) !== Number(fence.revocationEpoch) ||
+        Number(payload.authorizationVersion) !== Number(fence.authorizationVersion) ||
+        !fenceMembership ||
+        Number(payload.membershipAuthorizationVersion) !== Number(fenceMembership.authorizationVersion)) {
+        return null;
+    }
     return { device, worker, state, payload, membership };
 }
 
@@ -1529,7 +1577,16 @@ function readServiceWorkers(operation) {
 
 async function mutateServiceWorkers(companyId, mutation) {
     return queueServiceWorkerState(async () => {
-        if (!db) return mutation();
+        if (!db) {
+            const result = mutation();
+            if (result && result.ok && result.worker && result.worker.id) {
+                await serviceTaskActions.advanceWorkerFence({
+                    companyId, worker: result.worker, workerId: result.worker.id,
+                    reason: 'WORKER_AUTHORIZATION_CHANGED'
+                });
+            }
+            return result;
+        }
         const workersRef = db.collection(STORE_COLLECTION).doc('service_workers');
         const auditRef = db.collection(STORE_COLLECTION).doc('service_worker_audit');
         return db.runTransaction(async transaction => {
@@ -1542,6 +1599,18 @@ async function mutateServiceWorkers(companyId, mutation) {
             serviceWorkers.setAuditStore(canonicalAudit);
             const result = mutation();
             if (result && result.ok) {
+                // The authorization fence is committed in this same
+                // Firestore transaction as the worker mutation. Service
+                // actions read the fence in their own transaction, so a
+                // stale proof cannot commit after this transaction wins.
+                if (result.worker && result.worker.id) {
+                    await serviceTaskActions.writeWorkerFenceInTransaction(transaction, {
+                        companyId,
+                        worker: result.worker,
+                        workerId: result.worker.id,
+                        reason: 'WORKER_AUTHORIZATION_CHANGED'
+                    });
+                }
                 transaction.set(workersRef, { store: serviceWorkers.getStore(), updatedAt: Date.now() });
                 transaction.set(auditRef, { store: serviceWorkers.getAuditStore(), updatedAt: Date.now() });
             }
@@ -1582,6 +1651,7 @@ app.patch('/api/service/workers/:workerId', workerAsyncRoute(async (req, res) =>
         reason: 'WORKER_AUTHORIZATION_CHANGED'
     });
     await broadcastServiceInvalidations(ctx.companyId, invalidated);
+    broadcastOps(ctx.companyId, { action: 'OPS_TASK_SERVICE_RECONCILE' });
     res.json({ success: true, worker: result.worker });
 }));
 
@@ -1599,6 +1669,7 @@ app.put('/api/service/workers/:workerId/status', workerAsyncRoute(async (req, re
         reason: 'WORKER_STATUS_CHANGED'
     });
     await broadcastServiceInvalidations(ctx.companyId, invalidated);
+    broadcastOps(ctx.companyId, { action: 'OPS_TASK_SERVICE_RECONCILE' });
     res.json({ success: true, worker: result.worker });
 }));
 
@@ -1617,6 +1688,7 @@ app.put('/api/service/workers/:workerId/memberships', workerAsyncRoute(async (re
         reason: 'WORKER_MEMBERSHIP_CHANGED'
     });
     await broadcastServiceInvalidations(ctx.companyId, invalidated);
+    broadcastOps(ctx.companyId, { action: 'OPS_TASK_SERVICE_RECONCILE' });
     res.json({ success: true, worker: result.worker });
 }));
 
@@ -1634,6 +1706,7 @@ app.post('/api/service/workers/:workerId/reset-pin', workerAsyncRoute(async (req
         reason: 'WORKER_PIN_VERIFIER_CHANGED'
     });
     await broadcastServiceInvalidations(ctx.companyId, invalidated);
+    broadcastOps(ctx.companyId, { action: 'OPS_TASK_SERVICE_RECONCILE' });
     res.json({ success: true, worker: result.worker });
 }));
 
@@ -1714,6 +1787,13 @@ app.post('/api/service/workers/verify', workerAsyncRoute(async (req, res) => {
     }
     await clearWorkerVerificationFailures(keys);
     await revokeDeviceWorkerProofs(device.account.id, 'WORKER_SWITCH');
+    const authorizationFenceResult = await serviceTaskActions.ensureWorkerFence({
+        companyId: device.companyId,
+        workerId: worker.id,
+        worker,
+        reason: 'WORKER_FENCE_INITIALIZED'
+    });
+    const authorizationFence = authorizationFenceResult.fence;
     const proofId = crypto.randomBytes(24).toString('hex');
     const expiresAt = now + WORKER_PROOF_ABSOLUTE_MS;
     const payload = {
@@ -1725,6 +1805,7 @@ app.post('/api/service/workers/verify', workerAsyncRoute(async (req, res) => {
         departmentId: device.departmentId,
         authorizationVersion: worker.authorizationVersion,
         membershipAuthorizationVersion: membership.authorizationVersion,
+        revocationEpoch: authorizationFence ? Number(authorizationFence.revocationEpoch || 0) : 0,
         verifierVersion: worker.verifier.version,
         iat: now,
         exp: expiresAt
@@ -1776,6 +1857,7 @@ app.post('/api/service/workers/clear', workerAsyncRoute(async (req, res) => {
     const ctx = await resolveWorkerProof(req, session, { touch: false });
     if (!ctx) return res.status(401).json({ error: 'Worker proof invalid or expired.', code: 'WORKER_PROOF_INVALID' });
     await revokeWorkerProofState(ctx.state, 'HANDOFF');
+    broadcastOps(ctx.device.companyId, { action: 'OPS_TASK_SERVICE_RECONCILE' });
     res.json({ success: true });
 }));
 
@@ -1785,6 +1867,7 @@ app.post('/api/service/workers/clear-device', workerAsyncRoute(async (req, res) 
     const device = await getAuthoritativeServiceDeviceContext(session);
     if (!device) return res.status(403).json({ error: 'Device not authorized.', code: 'DEVICE_NOT_AUTHORIZED' });
     await revokeDeviceWorkerProofs(device.account.id, 'DEVICE_LOGOUT');
+    broadcastOps(device.companyId, { action: 'OPS_TASK_SERVICE_RECONCILE' });
     res.json({ success: true });
 }));
 
@@ -1922,7 +2005,8 @@ async function broadcastServiceInvalidations(companyId, result) {
             task: opsTaskWithComputedStatus(committed),
             serviceActionRevision: committed.serviceActionRevision
         });
-        broadcastOpsServiceRemoved(companyId, committed.id, committed.serviceDepartmentId);
+        broadcastOpsServiceRemoved(companyId, committed.id, committed.serviceDepartmentId,
+            null, executionTargets.effectiveTarget(committed));
     }
     if (changed) {
         await persistCanonicalOpsTaskProjection(changedTasks);
@@ -1952,6 +2036,13 @@ async function getServiceEntitledOpsTasks(req, res) {
         return null;
     }
 
+    // PERSON targets are private to the exact verified worker.  A missing,
+    // stale, or sibling-device proof intentionally produces the same empty
+    // queue as a task that does not exist, avoiding an existence oracle.
+    const suppliedProof = req.headers['x-worker-proof'];
+    const workerProof = suppliedProof
+        ? await resolveWorkerProof(req, session, { touch: false })
+        : null;
     const candidates = getOpsTasks(companyId);
     for (const task of candidates) await hydrateCanonicalTaskFromService(companyId, task);
     const tasks = candidates
@@ -1959,6 +2050,12 @@ async function getServiceEntitledOpsTasks(req, res) {
             t.companyId === companyId &&
             t.publishToService === true &&
             executionTargets.effectiveTarget(t)?.departmentId === departmentId &&
+            (() => {
+                const target = executionTargets.effectiveTarget(t);
+                return target && target.type === executionTargets.PERSON
+                    ? !!workerProof && workerProof.worker.id === target.workerId
+                    : target && target.type === executionTargets.DEPARTMENT;
+            })() &&
             !isTaskAcknowledgedBy(companyId, t.id, departmentId) &&
             !(t.acknowledgements && t.acknowledgements[departmentId]));
 
@@ -2015,7 +2112,8 @@ app.get('/api/service/ops-tasks/today', async (req, res) => {
 // request body may carry an expected revision and an idempotency key, but can
 // never choose the company, department, or actor.
 function serviceActionErrorStatus(code) {
-    if (code === 'WORKER_REVOKED' || code === 'WORKER_PROOF_STALE') return 403;
+    if (code === 'WORKER_REVOKED' || code === 'WORKER_PROOF_STALE' ||
+        code === 'WORKER_NOT_AUTHORIZED') return 403;
     if (code === 'TASK_NOT_FOUND') return 404;
     return 409;
 }
@@ -2086,6 +2184,9 @@ app.post('/api/service/ops-tasks/:taskId/:action(claim|start|renew|release|compl
                 serviceEnabled: ctx.worker.serviceEnabled === true,
                 authorizationVersion: ctx.payload.authorizationVersion,
                 membershipAuthorizationVersion: ctx.payload.membershipAuthorizationVersion,
+                proofEpoch: ctx.payload.revocationEpoch || 0,
+                membershipValidFrom: ctx.membership.validFrom || null,
+                membershipValidUntil: ctx.membership.validUntil || null,
                 verificationStrength: 'WORKER_PROOF',
                 idempotencyKey
             }
@@ -2105,7 +2206,8 @@ app.post('/api/service/ops-tasks/:taskId/:action(claim|start|renew|release|compl
             serviceActionRevision: canonical.serviceActionRevision
         });
         if (canonical.status === 'COMPLETED' && canonical.publishToService === true) {
-            broadcastOpsServiceRemoved(companyId, canonical.id, canonical.serviceDepartmentId);
+            broadcastOpsServiceRemoved(companyId, canonical.id, canonical.serviceDepartmentId,
+                null, executionTargets.effectiveTarget(canonical));
         }
         res.json({ success: true, action: req.params.action, task: projectOpsTaskForService(canonical),
             revision: canonical.serviceActionRevision, idempotent: result.idempotent === true });
@@ -2195,6 +2297,9 @@ app.post('/api/service/ops-tasks/:taskId/acknowledge', workerAsyncRoute(async (r
         if (!opsAckStore[companyId]) opsAckStore[companyId] = [];
         opsAckStore[companyId].push({ taskId, serviceDepartmentId: departmentId, acknowledgedAt: new Date().toISOString() });
         saveOpsAcks();
+    }
+    if (taskTarget && taskTarget.type === executionTargets.PERSON) {
+        broadcastOps(companyId, { action: 'OPS_TASK_SERVICE_RECONCILE' });
     }
 
     console.log(`[OPS-ACK-AUTH] finalStatus=200`);
@@ -4421,6 +4526,34 @@ app.get('/api/operations/service-departments', (req, res) => {
     res.json({ success: true, departments });
 });
 
+// Eligible Service execution targets for the Operations task form.  This is
+// intentionally separate from /assignees: an Operations user is not a Service
+// worker, and an Operations link never grants execution authority.
+app.get('/api/operations/service-workers', workerAsyncRoute(async (req, res) => {
+    const ctx = requireOpsAuth(req, res);
+    if (!ctx) return;
+    await refreshServiceWorkersFromAuthority();
+    const companyId = ctx.opsUser.companyId;
+    const departmentId = String(req.query.departmentId || '').trim();
+    const department = getCompanyDepts(companyId).find(d => d.id === departmentId && d.active === true);
+    if (!department) return res.status(404).json({ error: 'Reparto Service non trovato.' });
+    if (!opsAuth.canManageServiceExecutionTarget(ctx.opsUser, {
+        companyId, createdBy: ctx.opsUser.id, assigneeId: ctx.opsUser.id
+    }, opsUsersById(companyId))) {
+        return res.status(403).json({ error: 'Non autorizzato a gestire la destinazione Service.' });
+    }
+    const now = Date.now();
+    const workers = serviceWorkers.getSelectableWorkers(companyId, departmentId)
+        .filter(worker => {
+            const membership = worker.departmentMemberships.find(m => m.departmentId === departmentId);
+            return membership &&
+                (!membership.validFrom || now >= Number(membership.validFrom)) &&
+                (!membership.validUntil || now <= Number(membership.validUntil));
+        })
+        .map(worker => ({ id: worker.id, displayName: worker.displayName }));
+    res.json({ success: true, workers });
+}));
+
 // ── POST /api/operations/users — Director only: invite a new team member ──
 // [SECURITY] companyId ALWAYS from the Director's server-side record. role
 // validated server-side. Client-supplied companyId/uid are ignored.
@@ -5011,6 +5144,19 @@ function resolveServicePublication(companyId, body, existing) {
         if (!dept) throw 'Reparto Service non valido o non attivo.';
         deptName = dept.name;
     }
+    if (normalized.target && normalized.target.type === executionTargets.PERSON) {
+        const worker = serviceWorkers.findWorkerById(companyId, normalized.target.workerId);
+        const now = Date.now();
+        const membership = worker && (worker.departmentMemberships || []).find(member =>
+            member.departmentId === deptId &&
+            member.status === serviceWorkers.MEMBERSHIP_STATUS &&
+            (!member.validFrom || now >= Number(member.validFrom)) &&
+            (!member.validUntil || now <= Number(member.validUntil)));
+        if (!worker || worker.companyId !== companyId ||
+            worker.status !== 'ACTIVE' || worker.serviceEnabled !== true || !membership) {
+            throw 'Lavoratore Service non valido o non abilitato per questo reparto.';
+        }
+    }
     return {
         serviceDepartmentId: deptId || null,
         serviceExecutionTarget: normalized.target,
@@ -5071,6 +5217,19 @@ function resolveTemplateDepartment(companyId, body, existing) {
     };
     const dept = getCompanyDepts(companyId).find(d => d.id === deptId && d.active === true);
     if (!dept) throw 'Reparto Service non valido o non attivo.';
+    if (normalized.target && normalized.target.type === executionTargets.PERSON) {
+        const worker = serviceWorkers.findWorkerById(companyId, normalized.target.workerId);
+        const now = Date.now();
+        const membership = worker && (worker.departmentMemberships || []).find(member =>
+            member.departmentId === deptId &&
+            member.status === serviceWorkers.MEMBERSHIP_STATUS &&
+            (!member.validFrom || now >= Number(member.validFrom)) &&
+            (!member.validUntil || now <= Number(member.validUntil)));
+        if (!worker || worker.companyId !== companyId ||
+            worker.status !== 'ACTIVE' || worker.serviceEnabled !== true || !membership) {
+            throw 'Lavoratore Service non valido o non abilitato per questo reparto.';
+        }
+    }
     return {
         serviceDepartmentId: dept.id,
         serviceDepartmentName: dept.name,
@@ -5124,16 +5283,26 @@ function projectOpsTaskForService(t) {
     };
 }
 
-function broadcastOpsServiceRemoved(companyId, taskId, prevServiceDepartmentId) {
+function broadcastOpsServiceRemoved(companyId, taskId, prevServiceDepartmentId, previousTarget, currentTarget) {
+    // Department sockets are not bound to worker proofs.  A PERSON task was
+    // never safely delivered to those sockets, so emitting its task ID would
+    // create an existence oracle during completion/retargeting.
+    if ((previousTarget && previousTarget.type === executionTargets.PERSON) ||
+        (currentTarget && currentTarget.type === executionTargets.PERSON)) {
+        broadcastOps(companyId, { action: 'OPS_TASK_SERVICE_RECONCILE' });
+        return;
+    }
     broadcastOps(companyId, { action: 'OPS_TASK_SERVICE_REMOVED', taskId, prevServiceDepartmentId });
 }
 
 // True when a previously-published task is no longer visible to the SAME
 // department it was published to (unpublished, moved, completed or cancelled).
-function opsServiceEntitlementLost(task, prevPublish, prevDeptId) {
+function opsServiceEntitlementLost(task, prevPublish, prevDeptId, previousTarget) {
     if (!prevPublish) return false;
+    const currentTarget = executionTargets.effectiveTarget(task);
     return task.publishToService !== true ||
-           executionTargets.effectiveTarget(task)?.departmentId !== prevDeptId ||
+           currentTarget?.departmentId !== prevDeptId ||
+           (previousTarget && JSON.stringify(currentTarget) !== JSON.stringify(previousTarget)) ||
            (task.status !== 'OPEN' && task.status !== 'IN_PROGRESS');
 }
 
@@ -5256,9 +5425,11 @@ app.post('/api/operations/tasks', async (req, res) => {
 
     // [Task 66] Validate optional Service publication fields
     let svc;
-    try { svc = resolveServicePublication(companyId, req.body, null); }
+    try {
+        await refreshServiceWorkersFromAuthority();
+        svc = resolveServicePublication(companyId, req.body, null);
+    }
     catch (msg) { return sendServiceTargetError(res, msg); }
-
     const assigneeId = (req.body.assigneeId || actor.id).toString();
     const byId = opsUsersById(companyId); // only own-company users resolvable
     const assignee = byId[assigneeId];
@@ -5269,6 +5440,13 @@ app.post('/api/operations/tasks', async (req, res) => {
     if (!opsAuth.canAssignTaskTo(actor, assignee)) {
         console.log(`⛔ [OPS-SECURITY] task-create rejected — ${actor.role} cannot assign to ${assignee.role} (company "${companyId}")`);
         return res.status(403).json({ error: `Il tuo ruolo (${actor.role}) non può assegnare compiti a ${assignee.role}.` });
+    }
+    if (svc.serviceExecutionTarget &&
+        svc.serviceExecutionTarget.type === executionTargets.PERSON &&
+        !opsAuth.canManageServiceExecutionTarget(actor, {
+            companyId, createdBy: actor.id, assigneeId: assignee.id
+        }, byId)) {
+        return res.status(403).json({ error: 'Non autorizzato a impostare una destinazione Service personale.' });
     }
 
     const now = Date.now();
@@ -5287,6 +5465,8 @@ app.post('/api/operations/tasks', async (req, res) => {
         department: clean.department,
         // [Task 66] Service publication (validated server-side above)
         serviceDepartmentId:   svc.serviceDepartmentId,
+        serviceExecutionTarget: svc.serviceExecutionTarget,
+        serviceExecutionTargetVersion: svc.serviceExecutionTargetVersion,
         publishToService:      svc.publishToService,
         serviceDepartmentName: svc.serviceDepartmentName,
         notes: '',
@@ -5569,6 +5749,8 @@ app.get('/api/operations/calendar', (req, res) => {
                 assigneeName: assignee ? (assignee.name || assignee.email || projectedTask.assigneeId) : null,
                 serviceDepartmentId: template.serviceDepartmentId ?? null,
                 serviceDepartmentName: template.serviceDepartmentName ?? null,
+                 serviceExecutionTarget: template.defaultServiceExecutionTarget || null,
+                 serviceExecutionTargetVersion: Number(template.defaultServiceExecutionTargetVersion || 0),
                 isPlanned: true,
                 actionable: false,
             });
@@ -5625,8 +5807,16 @@ app.put('/api/operations/tasks/:id', async (req, res) => {
         if (!opsAuth.canEditTask(actor, task, byId)) {
             return res.status(403).json({ error: 'Non autorizzato a modificare questo compito.' });
         }
-        try { validatedServicePublication = resolveServicePublication(companyId, req.body, task); }
+        try {
+            await refreshServiceWorkersFromAuthority();
+            validatedServicePublication = resolveServicePublication(companyId, req.body, task);
+        }
         catch (msg) { return sendServiceTargetError(res, msg); }
+        if (JSON.stringify(validatedServicePublication.serviceExecutionTarget) !==
+            JSON.stringify(executionTargets.effectiveTarget(task)) &&
+            !opsAuth.canManageServiceExecutionTarget(actor, task, byId)) {
+            return res.status(403).json({ error: 'Non autorizzato a modificare la destinazione Service.' });
+        }
     }
 
     if (wantsComplete) {
@@ -5724,8 +5914,10 @@ app.put('/api/operations/tasks/:id', async (req, res) => {
     }
     broadcastOps(companyId, { action: 'OPS_TASK_UPDATED', task: opsTaskWithComputedStatus(task) });
     // [Task 66] Explicit removal signal to the previously-entitled department
-    if (opsServiceEntitlementLost(task, prevPublish, prevServiceDepartmentId))
-        broadcastOpsServiceRemoved(companyId, task.id, prevServiceDepartmentId);
+    if (opsServiceEntitlementLost(task, prevPublish, prevServiceDepartmentId,
+        executionTargets.effectiveTarget(taskBefore)))
+        broadcastOpsServiceRemoved(companyId, task.id, prevServiceDepartmentId,
+            executionTargets.effectiveTarget(taskBefore));
     // [Task 66 Rework] Sync to Service calendar mirror (fire-and-forget — non-fatal)
     syncOpsTaskToCalendar(companyId, task).catch(e => console.error('[CAL-SYNC]', e.message));
     res.json({ success: true, task: opsTaskWithComputedStatus(task) });
@@ -5787,8 +5979,16 @@ app.patch('/api/operations/tasks/:id', async (req, res) => {
         req.body.serviceExecutionTargetVersion !== undefined;
     let svc = null;
     if (svcFieldsPresent) {
-        try { svc = resolveServicePublication(actor.companyId, req.body, task); }
+    try {
+        await refreshServiceWorkersFromAuthority();
+        svc = resolveServicePublication(actor.companyId, req.body, task);
+    }
         catch (msg) { return sendServiceTargetError(res, msg); }
+        if (JSON.stringify(svc.serviceExecutionTarget) !==
+            JSON.stringify(executionTargets.effectiveTarget(task)) &&
+            !opsAuth.canManageServiceExecutionTarget(actor, task, byId)) {
+            return res.status(403).json({ error: 'Non autorizzato a modificare la destinazione Service.' });
+        }
     }
 
     if (Object.keys(patch).length === 0 && !svcFieldsPresent)
@@ -5831,8 +6031,10 @@ app.patch('/api/operations/tasks/:id', async (req, res) => {
     console.log(`✅ [OPS] Task patched: ${task.id} by ${actor.id} — fields: ${Object.keys(patch).join(',')}`);
     broadcastOps(actor.companyId, { action: 'OPS_TASK_UPDATED', task: opsTaskWithComputedStatus(task) });
     // [Task 66] Explicit removal signal to the previously-entitled department
-    if (opsServiceEntitlementLost(task, prevPublish, prevServiceDepartmentId))
-        broadcastOpsServiceRemoved(actor.companyId, task.id, prevServiceDepartmentId);
+    if (opsServiceEntitlementLost(task, prevPublish, prevServiceDepartmentId,
+        executionTargets.effectiveTarget(taskBefore)))
+        broadcastOpsServiceRemoved(actor.companyId, task.id, prevServiceDepartmentId,
+            executionTargets.effectiveTarget(taskBefore));
     // [Task 66 Rework] Sync to Service calendar mirror (fire-and-forget — non-fatal)
     syncOpsTaskToCalendar(actor.companyId, task).catch(e => console.error('[CAL-SYNC]', e.message));
     res.json({ success: true, task: opsTaskWithComputedStatus(task) });
@@ -5917,7 +6119,8 @@ app.post('/api/operations/tasks/:id/progress', async (req, res) => {
     });
     // [Task 66] Auto-completion via 100% removes the task from the Service view
     if (prevPublish && task.status === 'COMPLETED')
-        broadcastOpsServiceRemoved(actor.companyId, task.id, prevServiceDepartmentId);
+        broadcastOpsServiceRemoved(actor.companyId, task.id, prevServiceDepartmentId,
+            null, executionTargets.effectiveTarget(task));
     // [Task 66 Rework] Sync to Service calendar mirror (fire-and-forget — non-fatal)
     syncOpsTaskToCalendar(actor.companyId, task).catch(e => console.error('[CAL-SYNC]', e.message));
     res.json({ success: true, task: opsTaskWithComputedStatus(task) });
@@ -5956,7 +6159,8 @@ app.post('/api/operations/tasks/:id/complete', async (req, res) => {
     broadcastOps(actor.companyId, { action: 'OPS_TASK_COMPLETED', task: opsTaskWithComputedStatus(task) });
     // [Task 66] Completed tasks leave the Service view — explicit removal signal
     if (prevPublish)
-        broadcastOpsServiceRemoved(actor.companyId, task.id, prevServiceDepartmentId);
+        broadcastOpsServiceRemoved(actor.companyId, task.id, prevServiceDepartmentId,
+            null, executionTargets.effectiveTarget(task));
     // [Task 66 Rework] Sync to Service calendar mirror (fire-and-forget — non-fatal)
     syncOpsTaskToCalendar(actor.companyId, task).catch(e => console.error('[CAL-SYNC]', e.message));
     res.json({ success: true, task: opsTaskWithComputedStatus(task) });
@@ -6034,7 +6238,8 @@ app.post('/api/operations/tasks/:id/reassign', async (req, res) => {
     // [Task 66] Consistency signal first, then the REASSIGNED upsert re-adds
     // the card on the (still-entitled) department page with fresh data.
     if (prevPublish)
-        broadcastOpsServiceRemoved(actor.companyId, task.id, prevServiceDepartmentId);
+        broadcastOpsServiceRemoved(actor.companyId, task.id, prevServiceDepartmentId,
+            null, executionTargets.effectiveTarget(task));
     broadcastOps(actor.companyId, { action: 'OPS_TASK_REASSIGNED', task: opsTaskWithComputedStatus(task), prevAssigneeId: oldAssigneeId });
     // [Task 66 Rework] Sync to Service calendar mirror — reassign updates assigneeName (fire-and-forget)
     syncOpsTaskToCalendar(actor.companyId, task).catch(e => console.error('[CAL-SYNC]', e.message));
@@ -6069,7 +6274,8 @@ app.post('/api/operations/tasks/:id/cancel', async (req, res) => {
     broadcastOps(actor.companyId, { action: 'OPS_TASK_UPDATED', task: opsTaskWithComputedStatus(task) });
     // [Task 66] Cancelled tasks leave the Service view — explicit removal signal
     if (prevPublish)
-        broadcastOpsServiceRemoved(actor.companyId, task.id, prevServiceDepartmentId);
+        broadcastOpsServiceRemoved(actor.companyId, task.id, prevServiceDepartmentId,
+            null, executionTargets.effectiveTarget(task));
     // [Task 66 Rework] Sync to Service calendar mirror (fire-and-forget — non-fatal)
     syncOpsTaskToCalendar(actor.companyId, task).catch(e => console.error('[CAL-SYNC]', e.message));
     res.json({ success: true, task: opsTaskWithComputedStatus(task) });
@@ -6339,7 +6545,8 @@ app.delete('/api/operations/tasks/:id', async (req, res) => {
     broadcastOps(actor.companyId, { action: 'OPS_TASK_DELETED', taskId: task.id });
     // [Task 66] Deleted tasks leave the Service view — explicit removal signal
     if (prevPublish)
-        broadcastOpsServiceRemoved(actor.companyId, task.id, prevServiceDepartmentId);
+        broadcastOpsServiceRemoved(actor.companyId, task.id, prevServiceDepartmentId,
+            executionTargets.effectiveTarget(task));
     // [Task 66 Rework] Remove calendar mirror for deleted task (force status to removed)
     {
         const _deletedMirrorId = 'opsmirror_' + task.id;
@@ -6749,7 +6956,10 @@ app.post('/api/operations/templates', async (req, res) => {
 
     const clean = opsRecurring.sanitizeTemplateInput(req.body);
     let serviceDept;
-    try { serviceDept = resolveTemplateDepartment(companyId, req.body, null); }
+    try {
+        await refreshServiceWorkersFromAuthority();
+        serviceDept = resolveTemplateDepartment(companyId, req.body, null);
+    }
     catch (msg) { return sendServiceTargetError(res, msg); }
     const now   = Date.now();
     const template = {
@@ -6815,7 +7025,10 @@ app.patch('/api/operations/templates/:id', async (req, res) => {
     try { patch = opsRecurring.sanitizeTemplatePatch(req.body); }
     catch (msg) { return sendServiceTargetError(res, msg); }
     let serviceDept;
-    try { serviceDept = resolveTemplateDepartment(companyId, req.body, tpl); }
+    try {
+        await refreshServiceWorkersFromAuthority();
+        serviceDept = resolveTemplateDepartment(companyId, req.body, tpl);
+    }
     catch (msg) { return sendServiceTargetError(res, msg); }
 
     // Validate defaultAssigneeId if changing
@@ -6888,9 +7101,16 @@ app.post('/api/operations/templates/:id/generate-now', async (req, res) => {
         getOpsTasks(companyId).filter(t => t.templateId === tpl.id && t.occurrenceKey).map(t => t.occurrenceKey)
     );
     const usersById = opsUsersById(companyId);
-    const newTasks  = opsRecurring.generateTasksForTemplate(
-        tpl, companyId, existingKeys, usersById, addHistory,
-        { isDepartmentActive: departmentId => getCompanyDepts(companyId).some(d => d.id === departmentId && d.active === true) }
+    const newTasks = await readServiceWorkers(() =>
+        opsRecurring.generateTasksForTemplate(
+            tpl, companyId, existingKeys, usersById, addHistory,
+            {
+                isDepartmentActive: departmentId => getCompanyDepts(companyId)
+                    .some(d => d.id === departmentId && d.active === true),
+                getServiceWorker: (workerCompanyId, workerId) =>
+                    serviceWorkers.findWorkerById(workerCompanyId, workerId)
+            }
+        )
     );
     if (newTasks.length > 0) {
         if (!opsTasksStore[companyId]) opsTasksStore[companyId] = [];
@@ -7115,9 +7335,23 @@ function opsPayloadForBoundSocket(payload, boundDepartmentId, companyId) {
             ? JSON.stringify(payload)   // already minimal: {action, taskId, prevServiceDepartmentId}
             : null;
     }
+    if (payload.action === 'OPS_TASK_SERVICE_RECONCILE') {
+        // Deliberately contains no task ID/content. The client must reload the
+        // proof-aware HTTP queue to discover any PERSON-targeted changes.
+        return JSON.stringify({ action: payload.action });
+    }
     if (OPS_TASK_PAYLOAD_ACTIONS.has(payload.action) && payload.task) {
         const t = payload.task;
         const target = executionTargets.effectiveTarget(t);
+        // WebSockets are department-scoped, not worker-proof-scoped.  Never
+        // deliver PERSON task content to a shared socket; the verified worker
+        // reconciles through the authenticated HTTP queue/action endpoints.
+        if (target && target.type === executionTargets.PERSON &&
+            target.departmentId === boundDepartmentId &&
+            t.publishToService === true) {
+            return JSON.stringify({ action: 'OPS_TASK_SERVICE_RECONCILE' });
+        }
+        if (!target || target.type !== executionTargets.DEPARTMENT) return null;
         const entitled = t.publishToService === true &&
                          target?.departmentId === boundDepartmentId &&
                          (t.status === 'OPEN' || t.status === 'IN_PROGRESS');
@@ -8719,7 +8953,10 @@ const PORT = process.env.PORT || 3000;
 // ── Sprint 3 scheduler ───────────────────────────────────────────────────────
 // Idempotent — safe to call repeatedly; each phase guards against duplicates.
 const opsSchedulerInstance = opsScheduler.createScheduler(
-    () => ({ opsTasksStore, opsUsersStore, opsTemplatesStore, opsPrefsStore, departmentsStore }),
+    () => ({
+        opsTasksStore, opsUsersStore, opsTemplatesStore, opsPrefsStore, departmentsStore,
+        serviceWorkers, refreshServiceWorkers: refreshServiceWorkersFromAuthority
+    }),
     () => ({ saveOpsTasks, saveOpsTemplates, saveOpsPrefs, saveRecurringGeneration: persistOpsRecurringGeneration }),
     opsEmail,
     addHistory,

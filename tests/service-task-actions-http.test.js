@@ -10,6 +10,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawn } = require('child_process');
+const WebSocket = require('ws');
 
 const SECRET = 'task-127-http-test-secret';
 const PORT = 40000 + (process.pid % 20000);
@@ -55,6 +56,37 @@ async function api(token, method, route, body, extraHeaders = {}) {
 async function action(token, proof, taskId, name, key, body = {}) {
     return api(token, 'POST', `/api/service/ops-tasks/${taskId}/${name}`,
         body, { 'X-Worker-Proof': proof, 'Idempotency-Key': key });
+}
+
+function wait(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function openServiceSocket(token, departmentId) {
+    const messages = [];
+    const socket = new WebSocket(`ws://127.0.0.1:${PORT}/ws`);
+    await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('Service websocket join timeout')), 5000);
+        socket.on('open', () => socket.send(JSON.stringify({
+            action: 'joinRoom', token, pageType: departmentId
+        })));
+        socket.on('message', raw => {
+            try {
+                const message = JSON.parse(String(raw));
+                messages.push(message);
+                if (message.action === 'roomJoined' || message.action === 'joinedRoom' ||
+                    message.success === true) {
+                    clearTimeout(timeout);
+                    resolve();
+                }
+            } catch (_) { /* ignore non-JSON diagnostics */ }
+        });
+        socket.once('error', error => {
+            clearTimeout(timeout);
+            reject(error);
+        });
+    });
+    return { socket, messages };
 }
 
 function startServer() {
@@ -135,6 +167,7 @@ async function createWorker(director, displayName, pin, departmentId) {
 async function run() {
     fs.writeFileSync(path.join(DATA_DIR, 'plans.json'), JSON.stringify({ 'task-127-co': 'medium' }));
     let server;
+    let serviceSocket;
 
     try {
         server = startServer();
@@ -163,17 +196,67 @@ async function run() {
         const serviceToken = response.data.token;
         check('Service device login is server-derived', response.status === 200 &&
             response.data.departmentId === department.id && !JSON.stringify(response.data).includes('passwordHash'), response.data);
+        response = await api(director, 'POST', '/api/departments', { name: 'Task 127 Pastry' });
+        const secondDepartment = response.data.department;
+        check('second active Service department is created',
+            response.status === 201 && secondDepartment?.active === true, response.data);
+        response = await api(director, 'POST', '/api/department-accounts', {
+            departmentId: secondDepartment.id,
+            loginIdentifier: 'task127-kitchen-2',
+            password: 'device-password-2'
+        });
+        check('second department device account is created',
+            response.status === 201 && response.data.account?.status === 'ACTIVE', response.data);
+        response = await api(null, 'POST', '/api/service/login', {
+            loginIdentifier: 'task127-kitchen-2',
+            password: 'device-password-2'
+        });
+        const serviceToken2 = response.data.token;
+        check('second Service device login is server-derived',
+            response.status === 200 && response.data.departmentId === secondDepartment.id, response.data);
 
         const alice = await createWorker(director, 'Alice', '7392', department.id);
         const bob = await createWorker(director, 'Bob', '8462', department.id);
+        response = await api(director, 'PUT', `/api/service/workers/${alice.id}/memberships`, {
+            departmentMemberships: [department.id, secondDepartment.id]
+        });
+        check('same worker is active on both department devices',
+            response.status === 200 &&
+            response.data.worker?.departmentMemberships?.some(m =>
+                m.departmentId === secondDepartment.id && m.status === 'ACTIVE'),
+            response.data);
         check('two Service workers have active memberships', alice?.id && bob?.id &&
             alice.departmentMemberships?.some(m => m.departmentId === department.id && m.status === 'ACTIVE') &&
             bob.departmentMemberships?.some(m => m.departmentId === department.id && m.status === 'ACTIVE'));
+        // Simulate a pre-migration worker: the canonical worker remains
+        // intact, but its legacy Service action store has no authorization
+        // fence yet. Verification must bootstrap that fence without revoking
+        // anything, and the fresh proof must work across current/queue/action.
+        await stopServer(server.child);
+        const actionStorePath = path.join(DATA_DIR, 'service-task-actions.json');
+        const actionStore = JSON.parse(fs.readFileSync(actionStorePath, 'utf8'));
+        delete (actionStore.authorizationFences || {})[`task-127-co::${alice.id}`];
+        fs.writeFileSync(actionStorePath, JSON.stringify(actionStore, null, 2));
+        check('pre-migration worker fence is absent before restart',
+            !Object.prototype.hasOwnProperty.call(
+                actionStore.authorizationFences || {}, `task-127-co::${alice.id}`));
+        server = startServer();
+        await server.ready;
 
         response = await api(serviceToken, 'GET', '/api/service/workers/roster');
         check('worker roster is a safe membership projection', response.status === 200 &&
             response.data.workers?.length === 2 &&
             response.data.workers.every(worker => Object.keys(worker).sort().join(',') === 'displayName,id'), response.data);
+        response = await api(director, 'GET',
+            `/api/operations/service-workers?departmentId=${encodeURIComponent(department.id)}`);
+        check('Operations eligible-worker API is company scoped and secret-free',
+            response.status === 200 && response.data.workers?.length === 2 &&
+            response.data.workers.every(worker =>
+                Object.keys(worker).sort().join(',') === 'displayName,id'), response.data);
+        response = await api(director, 'GET',
+            '/api/operations/service-workers?departmentId=department-from-other-company');
+        check('eligible-worker API does not expose unknown/cross-company departments',
+            response.status === 404, response.data);
 
         response = await api(serviceToken, 'POST', '/api/service/workers/verify',
             { workerId: alice.id, pin: '7392' });
@@ -184,6 +267,32 @@ async function run() {
             undefined, { 'X-Worker-Proof': aliceProof });
         check('Alice proof resolves on the authorized device', response.status === 200 &&
             response.data.worker?.id === alice.id, response.data);
+        check('pre-migration worker proof is accepted by current', response.status === 200,
+            response.data);
+        response = await api(director, 'POST', '/api/operations/tasks', {
+            title: 'Pre-migration PERSON task',
+            serviceDepartmentId: department.id,
+            serviceExecutionTarget: {
+                type: 'PERSON', departmentId: department.id, workerId: alice.id
+            },
+            publishToService: true
+        });
+        const preMigrationPersonTask = response.data.task;
+        response = await api(serviceToken, 'GET', '/api/service/ops-tasks',
+            undefined, { 'X-Worker-Proof': aliceProof });
+        check('pre-migration worker proof receives PERSON queue',
+            response.status === 200 &&
+            (response.data.tasks || []).some(item => item.id === preMigrationPersonTask.id),
+            response.data);
+        response = await action(serviceToken, aliceProof, preMigrationPersonTask.id,
+            'claim', 'pre-migration-person-claim');
+        check('pre-migration worker proof can act',
+            response.status === 200 && response.data.success === true, response.data);
+        const preMigrationLeaseId = response.data.task?.claim?.leaseId;
+        response = await action(serviceToken, aliceProof, preMigrationPersonTask.id,
+            'release', 'pre-migration-person-release', { leaseId: preMigrationLeaseId });
+        check('pre-migration worker proof release succeeds',
+            response.status === 200 && response.data.success === true, response.data);
 
         response = await api(serviceToken, 'POST', '/api/service/workers/verify',
             { workerId: bob.id, pin: '8462' });
@@ -366,8 +475,206 @@ async function run() {
             response.data.code === 'WORKER_PROOF_INVALID', response.data);
 
         response = await api(director, 'PUT', `/api/service/workers/${bob.id}/memberships`,
-            { departmentMemberships: [department.id] });
+            { departmentMemberships: [{ departmentId: department.id, validUntil: Date.now() + 86_400_000 }] });
         check('worker membership can be restored', response.status === 200, response.data);
+        response = await api(serviceToken, 'POST', '/api/service/workers/verify',
+            { workerId: bob.id, pin: '8462' });
+        bobProof = response.data.proof;
+        check('restored membership issues a fresh Bob proof',
+            response.status === 200 && !!bobProof, response.data);
+        response = await api(director, 'PUT', `/api/service/workers/${bob.id}/memberships`,
+            { departmentMemberships: [{ departmentId: department.id, validUntil: Date.now() - 1 }] });
+        check('membership expiry is accepted for stale-proof coverage',
+            response.status === 200, response.data);
+        response = await action(serviceToken, bobProof, abandonedTask.id, 'claim',
+            'task140-expired-membership');
+        check('expired membership invalidates an existing proof',
+            response.status === 401 && response.data.code === 'WORKER_PROOF_INVALID', response.data);
+        response = await api(director, 'PUT', `/api/service/workers/${bob.id}/memberships`,
+            { departmentMemberships: [{ departmentId: department.id, validUntil: Date.now() + 86_400_000 }] });
+        response = await api(serviceToken, 'POST', '/api/service/workers/verify',
+            { workerId: bob.id, pin: '8462' });
+        bobProof = response.data.proof;
+        check('membership restoration issues a fresh proof after expiry',
+            response.status === 200 && !!bobProof, response.data);
+
+        // Task #140: bind the queue to the exact PERSON worker, not merely to
+        // the department device.  A shared department websocket must not leak
+        // PERSON task content; HTTP reconciliation remains authoritative.
+        // Keep Alice verified on both devices. A later switch on device one
+        // must revoke Alice's worker-wide epoch on device two as well.
+        response = await api(serviceToken, 'POST', '/api/service/workers/verify',
+            { workerId: alice.id, pin: '7392' });
+        const deviceOneAliceProof = response.data.proof;
+        response = await api(serviceToken2, 'POST', '/api/service/workers/verify',
+            { workerId: alice.id, pin: '7392' });
+        const deviceTwoAliceProof = response.data.proof;
+        check('same worker has valid proofs on two department devices',
+            response.status === 200 && !!deviceOneAliceProof && !!deviceTwoAliceProof,
+            response.data);
+        response = await api(serviceToken, 'GET', '/api/service/workers/current',
+            undefined, { 'X-Worker-Proof': deviceOneAliceProof });
+        const deviceOneCurrent = response.status === 200;
+        response = await api(serviceToken2, 'GET', '/api/service/workers/current',
+            undefined, { 'X-Worker-Proof': deviceTwoAliceProof });
+        check('both device proofs resolve before the worker switch',
+            deviceOneCurrent && response.status === 200, response.data);
+        serviceSocket = await openServiceSocket(serviceToken, department.id);
+        response = await api(director, 'POST', '/api/operations/tasks', {
+            title: 'Task 140 exact person',
+            serviceDepartmentId: department.id,
+            serviceExecutionTarget: {
+                type: 'PERSON', departmentId: department.id, workerId: alice.id
+            },
+            publishToService: true
+        });
+        const personTask = response.data.task;
+        check('Operations Director can create a PERSON-targeted task',
+            response.status === 201 &&
+            personTask.serviceExecutionTarget?.type === 'PERSON' &&
+            personTask.serviceExecutionTarget.workerId === alice.id, response.data);
+        response = await api(director, 'POST', '/api/operations/tasks', {
+            title: 'Task 140 exact person on second device',
+            serviceDepartmentId: secondDepartment.id,
+            serviceExecutionTarget: {
+                type: 'PERSON', departmentId: secondDepartment.id, workerId: alice.id
+            },
+            publishToService: true
+        });
+        const secondDevicePersonTask = response.data.task;
+        check('second-device PERSON task is created',
+            response.status === 201 &&
+            secondDevicePersonTask.serviceExecutionTarget?.departmentId === secondDepartment.id &&
+            secondDevicePersonTask.serviceExecutionTarget.workerId === alice.id,
+            response.data);
+        await wait(150);
+        check('department websocket withholds PERSON task content',
+            !serviceSocket.messages.some(message =>
+                JSON.stringify(message).includes(personTask.id)), serviceSocket.messages);
+
+        response = await api(serviceToken, 'GET', '/api/service/ops-tasks');
+        check('PERSON task is hidden without an exact worker proof',
+            response.status === 200 &&
+            !(response.data.tasks || []).some(item => item.id === personTask.id), response.data);
+        // Switch device one away from Alice. The worker-wide fence must make
+        // device two's otherwise-live proof unusable everywhere.
+        response = await api(serviceToken, 'POST', '/api/service/workers/verify',
+            { workerId: bob.id, pin: '8462' });
+        bobProof = response.data.proof;
+        response = await api(serviceToken2, 'GET', '/api/service/workers/current',
+            undefined, { 'X-Worker-Proof': deviceTwoAliceProof });
+        check('worker-wide switch invalidates the other device current proof',
+            response.status === 401 && response.data.code === 'WORKER_PROOF_INVALID',
+            response.data);
+        response = await api(serviceToken2, 'GET', '/api/service/ops-tasks',
+            undefined, { 'X-Worker-Proof': deviceTwoAliceProof });
+        check('invalid other-device proof receives no PERSON queue details',
+            (response.status === 200 || response.status === 401) &&
+            !(response.data.tasks || []).some(item =>
+                item.id === secondDevicePersonTask.id || item.id === personTask.id),
+            response.data);
+        response = await api(serviceToken2, 'GET', '/api/service/ops-tasks/today',
+            undefined, { 'X-Worker-Proof': deviceTwoAliceProof });
+        check('invalid other-device proof receives no PERSON today details',
+            (response.status === 200 || response.status === 401) &&
+            !(response.data.tasks || []).some(item =>
+                item.id === secondDevicePersonTask.id || item.id === personTask.id),
+            response.data);
+        response = await action(serviceToken2, deviceTwoAliceProof, secondDevicePersonTask.id,
+            'claim', 'task140-stale-other-device');
+        check('invalid other-device proof cannot act',
+            response.status === 401 && response.data.code === 'WORKER_PROOF_INVALID',
+            response.data);
+        response = await api(serviceToken, 'GET', '/api/service/ops-tasks',
+            undefined, { 'X-Worker-Proof': bobProof });
+        check('sibling worker receives no PERSON existence oracle',
+            response.status === 200 &&
+            !(response.data.tasks || []).some(item => item.id === personTask.id), response.data);
+        response = await api(director, 'POST', '/api/operations/tasks', {
+            title: 'Task 140 department acknowledgement parity',
+            serviceDepartmentId: department.id,
+            serviceExecutionTarget: {
+                type: 'PERSON', departmentId: department.id, workerId: alice.id
+            },
+            publishToService: true
+        });
+        const personAckTask = response.data.task;
+        response = await api(serviceToken, 'POST',
+            `/api/service/ops-tasks/${personAckTask.id}/acknowledge`);
+        check('department acknowledgement remains valid for PERSON tasks',
+            response.status === 200, response.data);
+
+        response = await action(serviceToken, bobProof, personTask.id, 'claim',
+            'task140-wrong-worker');
+        check('other worker cannot claim a PERSON task',
+            response.status === 403 && response.data.code === 'WORKER_NOT_AUTHORIZED', response.data);
+        response = await api(serviceToken, 'POST', '/api/service/workers/verify',
+            { workerId: alice.id, pin: '7392' });
+        const exactAliceProof = response.data.proof;
+        check('freshly verified proof succeeds after worker-wide revocation',
+            response.status === 200 && !!exactAliceProof, response.data);
+        response = await api(serviceToken, 'GET', '/api/service/ops-tasks',
+            undefined, { 'X-Worker-Proof': exactAliceProof });
+        check('exact worker proof reveals the PERSON task',
+            response.status === 200 &&
+            (response.data.tasks || []).some(item => item.id === personTask.id), response.data);
+        response = await action(serviceToken, exactAliceProof, personTask.id, 'claim',
+            'task140-exact-worker');
+        const personLeaseId = response.data.task?.claim?.leaseId;
+        check('exact worker can claim the PERSON task',
+            response.status === 200 && !!personLeaseId, response.data);
+
+        response = await api(director, 'PATCH', `/api/operations/tasks/${personTask.id}`, {
+            serviceDepartmentId: department.id,
+            serviceExecutionTarget: {
+                type: 'PERSON', departmentId: department.id, workerId: bob.id
+            },
+            serviceExecutionTargetVersion: personTask.serviceExecutionTargetVersion,
+            publishToService: true
+        });
+        check('authorized retarget succeeds and versions the target',
+            response.status === 200 &&
+            response.data.task?.serviceExecutionTarget?.workerId === bob.id &&
+            response.data.task.serviceExecutionTargetVersion > personTask.serviceExecutionTargetVersion,
+            response.data);
+        response = await action(serviceToken, exactAliceProof, personTask.id, 'start',
+            'task140-stale-lease', { leaseId: personLeaseId });
+        check('stale lease action loses after PERSON retarget',
+            response.status === 403 && response.data.code === 'WORKER_NOT_AUTHORIZED',
+            response.data);
+
+        // Resetting the PIN increments worker authorization and invalidates a
+        // previously issued proof before any action can use it.
+        response = await api(director, 'POST', `/api/service/workers/${alice.id}/reset-pin`,
+            { pin: '9173' });
+        check('PIN reset is accepted for the targeted worker', response.status === 200, response.data);
+        response = await api(serviceToken, 'GET', '/api/service/workers/current',
+            undefined, { 'X-Worker-Proof': exactAliceProof });
+        check('old PERSON proof is stale after PIN reset',
+            response.status === 401, response.data);
+
+        // Explicit removal is sent for a department-visible task; reconnect
+        // reconciliation then reflects the authoritative HTTP queue.
+        response = await api(director, 'POST', '/api/operations/tasks', {
+            title: 'Task 140 removal signal',
+            serviceDepartmentId: department.id,
+            publishToService: true
+        });
+        const removalTask = response.data.task;
+        await wait(100);
+        response = await api(director, 'PATCH', `/api/operations/tasks/${removalTask.id}`, {
+            serviceDepartmentId: department.id,
+            publishToService: false
+        });
+        await wait(150);
+        check('department websocket emits explicit removal for department tasks',
+            response.status === 200 && serviceSocket.messages.some(message =>
+                message.action === 'OPS_TASK_SERVICE_REMOVED' && message.taskId === removalTask.id),
+            serviceSocket.messages);
+        response = await api(serviceToken, 'GET', '/api/service/ops-tasks');
+        check('HTTP reconciliation removes the unpublished task',
+            response.status === 200 &&
+            !(response.data.tasks || []).some(item => item.id === removalTask.id), response.data);
 
         await stopServer(server.child);
         server = startServer();
@@ -393,6 +700,7 @@ async function run() {
         failed++;
         console.error(`❌ Task 127 HTTP test error: ${error.stack || error.message}`);
     } finally {
+        if (serviceSocket && serviceSocket.socket.readyState < 2) serviceSocket.socket.close();
         await stopServer(server && server.child);
         fs.rmSync(DATA_DIR, { recursive: true, force: true });
     }

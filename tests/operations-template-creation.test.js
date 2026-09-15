@@ -156,6 +156,52 @@ async function run() {
     check('unrelated edit omits an unchanged inactive department',
         !!edit && JSON.parse(edit.options.body).serviceDepartmentId === undefined);
 
+    // A PERSON target with no eligible worker must be a recoverable client
+    // validation error, not an uncaught collectForm exception.
+    route.dom.window.openCreatePanel();
+    const createWorkerSelect = route.dom.window.document.getElementById('tpl-worker');
+    route.dom.window.document.getElementById('tpl-target-type').value = 'PERSON';
+    route.dom.window.document.getElementById('tpl-service-dept').value = 'dept-bar';
+    createWorkerSelect.value = '';
+    const createSaveButton = route.dom.window.document.getElementById('tpl-save-btn');
+    let missingWorkerCreateThrew = false;
+    try {
+        await route.dom.window.doCreate();
+    } catch (_) {
+        missingWorkerCreateThrew = true;
+    }
+    check('missing PERSON worker create does not throw',
+        !missingWorkerCreateThrew);
+    check('missing PERSON worker create restores the save button and message',
+        createSaveButton.disabled === false &&
+        route.dom.window.document.getElementById('panel-msg').textContent ===
+            'Seleziona un operatore verificato.');
+    check('missing PERSON worker create keeps the panel open and focuses worker',
+        route.dom.window.document.getElementById('side-panel').classList.contains('open') &&
+        route.dom.window.document.activeElement === createWorkerSelect);
+
+    route.dom.window.openEditMode('tpl-1');
+    route.dom.window.document.getElementById('tpl-target-type').value = 'PERSON';
+    route.dom.window.document.getElementById('tpl-service-dept').value = 'dept-bar';
+    const editWorkerSelect = route.dom.window.document.getElementById('tpl-worker');
+    editWorkerSelect.value = '';
+    const editSaveButton = route.dom.window.document.getElementById('tpl-save-btn');
+    let missingWorkerEditThrew = false;
+    try {
+        await route.dom.window.doEdit('tpl-1');
+    } catch (_) {
+        missingWorkerEditThrew = true;
+    }
+    check('missing PERSON worker edit does not throw',
+        !missingWorkerEditThrew);
+    check('missing PERSON worker edit restores the save button and message',
+        editSaveButton.disabled === false &&
+        route.dom.window.document.getElementById('panel-msg').textContent ===
+            'Seleziona un operatore verificato.');
+    check('missing PERSON worker edit keeps the panel open and focuses worker',
+        route.dom.window.document.getElementById('side-panel').classList.contains('open') &&
+        route.dom.window.document.activeElement === editWorkerSelect);
+
     await route.dom.window.forceGenerate('tpl-1');
     const generate = route.calls.find(call =>
         call.requestPath === '/api/operations/templates/tpl-1/generate-now' &&

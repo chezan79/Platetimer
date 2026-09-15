@@ -75,6 +75,9 @@ async function processRecurring(stores, savers, addHistoryFn, onTaskCreatedFn) {
         }
     }
     if (!allTemplates.length) return { generated: 0 };
+    if (typeof stores.refreshServiceWorkers === 'function') {
+        await stores.refreshServiceWorkers();
+    }
 
     let generated = 0;
     let tasksDirty = false;
@@ -100,6 +103,11 @@ async function processRecurring(stores, savers, addHistoryFn, onTaskCreatedFn) {
                 isDepartmentActive: departmentId =>
                     !departmentsStore || (departmentsStore[companyId] || [])
                         .some(department => department.id === departmentId && department.active === true)
+                ,
+                getServiceWorker: (workerCompanyId, workerId) =>
+                    stores.serviceWorkers && typeof stores.serviceWorkers.findWorkerById === 'function'
+                        ? stores.serviceWorkers.findWorkerById(workerCompanyId, workerId)
+                        : null
             }
         );
         if (!newTasks.length) continue;

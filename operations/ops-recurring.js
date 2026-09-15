@@ -353,6 +353,23 @@ function generateTasksForTemplate(template, companyId, existingKeysSet, usersByI
         !options.isDepartmentActive(target.departmentId, companyId)) {
         target = null;
     }
+    if (target && target.type === executionTargets.PERSON) {
+        const worker = typeof options.getServiceWorker === 'function'
+            ? options.getServiceWorker(companyId, target.workerId) : null;
+        const nowMs = options.now instanceof Date ? options.now.getTime()
+            : Number(options.now || Date.now());
+        const membership = worker && worker.companyId === companyId &&
+            worker.status === 'ACTIVE' && worker.serviceEnabled === true &&
+            (worker.departmentMemberships || []).find(member =>
+                member.departmentId === target.departmentId &&
+                member.status === 'ACTIVE' &&
+                (member.validFrom == null || nowMs >= Number(member.validFrom)) &&
+                (member.validUntil == null || nowMs <= Number(member.validUntil)));
+        // PERSON is an authority-bearing target. Without a canonical worker
+        // resolver, generation must fail closed rather than preserve stale
+        // target identity in a newly-created task.
+        if (!membership) target = null;
+    }
     for (const ds of dates) {
         const key = occurrenceKey(template.id, ds);
         if (existingKeysSet.has(key)) continue; // idempotent guard

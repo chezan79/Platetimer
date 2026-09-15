@@ -86,6 +86,17 @@ function canManageServiceWorkers(actor, companyId) {
     return canManageDepartmentAccounts(actor, companyId);
 }
 
+// Service execution targeting is a separate Operations permission namespace.
+// It never grants Service execution itself: the worker proof, live membership,
+// and device department remain the only Service authority. Managers may target
+// work they are already entitled to edit, while ordinary assignees cannot
+// redirect execution to another worker.
+function canManageServiceExecutionTarget(actor, task, usersById) {
+    if (!actor || !task || actor.companyId !== task.companyId) return false;
+    if (!['DIRECTOR', 'CHEF_CUISINE', 'ADJOINT'].includes(actor.role)) return false;
+    return canEditTask(actor, task, usersById || {});
+}
+
 // Self-binding is not an administrative grant: it may only attach the verified
 // session UID to an account in the same tenant. Account lifecycle checks remain
 // in bindFirebaseUid so callers receive the established 409 state errors.
@@ -210,6 +221,7 @@ module.exports = {
     canManageUsers,
     canManageDepartmentAccounts,
     canManageServiceWorkers,
+    canManageServiceExecutionTarget,
     canBindDepartmentAccount,
     canManageOpsUser,
     canDeleteOpsUser,

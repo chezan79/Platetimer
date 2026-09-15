@@ -716,6 +716,14 @@ function openCreatePanel(sourceNote) {
       <input id="c-due" class="form-input" type="datetime-local">
       <label class="form-label">${t('ops.task.serviceDepartment')}</label>
       <select id="c-dept" class="form-select"><option value="">${t('ops.task.noServiceDepartment')}</option></select>
+      <label class="form-label">Destinazione esecuzione Service</label>
+      <select id="c-target-type" class="form-select">
+        <option value="DEPARTMENT">Qualsiasi operatore del reparto</option>
+        <option value="PERSON">Operatore specifico</option>
+      </select>
+      <select id="c-worker" class="form-select" style="display:none;margin-top:6px">
+        <option value="">Seleziona operatore verificato</option>
+      </select>
       <label style="display:flex;align-items:center;gap:8px;margin:6px 0 10px;font-size:13px;cursor:pointer">
         <input type="checkbox" id="c-publish" disabled>
         <span>${t('ops.task.publishToService')}</span>
@@ -733,6 +741,7 @@ function openCreatePanel(sourceNote) {
     </div>`;
   openPanel();
   initServiceDeptControls('c-dept', 'c-publish', null, false);
+  initServiceTargetControls('c-dept', 'c-target-type', 'c-worker', null);
 }
 
 // ── [Task 66] Service department dropdown + publish checkbox ──
@@ -764,6 +773,32 @@ async function initServiceDeptControls(selId, cbId, selectedId, publish) {
   sync();
 }
 
+async function initServiceTargetControls(deptId, typeId, workerId, target) {
+  const dept = document.getElementById(deptId), type = document.getElementById(typeId);
+  const workers = document.getElementById(workerId);
+  if (!dept || !type || !workers) return;
+  type.value = target && target.type === 'PERSON' ? 'PERSON' : 'DEPARTMENT';
+  const refresh = async () => {
+    const person = type.value === 'PERSON';
+    workers.style.display = person ? '' : 'none';
+    workers.required = person;
+    workers.innerHTML = '<option value="">Seleziona operatore verificato</option>';
+    if (!person || !dept.value) return;
+    const response = await OpsCommon.api('/api/operations/service-workers?departmentId=' +
+      encodeURIComponent(dept.value));
+    (response && response.success ? response.workers : []).forEach(worker => {
+      const option = document.createElement('option');
+      option.value = worker.id;
+      option.textContent = worker.displayName;
+      if (target && target.workerId === worker.id) option.selected = true;
+      workers.appendChild(option);
+    });
+  };
+  dept.addEventListener('change', refresh);
+  type.addEventListener('change', refresh);
+  await refresh();
+}
+
 // ── Edit mode (inside panel) ──
 function openEditMode(taskId) {
   const task = allTasks.find(t => t.id === taskId) || {};
@@ -786,6 +821,14 @@ function openEditMode(taskId) {
       <input id="e-due" class="form-input" type="datetime-local" value="${esc(task.dueDate ? task.dueDate.slice(0,16) : '')}">
       <label class="form-label">${t('ops.task.serviceDepartment')}</label>
       <select id="e-dept" class="form-select"><option value="">${t('ops.task.noServiceDepartment')}</option></select>
+      <label class="form-label">Destinazione esecuzione Service</label>
+      <select id="e-target-type" class="form-select">
+        <option value="DEPARTMENT">Qualsiasi operatore del reparto</option>
+        <option value="PERSON">Operatore specifico</option>
+      </select>
+      <select id="e-worker" class="form-select" style="display:none;margin-top:6px">
+        <option value="">Seleziona operatore verificato</option>
+      </select>
       <label style="display:flex;align-items:center;gap:8px;margin:6px 0 10px;font-size:13px;cursor:pointer">
         <input type="checkbox" id="e-publish" disabled>
         <span>${t('ops.task.publishToService')}</span>
@@ -798,6 +841,7 @@ function openEditMode(taskId) {
       </div>
     </div>`;
   initServiceDeptControls('e-dept', 'e-publish', task.serviceDepartmentId || null, task.publishToService === true);
+  initServiceTargetControls('e-dept', 'e-target-type', 'e-worker', task.serviceExecutionTarget || null);
 }
 
 // ── Reassign mode ──
@@ -1049,6 +1093,13 @@ async function doCreate() {
     serviceDepartmentId: document.getElementById('c-dept').value || null,
     publishToService:    document.getElementById('c-publish').checked
   };
+  if (document.getElementById('c-target-type').value === 'PERSON') {
+    const workerId = document.getElementById('c-worker').value;
+    if (!workerId) { panelMsg('Seleziona un operatore verificato.'); btn.disabled = false; return; }
+    body.serviceExecutionTarget = {
+      type: 'PERSON', departmentId: body.serviceDepartmentId, workerId
+    };
+  }
   if (_createSourceNoteId) body.sourceNoteId = _createSourceNoteId;
   if (!body.title) { panelMsg(t('ops.task.titleRequired')); btn.disabled = false; return; }
 
@@ -1094,6 +1145,15 @@ async function doEdit(taskId) {
     publishToService:    document.getElementById('e-publish').checked,
     notes: document.getElementById('e-notes').value.trim()
   };
+  const original = allTasks.find(task => task.id === taskId) || {};
+  if (document.getElementById('e-target-type').value === 'PERSON') {
+    const workerId = document.getElementById('e-worker').value;
+    if (!workerId) { panelMsg('Seleziona un operatore verificato.'); btn.disabled = false; return; }
+    body.serviceExecutionTarget = {
+      type: 'PERSON', departmentId: body.serviceDepartmentId, workerId
+    };
+  }
+  body.serviceExecutionTargetVersion = Number(original.serviceExecutionTargetVersion || 0);
   const r = await OpsCommon.api('/api/operations/tasks/' + taskId, { method: 'PATCH', body: JSON.stringify(body) });
   btn.disabled = false;
   if (r && r.success) {
