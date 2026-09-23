@@ -523,6 +523,92 @@ body.operations-shell .ops-status-tab.active {
   font-weight: 600;
 }
 
+/* Tasks: authorized list presented by collaborator or as one flat list */
+body.operations-shell .ops-task-view-switch {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: 12px;
+  background: var(--ops-surface);
+  border: 1px solid var(--ops-border);
+  border-radius: 9px;
+}
+body.operations-shell .ops-task-view-btn {
+  padding: 7px 12px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ops-muted);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+body.operations-shell .ops-task-view-btn.active {
+  border-color: rgba(37,99,235,.25);
+  color: var(--ops-accent);
+  background: var(--ops-accent-l);
+  font-weight: 700;
+}
+body.operations-shell .ops-task-view-btn:focus-visible,
+body.operations-shell .ops-collab-summary:focus-visible {
+  outline: 2px solid var(--ops-accent);
+  outline-offset: 2px;
+}
+body.operations-shell .ops-collab-card {
+  border: 1px solid var(--ops-border);
+  background: var(--ops-surface);
+  border-radius: 10px;
+  box-shadow: var(--ops-shadow);
+  overflow: hidden;
+}
+body.operations-shell .ops-collab-card.has-overdue {
+  border-left: 4px solid var(--ops-red);
+}
+body.operations-shell .ops-collab-summary {
+  cursor: pointer;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 14px 16px;
+  list-style: none;
+}
+body.operations-shell .ops-collab-summary::-webkit-details-marker { display: none; }
+body.operations-shell .ops-collab-identity {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 10px;
+  align-items: baseline;
+  min-width: 140px;
+  flex: 1 1 190px;
+  overflow-wrap: anywhere;
+}
+body.operations-shell .ops-collab-role,
+body.operations-shell .ops-collab-next { color: var(--ops-muted); font-size: 12px; }
+body.operations-shell .ops-collab-metrics { display: flex; flex: 3 1 390px; flex-wrap: wrap; gap: 5px 12px; font-size: 12px; color: var(--ops-muted); }
+body.operations-shell .ops-collab-metrics b { color: var(--ops-text); }
+body.operations-shell .ops-collab-late,
+body.operations-shell .ops-collab-late b { color: var(--ops-red) !important; font-weight: 700; }
+body.operations-shell .ops-collab-next { flex: 1 1 150px; }
+body.operations-shell .ops-collab-expand { font-size: 12px; color: var(--ops-accent); white-space: nowrap; }
+body.operations-shell .ops-collab-card[open] .ops-collab-expand { display: none; }
+body.operations-shell .ops-collab-rows {
+  border-top: 1px solid var(--ops-border);
+  background: var(--ops-bg);
+  padding: 10px 14px;
+}
+@media (max-width: 768px) {
+  body.operations-shell .ops-collab-summary { gap: 8px; padding: 12px; }
+  body.operations-shell .ops-collab-metrics { flex-basis: 100%; gap: 5px 10px; }
+  body.operations-shell .ops-collab-rows { padding: 8px; }
+}
+@media (max-width: 500px) {
+  body.operations-shell .ops-task-view-switch { display: flex; }
+  body.operations-shell .ops-task-view-btn { flex: 1; }
+  body.operations-shell .ops-collab-next { flex-basis: 100%; }
+}
+
 /* ── Task rows ──────────────────────────────────────────────────────── */
 body.operations-shell .task-list { gap: 6px; }
 body.operations-shell .task-item {

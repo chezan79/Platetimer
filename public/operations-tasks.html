@@ -86,6 +86,10 @@
     <button onclick="clearTodayFilter()" style="background:rgba(255,255,255,.18);border:none;color:#fff;cursor:pointer;font-size:13px;padding:4px 10px;border-radius:6px" data-i18n="ops.task.todayClear">Mostra tutti</button>
   </div>
 
+  <div class="ops-task-view-switch" role="group" aria-label="Task views">
+    <button type="button" id="view-collaborator" class="ops-task-view-btn" data-i18n="ops.task.byCollaborator" aria-pressed="false">Per collaboratore</button>
+    <button type="button" id="view-all" class="ops-task-view-btn active" data-i18n="ops.task.allTasks" aria-pressed="true">Tutti i compiti</button>
+  </div>
   <div id="ops-error" class="msg msg-error" style="display:none"></div>
   <div id="task-list" class="task-list"><div class="empty-state" data-i18n="ops.task.loading">Caricamento…</div></div>
 </main>
@@ -114,6 +118,7 @@
 <script src="js/ws-auth.js"></script>
 <script src="js/operations-common.js"></script>
 <script src="js/operations-realtime.js"></script>
+<script src="js/operations-task-groups.js"></script>
 <script>
 // Shorthand helpers
 const esc = OpsCommon.escHtml;
@@ -126,6 +131,8 @@ let filterTimer = null;
 let _createSourceNoteId = null;
 // true when page was opened with ?filter=today (Director quick-action)
 let todayFilterActive = false;
+let taskView = 'all';
+const expandedCollaborators = new Set();
 
 // [S6.4.1] Files staged for upload during task creation.
 let _pendingAttachments = [];
@@ -136,6 +143,8 @@ async function load() {
   if (!meData) return;
   document.getElementById('me-name').textContent = meData.user.name || '';
   document.getElementById('me-role').textContent = OpsCommon.roleLabel(meData.user.role);
+  taskView = OpsTaskGroups.isManager(meData.user.role) ? 'collaborator' : 'all';
+  syncTaskViewControls();
   if (meData.user.role === 'DIRECTOR') {
     document.getElementById('team-btn').style.display = '';
     document.getElementById('tpl-btn').style.display = '';
@@ -455,6 +464,70 @@ function exportToPDF() {
 }
 
 // ── Task list rendering ──
+function syncTaskViewControls() {
+  for (const [id, selected] of [
+    ['view-collaborator', taskView === 'collaborator'],
+    ['view-all', taskView === 'all']
+  ]) {
+    const btn = document.getElementById(id);
+    btn.classList.toggle('active', selected);
+    btn.setAttribute('aria-pressed', String(selected));
+  }
+}
+
+function setTaskView(next) {
+  if (next !== 'all' && next !== 'collaborator') return;
+  if (taskView === next) return;
+  taskView = next;
+  syncTaskViewControls();
+  renderList(); // uses cached, authorized data; never refetches or resets filters
+}
+
+const taskRowOptions = {
+  onTaskClick: openDetail,
+  showComplete: false,
+  showStart: false
+};
+
+function renderCollaboratorList(container, tasks) {
+  const groups = OpsTaskGroups.group(tasks, allUsers);
+  container.innerHTML = '';
+  if (!groups.length) {
+    container.innerHTML = `<div class="empty-state">${esc(t('ops.task.noTasks'))}</div>`;
+    return;
+  }
+  for (const group of groups) {
+    const card = document.createElement('details');
+    card.className = 'ops-collab-card' + (group.overdue ? ' has-overdue' : '');
+    card.dataset.groupKey = group.key;
+    card.open = expandedCollaborators.has(group.key);
+    const name = group.assigneeId === null ? t('ops.task.unassigned')
+      : group.missing ? t('ops.task.unknownAssignee') + ' · ' + group.assigneeId : group.name;
+    const role = group.role ? `<span class="ops-collab-role">${esc(OpsCommon.roleLabel(group.role))}</span>` : '';
+    const due = group.nextDue !== null
+      ? `<span class="ops-collab-next">${esc(t('ops.task.nextDue'))}: ${esc(OpsCommon.fmtDue(group.nextDue))}</span>` : '';
+    card.innerHTML = `<summary class="ops-collab-summary">
+      <span class="ops-collab-identity"><strong>${esc(name)}</strong>${role}</span>
+      <span class="ops-collab-metrics">
+        <span>${esc(t('ops.task.groupTotal'))} <b>${group.total}</b></span>
+        <span>${esc(OpsCommon.statusLabel('OPEN'))} <b>${group.open}</b></span>
+        <span>${esc(OpsCommon.statusLabel('IN_PROGRESS'))} <b>${group.inProgress}</b></span>
+        <span class="${group.overdue ? 'ops-collab-late' : ''}">${esc(OpsCommon.statusLabel('OVERDUE'))} <b>${group.overdue}</b></span>
+        <span>${esc(OpsCommon.statusLabel('COMPLETED'))} <b>${group.completed}</b></span>
+      </span>
+      ${due}
+      <span class="ops-collab-expand">${esc(t('ops.task.expandTasks'))}</span>
+    </summary><div class="ops-collab-rows task-list"></div>`;
+    card.addEventListener('toggle', () => {
+      if (card.open) expandedCollaborators.add(group.key);
+      else expandedCollaborators.delete(group.key);
+    });
+    container.appendChild(card);
+    OpsCommon.renderTaskList(card.querySelector('.ops-collab-rows'), group.tasks,
+      allUsers, meData && meData.user.id, loadTasks, taskRowOptions);
+  }
+}
+
 function renderList() {
   const tasks = getExportDataset();
 
@@ -469,11 +542,8 @@ function renderList() {
     return;
   }
 
-  OpsCommon.renderTaskList(container, tasks, allUsers, meData && meData.user.id, loadTasks, {
-    onTaskClick: openDetail,
-    showComplete: false,
-    showStart: false
-  });
+  if (taskView === 'collaborator') renderCollaboratorList(container, tasks);
+  else OpsCommon.renderTaskList(container, tasks, allUsers, meData && meData.user.id, loadTasks, taskRowOptions);
 }
 
 // ── Detail panel ──
@@ -1282,9 +1352,18 @@ async function doSetEscalation(taskId) {
 // handler, keeping this page's panel entry point inside the script's scope.
 const newTaskBtn = document.getElementById('new-task-btn');
 if (newTaskBtn) newTaskBtn.addEventListener('click', openCreatePanel);
+const collaboratorViewBtn = document.getElementById('view-collaborator');
+const allViewBtn = document.getElementById('view-all');
+if (collaboratorViewBtn) collaboratorViewBtn.addEventListener('click', () => setTaskView('collaborator'));
+if (allViewBtn) allViewBtn.addEventListener('click', () => setTaskView('all'));
 
 // ── Init: load translations then boot ──
-I18n.init({ selector: '#i18n-sel' }).then(() => load());
+I18n.init({ selector: '#i18n-sel' }).then(() => {
+  document.getElementById('i18n-sel').addEventListener('click', event => {
+    if (event.target.closest('.i18n-lang-btn')) queueMicrotask(renderList);
+  });
+  return load();
+});
 
 // Sprint 5: real-time live updates ──────────────────────────────────────────
 OpsRealtime.init();
