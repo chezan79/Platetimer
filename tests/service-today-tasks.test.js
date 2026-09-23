@@ -88,6 +88,9 @@ async function run() {
         await api(director, 'GET', '/api/operations/me?name=Director');
         let r = await api(director, 'POST', '/api/departments', { name: 'Kitchen' });
         const kitchen = r.data.department;
+        await api(director, 'PUT', `/api/departments/${kitchen.id}/type`, {
+            departmentType: 'CENTRAL'
+        });
         r = await api(director, 'POST', '/api/departments', { name: 'Bar' });
         const bar = r.data.department;
         r = await api(director, 'POST', '/api/department-accounts', {
@@ -103,6 +106,9 @@ async function run() {
         await api(otherDirector, 'GET', '/api/operations/me?name=Other');
         r = await api(otherDirector, 'POST', '/api/departments', { name: 'Other Kitchen' });
         const otherKitchen = r.data.department;
+        await api(otherDirector, 'PUT', `/api/departments/${otherKitchen.id}/type`, {
+            departmentType: 'CENTRAL'
+        });
         await api(otherDirector, 'POST', '/api/department-accounts', {
             departmentId: otherKitchen.id, displayName: 'Other Kitchen', loginIdentifier: 'other.kitchen'
         });
@@ -139,7 +145,12 @@ async function run() {
         });
         const impossibleValue = `${today.slice(0, 5)}02-30`;
         const unpublished = await create('unpublished', today, { publishToService: false });
-        const wrongDept = await create('wrong department', today, { serviceDepartmentId: bar.id });
+        const wrongDept = await api(director, 'POST', '/api/operations/tasks', {
+            title: 'wrong department', dueDate: today,
+            serviceDepartmentId: bar.id, publishToService: true
+        });
+        check('STANDARD department is not an Operations execution target',
+            wrongDept.status === 400, wrongDept);
         const completed = await create('completed', today);
         await api(director, 'POST', `/api/operations/tasks/${completed.id}/complete`);
         const cancelled = await create('cancelled', today);
@@ -173,7 +184,7 @@ async function run() {
             completedProjection);
         check('excludes acknowledged task', !ids.has(acknowledged.id), [...ids]);
         check('enforces department and company isolation',
-            !ids.has(wrongDept.id) && !ids.has(otherCompanyTask.id), [...ids]);
+            !ids.has(otherCompanyTask.id), [...ids]);
         check('uses unchanged safe projection',
             r.data.tasks.every(task => task.source === 'OPERATIONS' &&
                 !('companyId' in task) && !('assigneeId' in task) && !('createdBy' in task)),

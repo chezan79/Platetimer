@@ -283,6 +283,9 @@ async function main() {
         console.log('\n── planned recurring occurrence projection ──');
         r = await api(dirA, 'POST', '/api/departments', { name: 'Future Kitchen' });
         const futureDept = r.data.department;
+        await api(dirA, 'PUT', `/api/departments/${futureDept.id}/type`, {
+            departmentType: 'CENTRAL'
+        });
         r = await api(dirA, 'POST', '/api/operations/templates', {
             title: 'Future SC plan',
             frequency: 'DAILY',

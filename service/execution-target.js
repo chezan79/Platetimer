@@ -4,6 +4,20 @@ const DEPARTMENT = 'DEPARTMENT';
 const PERSON = 'PERSON';
 const ROLE = 'ROLE';
 
+function isEligibleOperationsDepartment(department, companyId) {
+    if (!department || department.active !== true ||
+        department.departmentType !== 'CENTRAL') return false;
+    return !department.companyId || department.companyId === companyId;
+}
+
+function findEligibleOperationsDepartment(departments, companyId, departmentId) {
+    const id = typeof departmentId === 'string' ? departmentId.trim() : '';
+    if (!id) return null;
+    return (departments || []).find(department =>
+        department.id === id &&
+        isEligibleOperationsDepartment(department, companyId)) || null;
+}
+
 function cloneTarget(target) {
     if (!target) return null;
     return {
@@ -142,6 +156,8 @@ module.exports = {
     DEPARTMENT,
     PERSON,
     ROLE,
+    findEligibleOperationsDepartment,
+    isEligibleOperationsDepartment,
     effectiveTarget,
     normalizeWrite,
     parseTarget,

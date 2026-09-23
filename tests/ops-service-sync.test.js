@@ -130,6 +130,9 @@ async function run() {
 
         r = await api(tokDir, 'POST', '/api/departments', { name: 'Cucina' });
         const deptA = r.data.department;
+        await api(tokDir, 'PUT', `/api/departments/${deptA.id}/type`, {
+            departmentType: 'CENTRAL'
+        });
         r = await api(tokDir, 'POST', '/api/departments', { name: 'Pizzeria' });
         const deptB = r.data.department;
         r = await api(tokDir, 'POST', '/api/departments', { name: 'Magazzino' });
@@ -161,9 +164,9 @@ async function run() {
         // ── Endpoint: service-departments dropdown source ─────────────────────
         console.log('\n  — service-departments endpoint —\n');
         r = await api(tokDir, 'GET', '/api/operations/service-departments');
-        check('service-departments: lists active only, sorted', r.data.success === true &&
-            r.data.departments.length === 2 &&
-            r.data.departments[0].name === 'Cucina' && r.data.departments[1].name === 'Pizzeria' &&
+        check('service-departments: lists active CENTRAL only', r.data.success === true &&
+            r.data.departments.length === 1 &&
+            r.data.departments[0].id === deptA.id &&
             r.data.departments.every(d => d.id && d.name && Object.keys(d).length === 2), r.data);
         r = await api(tokDeptA, 'GET', '/api/operations/service-departments');
         check('service-departments: rejected for non-ops session', r.status === 403 || r.status === 401, r.status);
@@ -255,36 +258,31 @@ async function run() {
         listA = await svcTasks(tokDeptA);
         check('12. priority update propagates', listA[0]?.priority === 'URGENT', listA);
 
-        // ── 13: department move A → B ────────────────────────────────────────
+        // ── 13: STANDARD is not an Operations execution destination ─────────
         console.log('\n  — move / publish toggles / lifecycle —\n');
         r = await api(tokDir, 'PATCH', `/api/operations/tasks/${tPub.id}`, { serviceDepartmentId: deptB.id });
-        check('13. move A→B: A empty, B has task',
-            r.data.success === true &&
-            (await svcTasks(tokDeptA)).length === 0 &&
-            (await svcTasks(tokDeptB)).some(t => t.id === tPub.id), r.data);
-        const movedVersion = r.data.task.serviceExecutionTargetVersion;
-        check('legacy department move advances and dual-writes target revision',
-            movedVersion === 1 &&
-            r.data.task.serviceExecutionTarget.departmentId === deptB.id, r.data.task);
-        r = await api(tokDir, 'PATCH', `/api/operations/tasks/${tPub.id}`, {
-            serviceExecutionTarget: { type: 'DEPARTMENT', departmentId: deptA.id },
-            serviceExecutionTargetVersion: 0
-        });
-        check('stale target-aware writer loses to legacy writer',
-            r.status === 409 && r.data.code === 'SERVICE_TARGET_VERSION_CONFLICT' &&
-            r.data.serviceExecutionTargetVersion === movedVersion, r.data);
+        check('13. move to STANDARD is rejected and original task stays published',
+            r.status === 400 &&
+            (await svcTasks(tokDeptA)).some(t => t.id === tPub.id) &&
+            (await svcTasks(tokDeptB)).length === 0, r.data);
+        const movedVersion = tPub.serviceExecutionTargetVersion;
         r = await api(tokDir, 'PATCH', `/api/operations/tasks/${tPub.id}`, {
             serviceExecutionTarget: { type: 'DEPARTMENT', departmentId: deptB.id },
             serviceExecutionTargetVersion: movedVersion
         });
+        check('typed target cannot move to STANDARD either', r.status === 400, r.data);
+        r = await api(tokDir, 'PATCH', `/api/operations/tasks/${tPub.id}`, {
+            serviceExecutionTarget: { type: 'DEPARTMENT', departmentId: deptA.id },
+            serviceExecutionTargetVersion: movedVersion
+        });
         check('fresh target-aware writer preserves matching representations',
-            r.status === 200 && r.data.task.serviceDepartmentId === deptB.id &&
-            r.data.task.serviceExecutionTarget.departmentId === deptB.id, r.data.task);
+            r.status === 200 && r.data.task.serviceDepartmentId === deptA.id &&
+            r.data.task.serviceExecutionTarget.departmentId === deptA.id, r.data.task);
 
         // ── 14/15: publish toggles ────────────────────────────────────────────
         r = await api(tokDir, 'PATCH', `/api/operations/tasks/${tPub.id}`, { publishToService: false });
         check('14. publish true→false removes from Service GET',
-            r.data.success === true && (await svcTasks(tokDeptB)).length === 0, r.data);
+            r.data.success === true && (await svcTasks(tokDeptA)).length === 0, r.data);
         check('unpublish advances the versioned Service targeting state',
             r.data.task.serviceExecutionTargetVersion > movedVersion, r.data.task);
         const unpublishedVersion = r.data.task.serviceExecutionTargetVersion;
@@ -295,13 +293,13 @@ async function run() {
         check('stale target-aware publication-only writer is rejected',
             r.status === 409 && r.data.code === 'SERVICE_TARGET_VERSION_CONFLICT' &&
             r.data.serviceExecutionTargetVersion === unpublishedVersion &&
-            (await svcTasks(tokDeptB)).length === 0, r.data);
+            (await svcTasks(tokDeptA)).length === 0, r.data);
         r = await api(tokDir, 'PATCH', `/api/operations/tasks/${tPub.id}`, {
             publishToService: true,
             serviceExecutionTargetVersion: unpublishedVersion
         });
         check('15. publish false→true re-appears in Service GET',
-            r.data.success === true && (await svcTasks(tokDeptB)).length === 1, r.data);
+            r.data.success === true && (await svcTasks(tokDeptA)).length === 1, r.data);
         const republishedVersion = r.data.task.serviceExecutionTargetVersion;
         for (const invalidVersion of ['1', -1, 1.5]) {
             r = await api(tokDir, 'PATCH', `/api/operations/tasks/${tPub.id}`, {
@@ -322,30 +320,30 @@ async function run() {
         // ── 16–18: lifecycle removals ─────────────────────────────────────────
         r = await api(tokDir, 'POST', `/api/operations/tasks/${tPub.id}/complete`);
         check('16. completion removes from Service GET',
-            r.data.success === true && (await svcTasks(tokDeptB)).length === 0, r.data);
+            r.data.success === true && (await svcTasks(tokDeptA)).length === 0, r.data);
 
         r = await api(tokDir, 'POST', '/api/operations/tasks', {
-            title: 'Da cancellare', serviceDepartmentId: deptB.id, publishToService: true });
+            title: 'Da cancellare', serviceDepartmentId: deptA.id, publishToService: true });
         const tCanc = r.data.task;
-        check('16b. new published task visible', (await svcTasks(tokDeptB)).length === 1);
+        check('16b. new published task visible', (await svcTasks(tokDeptA)).length === 1);
         r = await api(tokDir, 'POST', `/api/operations/tasks/${tCanc.id}/cancel`, { reason: 'test' });
         check('17. cancellation removes from Service GET',
-            r.data.success === true && (await svcTasks(tokDeptB)).length === 0, r.data);
+            r.data.success === true && (await svcTasks(tokDeptA)).length === 0, r.data);
 
         r = await api(tokDir, 'POST', '/api/operations/tasks', {
-            title: 'Da eliminare', serviceDepartmentId: deptB.id, publishToService: true });
+            title: 'Da eliminare', serviceDepartmentId: deptA.id, publishToService: true });
         const tDel = r.data.task;
         r = await api(tokDir, 'DELETE', `/api/operations/tasks/${tDel.id}`);
         check('18. deletion removes from Service GET',
-            r.data.success === true && (await svcTasks(tokDeptB)).length === 0, r.data);
+            r.data.success === true && (await svcTasks(tokDeptA)).length === 0, r.data);
 
         // ── 19: canonical record retains fields ───────────────────────────────
         r = await api(tokDir, 'GET', `/api/operations/tasks/${tPub.id}`);
         const canonical = r.data.task;
         check('19. canonical ops record retains all fields after mutations',
-            canonical && canonical.serviceDepartmentId === deptB.id &&
+            canonical && canonical.serviceDepartmentId === deptA.id &&
             canonical.publishToService === true &&
-            canonical.serviceDepartmentName === 'Pizzeria' &&
+            canonical.serviceDepartmentName === 'Cucina' &&
             canonical.status === 'COMPLETED' && canonical.title === 'Prep cucina v2' &&
             canonical.companyId === 'ristorante' && canonical.assigneeId === directorId, canonical);
 
@@ -400,26 +398,22 @@ async function run() {
         const subOther = await wsConnect(tokOtherDir);
         await new Promise(res => setTimeout(res, 300));
 
-        // 21. dept move A → B
+        // 21. rejected STANDARD retarget does not publish an event
         r = await api(tokDir, 'POST', '/api/operations/tasks', {
             title: 'WS move', serviceDepartmentId: deptA.id, publishToService: true });
         const wsT = r.data.task;
         await sub.waitFor('OPS_TASK_CREATED');
         r = await api(tokDir, 'PATCH', `/api/operations/tasks/${wsT.id}`, { serviceDepartmentId: deptB.id });
-        let evUpd = await sub.waitFor('OPS_TASK_UPDATED');
-        let evRem = await sub.waitFor('OPS_TASK_SERVICE_REMOVED');
-        check('21a. move: OPS_TASK_SERVICE_REMOVED with prev dept A',
-            evRem && evRem.taskId === wsT.id && evRem.prevServiceDepartmentId === deptA.id, evRem);
-        check('21b. move: OPS_TASK_UPDATED carries new dept B',
-            evUpd && evUpd.task.id === wsT.id && evUpd.task.serviceDepartmentId === deptB.id &&
-            evUpd.task.publishToService === true, evUpd && evUpd.task);
+        check('21. rejected STANDARD retarget does not remove Service publication',
+            r.status === 400 && (await svcTasks(tokDeptA)).some(t => t.id === wsT.id), r.data);
+        let evRem;
 
         // 22. unpublish
         await api(tokDir, 'PATCH', `/api/operations/tasks/${wsT.id}`, { publishToService: false });
         await sub.waitFor('OPS_TASK_UPDATED');
         evRem = await sub.waitFor('OPS_TASK_SERVICE_REMOVED');
-        check('22. unpublish: OPS_TASK_SERVICE_REMOVED with prev dept B',
-            evRem && evRem.taskId === wsT.id && evRem.prevServiceDepartmentId === deptB.id, evRem);
+        check('22. unpublish: OPS_TASK_SERVICE_REMOVED with prev dept A',
+            evRem && evRem.taskId === wsT.id && evRem.prevServiceDepartmentId === deptA.id, evRem);
 
         // 23. completion
         await api(tokDir, 'PATCH', `/api/operations/tasks/${wsT.id}`, { publishToService: true });
@@ -428,18 +422,18 @@ async function run() {
         await sub.waitFor('OPS_TASK_COMPLETED');
         evRem = await sub.waitFor('OPS_TASK_SERVICE_REMOVED');
         check('23. completion: OPS_TASK_SERVICE_REMOVED emitted',
-            evRem && evRem.taskId === wsT.id && evRem.prevServiceDepartmentId === deptB.id, evRem);
+            evRem && evRem.taskId === wsT.id && evRem.prevServiceDepartmentId === deptA.id, evRem);
 
         // 24. cancellation
         r = await api(tokDir, 'POST', '/api/operations/tasks', {
-            title: 'WS cancel', serviceDepartmentId: deptB.id, publishToService: true });
+            title: 'WS cancel', serviceDepartmentId: deptA.id, publishToService: true });
         const wsT2 = r.data.task;
         await sub.waitFor('OPS_TASK_CREATED');
         await api(tokDir, 'POST', `/api/operations/tasks/${wsT2.id}/cancel`, { reason: 'ws' });
         await sub.waitFor('OPS_TASK_UPDATED');
         evRem = await sub.waitFor('OPS_TASK_SERVICE_REMOVED');
         check('24. cancellation: OPS_TASK_SERVICE_REMOVED emitted',
-            evRem && evRem.taskId === wsT2.id && evRem.prevServiceDepartmentId === deptB.id, evRem);
+            evRem && evRem.taskId === wsT2.id && evRem.prevServiceDepartmentId === deptA.id, evRem);
 
         // 25. deletion
         r = await api(tokDir, 'POST', '/api/operations/tasks', {
@@ -518,37 +512,28 @@ async function run() {
         check('29c. unrelated dept socket receives NO task event', evBnone === null, evBnone);
 
         // 30. unpublished task in same company: neither bound socket receives anything
-        await api(tokDir, 'POST', '/api/operations/tasks', { title: 'Interno', serviceDepartmentId: deptB.id, publishToService: false });
+        await api(tokDir, 'POST', '/api/operations/tasks', { title: 'Interno', serviceDepartmentId: deptA.id, publishToService: false });
         await sub.waitFor('OPS_TASK_CREATED');
         check('30. unpublished task: no bound socket receives it',
             (await subA.waitFor('OPS_TASK_CREATED', 700)) === null &&
             (await subB.waitFor('OPS_TASK_CREATED', 300)) === null);
 
-        // 31. move A→B over bound sockets: A gets only removal, B gets projection
+        // 31. STANDARD retarget does not emit a Service event over bound sockets
         subA.received.length = 0; subB.received.length = 0;
-        await api(tokDir, 'PATCH', `/api/operations/tasks/${bT.id}`, { serviceDepartmentId: deptB.id });
-        await sub.waitFor('OPS_TASK_UPDATED'); await sub.waitFor('OPS_TASK_SERVICE_REMOVED');
-        const remA = await subA.waitFor('OPS_TASK_SERVICE_REMOVED');
-        const updB = await subB.waitFor('OPS_TASK_UPDATED');
-        check('31a. move: prior dept gets minimal removal event only',
-            remA && remA.taskId === bT.id && remA.prevServiceDepartmentId === deptA.id &&
-            remA.task === undefined &&
-            subA.received.filter(m => m.action.startsWith('OPS_') && m.action !== 'OPS_TASK_SERVICE_REMOVED').length === 0,
-            { remA, other: subA.received });
-        check('31b. move: new dept gets safe projection, no removal',
-            updB && updB.task.id === bT.id && updB.task.serviceDepartmentId === deptB.id &&
-            updB.task.companyId === undefined &&
-            (await subB.waitFor('OPS_TASK_SERVICE_REMOVED', 500)) === null, updB);
+        r = await api(tokDir, 'PATCH', `/api/operations/tasks/${bT.id}`, { serviceDepartmentId: deptB.id });
+        check('31. STANDARD retarget rejected for bound sockets',
+            r.status === 400 && (await svcTasks(tokDeptA)).some(t => t.id === bT.id) &&
+            (await svcTasks(tokDeptB)).length === 0, r.data);
 
-        // 32. completion: entitled dept gets removal, NOT the full COMPLETED payload
-        subB.received.length = 0;
+        // 32. completion: CENTRAL gets removal, NOT the full COMPLETED payload
+        subA.received.length = 0;
         await api(tokDir, 'POST', `/api/operations/tasks/${bT.id}/complete`);
         await sub.waitFor('OPS_TASK_COMPLETED'); await sub.waitFor('OPS_TASK_SERVICE_REMOVED');
-        const remB = await subB.waitFor('OPS_TASK_SERVICE_REMOVED');
+        const remB = await subA.waitFor('OPS_TASK_SERVICE_REMOVED');
         check('32. completion: bound socket gets removal only, no full task payload',
-            remB && remB.taskId === bT.id && remB.prevServiceDepartmentId === deptB.id &&
-            subB.received.filter(m => m.action === 'OPS_TASK_COMPLETED').length === 0,
-            { remB, other: subB.received });
+            remB && remB.taskId === bT.id && remB.prevServiceDepartmentId === deptA.id &&
+            subA.received.filter(m => m.action === 'OPS_TASK_COMPLETED').length === 0,
+            { remB, other: subA.received });
 
         // 33. bound sockets never see unrelated OPS traffic (plain-task update)
         subA.received.length = 0; subB.received.length = 0;

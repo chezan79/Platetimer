@@ -142,23 +142,22 @@ async function run() {
         createCalls.some(call => call.requestPath === '/api/operations/templates' &&
             call.options.method === undefined));
 
-    route.dom.window.openEditMode('tpl-1');
+    await route.dom.window.openEditMode('tpl-1');
     const editDepartment = route.dom.window.document.getElementById('tpl-service-dept');
-    check('edit visibly preserves a selected department that is no longer active',
-        editDepartment.value === 'dept-kitchen' &&
-        editDepartment.selectedOptions[0].disabled &&
-        editDepartment.selectedOptions[0].textContent.includes('non attivo'));
+    check('edit does not render a stale ineligible department option',
+        editDepartment.value === '' &&
+        ![...editDepartment.options].some(option => option.value === 'dept-kitchen'));
     await route.dom.window.doEdit('tpl-1');
     const edit = route.calls.find(call => call.requestPath === '/api/operations/templates/tpl-1' &&
         call.options.method === 'PATCH');
     check('edit uses the PATCH options object', !!edit);
     check('edit sends a JSON body', !!edit && typeof edit.options.body === 'string');
-    check('unrelated edit omits an unchanged inactive department',
-        !!edit && JSON.parse(edit.options.body).serviceDepartmentId === undefined);
+    check('edit clears a stale ineligible department',
+        !!edit && JSON.parse(edit.options.body).serviceDepartmentId === null);
 
     // A PERSON target with no eligible worker must be a recoverable client
     // validation error, not an uncaught collectForm exception.
-    route.dom.window.openCreatePanel();
+    await route.dom.window.openCreatePanel();
     const createWorkerSelect = route.dom.window.document.getElementById('tpl-worker');
     route.dom.window.document.getElementById('tpl-target-type').value = 'PERSON';
     route.dom.window.document.getElementById('tpl-service-dept').value = 'dept-bar';
@@ -180,7 +179,7 @@ async function run() {
         route.dom.window.document.getElementById('side-panel').classList.contains('open') &&
         route.dom.window.document.activeElement === createWorkerSelect);
 
-    route.dom.window.openEditMode('tpl-1');
+    await route.dom.window.openEditMode('tpl-1');
     route.dom.window.document.getElementById('tpl-target-type').value = 'PERSON';
     route.dom.window.document.getElementById('tpl-service-dept').value = 'dept-bar';
     const editWorkerSelect = route.dom.window.document.getElementById('tpl-worker');

@@ -179,7 +179,10 @@ function openDetail(tplId) {
   openPanel();
 }
 
-function openCreatePanel() {
+async function openCreatePanel() {
+  const response = await OpsCommon.api('/api/operations/service-departments');
+  serviceDepartments = (response && response.success && Array.isArray(response.departments))
+    ? response.departments : [];
   const assigneeOpts = [
     `<option value="">Nessun assegnatario predefinito</option>`,
     ...assignableUsers.map(u => `<option value="${esc(u.id)}">${esc(u.name)} (${esc(OpsCommon.roleLabel(u.role))})</option>`)
@@ -199,9 +202,12 @@ function openCreatePanel() {
   initTemplateTargetControls(null);
 }
 
-function openEditMode(tplId) {
+async function openEditMode(tplId) {
   const t = allTemplates.find(x => x.id === tplId);
   if (!t) return;
+  const response = await OpsCommon.api('/api/operations/service-departments');
+  serviceDepartments = (response && response.success && Array.isArray(response.departments))
+    ? response.departments : [];
   const assigneeOpts = [
     `<option value="">Nessun assegnatario predefinito</option>`,
     ...assignableUsers.map(u => `<option value="${esc(u.id)}"${u.id===t.defaultAssigneeId?' selected':''}>${esc(u.name)} (${esc(OpsCommon.roleLabel(u.role))})</option>`)
@@ -235,9 +241,6 @@ function tplForm(t) {
   const departmentOpts = [
     '<option value="">Nessun reparto Service</option>',
     ...serviceDepartments.map(d => `<option value="${esc(d.id)}"${t&&d.id===t.serviceDepartmentId?' selected':''}>${esc(d.name)}</option>`),
-    ...(t && t.serviceDepartmentId && !serviceDepartments.some(d => d.id === t.serviceDepartmentId)
-      ? [`<option value="${esc(t.serviceDepartmentId)}" selected disabled>${esc(t.serviceDepartmentName || t.department || 'Reparto non disponibile')} (non attivo)</option>`]
-      : [])
   ].join('');
   return `
     <label class="form-label">Titolo *</label>

@@ -810,17 +810,14 @@ function openCreatePanel(sourceNote) {
       <button class="btn btn-primary" style="width:100%;margin-top:6px" id="c-btn" onclick="doCreate()">${t('ops.task.create')}</button>
     </div>`;
   openPanel();
-  initServiceDeptControls('c-dept', 'c-publish', null, false);
-  initServiceTargetControls('c-dept', 'c-target-type', 'c-worker', null);
+  initServiceDeptControls('c-dept', 'c-publish', null, false)
+    .then(() => initServiceTargetControls('c-dept', 'c-target-type', 'c-worker', null));
 }
 
 // ── [Task 66] Service department dropdown + publish checkbox ──
-let _serviceDepts = null;
 async function loadServiceDepts() {
-  if (_serviceDepts) return _serviceDepts;
   const r = await OpsCommon.api('/api/operations/service-departments');
-  _serviceDepts = (r && r.success && Array.isArray(r.departments)) ? r.departments : [];
-  return _serviceDepts;
+  return (r && r.success && Array.isArray(r.departments)) ? r.departments : [];
 }
 async function initServiceDeptControls(selId, cbId, selectedId, publish) {
   const depts = await loadServiceDepts();
@@ -908,8 +905,8 @@ function openEditMode(taskId) {
         <button class="btn btn-neutral" onclick="openDetail('${esc(taskId)}')">${t('common.cancel')}</button>
       </div>
     </div>`;
-  initServiceDeptControls('e-dept', 'e-publish', task.serviceDepartmentId || null, task.publishToService === true);
-  initServiceTargetControls('e-dept', 'e-target-type', 'e-worker', task.serviceExecutionTarget || null);
+  initServiceDeptControls('e-dept', 'e-publish', task.serviceDepartmentId || null, task.publishToService === true)
+    .then(() => initServiceTargetControls('e-dept', 'e-target-type', 'e-worker', task.serviceExecutionTarget || null));
 }
 
 // ── Reassign mode ──

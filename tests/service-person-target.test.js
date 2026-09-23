@@ -63,7 +63,7 @@ async function main() {
     const generated = recurring.generateTasksForTemplate(
         template, 'company-a', new Set(), { 'ops-user': { id: 'ops-user', status: 'ACTIVE' } },
         null, {
-            isDepartmentActive: () => true,
+            isDepartmentEligible: () => true,
             getServiceWorker: () => ({
                 id: 'alice', companyId: 'company-a', status: 'ACTIVE',
                 serviceEnabled: true,
@@ -93,7 +93,7 @@ async function main() {
             { ...template, id: `tpl-invalid-${worker && worker.status || 'missing'}` },
             'company-a', new Set(), { 'ops-user': { id: 'ops-user', status: 'ACTIVE' } },
             null, {
-                isDepartmentActive: () => true,
+                isDepartmentEligible: () => true,
                 now: 10_000,
                 getServiceWorker: () => worker
             }

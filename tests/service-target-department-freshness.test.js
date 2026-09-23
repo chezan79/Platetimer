@@ -30,9 +30,9 @@ const departmentRoute = routeBody(
 );
 check('department options refresh the canonical department authority before filtering',
     departmentRoute.includes('await refreshDepartmentsFromAuthority()'));
-check('department options remain company-scoped and active-only',
+check('department options remain company-scoped and CENTRAL-only',
     departmentRoute.includes('ctx.opsUser.companyId') &&
-    departmentRoute.includes('d.active === true'));
+    departmentRoute.includes('isEligibleOperationsDepartment(d, companyId)'));
 check('department serialization depends only on canonical ID and name',
     departmentRoute.includes("map(d => ({ id: d.id, name: d.name }))") &&
     !departmentRoute.includes('departmentAccounts'));
@@ -46,6 +46,7 @@ check('eligible-worker lookup refreshes departments and workers from the same au
     workerRoute.includes('refreshServiceWorkersFromAuthority()'));
 check('eligible-worker lookup keeps canonical company and membership checks',
     workerRoute.includes('getCompanyDepts(companyId)') &&
+    workerRoute.includes('findEligibleOperationsDepartment') &&
     workerRoute.includes('getSelectableWorkers(companyId, departmentId)'));
 
 for (const [label, routeStart, routeEnd] of [

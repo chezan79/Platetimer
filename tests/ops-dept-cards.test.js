@@ -138,6 +138,9 @@ async function run() {
         // Create departments
         r = await api(tokDir, 'POST', '/api/departments', { name: 'Cucina' });
         const deptCucina = r.data.department;
+        await api(tokDir, 'PUT', `/api/departments/${deptCucina.id}/type`, {
+            departmentType: 'CENTRAL'
+        });
         r = await api(tokDir, 'POST', '/api/departments', { name: 'Pizzeria' });
         const deptPizzeria = r.data.department;
         check('Setup: departments created', !!(deptCucina?.id && deptPizzeria?.id), r.data);
@@ -260,8 +263,8 @@ async function run() {
         check('8b. still exactly one entry with same id', matching.length === 1, matching);
         check('8c. updated title present', matching[0]?.title === 'TEST OPS CUCINA v2', matching[0]);
 
-        // ── 9 & 10. Department move ───────────────────────────────────────────
-        console.log('\n  — 9/10. department move Cucina→Pizzeria —\n');
+        // ── 9 & 10. STANDARD destination is not eligible ─────────────────────
+        console.log('\n  — 9/10. reject move Cucina→Pizzeria —\n');
         // Connect WS clients for both departments
         const wsCuc = await wsConnect(tokCuc);
         const wsPiz = await wsConnect(tokPiz);
@@ -270,26 +273,14 @@ async function run() {
         r = await api(tokDir, 'PATCH', `/api/operations/tasks/${tCucina.id}`, {
             serviceDepartmentId: deptPizzeria.id
         });
-        check('9a. move PATCH 200', r.data.success === true, r.data);
-
-        // WS: Cucina should receive OPS_TASK_SERVICE_REMOVED
-        const cucRemoved = await wsCuc.waitFor('OPS_TASK_SERVICE_REMOVED', 5000);
-        check('9b. Cucina receives OPS_TASK_SERVICE_REMOVED',
-            cucRemoved && cucRemoved.taskId === tCucina.id &&
-            cucRemoved.prevServiceDepartmentId === deptCucina.id, cucRemoved);
-
-        // WS: Pizzeria should receive OPS_TASK_UPDATED
-        const pizUpdated = await wsPiz.waitFor('OPS_TASK_UPDATED', 5000);
-        check('10a. Pizzeria receives OPS_TASK_UPDATED',
-            pizUpdated && pizUpdated.task?.id === tCucina.id &&
-            pizUpdated.task?.serviceDepartmentId === deptPizzeria.id, pizUpdated);
+        check('9a. move to STANDARD rejected', r.status === 400, r.data);
 
         await new Promise(res => setTimeout(res, 150));
-        // REST check: Cucina no longer has the task, Pizzeria now has it
+        // REST check: existing publication remains with CENTRAL
         const cucAfterMove = await getOpsTasksFor(tokCuc);
-        check('9c. task removed from Cucina (REST)', !cucAfterMove?.some(tk => tk.id === tCucina.id), cucAfterMove);
+        check('9c. task remains in Cucina (REST)', cucAfterMove?.some(tk => tk.id === tCucina.id), cucAfterMove);
         const pizAfterMove = await getOpsTasksFor(tokPiz);
-        check('10b. task appeared in Pizzeria (REST)', pizAfterMove?.some(tk => tk.id === tCucina.id), pizAfterMove);
+        check('10b. task never appears in Pizzeria (REST)', !pizAfterMove?.some(tk => tk.id === tCucina.id), pizAfterMove);
 
         wsCuc.close();
         wsPiz.close();
@@ -297,13 +288,13 @@ async function run() {
         // ── 11. Unpublish removes card ────────────────────────────────────────
         console.log('\n  — 11. unpublish removes card —\n');
         r = await api(tokDir, 'PATCH', `/api/operations/tasks/${tCucina.id}`, {
-            publishToService: false, serviceDepartmentId: deptPizzeria.id
+            publishToService: false
         });
         check('11a. unpublish PATCH 200', r.data.success === true, r.data);
         await new Promise(res => setTimeout(res, 150));
-        const pizAfterUnpub = await getOpsTasksFor(tokPiz);
-        check('11b. task removed from Pizzeria after unpublish',
-            !pizAfterUnpub?.some(tk => tk.id === tCucina.id), pizAfterUnpub);
+        const cucAfterUnpub = await getOpsTasksFor(tokCuc);
+        check('11b. task removed from Cucina after unpublish',
+            !cucAfterUnpub?.some(tk => tk.id === tCucina.id), cucAfterUnpub);
 
         // Re-publish to Cucina for subsequent tests
         r = await api(tokDir, 'PATCH', `/api/operations/tasks/${tCucina.id}`, {

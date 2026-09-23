@@ -2037,10 +2037,15 @@ async function getServiceEntitledOpsTasks(req, res) {
 
     const companyId = boundAcct.companyId;
     const departmentId = boundAcct.departmentId;
+    await refreshDepartmentsFromAuthority();
     const liveDept = getCompanyDepts(companyId).find(d => d.id === departmentId);
     if (!liveDept || !liveDept.active) {
         res.status(410).json({ error: 'Assigned department inactive', code: 'DEPARTMENT_INACTIVE' });
         return null;
+    }
+    if (!executionTargets.findEligibleOperationsDepartment(
+        getCompanyDepts(companyId), companyId, departmentId)) {
+        return { companyId, departmentId, tasks: [] };
     }
 
     // PERSON targets are private to the exact verified worker.  A missing,
@@ -2155,6 +2160,15 @@ app.post('/api/service/ops-tasks/:taskId/:action(claim|start|renew|release|compl
         if (!ctx) return;
         const companyId = ctx.device.companyId;
         const departmentId = ctx.device.departmentId;
+        await refreshDepartmentsFromAuthority();
+        const eligibleDepartment = executionTargets.findEligibleOperationsDepartment(
+            getCompanyDepts(companyId), companyId, departmentId);
+        if (!eligibleDepartment) {
+            return res.status(403).json({
+                error: 'Service execution is restricted to the active CENTRAL department.',
+                code: 'SERVICE_DEPARTMENT_NOT_ELIGIBLE'
+            });
+        }
         const canonical = getOpsTasks(companyId).find(task => task.id === req.params.taskId);
         if (!canonical || canonical.companyId !== companyId) {
             return res.status(404).json({ error: 'Task not found.', code: 'TASK_NOT_FOUND' });
@@ -2185,7 +2199,7 @@ app.post('/api/service/ops-tasks/:taskId/:action(claim|start|renew|release|compl
                 departmentName: ctx.device.department.name,
                 departmentAccountId: ctx.device.account.id,
                 accountStatus: ctx.device.account.status,
-                departmentActive: ctx.device.department.active === true,
+                departmentActive: eligibleDepartment.active === true,
                 membershipActive: ctx.membership.status === 'ACTIVE',
                 workerActive: ctx.worker.status === 'ACTIVE',
                 serviceEnabled: ctx.worker.serviceEnabled === true,
@@ -2260,10 +2274,17 @@ app.post('/api/service/ops-tasks/:taskId/acknowledge', workerAsyncRoute(async (r
     console.log(`[OPS-ACK-AUTH] companyResolved=true departmentResolved=true`);
 
     // Live department-activity guard (mirrors GET /api/service/ops-tasks)
+    await refreshDepartmentsFromAuthority();
     const liveDept = getCompanyDepts(companyId).find(d => d.id === departmentId);
     if (!liveDept || !liveDept.active) {
         console.log(`[OPS-ACK-AUTH] finalStatus=410 reason=DEPARTMENT_INACTIVE`);
         return res.status(410).json({ error: 'Assigned department inactive', code: 'DEPARTMENT_INACTIVE' });
+    }
+    if (!executionTargets.findEligibleOperationsDepartment(
+        getCompanyDepts(companyId), companyId, departmentId)) {
+        return res.status(404).json({
+            error: 'Task not found or not published to this department.', code: 'TASK_NOT_FOUND'
+        });
     }
 
     // Validate the legacy projection first, then use the recoverable
@@ -2491,10 +2512,9 @@ app.post('/api/service/login', (req, res) => {
 });
 
 // PUT /api/departments/:id/type — set departmentType (STANDARD | CENTRAL)
-// [TRANSITIONAL] Representation only in this sprint: no permission is derived
-// from CENTRAL yet. Max one CENTRAL per company (reject-until-reverted).
+// Operations execution requires CENTRAL. Max one CENTRAL per company.
 // [S1.4] Bound Department Accounts cannot manage departments.
-app.put('/api/departments/:id/type', (req, res) => {
+app.put('/api/departments/:id/type', workerAsyncRoute(async (req, res) => {
     const session = requireAuth(req, res);
     if (!session) return;
     const boundAcct = getBoundDepartmentContext(session);
@@ -2503,11 +2523,21 @@ app.put('/api/departments/:id/type', (req, res) => {
     if (!adminCtx) return;
     const companyId = adminCtx.companyId;
     const depts = departmentsStore[companyId] || [];
+    const previousType = departmentAccounts.getDepartmentType(
+        depts.find(d => d.id === req.params.id));
     const result = departmentAccounts.setDepartmentType(depts, req.params.id, (req.body || {}).departmentType);
     if (!result.ok) return res.status(result.code).json({ error: result.error });
     saveJSON(DEPARTMENTS_FILE, departmentsStore);
+    if (previousType === 'CENTRAL' && result.department.departmentType !== 'CENTRAL') {
+        const invalidated = await serviceTaskActions.invalidateForDepartment({
+            companyId, departmentId: result.department.id,
+            actorId: adminCtx.session.uid, reason: 'DEPARTMENT_NOT_CENTRAL'
+        });
+        await broadcastServiceInvalidations(companyId, invalidated);
+        broadcastOps(companyId, { action: 'OPS_TASK_SERVICE_RECONCILE' });
+    }
     res.json({ success: true, department: result.department });
-});
+}));
 
 // GET /api/subscription — return company's current plan and limit
 app.get('/api/subscription', (req, res) => {
@@ -4517,7 +4547,8 @@ app.get('/api/operations/assignees', (req, res) => {
 });
 
 // ── [Task 66] GET /api/operations/service-departments ───────────────────────
-// Active Service departments of the actor's company, for the task-form dropdown.
+// The active CENTRAL Service department of the actor's company, for Operations
+// execution controls.
 // [SECURITY] companyId ALWAYS from the server-side ops record — never from the
 // request. Returns only {id, name}, sorted by name.
 app.get('/api/operations/service-departments', workerAsyncRoute(async (req, res) => {
@@ -4526,8 +4557,9 @@ app.get('/api/operations/service-departments', workerAsyncRoute(async (req, res)
     await refreshDepartmentsFromAuthority();
     const companyId = ctx.opsUser.companyId;
     const allDepts = getCompanyDepts(companyId);
-    const activeDepts = allDepts.filter(d => d.active === true);
-    const departments = activeDepts
+    const eligibleDepts = allDepts.filter(d =>
+        executionTargets.isEligibleOperationsDepartment(d, companyId));
+    const departments = eligibleDepts
         .map(d => ({ id: d.id, name: d.name }))
         .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
     res.json({ success: true, departments });
@@ -4545,7 +4577,8 @@ app.get('/api/operations/service-workers', workerAsyncRoute(async (req, res) => 
     ]);
     const companyId = ctx.opsUser.companyId;
     const departmentId = String(req.query.departmentId || '').trim();
-    const department = getCompanyDepts(companyId).find(d => d.id === departmentId && d.active === true);
+    const department = executionTargets.findEligibleOperationsDepartment(
+        getCompanyDepts(companyId), companyId, departmentId);
     if (!department) return res.status(404).json({ error: 'Reparto Service non trovato.' });
     if (!opsAuth.canManageServiceExecutionTarget(ctx.opsUser, {
         companyId, createdBy: ctx.opsUser.id, assigneeId: ctx.opsUser.id
@@ -5140,8 +5173,8 @@ function sanitizeOpsTaskPatch(body) {
 // Resolve & validate the Service publication fields of a task.
 // `existing` is the current task record (null on create). Fields absent from
 // the body are carried over unchanged from `existing`.
-// [SECURITY] serviceDepartmentId is validated against the company's ACTIVE
-// departments via getCompanyDepts(companyId); serviceDepartmentName is ALWAYS
+// [SECURITY] serviceDepartmentId is validated against the company's active
+// CENTRAL department via its canonical record; serviceDepartmentName is ALWAYS
 // derived server-side from the validated department record — never from the
 // client. publishToService is coerced to false when no valid department is set.
 // Throws a user-facing message (→ 400) when an explicitly provided ID is invalid.
@@ -5150,8 +5183,9 @@ function resolveServicePublication(companyId, body, existing) {
     const deptId = normalized.target && normalized.target.departmentId;
     let deptName = null;
     if (deptId) {
-        const dept = getCompanyDepts(companyId).find(d => d.id === deptId && d.active === true);
-        if (!dept) throw 'Reparto Service non valido o non attivo.';
+        const dept = executionTargets.findEligibleOperationsDepartment(
+            getCompanyDepts(companyId), companyId, deptId);
+        if (!dept) throw 'La destinazione Operations deve essere il reparto Service CENTRAL attivo.';
         deptName = dept.name;
     }
     if (normalized.target && normalized.target.type === executionTargets.PERSON) {
@@ -5225,8 +5259,9 @@ function resolveTemplateDepartment(companyId, body, existing) {
         defaultServiceExecutionTargetVersion: normalized.version,
         publishToService: false
     };
-    const dept = getCompanyDepts(companyId).find(d => d.id === deptId && d.active === true);
-    if (!dept) throw 'Reparto Service non valido o non attivo.';
+    const dept = executionTargets.findEligibleOperationsDepartment(
+        getCompanyDepts(companyId), companyId, deptId);
+    if (!dept) throw 'La destinazione Operations deve essere il reparto Service CENTRAL attivo.';
     if (normalized.target && normalized.target.type === executionTargets.PERSON) {
         const worker = serviceWorkers.findWorkerById(companyId, normalized.target.workerId);
         const now = Date.now();
@@ -7130,8 +7165,9 @@ app.post('/api/operations/templates/:id/generate-now', async (req, res) => {
         opsRecurring.generateTasksForTemplate(
             tpl, companyId, existingKeys, usersById, addHistory,
             {
-                isDepartmentActive: departmentId => getCompanyDepts(companyId)
-                    .some(d => d.id === departmentId && d.active === true),
+                isDepartmentEligible: (departmentId, targetCompanyId) =>
+                    !!executionTargets.findEligibleOperationsDepartment(
+                        getCompanyDepts(targetCompanyId), targetCompanyId, departmentId),
                 getServiceWorker: (workerCompanyId, workerId) =>
                     serviceWorkers.findWorkerById(workerCompanyId, workerId)
             }
@@ -7353,8 +7389,8 @@ function opsPayloadForBoundSocket(payload, boundDepartmentId, companyId) {
     // [SECURITY] Live authorization check — do not trust the activity state
     // cached at joinRoom time: a department deactivated after the socket
     // joined must stop receiving Ops data immediately.
-    const liveDept = getCompanyDepts(companyId).find(d => d.id === boundDepartmentId);
-    if (!liveDept || !liveDept.active) return null;
+    if (!executionTargets.findEligibleOperationsDepartment(
+        getCompanyDepts(companyId), companyId, boundDepartmentId)) return null;
     if (payload.action === 'OPS_TASK_SERVICE_REMOVED') {
         return payload.prevServiceDepartmentId === boundDepartmentId
             ? JSON.stringify(payload)   // already minimal: {action, taskId, prevServiceDepartmentId}
@@ -8991,7 +9027,9 @@ const PORT = process.env.PORT || 3000;
 const opsSchedulerInstance = opsScheduler.createScheduler(
     () => ({
         opsTasksStore, opsUsersStore, opsTemplatesStore, opsPrefsStore, departmentsStore,
-        serviceWorkers, refreshServiceWorkers: refreshServiceWorkersFromAuthority
+        serviceWorkers, getCompanyDepartments: getCompanyDepts,
+        refreshDepartments: refreshDepartmentsFromAuthority,
+        refreshServiceWorkers: refreshServiceWorkersFromAuthority
     }),
     () => ({ saveOpsTasks, saveOpsTemplates, saveOpsPrefs, saveRecurringGeneration: persistOpsRecurringGeneration }),
     opsEmail,

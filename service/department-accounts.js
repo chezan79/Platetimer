@@ -320,8 +320,9 @@ function suspendAccountsForDepartment(companyId, departmentId) {
 
 // ── departmentType helpers ───────────────────────────────────────────────
 // The type lives ONLY on the department record. Absent field == STANDARD.
-// CENTRAL is representation only in this sprint — no permission is derived
-// from it yet. Name/position/index have no bearing; Floor/sala is NOT central.
+// Name/position/index have no bearing; Floor/sala is NOT central. Operations
+// execution eligibility is the only consumer that derives authority from this
+// canonical type; other Service behavior remains independent.
 
 function isValidDepartmentType(t) {
     return DEPARTMENT_TYPES.includes(t);

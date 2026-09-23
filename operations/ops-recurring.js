@@ -5,6 +5,7 @@
 
 const crypto = require('crypto');
 const executionTargets = require('../service/execution-target');
+const isEligibleOperationsDepartment = executionTargets.isEligibleOperationsDepartment;
 
 // ── Constants ───────────────────────────────────────────────────────────────
 const VALID_FREQUENCIES = [
@@ -349,8 +350,10 @@ function generateTasksForTemplate(template, companyId, existingKeysSet, usersByI
         serviceExecutionTarget: template.defaultServiceExecutionTarget,
         serviceDepartmentId: template.serviceDepartmentId
     });
-    if (target && typeof options.isDepartmentActive === 'function' &&
-        !options.isDepartmentActive(target.departmentId, companyId)) {
+    // Publishing is authority-bearing. Generation must prove the saved target
+    // still resolves to the company's active CENTRAL department.
+    if (target && (typeof options.isDepartmentEligible !== 'function' ||
+        !options.isDepartmentEligible(target.departmentId, companyId))) {
         target = null;
     }
     if (target && target.type === executionTargets.PERSON) {
@@ -443,4 +446,5 @@ module.exports = {
     getOccurrenceDates,
     getOccurrenceDatesInRange,
     generateTasksForTemplate,
+    isEligibleOperationsDepartment,
 };

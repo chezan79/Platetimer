@@ -181,6 +181,12 @@ async function run() {
         response = await api(director, 'POST', '/api/departments', { name: 'Task 127 Kitchen' });
         const department = response.data.department;
         check('active Service department is created', response.status === 201 && department?.active === true, response.data);
+        response = await api(director, 'PUT', `/api/departments/${department.id}/type`, {
+            departmentType: 'CENTRAL'
+        });
+        check('Operations execution department is CENTRAL',
+            response.status === 200 && response.data.department?.departmentType === 'CENTRAL',
+            response.data);
 
         response = await api(director, 'POST', '/api/department-accounts', {
             departmentId: department.id,
@@ -253,6 +259,10 @@ async function run() {
             response.status === 200 && response.data.workers?.length === 2 &&
             response.data.workers.every(worker =>
                 Object.keys(worker).sort().join(',') === 'displayName,id'), response.data);
+        response = await api(director, 'GET',
+            `/api/operations/service-workers?departmentId=${encodeURIComponent(secondDepartment.id)}`);
+        check('Operations eligible-worker API rejects STANDARD even with a shared worker',
+            response.status === 404, response.data);
         response = await api(director, 'GET',
             '/api/operations/service-workers?departmentId=department-from-other-company');
         check('eligible-worker API does not expose unknown/cross-company departments',
@@ -541,15 +551,13 @@ async function run() {
             },
             publishToService: true
         });
-        const secondDevicePersonTask = response.data.task;
-        check('second-device PERSON task is created',
-            response.status === 201 &&
-            secondDevicePersonTask.serviceExecutionTarget?.departmentId === secondDepartment.id &&
-            secondDevicePersonTask.serviceExecutionTarget.workerId === alice.id,
+        check('STANDARD department cannot receive an Operations PERSON task',
+            response.status === 400 && !response.data.task,
             response.data);
         await wait(150);
         check('department websocket withholds PERSON task content',
-            !serviceSocket.messages.some(message =>
+            !serviceSocket.messages.filter(message =>
+                message.action.startsWith('OPS_TASK_')).some(message =>
                 JSON.stringify(message).includes(personTask.id)), serviceSocket.messages);
 
         response = await api(serviceToken, 'GET', '/api/service/ops-tasks');
@@ -571,19 +579,14 @@ async function run() {
         check('invalid other-device proof receives no PERSON queue details',
             (response.status === 200 || response.status === 401) &&
             !(response.data.tasks || []).some(item =>
-                item.id === secondDevicePersonTask.id || item.id === personTask.id),
+                item.id === personTask.id),
             response.data);
         response = await api(serviceToken2, 'GET', '/api/service/ops-tasks/today',
             undefined, { 'X-Worker-Proof': deviceTwoAliceProof });
         check('invalid other-device proof receives no PERSON today details',
             (response.status === 200 || response.status === 401) &&
             !(response.data.tasks || []).some(item =>
-                item.id === secondDevicePersonTask.id || item.id === personTask.id),
-            response.data);
-        response = await action(serviceToken2, deviceTwoAliceProof, secondDevicePersonTask.id,
-            'claim', 'task140-stale-other-device');
-        check('invalid other-device proof cannot act',
-            response.status === 401 && response.data.code === 'WORKER_PROOF_INVALID',
+                item.id === personTask.id),
             response.data);
         response = await api(serviceToken, 'GET', '/api/service/ops-tasks',
             undefined, { 'X-Worker-Proof': bobProof });
@@ -696,6 +699,51 @@ async function run() {
         response = await api(serviceToken, 'GET', '/api/service/ops-tasks');
         check('reconnected Service projection hides completed task',
             response.status === 200 && !(response.data.tasks || []).some(item => item.id === task.id), response.data);
+
+        // A type change is a live Operations authority change, not a change
+        // to the Service account or worker's separate membership.
+        response = await api(serviceToken, 'POST', '/api/service/workers/verify',
+            { workerId: bob.id, pin: '8462' });
+        const demotionProof = response.data.proof;
+        response = await api(director, 'POST', '/api/operations/tasks', {
+            title: 'Demotion execution fence',
+            serviceDepartmentId: department.id, publishToService: true
+        });
+        const demotionTask = response.data.task;
+        const claimedBeforeDemotion = await action(serviceToken, demotionProof,
+            demotionTask.id, 'claim', 'before-demotion');
+        check('CENTRAL worker claims task before demotion',
+            claimedBeforeDemotion.status === 200, claimedBeforeDemotion.data);
+        const demotionLeaseId = claimedBeforeDemotion.data.task?.claim?.leaseId;
+        const messagesBeforeDemotion = serviceSocket.messages.length;
+        response = await api(director, 'PUT', `/api/departments/${department.id}/type`, {
+            departmentType: 'STANDARD'
+        });
+        check('active department can be demoted without deleting Service records',
+            response.status === 200 && response.data.department?.active === true, response.data);
+        await wait(100);
+        check('demoted department receives no Operations events',
+            serviceSocket.messages.slice(messagesBeforeDemotion)
+                .every(message => !message.action?.startsWith('OPS_')),
+            serviceSocket.messages.slice(messagesBeforeDemotion));
+        for (const endpoint of ['/api/service/ops-tasks', '/api/service/ops-tasks/today']) {
+            response = await api(serviceToken, 'GET', endpoint, undefined,
+                { 'X-Worker-Proof': demotionProof });
+            check(`demoted department cannot read task at ${endpoint}`,
+                response.status === 200 &&
+                !(response.data.tasks || []).some(item => item.id === demotionTask.id), response.data);
+        }
+        response = await api(serviceToken, 'POST',
+            `/api/service/ops-tasks/${demotionTask.id}/acknowledge`);
+        check('demoted department cannot acknowledge Operations task',
+            response.status === 404, response.data);
+        for (const step of ['claim', 'start', 'renew', 'release', 'complete']) {
+            response = await action(serviceToken, demotionProof, demotionTask.id,
+                step, `demoted-${step}`, { leaseId: demotionLeaseId });
+            check(`demoted department cannot ${step} Operations task`,
+                response.status === 403 &&
+                response.data.code === 'SERVICE_DEPARTMENT_NOT_ELIGIBLE', response.data);
+        }
     } catch (error) {
         failed++;
         console.error(`❌ Task 127 HTTP test error: ${error.stack || error.message}`);

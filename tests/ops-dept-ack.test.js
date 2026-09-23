@@ -102,6 +102,9 @@ async function run() {
 
         r = await api(tokDir, 'POST', '/api/departments', { name: 'Cucina' });
         const deptA = r.data.department;
+        await api(tokDir, 'PUT', `/api/departments/${deptA.id}/type`, {
+            departmentType: 'CENTRAL'
+        });
         r = await api(tokDir, 'POST', '/api/departments', { name: 'Pizzeria' });
         const deptB = r.data.department;
         check('Setup: departments created', !!(deptA?.id && deptB?.id));
@@ -144,19 +147,15 @@ async function run() {
 
         // ── 2. Other dept unaffected ────────────────────────────────────────────
         console.log('\n  — 2. other dept unaffected —\n');
-        // Publish to B independently, acknowledge from A, B should still see its own
+        // STANDARD cannot receive an independently published Operations task.
         r = await api(tokDir, 'POST', '/api/operations/tasks', {
             title: 'Shared visibility', serviceDepartmentId: deptB.id, publishToService: true
         });
-        const tShared = r.data.task;
-        // Ack from A has no effect on B (different task, different dept — but validate isolation)
-        check('2a. Dept B sees its own task', (await svcTasks(tokDeptB)).some(t => t.id === tShared.id));
-        check('2b. Dept A does NOT see Dept B task', !(await svcTasks(tokDeptA)).some(t => t.id === tShared.id));
+        check('2a. STANDARD cannot be targeted', r.status === 400, r.data);
 
-        // Now ack the tMain from deptA; verify deptB's task unaffected
         const listBBefore = await svcTasks(tokDeptB);
-        check('2c. Dept B task count unchanged after A acks different task',
-            listBBefore.some(t => t.id === tShared.id), listBBefore);
+        check('2c. STANDARD has no Operations task after A acknowledges',
+            listBBefore.length === 0, listBBefore);
 
         // Publish tMain to B as well, have B ack it, verify A's already-acked state unrelated
         await api(tokDir, 'POST', '/api/operations/tasks', {
@@ -202,8 +201,8 @@ async function run() {
 
         // ── 8. Task not published to this dept → 404 ────────────────────────────
         console.log('\n  — 8. task not for this dept —\n');
-        r = await ackTask(tokDeptA, tShared.id);
-        check('8. Task published to B → 404 for A', r.status === 404, r.status);
+        r = await ackTask(tokDeptB, tMain.id);
+        check('8. STANDARD department cannot acknowledge CENTRAL task', r.status === 404, r.status);
 
         // ── 9. Task not published at all → 404 ──────────────────────────────────
         console.log('\n  — 9. unpublished task —\n');
@@ -240,19 +239,18 @@ async function run() {
         // ── 12. Move dept: ack stays, task re-hidden for acking dept ────────────
         console.log('\n  — 12. move dept after ack —\n');
         // tMain is acked by A and currently assigned to A
-        // Move to B: A should not see it (still acked), B should see it
+        // Move to B is forbidden; acknowledgement remains attached to A.
         r = await api(tokDir, 'PATCH', `/api/operations/tasks/${tMain.id}`, {
             serviceDepartmentId: deptB.id
         });
-        check('12a. Move to B succeeds', r.data.success === true, r.data);
-        check('12b. B can see moved task', (await svcTasks(tokDeptB)).some(t => t.id === tMain.id));
-        check('12c. A does not see moved task (now in B, not A\'s dept)', !(await svcTasks(tokDeptA)).some(t => t.id === tMain.id));
-        // Move back to A: ack still applies → still hidden for A
+        check('12a. Move to STANDARD rejected', r.status === 400, r.data);
+        check('12b. B cannot see task', !(await svcTasks(tokDeptB)).some(t => t.id === tMain.id));
+        check('12c. A still does not see acknowledged task', !(await svcTasks(tokDeptA)).some(t => t.id === tMain.id));
         r = await api(tokDir, 'PATCH', `/api/operations/tasks/${tMain.id}`, {
             serviceDepartmentId: deptA.id
         });
-        check('12d. Move back to A succeeds', r.data.success === true, r.data);
-        check('12e. A still does not see re-moved task (ack persists)', !(await svcTasks(tokDeptA)).some(t => t.id === tMain.id));
+        check('12d. Staying in CENTRAL succeeds', r.data.success === true, r.data);
+        check('12e. A still does not see task (ack persists)', !(await svcTasks(tokDeptA)).some(t => t.id === tMain.id));
 
         // ── 13. Unpublish+republish after ack ────────────────────────────────────
         console.log('\n  — 13. unpublish/republish after ack —\n');
@@ -269,13 +267,11 @@ async function run() {
         const tIndep = r.data.task;
         check('14a. A sees task before ack', (await svcTasks(tokDeptA)).some(t => t.id === tIndep.id));
 
-        // Move to B so B can ack it, then move back to A
-        await api(tokDir, 'PATCH', `/api/operations/tasks/${tIndep.id}`, { serviceDepartmentId: deptB.id });
+        // STANDARD cannot acknowledge this task or become its target.
         r = await ackTask(tokDeptB, tIndep.id);
-        check('14b. B acks successfully', r.status === 200 && r.data.success === true, r);
+        check('14b. B cannot acknowledge', r.status === 404, r);
         check('14c. B no longer sees it', !(await svcTasks(tokDeptB)).some(t => t.id === tIndep.id));
 
-        await api(tokDir, 'PATCH', `/api/operations/tasks/${tIndep.id}`, { serviceDepartmentId: deptA.id });
         r = await ackTask(tokDeptA, tIndep.id);
         check('14d. A acks independently', r.status === 200 && r.data.success === true, r);
         check('14e. A no longer sees it after own ack', !(await svcTasks(tokDeptA)).some(t => t.id === tIndep.id));
@@ -299,16 +295,21 @@ async function run() {
         // DEPARTMENT_INACTIVE (410) — either is acceptable.
         console.log('\n  — 16. deactivated/suspended dept —\n');
         r = await api(tokDir, 'POST', '/api/operations/tasks', {
-            title: 'Suspend ack test', serviceDepartmentId: deptB.id, publishToService: true
+            title: 'Suspend ack test', serviceDepartmentId: deptA.id, publishToService: true
         });
         const tSusp = r.data.task;
-        r = await api(tokDir, 'PUT', `/api/departments/${deptB.id}`, { active: false });
-        check('16a. Setup: dept B deactivated', r.data.success === true, r.data);
-        r = await ackTask(tokDeptB, tSusp.id);
+        r = await api(tokDir, 'PUT', `/api/departments/${deptA.id}`, { active: false });
+        check('16a. Setup: dept A deactivated', r.data.success === true, r.data);
+        r = await ackTask(tokDeptA, tSusp.id);
         check('16b. Deactivated dept → 403 or 410',
             r.status === 403 || r.status === 410, r.status);
         // Restore
-        await api(tokDir, 'PUT', `/api/departments/${deptB.id}`, { active: true });
+        await api(tokDir, 'PUT', `/api/departments/${deptA.id}`, { active: true });
+        const accountA = (await api(tokDir, 'GET', '/api/department-accounts'))
+            .data.accounts.find(account => account.departmentId === deptA.id);
+        r = await api(tokDir, 'PUT', `/api/department-accounts/${accountA.id}/status`,
+            { status: 'ACTIVE' });
+        check('16c. Service account restored for persistence test', r.status === 200, r.data);
 
         // ── 17. Ack store persists across restart ─────────────────────────────────
         console.log('\n  — 17. persistence across server restart —\n');
@@ -331,7 +332,7 @@ async function run() {
         // Sanity: other tasks still visible
         const listAfterRestart = await svcTasks(tokDeptA2);
         check('17c. After restart: non-acked tasks still visible',
-            listAfterRestart.some(t => !t.id || listAfterRestart.length >= 0), true);
+            listAfterRestart.some(t => t.id === tBoth.id), listAfterRestart);
 
     } catch (e) {
         failed++;

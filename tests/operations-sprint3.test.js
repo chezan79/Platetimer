@@ -225,11 +225,15 @@ async function run() {
         createdBy: dirId, createdByName: 'Dir', active: true
     };
     const usersById = { [dirId]: { id: dirId, name: 'Dir', email: 'dir@test.com', role: 'DIRECTOR', status: 'ACTIVE', companyId: co } };
-    const firstGen = rec.generateTasksForTemplate(tpl, co, new Set(), usersById, null);
+    const firstGen = rec.generateTasksForTemplate(
+        tpl, co, new Set(), usersById, null,
+        { isDepartmentEligible: () => true });
     check('S3-9. generateTasksForTemplate: 3 tasks for 3-day template', firstGen.length === 3, firstGen.length);
 
     const existingKeys = new Set(firstGen.map(t => t.occurrenceKey));
-    const secondGen = rec.generateTasksForTemplate(tpl, co, existingKeys, usersById, null);
+    const secondGen = rec.generateTasksForTemplate(
+        tpl, co, existingKeys, usersById, null,
+        { isDepartmentEligible: () => true });
     check('S3-9b. generateTasksForTemplate: idempotent — no duplicates on re-run', secondGen.length === 0, secondGen.length);
 
     // Generated task structure
@@ -389,13 +393,47 @@ async function run() {
     // Template creation (Director A)
     const deptAResponse = await api(dirA, 'POST', '/api/departments', { name: 'Cucina Ricorrente' });
     const deptA = deptAResponse.data.department;
+    await api(dirA, 'PUT', `/api/departments/${deptA.id}/type`, {
+        departmentType: 'CENTRAL'
+    });
     const inactiveResponse = await api(dirA, 'POST', '/api/departments', { name: 'Reparto Inattivo' });
     const inactiveDept = inactiveResponse.data.department;
     await api(dirA, 'PUT', `/api/departments/${inactiveDept.id}`, { active: false });
+    const standardResponse = await api(dirA, 'POST', '/api/departments', { name: 'Cucina' });
+    const standardDept = standardResponse.data.department;
     const deptBResponse = await api(dir2A, 'POST', '/api/departments', { name: 'Altro Cliente' });
     const deptB = deptBResponse.data.department;
     check('S3-29a. Department fixtures created in isolated companies',
-        !!(deptA && inactiveDept && deptB));
+        !!(deptA && inactiveDept && standardDept && deptB));
+
+    r = await api(dirA, 'GET', '/api/operations/service-departments');
+    check('S3-29b. Operations lists only the active CENTRAL department',
+        r.data.success && r.data.departments.length === 1 &&
+        r.data.departments[0].id === deptA.id, r.data);
+    r = await api(dirA, 'POST', '/api/operations/tasks', {
+        title: 'Forged standard target', serviceDepartmentId: standardDept.id,
+        publishToService: true
+    });
+    check('S3-29c. Manual creation rejects STANDARD despite its display name',
+        r.status === 400, r.data);
+    r = await api(dirA, 'POST', '/api/operations/tasks', {
+        title: 'Central target', serviceDepartmentId: deptA.id, publishToService: true
+    });
+    const centralTask = r.data.task;
+    check('S3-29d. Manual creation accepts active CENTRAL',
+        r.status === 201 && centralTask?.serviceDepartmentId === deptA.id, r.data);
+    r = await api(dirA, 'PATCH', `/api/operations/tasks/${centralTask.id}`, {
+        serviceDepartmentId: standardDept.id
+    });
+    check('S3-29e. Manual update rejects STANDARD', r.status === 400, r.data);
+    r = await api(dirA, 'PUT', `/api/departments/${deptA.id}`, { name: 'Nuovo nome' });
+    check('S3-29f. CENTRAL display name can change without changing its identity',
+        r.status === 200 && r.data.department?.name === 'Nuovo nome', r.data);
+    r = await api(dirA, 'GET', '/api/operations/service-departments');
+    check('S3-29g. Renamed CENTRAL remains the only execution option',
+        r.data.departments?.length === 1 &&
+        r.data.departments[0].id === deptA.id &&
+        r.data.departments[0].name === 'Nuovo nome', r.data);
 
     r = await api(dirA, 'POST', '/api/operations/templates', {
         title: 'Pulizia serale', frequency: 'DAILY', startDate: '2026-08-01',
@@ -410,7 +448,7 @@ async function run() {
     check('S3-30d. Template stores canonical department ID and server-derived name',
         r.data.template &&
         r.data.template.serviceDepartmentId === deptA.id &&
-        r.data.template.serviceDepartmentName === deptA.name, r.data.template);
+        r.data.template.serviceDepartmentName === 'Nuovo nome', r.data.template);
 
     r = await api(dirA, 'POST', '/api/operations/templates', {
         title: 'Cross-company dept', frequency: 'DAILY', startDate: '2026-08-01',
@@ -423,6 +461,11 @@ async function run() {
         serviceDepartmentId: inactiveDept.id, workSchedule: [0,1,2,3,4,5,6]
     });
     check('S3-30f. Template rejects an inactive department', r.status === 400, r.data);
+    r = await api(dirA, 'POST', '/api/operations/templates', {
+        title: 'Standard department', frequency: 'DAILY', startDate: '2026-08-01',
+        serviceDepartmentId: standardDept.id
+    });
+    check('S3-30f2. Template creation rejects STANDARD', r.status === 400, r.data);
 
     // Forged companyId ignored
     r = await api(dirA, 'POST', '/api/operations/templates', {
@@ -472,7 +515,7 @@ async function run() {
             generatedForTemplate.every(t =>
                 !!t.dueDate &&
                 t.serviceDepartmentId === deptA.id &&
-                t.serviceDepartmentName === deptA.name &&
+                t.serviceDepartmentName === 'Nuovo nome' &&
                 t.department === 'Legacy Cucina'
             ), generatedForTemplate[0]);
 
@@ -501,7 +544,7 @@ async function run() {
         r.data.generated === 1 &&
         realtimeCreated.task.dueDate &&
         realtimeCreated.task.serviceDepartmentId === deptA.id &&
-        realtimeCreated.task.serviceDepartmentName === deptA.name,
+        realtimeCreated.task.serviceDepartmentName === 'Nuovo nome',
         realtimeCreated);
     realtime.client.close();
 
@@ -513,7 +556,11 @@ async function run() {
         check('S3-38b. Unrelated patch preserves a department that later became inactive',
             r.data.template &&
             r.data.template.serviceDepartmentId === deptA.id &&
-            r.data.template.serviceDepartmentName === deptA.name, r.data.template);
+            r.data.template.serviceDepartmentName === 'Nuovo nome', r.data.template);
+        r = await api(dirA, 'PATCH', '/api/operations/templates/' + tplId, {
+            serviceDepartmentId: standardDept.id
+        });
+        check('S3-38a. Template update rejects STANDARD', r.status === 400, r.data);
         // Previously generated tasks should still exist (not modified)
         const tasks = await api(dirA, 'GET', '/api/operations/tasks');
         const genTasks = (tasks.data.tasks || []).filter(t => t.templateId === tplId);

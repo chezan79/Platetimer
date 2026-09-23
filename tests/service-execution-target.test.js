@@ -41,12 +41,53 @@ const template = {
 };
 const generated = recurring.generateTasksForTemplate(
     template, 'company', new Set(), {}, null,
-    { isDepartmentActive: () => false }
+    { isDepartmentEligible: () => false }
 );
 assert.strictEqual(generated.length, 1);
 assert.strictEqual(generated[0].publishToService, false);
 assert.strictEqual(generated[0].serviceDepartmentId, null);
 assert.strictEqual(generated[0].serviceExecutionTarget, null);
+
+assert.strictEqual(targets.isEligibleOperationsDepartment({
+    id: 'renamed-central', name: 'Qualunque nome', active: true,
+    departmentType: 'CENTRAL', companyId: 'company'
+}, 'company'), true);
+assert.strictEqual(targets.isEligibleOperationsDepartment({
+    id: 'cucina-by-name-only', name: 'Cucina', active: true,
+    departmentType: 'STANDARD', companyId: 'company'
+}, 'company'), false);
+assert.strictEqual(targets.isEligibleOperationsDepartment({
+    id: 'other-company', active: true, departmentType: 'CENTRAL',
+    companyId: 'other'
+}, 'company'), false);
+const departments = [
+    { id: 'central', name: 'Renamed prep', active: true, departmentType: 'CENTRAL', companyId: 'company' },
+    { id: 'standard', name: 'Cucina', active: true, departmentType: 'STANDARD', companyId: 'company' },
+    { id: 'inactive', name: 'Cucina', active: false, departmentType: 'CENTRAL', companyId: 'company' },
+    { id: 'foreign', name: 'Cucina', active: true, departmentType: 'CENTRAL', companyId: 'foreign' }
+];
+assert.strictEqual(targets.findEligibleOperationsDepartment(departments, 'company', 'central'), departments[0]);
+for (const id of ['standard', 'inactive', 'foreign', 'missing']) {
+    assert.strictEqual(targets.findEligibleOperationsDepartment(departments, 'company', id), null);
+    const occurrence = recurring.generateTasksForTemplate({
+        ...template, id: `template-${id}`, serviceDepartmentId: id,
+        defaultServiceExecutionTarget: { type: 'DEPARTMENT', departmentId: id }
+    }, 'company', new Set(), {}, null, {
+        isDepartmentEligible: (deptId, companyId) =>
+            !!targets.findEligibleOperationsDepartment(departments, companyId, deptId)
+    });
+    assert.strictEqual(occurrence.length, 1);
+    assert.strictEqual(occurrence[0].publishToService, false);
+    assert.strictEqual(occurrence[0].serviceExecutionTarget, null);
+}
+const centralOccurrence = recurring.generateTasksForTemplate({
+    ...template, id: 'template-central', serviceDepartmentId: 'central',
+    defaultServiceExecutionTarget: { type: 'DEPARTMENT', departmentId: 'central' }
+}, 'company', new Set(), {}, null, {
+    isDepartmentEligible: (deptId, companyId) =>
+        !!targets.findEligibleOperationsDepartment(departments, companyId, deptId)
+});
+assert.strictEqual(centralOccurrence[0].publishToService, true);
 
 const versioned = {
     serviceExecutionTarget: {

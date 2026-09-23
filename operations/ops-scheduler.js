@@ -5,6 +5,7 @@
 // All phase functions accept an optional `now` Date for testability.
 
 const opsRecurring = require('./ops-recurring');
+const executionTargets = require('../service/execution-target');
 
 // ── Escalation chains ───────────────────────────────────────────────────────
 // Maps assignee ROLE → ordered list of ROLES to escalate through.
@@ -75,6 +76,9 @@ async function processRecurring(stores, savers, addHistoryFn, onTaskCreatedFn) {
         }
     }
     if (!allTemplates.length) return { generated: 0 };
+    if (typeof stores.refreshDepartments === 'function') {
+        await stores.refreshDepartments();
+    }
     if (typeof stores.refreshServiceWorkers === 'function') {
         await stores.refreshServiceWorkers();
     }
@@ -100,10 +104,13 @@ async function processRecurring(stores, savers, addHistoryFn, onTaskCreatedFn) {
         const newTasks = opsRecurring.generateTasksForTemplate(
             tpl, companyId, existingKeys, usersById, addHistoryFn,
             {
-                isDepartmentActive: departmentId =>
-                    !departmentsStore || (departmentsStore[companyId] || [])
-                        .some(department => department.id === departmentId && department.active === true)
-                ,
+                isDepartmentEligible: (departmentId, targetCompanyId) => {
+                    const departments = typeof stores.getCompanyDepartments === 'function'
+                        ? stores.getCompanyDepartments(targetCompanyId)
+                        : (departmentsStore && departmentsStore[targetCompanyId]);
+                    return !!executionTargets.findEligibleOperationsDepartment(
+                        departments, targetCompanyId, departmentId);
+                },
                 getServiceWorker: (workerCompanyId, workerId) =>
                     stores.serviceWorkers && typeof stores.serviceWorkers.findWorkerById === 'function'
                         ? stores.serviceWorkers.findWorkerById(workerCompanyId, workerId)
