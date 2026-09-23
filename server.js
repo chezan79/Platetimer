@@ -188,9 +188,21 @@ function saveJSON(filePath, data) {
     }
 }
 
+function departmentWriteFailure(res, error) {
+    console.error('❌ [DEPARTMENTS] Authoritative write failed:', error);
+    return res.status(503).json({
+        error: 'Department change could not be saved. Please retry.',
+        code: 'DEPARTMENT_WRITE_FAILED'
+    });
+}
+
 // Stores start empty; initializeDataStores() populates them from Firestore
 // (or local files in local-dev mode) BEFORE the HTTP server accepts connections.
 let departmentsStore = {};
+const departmentRepository = require('./service/department-store').createDepartmentStore({
+    firestore: db, collection: STORE_COLLECTION, file: DEPARTMENTS_FILE,
+    onCommit: value => { departmentsStore = value; }
+});
 let plansStore = {};
 // Countdown history — persistent archive of completed countdowns, keyed by verified companyId.
 let countdownHistoryStore = {};
@@ -853,7 +865,7 @@ app.get('/api/departments', (req, res) => {
 
 // POST /api/departments — create (enforces plan limit server-side)
 // [S1.4] Bound Department Accounts are workstation accounts, not administrators.
-app.post('/api/departments', (req, res) => {
+app.post('/api/departments', workerAsyncRoute(async (req, res) => {
     const session = requireAuth(req, res);
     if (!session) return;
     const boundAcct = getBoundDepartmentContext(session);
@@ -864,24 +876,24 @@ app.post('/api/departments', (req, res) => {
     const name = (req.body.name || '').trim();
     if (!name) return res.status(400).json({ error: 'Department name is required.' });
 
-    const depts = getCompanyDepts(companyId);
     const plan = getCompanyPlan(companyId);
     const limit = getPlanLimit(plan);
-    const activeCount = depts.filter(d => d.active).length;
-
-    if (activeCount >= limit) {
-        return res.status(403).json({
-            error: `Plan limit reached. Your ${plan} plan allows up to ${limit} active departments. Deactivate one or upgrade your plan.`
-        });
-    }
-
     const dept = { id: genDeptId(), name, active: true, usedInCountdowns: false, createdAt: Date.now() };
-    if (!departmentsStore[companyId]) departmentsStore[companyId] = [];
-    departmentsStore[companyId].push(dept);
-    saveJSON(DEPARTMENTS_FILE, departmentsStore);
+    let result;
+    try {
+        result = await departmentRepository.mutate(companyId, (depts, store) => {
+            if (depts.filter(d => d.active).length >= limit) return {
+                ok: false, code: 403,
+                error: `Plan limit reached. Your ${plan} plan allows up to ${limit} active departments. Deactivate one or upgrade your plan.`
+            };
+            store[companyId] = [...depts, dept];
+            return { ok: true };
+        });
+    } catch (e) { return departmentWriteFailure(res, e); }
+    if (!result.ok) return res.status(result.code).json({ error: result.error });
     console.log(`✅ Department created: "${name}" for company "${companyId}"`);
     res.status(201).json({ success: true, department: dept });
-});
+}));
 
 // PUT /api/departments/:id — update name and/or active status
 // [S1.4] Bound Department Accounts cannot manage departments.
@@ -893,48 +905,39 @@ app.put('/api/departments/:id', async (req, res) => {
     const adminCtx = requireDepartmentAccountManager(req, res);
     if (!adminCtx) return;
     const companyId = adminCtx.companyId;
-    const depts = departmentsStore[companyId] || [];
-    const idx = depts.findIndex(d => d.id === req.params.id);
-    if (idx === -1) return res.status(404).json({ error: 'Department not found.' });
-
     const { name, active } = req.body;
-
-    // Enforce plan limit when re-activating
-    if (active === true && !depts[idx].active) {
-        const plan = getCompanyPlan(companyId);
-        const limit = getPlanLimit(plan);
-        const currentActive = depts.filter(d => d.active).length;
-        if (currentActive >= limit) {
-            return res.status(403).json({
-                error: `Plan limit reached. Your ${plan} plan allows up to ${limit} active departments.`
-            });
-        }
+    let result;
+    try {
+        result = await departmentRepository.mutate(companyId, depts => {
+            const dept = depts.find(d => d.id === req.params.id);
+            if (!dept) return { ok: false, code: 404, error: 'Department not found.' };
+            if (active === true && !dept.active &&
+                depts.filter(d => d.active).length >= getPlanLimit(getCompanyPlan(companyId))) {
+                return { ok: false, code: 403, error: 'Plan limit reached.' };
+            }
+            // Also retry account suspension and claim invalidation if an
+            // earlier confirmed deactivation failed during post-commit work.
+            const deactivated = active === false;
+            if (typeof name === 'string' && name.trim()) dept.name = name.trim();
+            if (typeof active === 'boolean') dept.active = active;
+            return { ok: true, department: dept, deactivated };
+        });
+    } catch (e) { return departmentWriteFailure(res, e); }
+    if (!result.ok) return res.status(result.code).json({ error: result.error });
+    if (result.deactivated) {
+        departmentAccounts.suspendAccountsForDepartment(companyId, result.department.id);
+        const invalidated = await serviceTaskActions.invalidateForDepartment({
+            companyId, departmentId: result.department.id,
+            actorId: adminCtx.session.uid, reason: 'DEPARTMENT_INACTIVE'
+        });
+        await broadcastServiceInvalidations(companyId, invalidated);
     }
-
-    if (typeof name === 'string' && name.trim()) depts[idx].name = name.trim();
-    if (typeof active === 'boolean') {
-        // [S1.1] Referential integrity: deactivating a department auto-suspends
-        // its ACTIVE Department Account — no active identity may point at an
-        // inactive department.
-        if (active === false && depts[idx].active) {
-            const suspended = departmentAccounts.suspendAccountsForDepartment(companyId, depts[idx].id);
-            if (suspended) console.log(`⚠️ [DEPT-ACCOUNT] Auto-suspended account "${suspended.displayName}" (department deactivated)`);
-            const invalidated = await serviceTaskActions.invalidateForDepartment({
-                companyId, departmentId: depts[idx].id,
-                actorId: adminCtx.session.uid, reason: 'DEPARTMENT_INACTIVE'
-            });
-            await broadcastServiceInvalidations(companyId, invalidated);
-        }
-        depts[idx].active = active;
-    }
-
-    saveJSON(DEPARTMENTS_FILE, departmentsStore);
-    res.json({ success: true, department: depts[idx] });
+    res.json({ success: true, department: result.department });
 });
 
 // DELETE /api/departments/:id — only if never used in countdowns
 // [S1.4] Bound Department Accounts cannot manage departments.
-app.delete('/api/departments/:id', (req, res) => {
+app.delete('/api/departments/:id', workerAsyncRoute(async (req, res) => {
     const session = requireAuth(req, res);
     if (!session) return;
     const boundAcct = getBoundDepartmentContext(session);
@@ -942,19 +945,12 @@ app.delete('/api/departments/:id', (req, res) => {
     const adminCtx = requireDepartmentAccountManager(req, res);
     if (!adminCtx) return;
     const companyId = adminCtx.companyId;
-    const depts = departmentsStore[companyId] || [];
-    const idx = depts.findIndex(d => d.id === req.params.id);
-    if (idx === -1) return res.status(404).json({ error: 'Department not found.' });
-
     // [S1.1] Referential integrity: a department referenced by any Department
     // Account (any status) cannot be deleted — accounts must never dangle.
     if (departmentAccounts.hasDepartmentAccounts(companyId, req.params.id)) {
         return res.status(409).json({ error: 'This department has department accounts bound to it and cannot be deleted. Remove or reassign its accounts first.' });
     }
 
-    if (depts[idx].usedInCountdowns) {
-        return res.status(409).json({ error: 'This department has been used in countdowns and cannot be deleted. Deactivate it instead.' });
-    }
     // Also block if it has an active countdown right now
     if (activeCountdowns.has(companyId)) {
         for (const [, cd] of activeCountdowns.get(companyId)) {
@@ -964,10 +960,20 @@ app.delete('/api/departments/:id', (req, res) => {
         }
     }
 
-    departmentsStore[companyId].splice(idx, 1);
-    saveJSON(DEPARTMENTS_FILE, departmentsStore);
+    let result;
+    try {
+        result = await departmentRepository.mutate(companyId, (depts, store) => {
+            const idx = depts.findIndex(d => d.id === req.params.id);
+            if (idx === -1) return { ok: false, code: 404, error: 'Department not found.' };
+            if (depts[idx].usedInCountdowns) return { ok: false, code: 409,
+                error: 'This department has been used in countdowns and cannot be deleted. Deactivate it instead.' };
+            store[companyId] = depts.filter(d => d.id !== req.params.id);
+            return { ok: true };
+        });
+    } catch (e) { return departmentWriteFailure(res, e); }
+    if (!result.ok) return res.status(result.code).json({ error: result.error });
     res.json({ success: true });
-});
+}));
 
 // ===== Department Account REST API =====
 // Management requires an ACTIVE Operations Director record. The company comes
@@ -1562,10 +1568,7 @@ async function refreshServiceWorkersFromAuthority() {
 }
 
 async function refreshDepartmentsFromAuthority() {
-    if (!db) return;
-    const snapshot = await db.collection(STORE_COLLECTION).doc('departments').get();
-    departmentsStore = snapshot.exists && snapshot.data().store &&
-        typeof snapshot.data().store === 'object' ? snapshot.data().store : {};
+    await departmentRepository.refresh();
 }
 
 let serviceWorkerStateQueue = Promise.resolve();
@@ -2522,19 +2525,33 @@ app.put('/api/departments/:id/type', workerAsyncRoute(async (req, res) => {
     const adminCtx = requireDepartmentAccountManager(req, res);
     if (!adminCtx) return;
     const companyId = adminCtx.companyId;
-    const depts = departmentsStore[companyId] || [];
-    const previousType = departmentAccounts.getDepartmentType(
-        depts.find(d => d.id === req.params.id));
-    const result = departmentAccounts.setDepartmentType(depts, req.params.id, (req.body || {}).departmentType);
-    if (!result.ok) return res.status(result.code).json({ error: result.error });
-    saveJSON(DEPARTMENTS_FILE, departmentsStore);
-    if (previousType === 'CENTRAL' && result.department.departmentType !== 'CENTRAL') {
-        const invalidated = await serviceTaskActions.invalidateForDepartment({
-            companyId, departmentId: result.department.id,
-            actorId: adminCtx.session.uid, reason: 'DEPARTMENT_NOT_CENTRAL'
+    let result;
+    try {
+        result = await departmentRepository.mutate(companyId, depts => {
+            const previousType = departmentAccounts.getDepartmentType(
+                depts.find(d => d.id === req.params.id));
+            const updated = departmentAccounts.setDepartmentType(
+                depts, req.params.id, (req.body || {}).departmentType);
+            // Repeating STANDARD also retries invalidation after a committed
+            // demotion whose post-commit reconciliation previously failed.
+            return { ...updated, demoted: updated.ok && updated.department.departmentType === 'STANDARD',
+                transitioned: previousType === 'CENTRAL' };
         });
-        await broadcastServiceInvalidations(companyId, invalidated);
-        broadcastOps(companyId, { action: 'OPS_TASK_SERVICE_RECONCILE' });
+    } catch (e) { return departmentWriteFailure(res, e); }
+    if (!result.ok) return res.status(result.code).json({ error: result.error });
+    if (result.demoted) {
+        try {
+            const invalidated = await serviceTaskActions.invalidateForDepartment({
+                companyId, departmentId: result.department.id,
+                actorId: adminCtx.session.uid, reason: 'DEPARTMENT_NOT_CENTRAL'
+            });
+            await broadcastServiceInvalidations(companyId, invalidated);
+            broadcastOps(companyId, { action: 'OPS_TASK_SERVICE_RECONCILE' });
+        } catch (e) {
+            console.error('Department demotion committed, reconciliation failed:', e);
+            return res.status(503).json({ error: 'Department type saved; reconciliation incomplete. Retry the request.',
+                code: 'DEPARTMENT_RECONCILIATION_FAILED', committed: true });
+        }
     }
     res.json({ success: true, department: result.department });
 }));
@@ -7385,12 +7402,12 @@ const OPS_TASK_PAYLOAD_ACTIONS = new Set([
 // Every other OPS_* payload (full task records, comments, intelligence, …)
 // is withheld entirely: entitlement is enforced server-side per socket, never
 // left to the client.
-function opsPayloadForBoundSocket(payload, boundDepartmentId, companyId) {
+function opsPayloadForBoundSocket(payload, boundDepartmentId, companyId, authoritativeDepts = getCompanyDepts(companyId)) {
     // [SECURITY] Live authorization check — do not trust the activity state
     // cached at joinRoom time: a department deactivated after the socket
     // joined must stop receiving Ops data immediately.
     if (!executionTargets.findEligibleOperationsDepartment(
-        getCompanyDepts(companyId), companyId, boundDepartmentId)) return null;
+        authoritativeDepts, companyId, boundDepartmentId)) return null;
     if (payload.action === 'OPS_TASK_SERVICE_REMOVED') {
         return payload.prevServiceDepartmentId === boundDepartmentId
             ? JSON.stringify(payload)   // already minimal: {action, taskId, prevServiceDepartmentId}
@@ -7428,13 +7445,12 @@ function broadcastOps(companyId, payload) {
     if (!room || room.size === 0) return;
     const msg = JSON.stringify(payload);
     let sent = 0;
+    const boundClients = [];
     room.forEach(client => {
         if (client.readyState === 1) { // WebSocket.OPEN
             try {
                 if (client.boundDepartmentId) {
-                    // [Task 66] Bound Service department socket: filtered, safe-projection delivery only.
-                    const safeMsg = opsPayloadForBoundSocket(payload, client.boundDepartmentId, companyId);
-                    if (safeMsg) { client.send(safeMsg); sent++; }
+                    boundClients.push(client);
                 } else {
                     client.send(msg); sent++; // Operations / unbound legacy sockets: full payload
                 }
@@ -7442,6 +7458,26 @@ function broadcastOps(companyId, payload) {
             catch (_) { /* ignore per-client send errors */ }
         }
     });
+    if (boundClients.length) {
+        const deliverBound = depts => {
+            for (const client of boundClients) {
+                if (client.readyState !== 1) continue;
+                try {
+                    const safeMsg = opsPayloadForBoundSocket(payload, client.boundDepartmentId, companyId, depts);
+                    if (safeMsg) client.send(safeMsg);
+                } catch (_) { /* per-socket send failure */ }
+            }
+        };
+        // Other server instances can commit a type change while this process
+        // holds an old snapshot. Never authorize an Operations send from it.
+        if (db) {
+            db.collection(STORE_COLLECTION).doc('departments').get()
+                .then(snapshot => deliverBound(snapshot.exists && snapshot.data().store?.[companyId] || []))
+                .catch(e => console.error('[OPS-RT] Department authority unavailable; bound delivery withheld:', e));
+        } else {
+            deliverBound(getCompanyDepts(companyId));
+        }
+    }
     if (sent > 0)
         console.log(`📡 [OPS-RT] ${payload.action} → "${companyId}" (${sent} client${sent !== 1 ? 's' : ''})`);
 }
@@ -8074,15 +8110,12 @@ wss.on('connection', (ws, req) => {
                 console.log(`💾 Countdown creato per azienda "${ws.companyRoom}": Tavolo ${tableKey}, endsAt +${data.timeRemaining}s, Destinazioni: [${destinations.join(', ')}]`);
 
                 // Mark all destination departments as used (prevents accidental deletion)
-                let depsChanged = false;
-                for (const dest of destinations) {
-                    const deptIdx = (departmentsStore[ws.companyRoom] || []).findIndex(d => d.id === dest);
-                    if (deptIdx !== -1 && !departmentsStore[ws.companyRoom][deptIdx].usedInCountdowns) {
-                        departmentsStore[ws.companyRoom][deptIdx].usedInCountdowns = true;
-                        depsChanged = true;
+                departmentRepository.mutate(ws.companyRoom, depts => {
+                    for (const dept of depts) {
+                        if (destinations.includes(dept.id)) dept.usedInCountdowns = true;
                     }
-                }
-                if (depsChanged) saveJSON(DEPARTMENTS_FILE, departmentsStore);
+                    return { ok: true };
+                }).catch(e => console.error('❌ [DEPARTMENTS] Countdown usage write failed:', e));
 
                 // ── Broadcast ONE message to the entire company room ──────────────────
                 // Single message with destinations[] array replaces the previous N-per-destination
@@ -8917,7 +8950,7 @@ setInterval(() => {
 //   • Data is ephemeral on Railway; configure the secret for production.
 async function initializeDataStores() {
     const stores = [
-        { name: 'departments',     file: DEPARTMENTS_FILE,     setter: v => { departmentsStore    = v; } },
+        { name: 'departments',     file: DEPARTMENTS_FILE,     setter: v => { departmentRepository.setInitial(v); } },
         { name: 'plans',           file: PLANS_FILE,           setter: v => { plansStore          = v; } },
         { name: 'department_accounts', file: DEPARTMENT_ACCOUNTS_FILE, setter: v => { departmentAccounts.setStore(v); } },
         { name: 'service_workers', file: SERVICE_WORKERS_FILE, setter: v => { serviceWorkers.setStore(v); } },

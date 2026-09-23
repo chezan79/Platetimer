@@ -5,10 +5,12 @@ description: How configurable departments are stored and enforced server-side in
 
 # Department data model
 
-## Storage
-- `data/departments.json` — `{ [companyId]: Department[] }` loaded at startup into `departmentsStore`
-- `data/plans.json` — `{ [companyId]: 'base' | 'medium' | 'premium' }` loaded into `plansStore`
-- Both are reloaded from disk at startup; mutations call `saveJSON()` immediately (synchronous write)
+## Storage decision
+Department type changes and all other department mutations must share a confirmed, serialized authority write; never persist a cached whole-store snapshot independently of a type change.
+
+**Why:** A fire-and-forget write can acknowledge a demotion that Firestore never committed; an older snapshot from a different department mutation can subsequently restore CENTRAL and Service execution access.
+
+**How to apply:** Keep all department writers in the same Firestore transaction domain (or an atomic local-file replacement when Firestore is absent). Publish working memory only after commit. When post-commit claim invalidation fails, report a recoverable partial failure and allow an idempotent STANDARD retry to finish reconciliation.
 
 ## Department object shape
 ```json

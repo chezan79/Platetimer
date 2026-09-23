@@ -699,6 +699,7 @@ async function run() {
         response = await api(serviceToken, 'GET', '/api/service/ops-tasks');
         check('reconnected Service projection hides completed task',
             response.status === 200 && !(response.data.tasks || []).some(item => item.id === task.id), response.data);
+        serviceSocket = await openServiceSocket(serviceToken, department.id);
 
         // A type change is a live Operations authority change, not a change
         // to the Service account or worker's separate membership.
@@ -744,6 +745,19 @@ async function run() {
                 response.status === 403 &&
                 response.data.code === 'SERVICE_DEPARTMENT_NOT_ELIGIBLE', response.data);
         }
+        serviceSocket.socket.close();
+        await stopServer(server.child);
+        server = startServer();
+        await server.ready;
+        response = await api(serviceToken, 'GET', '/api/service/ops-tasks',
+            undefined, { 'X-Worker-Proof': demotionProof });
+        check('reloaded department remains excluded from Operations task reads',
+            response.status === 200 &&
+            !(response.data.tasks || []).some(item => item.id === demotionTask.id), response.data);
+        response = await action(serviceToken, demotionProof, demotionTask.id, 'claim',
+            'demoted-after-restart');
+        check('reloaded department remains unable to claim',
+            response.status === 403 && response.data.code === 'SERVICE_DEPARTMENT_NOT_ELIGIBLE', response.data);
     } catch (error) {
         failed++;
         console.error(`❌ Task 127 HTTP test error: ${error.stack || error.message}`);

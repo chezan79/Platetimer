@@ -1,5 +1,5 @@
 - [WebSocket Security Architecture](ws-security.md) — HMAC session tokens enforce auth and company isolation; never trust client-supplied companyName; requires WS_SESSION_SECRET in Secrets.
-- [Department data model](department-data-model.md) — departments are file-persisted per companyId in data/departments.json; plan limits in data/plans.json; PLAN_LIMITS={base:3,medium:5,premium:10}.
+- [Department data model](department-data-model.md) — department mutations share one confirmed authority write; stale snapshots must not restore CENTRAL after demotion.
 - [home.html module script quirk](home-module-quirk.md) — home.html uses script type=module for Firebase but needs ws-auth.js as a plain script tag before it; updateCompanyName() is scoped inside DOMContentLoaded and unreachable from onAuthStateChanged (pre-existing limitation, do not refactor without care).
 - [Calendar module](calendar-module.md) — calendar events/notifications stored in data/calendar-events.json and data/calendar-notif.json; broadcastCalendarEvent() references companyRooms declared later but safe because only called during HTTP handlers.
 - [PlateTimer Operations module](operations-module.md) — hierarchy rules centralized in operations/ops-auth.js; ops companyId from server-side ops record, not session; invite-code activation; logging-only email transport.

@@ -49,6 +49,12 @@ check('eligible-worker lookup keeps canonical company and membership checks',
     workerRoute.includes('findEligibleOperationsDepartment') &&
     workerRoute.includes('getSelectableWorkers(companyId, departmentId)'));
 
+const broadcastRoute = routeBody('function broadcastOps(companyId, payload)', '// Store per i countdown attivi');
+check('bound WebSocket Operations delivery checks the database rather than a stale process snapshot',
+    broadcastRoute.includes("doc('departments').get()") &&
+    broadcastRoute.includes('opsPayloadForBoundSocket(payload, client.boundDepartmentId, companyId, depts)') &&
+    broadcastRoute.includes('.catch(e =>'));
+
 for (const [label, routeStart, routeEnd] of [
     ['manual task creation', "app.post('/api/operations/tasks'", "app.get('/api/operations/tasks'"],
     ['manual task update', "app.patch('/api/operations/tasks/:id'", "app.delete('/api/operations/tasks/:id'"],

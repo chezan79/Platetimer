@@ -259,7 +259,35 @@ async function main() {
         check('T11b. Cucina still STANDARD after server restart',
             cucina11 && (cucina11.departmentType === 'STANDARD' || !cucina11.departmentType),
             cucina11 && cucina11.departmentType);
+        // Force a local-store failure: an existing directory cannot be replaced
+        // by the atomic rename, even in a privileged test runner.
+        const deptFile = path.join(DATA_DIR, 'departments.json');
+        const backup = path.join(DATA_DIR, 'departments.backup.json');
+        fs.renameSync(deptFile, backup);
+        fs.mkdirSync(deptFile);
+        r = await api(adminA, 'PUT', `/api/departments/${deptPizzeriaId}/type`, { departmentType: 'STANDARD' });
+        check('T12. Failed demotion returns 503, not success',
+            r.status === 503 && r.data.code === 'DEPARTMENT_WRITE_FAILED', r);
+        r = await api(adminA, 'GET', '/api/departments');
+        check('T12b. Failed demotion leaves working memory CENTRAL',
+            r.data.departments.find(d => d.id === deptPizzeriaId)?.departmentType === 'CENTRAL', r);
+        fs.rmdirSync(deptFile);
+        fs.renameSync(backup, deptFile);
         server2.kill();
+        await new Promise(r => setTimeout(r, 1_200));
+        const server3 = await startServer();
+        r = await api(adminA, 'GET', '/api/departments');
+        check('T12c. Failed demotion remains CENTRAL after reload',
+            r.data.departments.find(d => d.id === deptPizzeriaId)?.departmentType === 'CENTRAL', r);
+        r = await api(adminA, 'PUT', `/api/departments/${deptPizzeriaId}/type`, { departmentType: 'STANDARD' });
+        check('T13. Retried demotion commits', r.status === 200 && r.data.success, r);
+        server3.kill();
+        await new Promise(r => setTimeout(r, 1_200));
+        const server4 = await startServer();
+        r = await api(adminA, 'GET', '/api/departments');
+        check('T13b. Successful demotion survives reload',
+            r.data.departments.find(d => d.id === deptPizzeriaId)?.departmentType === 'STANDARD', r);
+        server4.kill();
 
     } catch (err) {
         console.error('Fatal error:', err);
