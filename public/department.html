@@ -1202,6 +1202,7 @@ let selectedDests  = new Set();
 let selectedDur    = 0;            // seconds
 let tableInput     = '';
 const pendingSends = new Set();   // table numbers recently sent by this page; tags server echo as 'sent'
+const seenCountdownIds = new Set(); // includes silent replay; independent of 60s/expiry alarm flags
 // Countdown map: tableNumber → { tableNumber, timeRemaining, initialDuration, startTime,
 //                                 startedAt, destinations, direction }
 // direction: 'sent' | 'received'
@@ -1887,6 +1888,7 @@ function sendCountdown(){
   // The server creates the countdown atomically and enforces the no-duplicate rule.
   ws.send(JSON.stringify({
     action:        'startCountdown',
+    originDepartmentId: myDeptId, // legacy presentation context; bound origin is server-derived
     tableNumber:   tableNum,
     timeRemaining: duration,
     destinations:  dests
@@ -2077,6 +2079,7 @@ async function processVoiceCmd(){
     if(ws.readyState === WebSocket.OPEN){
       ws.send(JSON.stringify({
         action:        'startCountdown',
+        originDepartmentId: myDeptId,
         tableNumber:   tableNum,
         timeRemaining: durationS,
         destinations:  deptIds
@@ -2255,6 +2258,22 @@ function handleIncomingCountdown(data){
   const incomingDests = Array.isArray(data.destinations)
     ? data.destinations
     : (data.destination ? [data.destination] : []);
+  // Only a first live delivery to a selected recipient plays an incoming alert.
+  // Replay on joinRoom/joinPage marks the identity seen but remains silent, even
+  // if a delayed duplicate live packet arrives after reconnect.
+  const id = typeof data.countdownId === 'string' && data.countdownId ? data.countdownId : null;
+  const firstReceipt = id ? !seenCountdownIds.has(id) : false;
+  if(id){
+    seenCountdownIds.add(id);
+    if(firstReceipt && data.live === true && incomingDests.includes(myDeptId) &&
+       data.originDepartmentId && data.originDepartmentId !== myDeptId){
+      playAlarm('snd-warn');
+    }
+  }
+
+  // An old packet must not replace a newer countdown for a reused table.
+  const ex = countdowns.get(tableNum);
+  if(ex && id && ex.countdownId && ex.countdownId !== id && !firstReceipt) return;
 
   // ── Determine if this page originated this countdown ───────────────────────
   // pendingSends holds table numbers recently sent from this page that have not
@@ -2264,14 +2283,14 @@ function handleIncomingCountdown(data){
   const isSender = pendingSends.has(tableNum);
   if(isSender) pendingSends.delete(tableNum);
 
-  const ex = countdowns.get(tableNum);
-  if(ex){
+  if(ex && (!id || !ex.countdownId || ex.countdownId === id)){
     // Update authoritative timing fields — alarm flags are NEVER touched here;
     // they are managed exclusively by tick() to avoid false repeats.
     if(!ex.expiredAt){
       ex.endsAt = data.endsAt ?? ex.endsAt ?? (Date.now() + tr * 1000);
     }
     ex.graceMs = data.graceMs ?? ex.graceMs;
+    if(id && !ex.countdownId) ex.countdownId = id;
     ex.timeRemaining   = tr;
     ex.initialDuration = data.initialDuration ?? ex.initialDuration;
     // Merge any new destinations into the list (idempotent)
@@ -2282,6 +2301,7 @@ function handleIncomingCountdown(data){
     // First time this table is seen — initialise alarm flags from the current
     // server-reported time so reconnects do not replay already-passed alarms.
     countdowns.set(tableNum, {
+      countdownId:    id,
       tableNumber:     tableNum,
       timeRemaining:   tr,
       initialDuration: data.initialDuration ?? tr,

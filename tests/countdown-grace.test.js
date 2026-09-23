@@ -151,13 +151,58 @@ async function main() {
         const tokB = sign('uid-b-admin', 'compb', 'ops-bootstrap');
 
         const aDept = await createDept(tokA, 'Cucina');
+        const aDept2 = await createDept(tokA, 'Sala');
+        const aDept3 = await createDept(tokA, 'Bar');
         const bDept = await createDept(tokB, 'CucinaB');
-        check('Setup: departments created', !!aDept && !!bDept, { aDept, bDept });
+        check('Setup: departments created', !!aDept && !!aDept2 && !!aDept3 && !!bDept, { aDept, aDept2, aDept3, bDept });
 
         const wsA = await openWs(); sockets.push(wsA);
         const wsB = await openWs(); sockets.push(wsB);
         await joinRoom(wsA, tokA);
         await joinRoom(wsB, tokB);
+        wsA.clearMsgs(); wsB.clearMsgs();
+
+        // Live creation is distinct from either join replay, and one broadcast
+        // reaches every selected department plus the sender's other tab.
+        const rec2 = await openWs(), rec3 = await openWs(), senderTab = await openWs();
+        sockets.push(rec2, rec3, senderTab);
+        await joinRoom(rec2, sign('uid-rec2', 'compa'));
+        await joinRoom(rec3, sign('uid-rec3', 'compa'));
+        await joinRoom(senderTab, sign('uid-origin-tab', 'compa'));
+        wsA.send(JSON.stringify({
+            action: 'startCountdown', tableNumber: 'ALERT', timeRemaining: 180,
+            destinations: [aDept, aDept2, aDept3], originDepartmentId: aDept
+        }));
+        const predAlert = m => m.action === 'startCountdown' && String(m.tableNumber).toLowerCase() === 'alert';
+        const [origin, otherTab, incoming2, incoming3] = await Promise.all([
+            wsA.waitFor(predAlert), senderTab.waitFor(predAlert),
+            rec2.waitFor(predAlert), rec3.waitFor(predAlert)
+        ]);
+        check('A1. All selected recipients get same live countdown identity',
+            [otherTab, incoming2, incoming3].every(m => m.countdownId === origin.countdownId));
+        check('A2. Origin carried to both recipients and sender other tab',
+            [origin, otherTab, incoming2, incoming3].every(m => m.live === true && m.originDepartmentId === aDept));
+        check('A3. Company B does not receive the countdown',
+            await wsB.notReceived(predAlert));
+        const reconnect = await openWs(); sockets.push(reconnect);
+        await joinRoom(reconnect, sign('uid-reconnect', 'compa'));
+        const replayRoom = await reconnect.waitFor(predAlert);
+        reconnect.send(JSON.stringify({ action: 'joinPage', pageType: aDept2 }));
+        const replayPage = await reconnect.waitFor(predAlert);
+        check('A4. Both join replay paths preserve identity/origin but are not live',
+            [replayRoom, replayPage].every(m => m.countdownId === origin.countdownId &&
+                m.originDepartmentId === aDept && m.live !== true));
+        wsA.send(JSON.stringify({ action: 'deleteCountdown', tableNumber: 'ALERT' }));
+        await wsA.waitFor(m => m.action === 'deleteCountdown' && m.tableNumber === 'ALERT');
+        wsA.send(JSON.stringify({
+            action: 'startCountdown', tableNumber: 'ALERT', timeRemaining: 180,
+            destinations: [aDept, aDept2, aDept3], originDepartmentId: aDept
+        }));
+        const nextAlert = await rec2.waitFor(predAlert);
+        check('A5. Reused table gets a new live countdown ID',
+            nextAlert.live === true && nextAlert.countdownId !== origin.countdownId);
+        wsA.send(JSON.stringify({ action: 'deleteCountdown', tableNumber: 'ALERT' }));
+        await wsA.waitFor(m => m.action === 'deleteCountdown' && m.tableNumber === 'ALERT');
         wsA.clearMsgs(); wsB.clearMsgs();
 
         // ── 1+10. Active countdown carries graceMs + countdownId ─────────────

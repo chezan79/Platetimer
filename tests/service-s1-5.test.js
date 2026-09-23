@@ -295,6 +295,22 @@ async function main() {
         ]);
         check('S15-6.  D1 receives D1+D2 countdown', !!cdD1multi, cdD1multi);
         check('S15-6b. D2 receives D1+D2 countdown', !!cdD2multi, cdD2multi);
+        // Bound sender identity must override even a forged legacy presentation hint.
+        const senderOtherTab = await openWs(); openSockets.push(senderOtherTab);
+        await joinRoom(senderOtherTab, tokD1);
+        senderOtherTab.clearMsgs();
+        wsD1.send(JSON.stringify({
+            action: 'startCountdown', tableNumber: 'T-ALERT-BOUND', timeRemaining: 180,
+            destinations: [d1Id, d2Id], originDepartmentId: d2Id
+        }));
+        const boundAlert = m => m.action === 'startCountdown' && m.tableNumber === 'T-ALERT-BOUND';
+        const [own, ownTab, received] = await Promise.all([
+            wsD1.waitFor(boundAlert), senderOtherTab.waitFor(boundAlert), wsD2.waitFor(boundAlert)
+        ]);
+        check('S15-6d. Bound origin wins over forged client origin',
+            [own, ownTab, received].every(m => m.live === true && m.originDepartmentId === d1Id));
+        check('S15-6e. Same identity reaches sender tab and receiving department',
+            own.countdownId === ownTab.countdownId && own.countdownId === received.countdownId);
         // D1B (company B) must not receive it
         const d1bNoMulti = await wsD1B.notReceived(m => m.action === 'startCountdown' && m.tableNumber === 'T4');
         check('S15-6c. Company B not contaminated', d1bNoMulti, 'CompB received tratt countdown');

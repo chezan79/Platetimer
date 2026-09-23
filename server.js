@@ -7801,6 +7801,7 @@ wss.on('connection', (ws, req) => {
                             const syncMessage = {
                                 action:          'startCountdown',
                                 countdownId:     countdown.id,
+                                originDepartmentId: countdown.originDepartmentId || null,
                                 tableNumber:     tableNumber,
                                 timeRemaining:   remaining,
                                 endsAt:          endsAt,
@@ -7867,6 +7868,7 @@ wss.on('connection', (ws, req) => {
                                 const syncMessage = {
                                     action:          'startCountdown',
                                     countdownId:     countdown.id,
+                                    originDepartmentId: countdown.originDepartmentId || null,
                                     tableNumber:     tableNumber,
                                     timeRemaining:   remaining,
                                     endsAt:          endsAt,
@@ -8016,8 +8018,15 @@ wss.on('connection', (ws, req) => {
                 const startTime    = Date.now();
                 const serverEndsAt = startTime + data.timeRemaining * 1000;
                 const countdownId  = genCountdownId();
+                // Bound origin is verified by joinRoom. Legacy page identity is
+                // presentation metadata only, and never grants send/receive rights.
+                const originDepartmentId = ws.boundDepartmentId ||
+                    (typeof data.originDepartmentId === 'string' && destinations.includes(data.originDepartmentId)
+                        ? data.originDepartmentId
+                        : (destinations.includes(ws.pageType) ? ws.pageType : null));
                 companyCountdowns.set(tableKey, {
                     id:              countdownId,
+                    originDepartmentId,
                     startTime,
                     initialDuration: data.timeRemaining,
                     endsAt:          serverEndsAt,
@@ -8048,6 +8057,8 @@ wss.on('connection', (ws, req) => {
                     const msg = JSON.stringify({
                         action:          'startCountdown',
                         countdownId,
+                        live:            true,
+                        originDepartmentId,
                         tableNumber:     data.tableNumber,
                         timeRemaining:   data.timeRemaining,
                         endsAt:          serverEndsAt,
