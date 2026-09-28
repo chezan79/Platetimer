@@ -390,6 +390,20 @@ async function run() {
                 conv.messages?.some(m => m.body === 'REST backfill check')
             );
             check('12c. Unrelated dept C inbox does NOT contain A-B message', cFound === false, r.data.conversations);
+
+            // Simulate recipient reconnect after missing the live WS event.
+            const reconnectedA = await wsConnect(tokDeptA);
+            check('12d. Reconnected recipient authenticates', !!(await reconnectedA.waitFor('joinedRoom')));
+            r = await api(tokDeptA, 'GET', '/api/service/mex/inbox');
+            check('12e. Reconnected recipient can backfill persisted message',
+                r.data.conversations?.some(conv => conv.messages?.some(m =>
+                    m.body === 'REST backfill check' && m.from === deptB.id)) === true);
+            reconnectedA.close();
+
+            r = await api(tokDeptO, 'GET', '/api/service/mex/inbox');
+            check('12f. Other company inbox cannot see A-B message',
+                r.status === 200 && !r.data.conversations?.some(conv =>
+                    conv.messages?.some(m => m.body === 'REST backfill check')), r.data);
         }
 
         // ── 13. Spoofed sender field in payload is ignored ────────────────────────

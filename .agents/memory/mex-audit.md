@@ -17,3 +17,8 @@ Authoritative blueprint: `docs/mex-architecture-audit.md`. Key durable facts lea
 - Firestore department_accounts also holds 3 ORPHANED accounts (cucina/pizzeria/griglia) whose departmentIds don't exist in prod → joinRoom silently binds sockets to a phantom dept (found=false), causing 410 on /api/voice-recipients and Mex delivery misses.
 - **Why:** joinRoom sets ws.boundDepartmentId from the account record without checking the dept exists/active.
 - **How to apply:** any Mex "works for some depts, not one" report → first check account.departmentId exists in the live departments store. Full report: docs/mex-carne-pesce-audit-report.md.
+
+## Meaning of a send ACK
+Treat a successful Mex send ACK as evidence of store commit, not of live delivery or reading by the recipient.
+**Why:** WebSocket rooms are process-local; with multiple replicas, a recipient connected to another process may not receive the broadcast even when the sender gets a success ACK. A lost ACK on disconnect also leaves the outcome ambiguous.
+**How to apply:** never auto-retry an unacknowledged send; distinguish sender ACK, recipient live event, and authenticated inbox separately when diagnosing Railway behavior. Confirm actual replica topology before proposing a broker.

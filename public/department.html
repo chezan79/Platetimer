@@ -2219,6 +2219,7 @@ function cancelCountdown(tableNum){
 }
 
 // ── WebSocket ──────────────────────────────────────────────────────────────────
+let mexSendPending = false;
 function connectWS(){
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
   ws = new WebSocket(`${proto}//${location.host}/ws`);
@@ -2237,6 +2238,13 @@ function connectWS(){
   ws.onclose = () => {
     wsConnected = false;
     setConnBadge(false);
+    if(mexSendPending){
+      // The server may have persisted the message before the ACK was lost.
+      // Never retry automatically: the operator must check the recipient first.
+      mexSendPending = false;
+      document.getElementById('mex-send-btn').disabled = false;
+      mexStatus(_mt('dept.mexUnknownSend'), 'err');
+    }
     setTimeout(connectWS, 3500);
   };
 
@@ -2246,6 +2254,10 @@ function connectWS(){
     let data;
     try { data = JSON.parse(ev.data); } catch{ return; }
     if(WsAuth.handleServerError(data)) return;
+    if(data.action === 'error' && data.code === 'MEX_NOT_BOUND'){
+      handleMexSendAck({ success: false, code: data.code });
+      return;
+    }
 
     // Keep-alive: respond to server heartbeat pings so ws.lastPong stays fresh
     // and the server's dead-socket cleanup does not terminate this connection.
@@ -3021,7 +3033,7 @@ async function buildMexRecipientList(){
     row.onclick = () => toggleMexRecipient(d.id);
     row.innerHTML =
       `<input type="radio" name="mex-recipient" id="${idSafe}" value="${esc(d.id)}" ` +
-      `onclick="event.stopPropagation()">` +
+      `onclick="toggleMexRecipient(this.value); event.stopPropagation()">` +
       `<label for="${idSafe}">${esc(d.name)}</label>`;
     list.appendChild(row);
   });
@@ -3034,7 +3046,7 @@ async function buildMexRecipientList(){
   floorRow.onclick = () => toggleMexRecipient('__sala__');
   floorRow.innerHTML =
     `<input type="radio" name="mex-recipient" id="${floorSafe}" value="__sala__" ` +
-    `onclick="event.stopPropagation()">` +
+    `onclick="toggleMexRecipient(this.value); event.stopPropagation()">` +
     `<label for="${floorSafe}" data-i18n="dept.floorDest">${esc(_mt('dept.floorDest'))}</label>`;
   list.appendChild(floorRow);
 
@@ -3218,6 +3230,7 @@ function sendMexMessage(){
   if(body.length > 300){ mexStatus(_mt('dept.mexBodyTooLong'), 'err'); return; }
   if(!ws || ws.readyState !== WebSocket.OPEN){ mexStatus(_mt('dept.mexErrorSend'), 'err'); return; }
   btn.disabled = true;
+  mexSendPending = true;
   mexStatus(_mt('dept.mexSending'));
   // [MEX SECURITY] 'from' is intentionally NOT sent — sender identity is
   // derived by the server from ws.boundDepartmentId, never from client payload.
@@ -3227,21 +3240,32 @@ function sendMexMessage(){
     payload.templateType = _deptMexQmType;
     if (_deptMexTableNum) payload.tableNumber = _deptMexTableNum;
   }
-  ws.send(JSON.stringify(payload));
+  try {
+    ws.send(JSON.stringify(payload));
+  } catch(e) {
+    mexSendPending = false;
+    btn.disabled = false;
+    mexStatus(_mt('dept.mexErrorSend'), 'err');
+  }
 }
 
 /** Handle mexSendAck from server (response to our mexSend). */
 function handleMexSendAck(data){
+  mexSendPending = false;
   const btn = document.getElementById('mex-send-btn');
   const ta  = document.getElementById('mex-body');
   if(data.success){
     mexStatus(_mt('dept.mexSent'), 'ok');
     if(ta){ ta.value = ''; mexUpdateCharCount(); }
     // [Step 6] After successful send, return to QM picker
-    setTimeout(() => { mexStatus(''); mexDeptResetCompose(); }, 1500);
+    setTimeout(() => mexDeptResetCompose(), 1500);
   } else {
     const message = data.code === 'MEX_RATE_LIMITED'
       ? _mt('dept.mexRateLimited')
+      : data.code === 'MEX_NOT_BOUND'
+      ? _mt('dept.mexNotBound')
+      : data.code === 'MEX_INVALID_RECIPIENT'
+      ? _mt('dept.mexInvalidRecipient')
       : _mt('dept.mexErrorSend');
     mexStatus(message, 'err');
   }
