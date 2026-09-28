@@ -1123,7 +1123,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 
 <audio id="snd-new-table" src="audio/new-table-alert.mp3" preload="auto"></audio>
 <audio id="snd-warn"   src="alerte-346112.mp3"           preload="auto"></audio>
-<audio id="snd-expiry" src="costa-rica-eas-alarm-346194.mp3" preload="auto"></audio>
+<audio id="snd-expiry" src="audio/campana-expiry.mp3" preload="auto"></audio>
 
 <script src="js/ws-auth.js"></script>
 <script src="js/mex-qm.js"></script>
@@ -1278,8 +1278,21 @@ function _unlockAudio() {
   ['snd-new-table','snd-warn','snd-expiry'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
+    // A permitted autoplay may already be ringing before the first gesture.
+    // Pausing it here would strand the expiry queue (paused media never ends).
+    if (id === 'snd-expiry' && expiryPlaying) return;
     el.muted = true;
-    el.play().then(() => { el.pause(); el.muted = false; el.currentTime = 0; }).catch(() => {});
+    el.play().then(() => {
+      if (id === 'snd-expiry' && expiryPlaying) {
+        el.muted = false;
+        return;
+      }
+      el.pause();
+      el.muted = false;
+      el.currentTime = 0;
+    }).catch(() => {
+      if (id === 'snd-expiry') el.muted = false;
+    });
   });
   // Also dismiss the voice-unlock banner and drain the playback queue if waiting.
   const banner = document.getElementById('audio-unlock-banner');
@@ -1352,6 +1365,53 @@ function playAlarm(id) {
   if (!el) return;
   el.currentTime = 0;
   el.play().catch(err => console.warn('[alarm] play blocked (interaction needed):', err.message));
+}
+
+// The expiry channel has one audio element. Queue simultaneous expiries so
+// neither a second countdown nor a repeated tick can restart a playing bell.
+const expiryQueue = [];
+let expiryPlaying = null;
+function playExpiryAlarm(cd) {
+  expiryQueue.push(cd);
+  if (!expiryPlaying) playNextExpiry();
+}
+function playNextExpiry() {
+  const el = document.getElementById('snd-expiry');
+  if (!el || !expiryQueue.length) return;
+  const cd = expiryQueue.shift();
+  const sequence = { cd, plays: 0 };
+  expiryPlaying = sequence;
+  function finish() {
+    el.removeEventListener('ended', onEnded);
+    el.removeEventListener('error', finish);
+    if (expiryPlaying !== sequence) return;
+    expiryPlaying = null;
+    playNextExpiry();
+  }
+  function start() {
+    const attempt = ++sequence.plays;
+    try {
+      el.muted = false;
+      el.currentTime = 0;
+      // Failure is terminal for this expiry; never retry on a later tick.
+      Promise.resolve(el.play()).catch(err => {
+        if (expiryPlaying !== sequence || sequence.plays !== attempt) return;
+        console.warn('[alarm] expiry play blocked:', err);
+        finish();
+      });
+    } catch (err) {
+      console.warn('[alarm] expiry play failed:', err);
+      finish();
+    }
+  }
+  function onEnded() {
+    if (expiryPlaying !== sequence) return;
+    if (sequence.plays < 3) start();
+    else finish();
+  }
+  el.addEventListener('ended', onEnded);
+  el.addEventListener('error', finish);
+  start();
 }
 
 // ── Utility ──────────────────────────────────────────────────────────────────
@@ -2299,21 +2359,22 @@ function handleIncomingCountdown(data){
     // If this page sent it, upgrade the direction so the card shows the correct style
     if(isSender) ex.direction = 'sent';
   } else {
-    // First time this table is seen — initialise alarm flags from the current
-    // server-reported time so reconnects do not replay already-passed alarms.
+    // First receipt: a replay whose deadline has passed stays silent. Floored
+    // timeRemaining can already be 0 while endsAt is still in the future.
+    const endsAt = data.endsAt ?? (Date.now() + tr * 1000);
     countdowns.set(tableNum, {
       countdownId:    id,
       tableNumber:     tableNum,
       timeRemaining:   tr,
       initialDuration: data.initialDuration ?? tr,
-      endsAt:          data.endsAt ?? (Date.now() + tr * 1000),
+      endsAt,
       // Server-delivered grace window (fallback matches server default)
       graceMs:         data.graceMs ?? 120000,
       startedAt:       nowTime(),
       destinations:    incomingDests,
       direction:       isSender ? 'sent' : 'received',
       warnedAt60:      tr <= 60,
-      alarmedExpiry:   tr === 0,
+      alarmedExpiry:   endsAt <= Date.now(),
       expiredAt:       null
     });
   }
@@ -2432,13 +2493,13 @@ function tick(){
     if(rem !== cd.timeRemaining){ cd.timeRemaining = rem; changed = true; }
 
     // ── Expiry: transition into the grace-window expired phase ───────────────
-    if(rem === 0){
+    if(now >= cd.endsAt){
       // Anchor expiredAt to endsAt so the phase length is independent of local
       // clock drift and of when exactly the tick fires.
       cd.expiredAt = cd.endsAt;
       if(!cd.alarmedExpiry){
-        playAlarm('snd-expiry');
         cd.alarmedExpiry = true;
+        playExpiryAlarm(cd);
       }
       changed = true;
     }

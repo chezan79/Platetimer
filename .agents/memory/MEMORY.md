@@ -29,6 +29,7 @@
 - [i18n dictionary integrity](i18n-dict-integrity.md) — public/i18n/*.json easily corrupted by appending after closing brace; always JSON-validate all three after edits.
 - [Operations light redesign system](ops-light-redesign.md) — navy header (#101722) + light bg (#F5F7FA) + white cards; all 6 pages have body.operations-shell; redesign CSS overrides dark vars via body-level specificity beating :root.
 - [Countdown lifecycle & history](countdown-lifecycle.md) — 120s grace via POST_EXPIRY_GRACE_MS; all countdown endings must route through completeCountdown() (idempotent archive + countdownCompleted broadcast).
+- [Expiry audio priming race](expiry-audio-priming.md) — gesture priming must never pause an active ended-driven bell sequence, including when its play promise settles late.
 - [Operations Sprint 6.4.1 Attachments](ops-sprint6-4-1.md) — multer proxy upload; MOCK_FIREBASE_STORAGE=1 for tests; storagePath server-generated; ?token= download auth; 37 new tests; 1441 total passing.
 - [Central Dept calendar access](central-calendar-access.md) — bound dept-account sessions hit calendar API only if their dept is ACTIVE+CENTRAL (requireCalendarAccess); unbound legacy sessions unchanged.
 - [Operations login & activation](ops-login-activation.md) — session exchange flags isOperations; missing users/{uid} doc is non-fatal; idempotent activate; Director repair-binding; TEST_FIREBASE_AUTH_MOCK hook.
