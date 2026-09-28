@@ -1121,6 +1121,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
   </section>
 </div>
 
+<audio id="snd-new-table" src="audio/new-table-alert.mp3" preload="auto"></audio>
 <audio id="snd-warn"   src="alerte-346112.mp3"           preload="auto"></audio>
 <audio id="snd-expiry" src="costa-rica-eas-alarm-346194.mp3" preload="auto"></audio>
 
@@ -1268,13 +1269,13 @@ const mexCdCards = new Map(); // conversationId → DOM element
 
 // ── Alarm audio ──────────────────────────────────────────────────────────────
 // Browsers block audio until the user has interacted with the page.
-// We silently prime both elements on the first pointer/key event so that
+// We silently prime all alarm elements on the first pointer/key event so that
 // subsequent playAlarm() calls succeed without a user-gesture requirement.
 let _audioUnlocked = false;
 function _unlockAudio() {
   if (_audioUnlocked) return;
   _audioUnlocked = true;
-  ['snd-warn','snd-expiry'].forEach(id => {
+  ['snd-new-table','snd-warn','snd-expiry'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     el.muted = true;
@@ -2267,7 +2268,7 @@ function handleIncomingCountdown(data){
     seenCountdownIds.add(id);
     if(firstReceipt && data.live === true && incomingDests.includes(myDeptId) &&
        data.originDepartmentId && data.originDepartmentId !== myDeptId){
-      playAlarm('snd-warn');
+      playAlarm('snd-new-table');
     }
   }
 
