@@ -695,11 +695,23 @@ async function ensureRegisteredCompanyDirector(uid, companyId, displayName = 'Di
     };
     // Persist before granting access. Registration never issues an admin token
     // solely from a writable Firebase profile.
-    const updated = { ...opsUsersStore, [companyId]: [director] };
-    await db.collection(STORE_COLLECTION).doc(getStoreNameForFile(OPS_USERS_FILE))
-        .set({ store: updated, updatedAt: Date.now() });
-    opsUsersStore = updated;
-    return true;
+    const storeRef = db.collection(STORE_COLLECTION).doc(getStoreNameForFile(OPS_USERS_FILE));
+    const created = await db.runTransaction(async tx => {
+        const snapshot = await tx.get(storeRef);
+        const current = snapshot.exists && snapshot.data().store &&
+            typeof snapshot.data().store === 'object' ? snapshot.data().store : {};
+        // Another registration may already have provisioned this company.
+        if (Array.isArray(current[companyId]) && current[companyId].length > 0) return false;
+        const updated = { ...current, [companyId]: [director] };
+        tx.set(storeRef, { store: updated, updatedAt: Date.now() });
+        return true;
+    });
+    if (created) {
+        // Merge the new record into the in-process cache without discarding
+        // other companies updated while the Firestore transaction was in flight.
+        opsUsersStore[companyId] = [director];
+    }
+    return created;
 }
 
 // Trusted registration boundary. Firebase Auth proves the caller UID; only the
