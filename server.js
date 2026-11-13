@@ -517,6 +517,10 @@ async function getAuthoritativeServiceDeviceContext(session) {
 require('./service/voice-rtc-test').mountVoiceRtcTest(app, {
     requireAuth, getAuthoritativeServiceDeviceContext
 });
+require('./service/voice-invites-preview').mountVoiceInvites(app, {
+    enabled: () => process.env.PLATETIMER_VOICE_TEST_ENABLED === 'true' && Boolean(process.env.REPL_ID) && process.env.NODE_ENV !== 'production',
+    requireAuth, getAuthoritativeServiceDeviceContext, getCompanyDepts
+});
 
 function departmentAccessError(boundAcct) {
     if (boundAcct.status === 'SUSPENDED') {
