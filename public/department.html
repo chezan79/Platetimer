@@ -844,11 +844,28 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
         style="display:none;">Passaggio</button>
     </div>
   </div>
+  <button type="button" class="hdr-btn" id="pt-voice-test-open" hidden>🎧 Voice test</button>
   <button class="hdr-btn" id="btn-calendar" onclick="window.location.href='calendar.html'" style="display:none;">📅 <span data-i18n="dept.calendar">Calendario</span></button>
   <button class="hdr-btn" id="btn-home" onclick="window.location.href='home.html'" data-i18n="dept.home">Home</button>
   <button class="hdr-btn danger" onclick="doLogout()" data-i18n="dept.logout">Esci</button>
   <span id="i18n-dept-sel"></span>
 </header>
+
+<!-- Preview-only voice overlay: does not change countdown/Mex layout -->
+<section id="pt-voice-test-panel" hidden aria-label="Test conferenza PlateTimer Voice" style="position:fixed;top:64px;right:12px;z-index:5000;width:min(350px,calc(100vw - 24px));background:#fff;color:#0f172a;border:1px solid #cbd5e1;border-radius:12px;box-shadow:0 10px 35px #0003;padding:14px;">
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;">
+    <strong>🎧 PlateTimer Voice · test</strong>
+    <button type="button" data-voice="close" aria-label="Riduci pannello" style="background:transparent;border:0;font-size:20px;cursor:pointer;">×</button>
+  </div>
+  <p style="font-size:12px;color:#64748b;margin-bottom:12px;">Collaudo Replit Preview. Avvio manuale; nessuna suoneria o fascia oraria ancora disponibile.</p>
+  <div style="display:flex;gap:6px;flex-wrap:wrap;">
+    <button type="button" class="hdr-btn" data-voice="join">Entra</button>
+    <button type="button" class="hdr-btn" data-voice="mute" disabled>Disattiva microfono</button>
+    <button type="button" class="hdr-btn danger" data-voice="leave" disabled>Esci</button>
+  </div>
+  <p data-voice="message" role="status" aria-live="polite" style="font-size:13px;margin:12px 0 5px;">Pronto per il test.</p>
+  <p data-voice="peers" style="font-size:12px;color:#64748b;"></p>
+</section>
 
 <!-- Left panel: countdown + voice tabs -->
 <aside class="lp">
@@ -3650,5 +3667,6 @@ window.addEventListener('beforeunload', () => {
   voiceMessages.forEach(vm => { if(vm.blobUrl) URL.revokeObjectURL(vm.blobUrl); });
 });
 </script>
+<script src="js/voice-preview-panel.js"></script>
 </body>
 </html>
