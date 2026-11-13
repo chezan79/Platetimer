@@ -513,6 +513,11 @@ async function getAuthoritativeServiceDeviceContext(session) {
 // [S1.4.1] Centralized structured error response for department access checks.
 // Returns { status, body } — caller does res.status(e.status).json(e.body).
 // All codes are stable strings for UI-layer branching (never parse the message).
+// Preview-only RTC experiment. Does not alter existing Service routes or UI.
+require('./service/voice-rtc-test').mountVoiceRtcTest(app, {
+    requireAuth, getAuthoritativeServiceDeviceContext
+});
+
 function departmentAccessError(boundAcct) {
     if (boundAcct.status === 'SUSPENDED') {
         return { status: 403, body: { error: 'Account reparto sospeso.', code: 'ACCOUNT_SUSPENDED' } };
