@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>PlateTimer Voice — test audio Preview</title>
+  <style>
+    * { box-sizing:border-box } body { margin:0; background:#f3f5f9; color:#182338; font:16px system-ui,-apple-system,sans-serif; }
+    main { max-width:650px; margin:4vh auto; padding:24px; background:white; border-radius:16px; box-shadow:0 8px 30px #172b4d12 }
+    h1 { margin:0 0 10px; font-size:24px } p { line-height:1.5 } .sub { color:#526177 }
+    button { cursor:pointer; padding:12px 16px; font-size:15px; border:0; border-radius:9px; color:white; background:#304cbb; }
+    button:disabled { opacity:.5; cursor:not-allowed } button.danger { background:#ba3636 } button.secondary { background:#617085 }
+    .controls { display:flex; flex-wrap:wrap; gap:9px; margin:20px 0 }
+    #status { background:#eff3fb; padding:12px; border-radius:9px; white-space:pre-wrap; }
+    .notice { background:#fff7e5; padding:12px; border-radius:9px; font-size:14px }
+    #participants { margin:10px 0 }
+  </style>
+</head>
+<body>
+<main>
+  <h1>PlateTimer Voice · collaudo audio</h1>
+  <p class="sub">Pagina sperimentale, separata dai countdown e da Mex. Usa un accesso reparto Service già effettuato in questa scheda.</p>
+  <p class="notice">Test riservato alla Replit Preview. Nessuna suoneria, invito o fascia oraria è ancora implementata. Usa cuffie su dispositivi vicini per evitare eco. Non utilizzare durante il servizio.</p>
+  <div class="controls">
+    <button id="join">Entra nella conferenza</button>
+    <button id="mute" class="secondary" disabled>Disattiva microfono</button>
+    <button id="leave" class="danger" disabled>Esci</button>
+  </div>
+  <div id="status" role="status" aria-live="polite">Pronto per il test.</div>
+  <p id="participants" class="sub"></p>
+  <div id="audio" aria-hidden="true"></div>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/agora-rtc-sdk-ng@4.24.9/AgoraRTC_N-production.js"></script>
+<script>
+'use strict';
+const statusEl = document.getElementById('status');
+const participantsEl = document.getElementById('participants');
+const joinBtn = document.getElementById('join');
+const leaveBtn = document.getElementById('leave');
+const muteBtn = document.getElementById('mute');
+let client = null;
+let micTrack = null;
+let joined = false;
+let busy = false;
+let muted = false;
+function status(message) { statusEl.textContent = message; }
+function buttons() {
+  joinBtn.disabled = busy || joined; leaveBtn.disabled = busy || !joined;
+  muteBtn.disabled = busy || !joined;
+  muteBtn.textContent = muted ? 'Attiva microfono' : 'Disattiva microfono';
+}
+function participants() {
+  participantsEl.textContent = client ? 'Altri partecipanti collegati: ' + client.remoteUsers.length : '';
+}
+async function leave() {
+  busy = true; buttons();
+  try {
+    if (micTrack) { micTrack.stop(); micTrack.close(); micTrack = null; }
+    if (client) {
+      await client.leave();
+      client.removeAllListeners();
+      client = null;
+    }
+    document.getElementById('audio').replaceChildren();
+    joined = false; muted = false;
+    status('Conferenza terminata su questo dispositivo.');
+  } catch (e) { status('Errore in uscita: ' + e.message); }
+  finally { busy = false; buttons(); participants(); }
+}
+joinBtn.addEventListener('click', async () => {
+  busy = true; buttons();
+  try {
+    if (!window.AgoraRTC) throw new Error('SDK Agora non caricato. Verifica la rete/CDN.');
+    const sessionToken = sessionStorage.getItem('ws_session_token');
+    if (!sessionToken) throw new Error('Accedi prima al reparto in questa scheda del browser.');
+    const response = await fetch('/api/voice-test/token', {
+      method:'POST', headers:{ Authorization:'Bearer ' + sessionToken }
+    });
+    const config = await response.json();
+    if (!response.ok) throw new Error(config.error || 'Autorizzazione negata');
+    client = AgoraRTC.createClient({ mode:'rtc', codec:'vp8' });
+    client.on('user-published', async (user, mediaType) => {
+      await client.subscribe(user, mediaType);
+      if (mediaType === 'audio') user.audioTrack.play();
+      participants();
+    });
+    client.on('user-unpublished', participants);
+    client.on('user-left', participants);
+    await client.join(config.appId, config.channel, config.token, config.uid);
+    micTrack = await AgoraRTC.createMicrophoneAudioTrack({
+      encoderConfig:'speech_standard', AEC:true, ANS:true, AGC:true
+    });
+    await client.publish([micTrack]);
+    joined = true; muted = false;
+    status('Collegato: ' + config.departmentName + '. Il microfono è attivo.');
+    participants();
+  } catch (e) {
+    status('Connessione non riuscita: ' + (e && e.message ? e.message : String(e)));
+    if (micTrack) { micTrack.stop(); micTrack.close(); micTrack = null; }
+    if (client) { try { await client.leave(); } catch (_) {} client.removeAllListeners(); client = null; }
+  } finally { busy = false; buttons(); }
+});
+leaveBtn.addEventListener('click', leave);
+muteBtn.addEventListener('click', async () => {
+  if (!micTrack || busy) return;
+  busy = true; buttons();
+  try {
+    await micTrack.setEnabled(muted);
+    muted = !muted;
+    status(muted ? 'Microfono disattivato.' : 'Microfono attivo.');
+  } catch(e) { status('Errore microfono: ' + e.message); }
+  finally { busy = false; buttons(); }
+});
+window.addEventListener('pagehide', () => {
+  if (micTrack) { micTrack.stop(); micTrack.close(); }
+  if (client) client.leave().catch(() => {});
+});
+buttons();
+</script>
+</body>
+</html>
