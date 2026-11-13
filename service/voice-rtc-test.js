@@ -10,6 +10,11 @@ function mountVoiceRtcTest(app, { requireAuth, getAuthoritativeServiceDeviceCont
       Boolean(process.env.REPL_ID) && process.env.NODE_ENV !== 'production';
   }
 
+  app.get('/api/voice-test/status', (_req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    return res.json({ enabled: available() });
+  });
+
   app.post('/api/voice-test/token', async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     if (!available()) return res.status(404).json({ error: 'Voice test disabled.' });
