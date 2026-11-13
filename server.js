@@ -635,6 +635,21 @@ app.post('/api/auth/session', async (req, res) => {
 
         const normalizedCompany = companyName.trim().toLowerCase();
 
+        // Existing registered owners can complete their onboarding at login.
+        // The registry owner UID is verified server-side before any role is granted.
+        // Never promote a legacy Service user who merely sets a company name.
+        if (!findOpsUserByUid(uid) && getOpsUsers(normalizedCompany).length === 0) {
+            await ensureRegisteredCompanyDirector(uid, normalizedCompany);
+            const provisioned = findOpsUserByUid(uid);
+            if (provisioned) {
+                const token = signSessionToken(uid, normalizedCompany, null, 'ops-membership');
+                return res.json({
+                    success: true, token, companyName: normalizedCompany,
+                    isOperations: true, opsRole: provisioned.role, opsStatus: provisioned.status
+                });
+            }
+        }
+
         // [SECURITY] Step 3: Issue a server-signed session token
         // Legacy Service compatibility only. This source is deliberately marked
         // so it can never establish or exercise administrative authority.
@@ -658,6 +673,34 @@ app.post('/api/auth/session', async (req, res) => {
         res.status(500).json({ error: 'Internal server error during authentication' });
     }
 });
+
+// A registration proves company ownership only when the server-side registry
+// identifies this Firebase UID as the owner. The legacy users/{uid}.company
+// field alone is NOT sufficient to grant Operations Director permissions.
+// Also repairs owners who registered before Director provisioning was added.
+async function ensureRegisteredCompanyDirector(uid, companyId, displayName = 'Direttore') {
+    if (!db) return false;
+    if (findOpsUserByUid(uid) || getOpsUsers(companyId).length !== 0) return false;
+    const registryId = crypto.createHash('sha256').update(companyId).digest('hex');
+    const registryDoc = await db.collection('platetimer_company_registry').doc(registryId).get();
+    if (!registryDoc.exists || registryDoc.data().ownerUid !== uid ||
+        registryDoc.data().companyId !== companyId) return false;
+    // No authorization is inferred from an arbitrary company name or client role.
+    if (findOpsUserByUid(uid) || getOpsUsers(companyId).length !== 0) return false;
+    const director = {
+        id: genOpsUserId(), companyId, uid,
+        name: String(displayName || 'Direttore').trim().substring(0, 160),
+        email: null, role: 'DIRECTOR', active: true, status: 'ACTIVE',
+        createdAt: Date.now()
+    };
+    // Persist before granting access. Registration never issues an admin token
+    // solely from a writable Firebase profile.
+    const updated = { ...opsUsersStore, [companyId]: [director] };
+    await db.collection(STORE_COLLECTION).doc(getStoreNameForFile(OPS_USERS_FILE))
+        .set({ store: updated, updatedAt: Date.now() });
+    opsUsersStore = updated;
+    return true;
+}
 
 // Trusted registration boundary. Firebase Auth proves the caller UID; only the
 // Admin SDK writes company membership. The registry transaction prevents a new
@@ -720,6 +763,7 @@ app.post('/api/auth/register-company', async (req, res) => {
                 createdAt: now
             }, { merge: true });
         });
+        await ensureRegisteredCompanyDirector(fbUser.localId, companyId, `${firstName} ${lastName}`);
         res.status(201).json({ success: true, companyName: companyId });
     } catch (error) {
         if (error && error.code === 'COMPANY_EXISTS') {
