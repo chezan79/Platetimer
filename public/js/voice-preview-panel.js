@@ -81,10 +81,13 @@
     if (!destination.value) return say('Scegli il reparto da chiamare.');
     callButton.disabled = true;
     try {
+      // Start caller audio first: the recipient must never accept an empty room.
+      if (!connected) await connect();
+      if (!connected) return;
       const data = await api('invite', {
         method: 'POST', body: {toDepartmentId: destination.value}
       });
-      say('Invito inviato a ' + data.toName + '. Scade tra 30 secondi.');
+      say('Collegato. Invito inviato a ' + data.toName + '. Scade tra 30 secondi.');
     } catch (error) { say('Chiamata non inviata: ' + error.message); }
     finally { callButton.disabled = false; }
   });
