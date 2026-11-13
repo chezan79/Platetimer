@@ -863,7 +863,17 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
     <button type="button" class="hdr-btn" data-voice="mute" disabled>Disattiva microfono</button>
     <button type="button" class="hdr-btn danger" data-voice="leave" disabled>Esci</button>
   </div>
-  <p data-voice="message" role="status" aria-live="polite" style="font-size:13px;margin:12px 0 5px;">Pronto per il test.</p>
+  <div data-voice="invitation-controls" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;align-items:center;">
+    <select data-voice="destination" aria-label="Reparto da chiamare" style="min-width:140px;max-width:210px;padding:7px;border:1px solid #cbd5e1;border-radius:6px;"><option value="">Seleziona reparto</option></select>
+    <button type="button" class="hdr-btn" data-voice="call">Chiama</button>
+  </div>
+  <div data-voice="incoming" hidden role="alert" style="border:1px solid #6366f1;border-radius:8px;padding:9px;margin-top:10px;background:#eef2ff;">
+    <strong data-voice="caller">Chiamata in arrivo</strong>
+    <p data-voice="remaining" style="font-size:12px;margin:5px 0;"></p>
+    <button type="button" class="hdr-btn" data-voice="accept">Accetta</button>
+    <button type="button" class="hdr-btn danger" data-voice="decline">Rifiuta</button>
+  </div>
+    <p data-voice="message" role="status" aria-live="polite" style="font-size:13px;margin:12px 0 5px;">Pronto per il test.</p>
   <p data-voice="peers" style="font-size:12px;color:#64748b;"></p>
 </section>
 
