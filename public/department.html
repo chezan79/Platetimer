@@ -2015,6 +2015,13 @@ function sendCountdown(){
 // ── Voice command: confirmed multilingual countdown ─────────────────────────
 const VC_MAX_SECS = 5;
 const VC_PREFERENCE_PREFIX = 'pt_voice_language_';
+const VC_STRINGS = {
+  'it-IT': {language:'Lingua del comando vocale',verify:'Verifica prima di inviare',cancel:'Annulla',send:'Conferma countdown',table:'Tavolo',duration:'Durata',dest:'Destinazioni',transcript:'Trascrizione',minutes:'minuti',idle:'🎤 Avvia comando vocale',rec:'⏹ Ferma registrazione',busy:'⏳ Trascrizione...',confirm:'✓ Verifica e conferma qui sotto',pending:'⏳ Attesa conferma server'},
+  'fr-CH': {language:'Langue de la commande vocale',verify:'Vérifiez avant l’envoi',cancel:'Annuler',send:'Confirmer le compte à rebours',table:'Table',duration:'Durée',dest:'Destinations',transcript:'Transcription',minutes:'minutes',idle:'🎤 Démarrer la commande vocale',rec:'⏹ Arrêter l’enregistrement',busy:'⏳ Transcription...',confirm:'✓ Vérifiez et confirmez ci-dessous',pending:'⏳ En attente du serveur'},
+  'de-CH': {language:'Sprache des Sprachbefehls',verify:'Vor dem Senden prüfen',cancel:'Abbrechen',send:'Countdown bestätigen',table:'Tisch',duration:'Dauer',dest:'Abteilungen',transcript:'Transkription',minutes:'Minuten',idle:'🎤 Sprachbefehl starten',rec:'⏹ Aufnahme stoppen',busy:'⏳ Spracherkennung...',confirm:'✓ Unten prüfen und bestätigen',pending:'⏳ Warte auf Serverbestätigung'}
+};
+function voiceStrings(){return VC_STRINGS[getVoiceLanguage()]||VC_STRINGS['it-IT'];}
+
 let vcDraft = null;
 let vcPendingTable = null;
 let vcPendingTimeout = null;
@@ -2038,6 +2045,11 @@ function saveVoiceLanguage(){
   try{localStorage.setItem(VC_PREFERENCE_PREFIX+voiceOperatorKey(),code);}catch(e){}
   const hints={'it-IT':'"Tavolo 12, otto minuti, Pizzeria"','fr-CH':'"Table douze, huit minutes, Pizzeria"','de-CH':'"Tisch zwölf, acht Minuten, Pizzeria"'};
   document.getElementById('vc-hint').textContent=hints[code];
+  const t=VC_STRINGS[code];
+  document.querySelector('label[for="vc-language"]').textContent=t.language;
+  document.querySelector('#vc-confirm > div:first-child').textContent=t.verify;
+  document.querySelector('#vc-confirm button:first-child').textContent=t.cancel;
+  document.getElementById('vc-confirm-send').textContent=t.send;
   cancelVoiceDraft();
 }
 function initVoiceLanguage(){
@@ -2141,7 +2153,8 @@ async function processVoiceCmd(){
     // Do not accept server-stored or guessed recipient names without checking actual company map.
     vcDraft=parsed;
     const names=parsed.departmentIds.map(id=>departmentMap[id]?.name||'Reparto sconosciuto');
-    document.getElementById('vc-preview').textContent='Trascrizione: '+result.transcription+'\nTavolo: '+parsed.tableNumber+'\nDurata: '+parsed.durationMinutes+' minuti\nDestinazioni: '+names.join(', ');
+    const t=voiceStrings();
+    document.getElementById('vc-preview').textContent=t.transcript+': '+result.transcription+'\n'+t.table+': '+parsed.tableNumber+'\n'+t.duration+': '+parsed.durationMinutes+' '+t.minutes+'\n'+t.dest+': '+names.join(', ');
     document.getElementById('vc-confirm').style.display='block';
     document.getElementById('vc-language').disabled=true;
     setVcState('confirm');
@@ -2218,7 +2231,7 @@ function showVcError(msg){
 function setVcState(state){
   const btn=document.getElementById('vc-btn'),sts=document.getElementById('vc-status');
   if(!btn)return;
-  const labels={idle:'🎤 Avvia comando vocale',rec:'⏹ Ferma registrazione',busy:'⏳ Trascrizione...',confirm:'✓ Verifica e conferma qui sotto',pending:'⏳ Attesa conferma server'};
+  const labels=voiceStrings();
   btn.textContent=labels[state]||labels.idle;
   btn.disabled=!['idle','rec'].includes(state);
   btn.className='vc-btn'+(state==='rec'?' vc-rec':state==='busy'?' vc-busy':'');
