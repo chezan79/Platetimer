@@ -48,7 +48,7 @@ const DEFAULT_DEPT_ALIASES={
  'pizzeria':['pizzaabteilung','pizza station','station pizza'],
  'cucina fredda':['cuisine froide','kalte küche','kalte kueche']
 };
-function parse(text,languageCode,departments,ownDepartmentId){
+function parse(text,languageCode,departments,ownDepartmentId,defaultDepartmentIds=[]){
  const lang=LANGUAGES[languageCode];
  if(!lang)return {ok:false,code:'INVALID_LANGUAGE'};
  if(typeof text!=='string'||text.length>500)return {ok:false,code:'INVALID_TEXT'};
@@ -74,8 +74,9 @@ function parse(text,languageCode,departments,ownDepartmentId){
  const ignored=new Set([spec.table,...spec.filler,'min','minuti','minute','minutes','minuten']);
  const extras=remainder.split(/\s+/).filter(w=>w&&!ignored.has(w));
  if(extras.length)return {ok:false,code:'UNKNOWN_TERMS',unknown:extras.slice(0,6)};
- if(!dests.length)dests=[ownDepartmentId];
  if(typeof ownDepartmentId!=='string'||!active.some(d=>d.id===ownDepartmentId))return {ok:false,code:'INVALID_OWN_DEPARTMENT'};
+ if(!Array.isArray(defaultDepartmentIds)||defaultDepartmentIds.some(id=>typeof id!=='string'||!active.some(d=>d.id===id)))return {ok:false,code:'INVALID_DEFAULT_DESTINATION'};
+ if(!dests.length)dests=defaultDepartmentIds.length?[...defaultDepartmentIds]:[ownDepartmentId];
  if(!dests.includes(ownDepartmentId))dests.push(ownDepartmentId);
  return {ok:true,tableNumber,durationMinutes,departmentIds:[...new Set(dests)],languageCode,transcription:text};
 }
