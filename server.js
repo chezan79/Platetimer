@@ -2632,70 +2632,68 @@ app.get('/api/subscription', (req, res) => {
     res.json({ success: true, plan, limit, activeCount });
 });
 
-// Endpoint per il riconoscimento vocale
+// Google Cloud Speech: strict audio/language allowlist. Never forward untrusted
+// client config to the provider or allow arbitrary enhanced models/quota use.
+const STT_LANGUAGES = new Set(['it-IT', 'fr-CH', 'de-CH']);
+const STT_ENCODINGS = new Set(['WEBM_OPUS', 'OGG_OPUS', 'LINEAR16']);
+const STT_MAX_AUDIO_BYTES = 1024 * 1024; // five-second voice commands
+const sttUsage = new Map(); // authenticated operator → short quota window
+const STT_MAX_REQUESTS_PER_MINUTE = 30;
 app.post('/api/speech-to-text', async (req, res) => {
     try {
-        // [SECURITY] Require a valid server session token — prevents unauthenticated callers
-        // from consuming Google Cloud Speech API quota at the restaurant's expense.
-        const authHeader = req.headers['authorization'];
-        if (!authHeader || !authHeader.startsWith('Bearer ')) {
-            console.log(`⛔ [SECURITY] POST /api/speech-to-text rejected — no token (IP: ${req.ip})`);
-            return res.status(401).json({ error: 'Authentication required. Please log in again.' });
-        }
-        const sttToken = authHeader.substring(7).trim();
-        const sttSession = verifySessionToken(sttToken);
-        if (!sttSession) {
-            console.log(`⛔ [SECURITY] POST /api/speech-to-text rejected — invalid or expired token (IP: ${req.ip})`);
-            return res.status(401).json({ error: 'Session token invalid or expired. Please log in again.' });
-        }
-
+        const session = requireAuth(req, res);
+        if (!session) return;
         if (!speechClient) {
-            return res.status(500).json({ 
-                error: 'Google Cloud Speech non configurato',
-                details: 'Controlla le credenziali nei Secrets'
-            });
+            return res.status(503).json({ error: 'SPEECH_NOT_CONFIGURED' });
         }
-
-        const { audioData, config = {} } = req.body;
-
-        if (!audioData) {
-            return res.status(400).json({ error: 'Audio data richiesto' });
-        }
-
-        // Configurazione per il riconoscimento
-        const request = {
-            audio: {
-                content: audioData
-            },
-            config: {
-                encoding: config.encoding || 'WEBM_OPUS',
-                sampleRateHertz: config.sampleRateHertz || 48000,
-                languageCode: config.languageCode || 'it-IT',
-                model: 'command_and_search',
-                useEnhanced: true,
-                ...config
+        // Limit provider billing abuse, scoped by verified account and restaurant.
+        const quotaKey = session.companyName + ':' + session.uid;
+        const now = Date.now();
+        if (sttUsage.size > 5000) {
+            for (const [key, bucket] of sttUsage) {
+                if (now - bucket.start > 60000) sttUsage.delete(key);
             }
+        }
+        let bucket = sttUsage.get(quotaKey);
+        if (!bucket || now - bucket.start >= 60000) bucket = { start: now, count: 0 };
+        if (bucket.count >= STT_MAX_REQUESTS_PER_MINUTE) {
+            return res.status(429).json({ error: 'VOICE_RATE_LIMITED' });
+        }
+        bucket.count++;
+        sttUsage.set(quotaKey, bucket);
+        const { audioData, config } = req.body || {};
+        if (!config || typeof config !== 'object' || Array.isArray(config) ||
+            !STT_LANGUAGES.has(config.languageCode) ||
+            !STT_ENCODINGS.has(config.encoding) ||
+            typeof audioData !== 'string' || audioData.length > 1400000 ||
+            !/^[A-Za-z0-9+/]+={0,2}$/.test(audioData) || audioData.length % 4 !== 0) {
+            return res.status(400).json({ error: 'INVALID_SPEECH_REQUEST' });
+        }
+        const audioBuffer = Buffer.from(audioData, 'base64');
+        if (!audioBuffer.length || audioBuffer.length > STT_MAX_AUDIO_BYTES) {
+            return res.status(413).json({ error: 'AUDIO_SIZE_INVALID' });
+        }
+        const sampleRateHertz = config.encoding === 'LINEAR16' ? 16000 : undefined;
+        if (config.sampleRateHertz != null && config.sampleRateHertz !== sampleRateHertz) {
+            return res.status(400).json({ error: 'INVALID_AUDIO_RATE' });
+        }
+        const recognitionConfig = {
+            encoding: config.encoding,
+            languageCode: config.languageCode,
+            ...(sampleRateHertz ? { sampleRateHertz } : {}),
+            enableAutomaticPunctuation: false
         };
-
-        // Effettua il riconoscimento
-        const [response] = await speechClient.recognize(request);
-        const transcription = response.results
-            .map(result => result.alternatives[0].transcript)
-            .join('\n');
-
-        console.log(`🎤 Trascrizione completata (${transcription.length} caratteri)`);
-
-        res.json({
-            transcription: transcription,
-            confidence: response.results[0]?.alternatives[0]?.confidence || 0
+        const [result] = await speechClient.recognize({
+            audio: { content: audioBuffer },
+            config: recognitionConfig
         });
-
+        const alternatives = (result.results || []).map(item => item.alternatives?.[0]).filter(Boolean);
+        const transcription = alternatives.map(a => a.transcript).join(' ').trim();
+        const confidence = alternatives.length ? Math.min(...alternatives.map(a => Number.isFinite(a.confidence) ? a.confidence : 0)) : 0;
+        return res.json({ transcription, confidence, languageCode: config.languageCode });
     } catch (error) {
-        console.error('❌ Errore Speech-to-Text:', error);
-        res.status(500).json({ 
-            error: 'Errore nel riconoscimento vocale',
-            details: error.message
-        });
+        console.error('[VOICE-STT] recognition failed:', error.code || error.message);
+        return res.status(502).json({ error: 'SPEECH_RECOGNITION_FAILED' });
     }
 });
 
