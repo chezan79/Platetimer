@@ -17,9 +17,9 @@ function variants(lang,n){
  if(lang==='it'){const stem=IT_TENS[t];return [u===0?stem:(u===1||u===8?stem.slice(0,-1):stem)+WORDS.it[u]];}
  if(lang==='de'){const stem=DE_TENS[t];return [u===0?stem:(u===1?'ein':WORDS.de[u])+'und'+stem];}
  if(u===0)return [FR_TENS[t]];
- if(t===8)return ['huitante '+WORDS.fr[u],'quatre vingt '+WORDS.fr[u]];
- if(t===9)return ['nonante '+WORDS.fr[u],'quatre vingt '+WORDS.fr[10+u]];
- if(t===7)return ['septante '+WORDS.fr[u],'soixante '+WORDS.fr[10+u]];
+ if(t===8)return [u===1?'huitante et un':'huitante '+WORDS.fr[u],'quatre vingt '+WORDS.fr[u]];
+ if(t===9)return [u===1?'nonante et un':'nonante '+WORDS.fr[u],'quatre vingt '+WORDS.fr[10+u]];
+ if(t===7)return [u===1?'septante et un':'septante '+WORDS.fr[u],'soixante '+WORDS.fr[10+u]];
  if(t===6&&u>0)return [u===1?'soixante et un':'soixante '+WORDS.fr[u]];
  return [FR_TENS[t]+(u===1?' et ':' ')+WORDS.fr[u]];
 }
