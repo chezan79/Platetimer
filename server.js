@@ -2637,6 +2637,8 @@ app.get('/api/subscription', (req, res) => {
 const STT_LANGUAGES = new Set(['it-IT', 'fr-CH', 'de-CH']);
 const STT_ENCODINGS = new Set(['WEBM_OPUS', 'OGG_OPUS', 'LINEAR16']);
 const STT_MAX_AUDIO_BYTES = 1024 * 1024; // five-second voice commands
+const sttUsage = new Map(); // authenticated operator → short quota window
+const STT_MAX_REQUESTS_PER_MINUTE = 30;
 app.post('/api/speech-to-text', async (req, res) => {
     try {
         const session = requireAuth(req, res);
@@ -2644,6 +2646,21 @@ app.post('/api/speech-to-text', async (req, res) => {
         if (!speechClient) {
             return res.status(503).json({ error: 'SPEECH_NOT_CONFIGURED' });
         }
+        // Limit provider billing abuse, scoped by verified account and restaurant.
+        const quotaKey = session.companyName + ':' + session.uid;
+        const now = Date.now();
+        if (sttUsage.size > 5000) {
+            for (const [key, bucket] of sttUsage) {
+                if (now - bucket.start > 60000) sttUsage.delete(key);
+            }
+        }
+        let bucket = sttUsage.get(quotaKey);
+        if (!bucket || now - bucket.start >= 60000) bucket = { start: now, count: 0 };
+        if (bucket.count >= STT_MAX_REQUESTS_PER_MINUTE) {
+            return res.status(429).json({ error: 'VOICE_RATE_LIMITED' });
+        }
+        bucket.count++;
+        sttUsage.set(quotaKey, bucket);
         const { audioData, config } = req.body || {};
         if (!config || typeof config !== 'object' || Array.isArray(config) ||
             !STT_LANGUAGES.has(config.languageCode) ||
