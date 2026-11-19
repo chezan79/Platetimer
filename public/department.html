@@ -1109,14 +1109,8 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
     <div class="cd-list" id="voice-msg-list"></div>
   </div>
 
-  <!-- [Task 66] Read-only Operations tasks published to this department -->
-  <div id="ops-tasks-section" class="vm-section" style="display:none;">
-    <div class="ra-hdr">
-      <span class="ra-title" data-i18n="service.todayTasksSection">Compiti di oggi</span>
-      <span class="ra-count" id="ops-task-count">0</span>
-    </div>
-    <div class="cd-list" id="ops-task-list" aria-live="polite"></div>
-  </div>
+  <!-- Operations daily tasks are disabled in the PlateTimer department view.
+       Operational task management belongs to the separate Operations app. -->
 </main>
 
 <!-- [Task 66 enhancement] Read-only Operations task detail modal -->
@@ -2970,6 +2964,9 @@ function _opsZurichDate(){
 }
 
 async function loadOpsTasks(){
+  // Operations integration deliberately disabled for every department login.
+  // Do not fetch operational tasks or reveal their UI in PlateTimer.
+  return;
   // [OPS-ACK-AUTH] Only a bound Service dept account session may fetch and display
   // ops tasks. Unbound admin/Firebase sessions are silently skipped — the section
   // stays hidden and the acknowledge endpoint is never reachable from this session.
