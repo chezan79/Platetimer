@@ -32,6 +32,8 @@ for(const phrase of [
 ]){
  test('rejects invalid voice command '+phrase,()=>assert.equal(parse(phrase,'it-IT',departments,'cucina').ok,false));
 }
+test('French department alias resolves to canonical ID',()=>{const r=parse('Table douze huit minutes cuisine froide','fr-CH',departments,'cucina');assert.equal(r.ok,true,JSON.stringify(r));assert.deepEqual(r.departmentIds,['cold','cucina']);});
+test('German department alias resolves to canonical ID',()=>{const r=parse('Tisch zwölf acht Minuten Küche','de-CH',departments,'cucina');assert.equal(r.ok,true,JSON.stringify(r));assert.deepEqual(r.departmentIds,['cucina']);});
 test('rejects unlisted language',()=>assert.equal(parse('Table douze huit minutes Pizzeria','en-US',departments,'cucina').code,'INVALID_LANGUAGE'));
 test('rejects unknown own department',()=>assert.equal(parse('Tavolo 12 8 minuti Pizzeria','it-IT',departments,'foreign').code,'INVALID_OWN_DEPARTMENT'));
 test('does not default unknown destination to own department',()=>assert.equal(parse('Tavolo 12 otto minuti Friggitoria','it-IT',departments,'cucina').ok,false));
