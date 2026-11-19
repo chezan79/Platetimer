@@ -8,6 +8,8 @@
   },
   "dependencies": {
     "@google-cloud/speech": "^7.1.0",
+    "agora-rtc-sdk-ng": "^4.24.9",
+    "agora-token": "^2.0.7",
     "express": "4.21.2",
     "firebase": "^11.8.1",
     "firebase-admin": "^14.1.0",
