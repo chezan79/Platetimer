@@ -67,9 +67,8 @@ function create({getLanguage,onCommand,onState,onError,Recognition,now,setTimer,
           const t=clock();
           if(text===lastPhrase&&t-lastPhraseAt<5000)continue;
           lastPhrase=text;lastPhraseAt=t;
-          pause();
-          onCommand(text);
-          break;
+          const accepted=onCommand(text);
+          if(accepted!==false){pause();break;}
         }
       };
       rec.onerror=event=>{
@@ -105,9 +104,9 @@ function create({getLanguage,onCommand,onState,onError,Recognition,now,setTimer,
     emit('checking');
     let availability;
     try{availability=await Engine.available({langs:[lang],processLocally:true});}
-    catch(e){return {ok:false,code:ERRORS.unsupported};}
+    catch(e){if(ticket===launchToken)emit('unavailable');return {ok:false,code:ERRORS.unsupported};}
     if(ticket!==launchToken)return {ok:false,code:'CANCELLED'};
-    if(availability!=='available')return {ok:false,code:ERRORS.language,availability};
+    if(availability!=='available'){emit('unavailable');return {ok:false,code:ERRORS.language,availability};}
     started=true;paused=false;shouldRestart=true;
     deadline=clock()+DURATION_MS;
     expiryTimer=later(timeout,DURATION_MS);
