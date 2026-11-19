@@ -1221,6 +1221,7 @@ if (typeof ServiceWorkerIdentity !== 'undefined') {
 let myDeptName    = '';
 let departmentMap = {};           // id → { id, name, active }
 let selectedDests  = new Set();
+let defaultCountdownDestinationId = null;
 let selectedDur    = 0;            // seconds
 let tableInput     = '';
 const pendingSends = new Set();   // table numbers recently sent by this page; tags server echo as 'sent'
@@ -1510,6 +1511,10 @@ async function buildDestList(){
       toggleDestById(d.id, e.target.checked);
     });
   });
+  // Default recipient: the first active sibling department.
+  // The user can still uncheck it or select additional destinations.
+  defaultCountdownDestinationId = others[0].id;
+  if(!selectedDests.size) toggleDestById(defaultCountdownDestinationId, true);
 }
 
 // ── Tab switcher ──────────────────────────────────────────────────────────────
@@ -1980,8 +1985,9 @@ function sendCountdown(){
   tableInput   = '';
   selectedDur  = 0;
   selectedDests.clear();
-  document.querySelectorAll('.di').forEach(el => el.classList.remove('sel'));
-  document.querySelectorAll('.di input[type=checkbox]').forEach(el => el.checked = false);
+  document.querySelectorAll('#dest-list .di').forEach(el => el.classList.remove('sel'));
+  document.querySelectorAll('#dest-list .di input[type=checkbox]').forEach(el => el.checked = false);
+  if(defaultCountdownDestinationId) toggleDestById(defaultCountdownDestinationId, true);
   document.querySelectorAll('.db').forEach(el => el.classList.remove('sel'));
   updateTblDisp();
   refreshSendBtn();
