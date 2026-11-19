@@ -9139,13 +9139,18 @@ initializeDataStores().then(() => {
     // [MEX] Init Mex store — local dev: eager load from file; Firestore: lazy per company.
     mexStoreModule.initMexStore().catch(e => console.error('[MEX] initMexStore error:', e.message));
 
-    // Kick off the first scheduler run shortly after startup, then every 5 minutes.
-    setTimeout(() => {
-        opsSchedulerInstance.run().catch(e => console.error('[SCHEDULER] Initial run error:', e.message));
-    }, 2000);
-    setInterval(() => {
-        opsSchedulerInstance.run().catch(e => console.error('[SCHEDULER] Periodic run error:', e.message));
-    }, 5 * 60 * 1000);
+    // Disable automatic Operations jobs in explicitly configured test environments.
+    if (process.env.PLATETIMER_DISABLE_OPS_SCHEDULER === 'true') {
+        console.warn('[SCHEDULER] Operations scheduler disabled by environment');
+    } else {
+        // Start shortly after boot and repeat every five minutes.
+        setTimeout(() => {
+            opsSchedulerInstance.run().catch(e => console.error('[SCHEDULER] Initial run error:', e.message));
+        }, 2000);
+        setInterval(() => {
+            opsSchedulerInstance.run().catch(e => console.error('[SCHEDULER] Periodic run error:', e.message));
+        }, 5 * 60 * 1000);
+    }
 
     server
         .listen(PORT, '0.0.0.0', () => {
