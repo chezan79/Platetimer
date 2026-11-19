@@ -2036,23 +2036,32 @@ let vcDraft = null;
 let vcPendingTable = null;
 let vcPendingTimeout = null;
 const VC_WINDOW_STATES={
- 'stopped':'Ascolto continuo disattivato',
- 'checking':'Controllo del riconoscimento locale...',
- 'listening':'In ascolto sul dispositivo: pronuncia tavolo, numero e minuti',
- 'paused':'In pausa: conferma o annulla la comanda',
- 'expired':'Sessione di 10 minuti terminata',
- 'unavailable':'Riconoscimento locale non disponibile su questo browser',
- 'error':'Ascolto interrotto per errore'
+ 'it-IT':{
+ stopped:'Ascolto continuo disattivato',checking:'Controllo del riconoscimento locale...',listening:'In ascolto sul dispositivo: pronuncia tavolo, numero e minuti',
+ paused:'In pausa: conferma o annulla la comanda',expired:'Sessione di 10 minuti terminata',unavailable:'Riconoscimento locale non disponibile su questo browser',error:'Ascolto interrotto per errore',
+ start:'🎧 Attiva ascolto 10 minuti (solo locale)',stop:'⏹ Termina ascolto continuo',unsupported:'La modalità 10 minuti richiede un browser con riconoscimento locale installato. Usa il pulsante della comanda singola.',
+ disclosure:'Questa modalità richiede riconoscimento vocale locale verificato dal browser. Se non disponibile, usa la comanda singola. PlateTimer non invia audio continuo a Google Speech.'},
+ 'fr-CH':{
+ stopped:'Écoute continue désactivée',checking:'Vérification de la reconnaissance locale...',listening:'Écoute sur cet appareil : dites table, numéro et minutes',
+ paused:'En pause : confirmez ou annulez la commande',expired:'Session de 10 minutes terminée',unavailable:'Reconnaissance locale indisponible sur ce navigateur',error:'Écoute interrompue',
+ start:'🎧 Activer l’écoute 10 minutes (locale)',stop:'⏹ Arrêter l’écoute continue',unsupported:'La reconnaissance locale est indisponible sur ce navigateur. Utilisez la commande vocale ponctuelle.',
+ disclosure:'Ce mode nécessite la reconnaissance vocale locale vérifiée par le navigateur. Sinon, utilisez la commande ponctuelle. PlateTimer n’envoie pas de flux audio continu à Google Speech.'},
+ 'de-CH':{
+ stopped:'Dauerhaftes Zuhören deaktiviert',checking:'Lokale Spracherkennung wird geprüft...',listening:'Lokales Zuhören: Tisch, Nummer und Minuten sagen',
+ paused:'Pausiert: Befehl bestätigen oder abbrechen',expired:'10-Minuten-Sitzung beendet',unavailable:'Lokale Spracherkennung in diesem Browser nicht verfügbar',error:'Zuhören wegen eines Fehlers beendet',
+ start:'🎧 10 Minuten lokal zuhören',stop:'⏹ Dauerhaftes Zuhören beenden',unsupported:'Lokale Spracherkennung ist in diesem Browser nicht verfügbar. Bitte den einzelnen Sprachbefehl verwenden.',
+ disclosure:'Dieser Modus erfordert nachweislich lokale Spracherkennung im Browser. Andernfalls die Einzelaufnahme verwenden. PlateTimer sendet keinen dauerhaften Audiostream an Google Speech.'}
 };
+function windowVoiceText(){return VC_WINDOW_STATES[getVoiceLanguage()]||VC_WINDOW_STATES['it-IT'];}
 function renderVoiceWindow(state,remaining){
   vcWindowState=state;
   const status=document.getElementById('vc-window-status');
   const toggle=document.getElementById('vc-window-toggle');
   const timer=document.getElementById('vc-window-time');
   if(!status||!toggle||!timer)return;
-  status.textContent=VC_WINDOW_STATES[state]||state;
+  status.textContent=windowVoiceText()[state]||state;
   const active=vcWindow?.active()||state==='listening'||state==='paused';
-  toggle.textContent=active?'⏹ Termina ascolto continuo':'🎧 Attiva ascolto 10 minuti (solo locale)';
+  toggle.textContent=active?windowVoiceText().stop:windowVoiceText().start;
   // Prevent changing the interpretation language during a live session.
   const languageSelect=document.getElementById('vc-language');
   if(languageSelect)languageSelect.disabled=active||!!vcDraft||!!vcPendingTable;
@@ -2095,7 +2104,7 @@ async function toggleVoiceWindow(){
   if(vcWindow!==session)return;
   if(!result.ok){
     renderVoiceWindow('unavailable',0);
-    showVcMessage('La modalità 10 minuti richiede un browser con riconoscimento locale installato ('+(result.availability||result.code)+'). Usa il pulsante della comanda singola.',true);
+    showVcMessage(windowVoiceText().unsupported+' ('+(result.availability||result.code)+')',true);
     return;
   }
   // The countdown is a visual aid, not the lifetime authority: the module
@@ -2127,6 +2136,10 @@ function saveVoiceLanguage(){
   try{localStorage.setItem(VC_PREFERENCE_PREFIX+voiceOperatorKey(),code);}catch(e){}
   const hints={'it-IT':'"Tavolo 12, otto minuti, Pizzeria"','fr-CH':'"Table douze, huit minutes, Pizzeria"','de-CH':'"Tisch zwölf, acht Minuten, Pizzeria"'};
   document.getElementById('vc-hint').textContent=hints[code];
+  const continuous=VC_WINDOW_STATES[code];
+  const notice=document.getElementById('vc-window-disclosure');
+  if(notice)notice.textContent=continuous.disclosure;
+  renderVoiceWindow(vcWindowState,vcWindow?.getRemainingMs()||0);
   const t=VC_STRINGS[code];
   document.querySelector('label[for="vc-language"]').textContent=t.language;
   document.querySelector('#vc-confirm > div:first-child').textContent=t.verify;
