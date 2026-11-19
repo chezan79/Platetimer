@@ -38,3 +38,18 @@ test('rejects unlisted language',()=>assert.equal(parse('Table douze huit minute
 test('rejects unknown own department',()=>assert.equal(parse('Tavolo 12 8 minuti Pizzeria','it-IT',departments,'foreign').code,'INVALID_OWN_DEPARTMENT'));
 test('does not default unknown destination to own department',()=>assert.equal(parse('Tavolo 12 otto minuti Friggitoria','it-IT',departments,'cucina').ok,false));
 test('normalizes Swiss-German spelling',()=>assert.equal(numberize('zweiunddreissig','de'),'32'));
+
+test('uses selected Pizzeria when the spoken command omits a department',()=>{
+ const result=parse('Tavolo 12 otto minuti','it-IT',departments,'cucina',['pizzeria']);
+ assert.equal(result.ok,true,JSON.stringify(result));
+ assert.deepEqual(result.departmentIds,['pizzeria','cucina']);
+});
+test('explicitly spoken department overrides selected destination',()=>{
+ const result=parse('Tavolo 12 otto minuti Cucina fredda','it-IT',departments,'cucina',['pizzeria']);
+ assert.equal(result.ok,true,JSON.stringify(result));
+ assert.deepEqual(result.departmentIds,['cold','cucina']);
+});
+test('rejects stale or unauthorized selected destination',()=>{
+ const result=parse('Tavolo 12 otto minuti','it-IT',departments,'cucina',['foreign']);
+ assert.equal(result.code,'INVALID_DEFAULT_DESTINATION');
+});
