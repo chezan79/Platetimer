@@ -1482,7 +1482,7 @@ async function loadDepts(){
     const stored = localStorage.getItem('userCompany');
     if(stored) document.getElementById('hdr-brand').textContent = stored.charAt(0).toUpperCase()+stored.slice(1);
 
-    buildDestList();
+    await buildDestList();
     buildVoiceDestList();
   } catch(e){
     console.error('loadDepts:', e);
@@ -1509,6 +1509,8 @@ async function buildDestList(){
     // Fallback: legacy behaviour from the departments map (unbound sessions).
     others = Object.values(departmentMap).filter(d => d.active && d.id !== myDeptId);
   }
+  // Populate the same authoritative tenant-scoped directory used by the voice parser.
+  others.forEach(d => { departmentMap[d.id] = d; });
   const el = document.getElementById('dest-list');
   if(!others.length){
     el.innerHTML = '<div class="no-dests">Nessun altro reparto attivo.</div>';
@@ -2063,7 +2065,13 @@ async function startVoiceCmd(){
     catch(e){stream.getTracks().forEach(t=>t.stop());throw e;}
     vcMediaRec.ondataavailable=e=>{if(e.data.size>0)vcChunks.push(e.data);};
     vcMediaRec.onstop=()=>{stream.getTracks().forEach(t=>t.stop());processVoiceCmd();};
-    vcMediaRec.onerror=()=>{stopVoiceCmd();showVcError('Registrazione audio non riuscita.');};
+    vcMediaRec.onerror=()=>{
+      clearInterval(vcCountInt);clearTimeout(vcTimer);vcRecording=false;
+      vcMediaRec.onstop=()=>stream.getTracks().forEach(t=>t.stop());
+      if(vcMediaRec.state!=='inactive')vcMediaRec.stop();
+      else stream.getTracks().forEach(t=>t.stop());
+      showVcError('Registrazione audio non riuscita.');
+    };
     vcMediaRec.start();
     vcRecording=true;
     setVcState('rec');
