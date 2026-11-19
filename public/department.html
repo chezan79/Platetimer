@@ -2015,10 +2015,11 @@ const VC_MAX_SECS = 5;
 const VC_PREFERENCE_PREFIX = 'pt_voice_language_';
 let vcDraft = null;
 let vcPendingTable = null;
+let vcPendingTimeout = null;
 function voiceOperatorKey(){
   // Non-authoritative JWT payload, used ONLY to scope a local UI preference.
   try{
-    const part=(WsAuth.getStoredToken()||'').split('.')[1];
+    const part=(WsAuth.getStoredToken()||'').split('.')[0];
     if(!part) return 'device';
     const p=JSON.parse(atob(part.replace(/-/g,'+').replace(/_/g,'/')));
     return String(p.uid||'device').replace(/[^a-zA-Z0-9_-]/g,'_').slice(0,100);
@@ -2165,6 +2166,14 @@ function confirmVoiceDraft(){
     ws.send(JSON.stringify({action:'startCountdown',originDepartmentId:myDeptId,tableNumber:parsed.tableNumber,timeRemaining:parsed.durationMinutes*60,destinations:parsed.departmentIds}));
     pendingSends.add(parsed.tableNumber);
     vcPendingTable=parsed.tableNumber;
+    clearTimeout(vcPendingTimeout);
+    vcPendingTimeout=setTimeout(()=>{
+      if(vcPendingTable===parsed.tableNumber){
+        vcPendingTable=null;
+        document.getElementById('vc-language').disabled=false;
+        showVcError('Nessuna conferma ricevuta. Controlla il tavolo prima di riprovare.');
+      }
+    },12000);
     vcDraft=null;
     document.getElementById('vc-confirm').style.display='none';
     setVcState('pending');
@@ -2173,6 +2182,7 @@ function confirmVoiceDraft(){
 function voiceServerStartAck(data){
   if(!vcPendingTable||String(data.tableNumber)!==vcPendingTable)return;
   vcPendingTable=null;
+  clearTimeout(vcPendingTimeout);vcPendingTimeout=null;
   document.getElementById('vc-language').disabled=false;
   setVcState('idle');
   showVcMessage('✅ Countdown confermato dal server: tavolo '+data.tableNumber,false);
@@ -2180,6 +2190,7 @@ function voiceServerStartAck(data){
 function voiceServerSendError(data){
   if(!vcPendingTable||String(data.tableNumber)!==vcPendingTable)return;
   vcPendingTable=null;
+  clearTimeout(vcPendingTimeout);vcPendingTimeout=null;
   document.getElementById('vc-language').disabled=false;
   showVcError('Countdown rifiutato: '+(data.message||data.code||'controlla i dati'));
 }
