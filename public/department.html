@@ -2060,7 +2060,7 @@ function renderVoiceWindow(state,remaining){
   const timer=document.getElementById('vc-window-time');
   if(!status||!toggle||!timer)return;
   status.textContent=windowVoiceText()[state]||state;
-  const active=vcWindow?.active()||state==='listening'||state==='paused';
+  const active=vcWindow?.active()||state==='checking'||state==='listening'||state==='paused';
   toggle.textContent=active?windowVoiceText().stop:windowVoiceText().start;
   // Prevent changing the interpretation language during a live session.
   const languageSelect=document.getElementById('vc-language');
@@ -2079,7 +2079,9 @@ function stopVoiceWindow(reason='stopped'){
   }
 }
 async function toggleVoiceWindow(){
-  if(vcWindow?.active()){stopVoiceWindow();return;}
+  if(vcWindowState==='checking'||vcWindow?.active()){stopVoiceWindow();return;}
+  // A previously stopped/failed availability check must never outlive this session.
+  if(vcWindow)vcWindow.stop('stopped');
   if(vcRecording||vcPendingTable||vcDraft){
     showVcError('Concludi o annulla prima la comanda corrente.');
     return;
@@ -2101,7 +2103,7 @@ async function toggleVoiceWindow(){
   });
   const session=vcWindow;
   const result=await session.start();
-  if(vcWindow!==session)return;
+  if(vcWindow!==session||result.code==='CANCELLED')return;
   if(!result.ok){
     renderVoiceWindow('unavailable',0);
     showVcMessage(windowVoiceText().unsupported+' ('+(result.availability||result.code)+')',true);
