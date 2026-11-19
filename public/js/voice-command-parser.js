@@ -29,7 +29,7 @@ for(const lang of Object.keys(WORDS)){
  for(let n=0;n<=99;n++)for(const v of variants(lang,n))table.set(clean(v),String(n));
  if(lang==='it')table.set('un','1');
  if(lang==='de'){table.set('ein','1');table.set('eine','1');table.set('einen','1');}
- if(lang==='fr')table.set('quatre vingts','80');
+ if(lang==='fr'){table.set('quatre vingts','80');table.set('quatre vingt','80');}
  aliases[lang]=Array.from(table.entries()).sort((a,b)=>b[0].length-a[0].length);
 }
 function numberize(text,lang){
