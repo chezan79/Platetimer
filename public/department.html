@@ -1510,7 +1510,7 @@ async function buildDestList(){
     others = Object.values(departmentMap).filter(d => d.active && d.id !== myDeptId);
   }
   // Populate the same authoritative tenant-scoped directory used by the voice parser.
-  others.forEach(d => { departmentMap[d.id] = d; });
+  others.forEach(d => { departmentMap[d.id] = { ...departmentMap[d.id], ...d, active: true }; });
   const el = document.getElementById('dest-list');
   if(!others.length){
     el.innerHTML = '<div class="no-dests">Nessun altro reparto attivo.</div>';
