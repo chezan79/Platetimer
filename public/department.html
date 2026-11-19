@@ -1014,6 +1014,12 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
       </select>
       <div id="vc-hint" class="vc-hint" style="display:block">"Tavolo 12, otto minuti, Pizzeria"</div>
       <div id="vc-status" class="vc-status"></div>
+      <div style="margin-top:10px;padding:10px;border:1px solid var(--border);border-radius:10px">
+        <button type="button" id="vc-window-toggle" onclick="toggleVoiceWindow()" style="width:100%;padding:12px;border-radius:8px">🎧 Attiva ascolto 10 minuti (solo sul dispositivo)</button>
+        <div id="vc-window-status" style="font-size:12px;margin-top:7px" role="status" aria-live="polite">Ascolto continuo disattivato</div>
+        <div id="vc-window-time" style="font-variant-numeric:tabular-nums;font-size:14px;font-weight:700"></div>
+        <p id="vc-window-disclosure" style="font-size:11px;margin-top:6px;color:var(--muted)">La modalità 10 minuti richiede riconoscimento vocale locale verificato dal browser. Se non disponibile, resta la registrazione singola. Nessuna registrazione continua viene inviata a Google Speech da PlateTimer.</p>
+      </div>
       <div id="vc-result" style="display:none;" role="status" aria-live="polite"></div>
       <div id="vc-confirm" style="display:none;margin-top:10px;padding:12px;border:1px solid var(--border);border-radius:10px">
         <div style="font-weight:700;margin-bottom:8px">Verifica prima di inviare</div>
@@ -1166,6 +1172,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 <script src="js/i18n.js"></script>
 <script src="js/service-worker-identity.js"></script>
 <script src="js/voice-command-parser.js"></script>
+<script src="js/voice-command-window.js"></script>
 <script>const i18nReady = I18n.init({ selector: '#i18n-dept-sel' });</script>
 <script>
 'use strict';
@@ -2015,6 +2022,9 @@ function sendCountdown(){
 // ── Voice command: confirmed multilingual countdown ─────────────────────────
 const VC_MAX_SECS = 5;
 const VC_PREFERENCE_PREFIX = 'pt_voice_language_';
+let vcWindow = null;
+let vcWindowTick = null;
+let vcWindowState = 'stopped';
 const VC_STRINGS = {
   'it-IT': {language:'Lingua del comando vocale',verify:'Verifica prima di inviare',cancel:'Annulla',send:'Conferma countdown',table:'Tavolo',duration:'Durata',dest:'Destinazioni',transcript:'Trascrizione',minutes:'minuti',idle:'🎤 Avvia comando vocale',rec:'⏹ Ferma registrazione',busy:'⏳ Trascrizione...',confirm:'✓ Verifica e conferma qui sotto',pending:'⏳ Attesa conferma server'},
   'fr-CH': {language:'Langue de la commande vocale',verify:'Vérifiez avant l’envoi',cancel:'Annuler',send:'Confirmer le compte à rebours',table:'Table',duration:'Durée',dest:'Destinations',transcript:'Transcription',minutes:'minutes',idle:'🎤 Démarrer la commande vocale',rec:'⏹ Arrêter l’enregistrement',busy:'⏳ Transcription...',confirm:'✓ Vérifiez et confirmez ci-dessous',pending:'⏳ En attente du serveur'},
@@ -2025,6 +2035,73 @@ function voiceStrings(){return VC_STRINGS[getVoiceLanguage()]||VC_STRINGS['it-IT
 let vcDraft = null;
 let vcPendingTable = null;
 let vcPendingTimeout = null;
+const VC_WINDOW_STATES={
+ 'stopped':'Ascolto continuo disattivato',
+ 'checking':'Controllo del riconoscimento locale...',
+ 'listening':'In ascolto sul dispositivo: pronuncia tavolo, numero e minuti',
+ 'paused':'In pausa: conferma o annulla la comanda',
+ 'expired':'Sessione di 10 minuti terminata',
+ 'unavailable':'Riconoscimento locale non disponibile su questo browser',
+ 'error':'Ascolto interrotto per errore'
+};
+function renderVoiceWindow(state,remaining){
+  vcWindowState=state;
+  const status=document.getElementById('vc-window-status');
+  const toggle=document.getElementById('vc-window-toggle');
+  const timer=document.getElementById('vc-window-time');
+  if(!status||!toggle||!timer)return;
+  status.textContent=VC_WINDOW_STATES[state]||state;
+  const active=vcWindow?.active()||state==='listening'||state==='paused';
+  toggle.textContent=active?'⏹ Termina ascolto continuo':'🎧 Attiva ascolto 10 minuti (solo locale)';
+  if(!active&&vcWindowTick){clearInterval(vcWindowTick);vcWindowTick=null;}
+  const seconds=Math.ceil((remaining||0)/1000);
+  timer.textContent=active?String(Math.floor(seconds/60)).padStart(2,'0')+':'+String(seconds%60).padStart(2,'0'):'';
+}
+function stopVoiceWindow(reason='stopped'){
+  if(vcWindow)vcWindow.stop(reason);
+  if(vcWindowTick){clearInterval(vcWindowTick);vcWindowTick=null;}
+  renderVoiceWindow(reason,0);
+  if(!vcRecording&&!vcPendingTable&&!vcDraft){
+    const select=document.getElementById('vc-language');
+    if(select)select.disabled=false;
+  }
+}
+async function toggleVoiceWindow(){
+  if(vcWindow?.active()){stopVoiceWindow();return;}
+  if(vcRecording||vcPendingTable||vcDraft){
+    showVcError('Concludi o annulla prima la comanda corrente.');
+    return;
+  }
+  const language=getVoiceLanguage();
+  if(!PlateVoiceWindow.WAKE[language])return;
+  vcWindow=PlateVoiceWindow.create({
+    getLanguage:()=>language,
+    onCommand:transcription=>{
+      // Ignore ambient conversation even if it begins with the wake word.
+      // Only a fully valid command can pause the listening session.
+      const parsed=PlateVoiceCommand.parse(transcription,language,Object.values(departmentMap),myDeptId,Array.from(selectedDests));
+      if(!parsed.ok||!wsConnected)return false;
+      showVoiceDraft(parsed);
+      return true;
+    },
+    onState:(state,remaining)=>renderVoiceWindow(state,remaining),
+    onError:code=>showVcMessage('Ascolto locale interrotto: '+code,true)
+  });
+  const result=await vcWindow.start();
+  if(!result.ok){
+    renderVoiceWindow('unavailable',0);
+    showVcMessage('La modalità 10 minuti richiede un browser con riconoscimento locale installato ('+(result.availability||result.code)+'). Usa il pulsante della comanda singola.',true);
+    return;
+  }
+  // The countdown is a visual aid, not the lifetime authority: the module
+  // uses a fixed deadline and a separate one-shot expiry timer.
+  vcWindowTick=setInterval(()=>renderVoiceWindow(vcWindowState,vcWindow.getRemainingMs()),1000);
+}
+document.addEventListener('visibilitychange',()=>{
+  // Avoid a hidden listening microphone when the station is in another app.
+  if(document.hidden)stopVoiceWindow('stopped');
+});
+window.addEventListener('pagehide',()=>stopVoiceWindow('stopped'));
 function voiceOperatorKey(){
   // Non-authoritative JWT payload, used ONLY to scope a local UI preference.
   try{
@@ -2040,7 +2117,7 @@ function getVoiceLanguage(){
   return PlateVoiceCommand.LANGUAGES[value]?value:'it-IT';
 }
 function saveVoiceLanguage(){
-  if(vcRecording||vcPendingTable) return;
+  if(vcRecording||vcPendingTable||vcWindow?.active()) return;
   const code=getVoiceLanguage();
   try{localStorage.setItem(VC_PREFERENCE_PREFIX+voiceOperatorKey(),code);}catch(e){}
   const hints={'it-IT':'"Tavolo 12, otto minuti, Pizzeria"','fr-CH':'"Table douze, huit minutes, Pizzeria"','de-CH':'"Tisch zwölf, acht Minuten, Pizzeria"'};
@@ -2064,6 +2141,8 @@ function toggleVoiceCmd(){
 }
 async function startVoiceCmd(){
   if(vcPendingTable)return;
+  // Only one microphone pipeline can be active on a station.
+  stopVoiceWindow('stopped');
   cancelVoiceDraft();
   if(!navigator.mediaDevices?.getUserMedia||!window.MediaRecorder){
     showVcError('Microfono non supportato. Utilizza HTTPS e un browser aggiornato.');
@@ -2148,20 +2227,22 @@ async function processVoiceCmd(){
     const result=await response.json();
     if(!result.transcription){showVcError('Nessuna frase riconosciuta. Riprova.');return;}
     const departments=Object.values(departmentMap);
-    const parsed=PlateVoiceCommand.parse(result.transcription,languageCode,departments,myDeptId);
-    if(!parsed.ok){showVcError('Comanda non valida ('+parsed.code+'). Pronuncia tavolo, durata in minuti e reparto.');return;}
-    // Do not accept server-stored or guessed recipient names without checking actual company map.
-    vcDraft=parsed;
-    const names=parsed.departmentIds.map(id=>departmentMap[id]?.name||'Reparto sconosciuto');
-    const t=voiceStrings();
-    document.getElementById('vc-preview').textContent=t.transcript+': '+result.transcription+'\n'+t.table+': '+parsed.tableNumber+'\n'+t.duration+': '+parsed.durationMinutes+' '+t.minutes+'\n'+t.dest+': '+names.join(', ');
-    document.getElementById('vc-confirm').style.display='block';
-    document.getElementById('vc-language').disabled=true;
-    setVcState('confirm');
+    const parsed=PlateVoiceCommand.parse(result.transcription,languageCode,departments,myDeptId,Array.from(selectedDests)); 
+    if(!parsed.ok){showVcError('Comanda non valida ('+parsed.code+'). Pronuncia tavolo e durata in minuti.');return;}
+    showVoiceDraft(parsed);
   }catch(e){
     console.error('[vc] capture/recognition:',e);
     showVcError('Registrazione o conversione audio non riuscita. Riprova.');
   }finally{vcChunks=[];}
+}
+function showVoiceDraft(parsed){
+  vcDraft=parsed;
+  const names=parsed.departmentIds.map(id=>departmentMap[id]?.name||'Reparto sconosciuto');
+  const t=voiceStrings();
+  document.getElementById('vc-preview').textContent=t.transcript+': '+parsed.transcription+'\n'+t.table+': '+parsed.tableNumber+'\n'+t.duration+': '+parsed.durationMinutes+' '+t.minutes+'\n'+t.dest+': '+names.join(', ');
+  document.getElementById('vc-confirm').style.display='block';
+  document.getElementById('vc-language').disabled=true;
+  setVcState('confirm');
 }
 function cancelVoiceDraft(){
   vcDraft=null;
@@ -2170,6 +2251,7 @@ function cancelVoiceDraft(){
   const select=document.getElementById('vc-language');
   if(select)select.disabled=false;
   if(!vcRecording&&!vcPendingTable)setVcState('idle');
+  if(vcWindow?.active())vcWindow.resume();
 }
 function confirmVoiceDraft(){
   const parsed=vcDraft;
@@ -2193,6 +2275,8 @@ function confirmVoiceDraft(){
         vcPendingTable=null;
         document.getElementById('vc-language').disabled=false;
         showVcError('Nessuna conferma ricevuta. Controlla il tavolo prima di riprovare.');
+        // Do not resume automatically if delivery is uncertain.
+        stopVoiceWindow('stopped');
       }
     },12000);
     vcDraft=null;
@@ -2206,6 +2290,7 @@ function voiceServerStartAck(data){
   clearTimeout(vcPendingTimeout);vcPendingTimeout=null;
   document.getElementById('vc-language').disabled=false;
   setVcState('idle');
+  if(vcWindow?.active())vcWindow.resume();
   showVcMessage('✅ Countdown confermato dal server: tavolo '+data.tableNumber,false);
 }
 function voiceServerSendError(data){
@@ -2214,6 +2299,7 @@ function voiceServerSendError(data){
   clearTimeout(vcPendingTimeout);vcPendingTimeout=null;
   document.getElementById('vc-language').disabled=false;
   showVcError('Countdown rifiutato: '+(data.message||data.code||'controlla i dati'));
+  if(vcWindow?.active())vcWindow.resume();
 }
 function showVcMessage(message,isError){
   const el=document.getElementById('vc-result');
@@ -2266,6 +2352,11 @@ function connectWS(){
   };
 
   ws.onclose = () => {
+    if(vcPendingTable){
+      vcPendingTable=null;clearTimeout(vcPendingTimeout);vcPendingTimeout=null;
+      showVcError('Connessione persa: controlla se la comanda è arrivata prima di ripetere.');
+      stopVoiceWindow('stopped');
+    }
     wsConnected = false;
     setConnBadge(false);
     if(mexSendPending){
