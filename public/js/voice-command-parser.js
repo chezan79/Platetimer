@@ -35,7 +35,7 @@ for(const lang of Object.keys(WORDS)){
 function numberize(text,lang){
  let norm=' '+clean(text)+' ';
  for(const [word,value] of aliases[lang]){
-  const pattern=new RegExp(' '+word.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+' ','g');
+  const pattern=new RegExp(' '+word+' ','g');
   norm=norm.replace(pattern,' '+value+' ');
  }
  return norm.trim().replace(/\s+/g,' ');
