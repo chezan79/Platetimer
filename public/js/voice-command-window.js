@@ -53,6 +53,13 @@ function create({getLanguage,onCommand,onState,onError,Recognition,now,setTimer,
     opening=true;
     try{
       const rec=new Engine();
+      // Some engines expose the availability API but do not implement the
+      // instance-level local-only flag. Never fall back to remote recognition.
+      if(!('processLocally' in rec)){
+        opening=false;stop('unavailable');
+        if(onError)onError(ERRORS.unsupported);
+        return;
+      }
       engine=rec;
       rec.lang=getLanguage();
       rec.continuous=true;rec.interimResults=false;rec.maxAlternatives=1;
