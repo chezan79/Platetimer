@@ -2247,7 +2247,7 @@ async function processVoiceCmd(){
     const result=await response.json();
     if(!result.transcription){showVcError('Nessuna frase riconosciuta. Riprova.');return;}
     const departments=Object.values(departmentMap);
-    const parsed=PlateVoiceCommand.parse(result.transcription,languageCode,departments,myDeptId,Array.from(selectedDests)); 
+    const parsed=PlateVoiceCommand.parse(result.transcription,languageCode,departments,myDeptId,Array.from(selectedDests));
     if(!parsed.ok){showVcError('Comanda non valida ('+parsed.code+'). Pronuncia tavolo e durata in minuti.');return;}
     showVoiceDraft(parsed);
   }catch(e){
