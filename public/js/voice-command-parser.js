@@ -41,6 +41,13 @@ function numberize(text,lang){
  return norm.trim().replace(/\s+/g,' ');
 }
 const COMMANDS={it:{table:'tavolo',minute:'minut[io]?',filler:['per','a','alla','al','in','reparto','e']},fr:{table:'table',minute:'minutes?',filler:['pour','a','au','aux','en','service','et']},de:{table:'tisch',minute:'minuten?',filler:['fur','an','in','abteilung','und']}};
+/* Explicit aliases for the three factory-default departments only.
+   Never guess translations for user-created department names. */
+const DEFAULT_DEPT_ALIASES={
+ 'cucina':['cuisine','küche','kueche'],
+ 'pizzeria':['pizzaabteilung','pizza station','station pizza'],
+ 'cucina fredda':['cuisine froide','kalte küche','kalte kueche']
+};
 function parse(text,languageCode,departments,ownDepartmentId){
  const lang=LANGUAGES[languageCode];
  if(!lang)return {ok:false,code:'INVALID_LANGUAGE'};
@@ -56,7 +63,7 @@ function parse(text,languageCode,departments,ownDepartmentId){
  const active=Array.isArray(departments)?departments.filter(d=>d&&d.active!==false&&typeof d.id==='string'&&typeof d.name==='string'):[];
  // Longest department name first; match whole normalized word boundaries.
  for(const d of active.sort((a,b)=>b.name.length-a.name.length)){
-  const forms=[d.name,...(Array.isArray(d.voiceAliases)?d.voiceAliases:[])].map(clean).filter(Boolean);
+  const forms=[d.name,...(DEFAULT_DEPT_ALIASES[clean(d.name)]||[]),...(Array.isArray(d.voiceAliases)?d.voiceAliases:[])].map(clean).filter(Boolean);
   for(const form of forms){
    const padded=' '+remainder+' ';
    if(padded.includes(' '+form+' ')){
