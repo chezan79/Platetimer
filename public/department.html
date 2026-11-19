@@ -2053,6 +2053,9 @@ function renderVoiceWindow(state,remaining){
   status.textContent=VC_WINDOW_STATES[state]||state;
   const active=vcWindow?.active()||state==='listening'||state==='paused';
   toggle.textContent=active?'⏹ Termina ascolto continuo':'🎧 Attiva ascolto 10 minuti (solo locale)';
+  // Prevent changing the interpretation language during a live session.
+  const languageSelect=document.getElementById('vc-language');
+  if(languageSelect)languageSelect.disabled=active||!!vcDraft||!!vcPendingTable;
   if(!active&&vcWindowTick){clearInterval(vcWindowTick);vcWindowTick=null;}
   const seconds=Math.ceil((remaining||0)/1000);
   timer.textContent=active?String(Math.floor(seconds/60)).padStart(2,'0')+':'+String(seconds%60).padStart(2,'0'):'';
@@ -2087,7 +2090,9 @@ async function toggleVoiceWindow(){
     onState:(state,remaining)=>renderVoiceWindow(state,remaining),
     onError:code=>showVcMessage('Ascolto locale interrotto: '+code,true)
   });
-  const result=await vcWindow.start();
+  const session=vcWindow;
+  const result=await session.start();
+  if(vcWindow!==session)return;
   if(!result.ok){
     renderVoiceWindow('unavailable',0);
     showVcMessage('La modalità 10 minuti richiede un browser con riconoscimento locale installato ('+(result.availability||result.code)+'). Usa il pulsante della comanda singola.',true);
