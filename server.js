@@ -538,6 +538,20 @@ require('./service/voice-invites-preview').mountVoiceInvites(app, {
     isVoiceAllowed: companyId => platformVoiceAccess.enabled(companyId)
 });
 
+// Production voice is explicitly opt-in and requires Firestore across replicas.
+// Preview-only behavior above remains unchanged.
+require('./service/voice-calls-production').mountProductionVoiceCalls(app, {
+    db, requireAuth, getAuthoritativeServiceDeviceContext,
+    isVoiceAllowed: companyId => platformVoiceAccess.enabled(companyId),
+    getDepartments: async companyId => {
+        if (!db) throw new Error('Firestore unavailable');
+        const doc = await db.collection(STORE_COLLECTION).doc('departments').get();
+        const departments = doc.exists && doc.data()?.store
+            ? doc.data().store[companyId] : null;
+        return Array.isArray(departments) ? departments : [];
+    }
+});
+
 function departmentAccessError(boundAcct) {
     if (boundAcct.status === 'SUSPENDED') {
         return { status: 403, body: { error: 'Account reparto sospeso.', code: 'ACCOUNT_SUSPENDED' } };
