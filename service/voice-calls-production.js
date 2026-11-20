@@ -77,6 +77,7 @@ function mountProductionVoiceCalls(app, {
       (call.from!==device.departmentId&&call.to!==device.departmentId)||
       !['ringing','accepted'].includes(call.state)||
       call.endsAt<=now()||
+      (call.state==='ringing'&&call.ringExpiresAt<=now())||
       (recipientMustAccept&&call.to===device.departmentId&&call.state!=='accepted'))return null;
     return call;
   }
@@ -109,7 +110,7 @@ function mountProductionVoiceCalls(app, {
       expiresAt:Math.min(t+RING_MS,endsAt)};
     const call={id,companyId:device.companyId,to,from:device.departmentId,
       fromName:device.department.name,toName:target.name,createdAt:t,
-      endsAt,state:'ringing'};
+      ringExpiresAt:invitation.expiresAt,endsAt,state:'ringing'};
     const ref=inviteRef(device.companyId,to);
     const result=await db.runTransaction(async tx=>{
       const old=await tx.get(ref);
@@ -144,7 +145,8 @@ function mountProductionVoiceCalls(app, {
       if(!inv||inv.id!==id||inv.companyId!==device.companyId||
          inv.to!==device.departmentId||inv.expiresAt<=t||
          !call||call.companyId!==device.companyId||
-         call.to!==device.departmentId||call.state!=='ringing'||call.endsAt<=t)
+         call.to!==device.departmentId||call.state!=='ringing'||
+         call.ringExpiresAt<=t||call.endsAt<=t)
         return null;
       tx.delete(ref);
       tx.set(callDoc,{...call,state:answer==='accept'?'accepted':'declined',updatedAt:t});
