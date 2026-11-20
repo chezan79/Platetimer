@@ -1,5 +1,5 @@
-/* Preview-only PlateTimer Voice panel, loaded only on department.html.
-   Never connects or requests microphone until the operator clicks Entra. */
+/* PlateTimer voice panel. Production calls and Replit Preview have separate
+   authenticated API endpoints. Microphone only starts after user action. */
 (() => {
   'use strict';
   const button = document.getElementById('pt-voice-test-open');
@@ -31,11 +31,13 @@
   const accept = panel.querySelector('[data-voice="accept"]');
   const decline = panel.querySelector('[data-voice="decline"]');
   let currentInvite = null, inviteTimer = null, pollTimer = null, toneContext = null;
+  let apiPrefix = '/api/voice-test';
+  let prodMode = false;
   function authHeaders() {
     return { Authorization: 'Bearer ' + (WsAuth.getStoredToken() || '') };
   }
   async function api(path, { method = 'GET', body } = {}) {
-    const r = await fetch('/api/voice-test/' + path, {
+    const r = await fetch(apiPrefix + '/' + path, {
       method, cache:'no-store',
       headers: { ...authHeaders(), ...(body ? { 'Content-Type':'application/json' } : {}) },
       ...(body ? { body: JSON.stringify(body) } : {})
@@ -121,7 +123,7 @@
     renderIncoming();
     if (currentInvite) soundRing();
   }, 1000);
-  pollTimer = setInterval(checkInvites, 2000);
+  // Invitation polling starts only after backend feature authorization.
 
   const say = text => { message.textContent = text; };
   const controls = () => {
@@ -189,7 +191,7 @@
     try {
       const session = WsAuth.getStoredToken();
       if (!session || !WsAuth.isServiceSession()) throw new Error('Accesso reparto Service richiesto.');
-      const response = await fetch('/api/voice-test/token', {
+      const response = await fetch(apiPrefix + '/token', {
         method: 'POST', headers: { Authorization: 'Bearer ' + session }
       });
       const data = await response.json();
@@ -238,7 +240,9 @@
   button.addEventListener('click', () => { panel.hidden = !panel.hidden; });
   close.addEventListener('click', () => { panel.hidden = true; });
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) void enforceVoiceWindow();
+    // In production, do not leave the microphone publishing in the background.
+    if (document.hidden && prodMode && connected) void disconnect('Chiamata terminata: pagina in background.');
+    else if (!document.hidden) void enforceVoiceWindow();
   });
   window.addEventListener('focus', () => { void enforceVoiceWindow(); });
   window.addEventListener('pagehide', () => {
@@ -248,16 +252,42 @@
     if (mic) { mic.stop(); mic.close(); mic = null; }
     if (rtc) rtc.leave().catch(() => {});
   });
-  fetch('/api/voice-test/status', {cache:'no-store', headers: authHeaders()}).then(r => r.ok ? r.json() : null)
-    .then(data => {
-      if (data && data.enabled && WsAuth.isServiceSession()) {
-        button.hidden = false;
-        refreshDepartments();
-        checkInvites();
+  async function bootVoice() {
+    if (!WsAuth.getStoredToken() || !WsAuth.isServiceSession()) return;
+    try {
+      // Production has priority: never fall back to the preview endpoints
+      // when a production authorization/connection attempt fails.
+      const response = await fetch('/api/voice-call/status', {
+        cache:'no-store', headers:authHeaders()
+      });
+      const production = response.ok ? await response.json() : null;
+      if (production && production.enabled) {
+        prodMode = true;
+        apiPrefix = '/api/voice-call';
+        const title = panel.querySelector('strong');
+        if (title) title.textContent = '🎧 PlateTimer · Chiamate';
+        const note = panel.querySelector('p');
+        if (note) note.textContent = 'Chiamate autorizzate tra reparti. Orari: 12:00–14:30 e 18:30–22:00 (Svizzera).';
+        button.textContent = '📞 Chiamate';
+      } else if (production && production.enabled === false) {
+        // Only a disabled production feature may use preview, and preview
+        // itself is restricted server-side to a Replit test environment.
+        const preview = await fetch('/api/voice-test/status', {
+          cache:'no-store', headers:authHeaders()
+        });
+        const test = preview.ok ? await preview.json() : null;
+        if (!test?.enabled) return;
       } else {
-        clearInterval(pollTimer); clearInterval(inviteTimer);
+        return; // Auth and authorization errors fail closed.
       }
-    })
-    .catch(() => {});
+      button.hidden = false;
+      await refreshDepartments();
+      await checkInvites();
+      pollTimer = setInterval(checkInvites, 2000);
+    } catch (error) {
+      console.warn('[VOICE] initialization failed:', error.message);
+    }
+  }
+  void bootVoice();
   controls();
 })();
