@@ -50,7 +50,7 @@ function snapshot({ wss, getCompanies, getCountdowns, now = Date.now() }) {
   };
 }
 
-function mountPlatformMonitor(app, { wss, getCompanies, getCountdowns, lookupFirebaseAccount }) {
+function mountPlatformMonitor(app, { wss, getCompanies, getCountdowns, lookupFirebaseAccount, now = () => Date.now() }) {
   if (!app || !wss || typeof getCompanies !== 'function' ||
       typeof getCountdowns !== 'function' || typeof lookupFirebaseAccount !== 'function')
     throw new TypeError('Platform monitor requires authoritative server dependencies');
@@ -66,7 +66,7 @@ function mountPlatformMonitor(app, { wss, getCompanies, getCountdowns, lookupFir
       if (!adminUid || !account || account.localId !== adminUid ||
           account.emailVerified !== true || account.disabled === true)
         return res.status(403).json({ error: 'Platform administrator required' });
-      return res.json(snapshot({ wss, getCompanies, getCountdowns }));
+      return res.json(snapshot({ wss, getCompanies, getCountdowns, now: now() }));
     } catch (error) {
       console.error('[PLATFORM MONITOR] Unable to collect status:', error.message);
       return res.status(503).json({ error: 'Monitoring temporarily unavailable' });
