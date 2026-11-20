@@ -1,18 +1,27 @@
 'use strict';
 
 const crypto = require('crypto');
+const { isPreviewVoiceEnabled, canUsePreviewVoice } = require('./voice-access-policy');
 
 // Preview-only audio connectivity test. Not the production calling feature.
 // Uses the existing authenticated Service device as the sole room principal.
 function mountVoiceRtcTest(app, { requireAuth, getAuthoritativeServiceDeviceContext }) {
-  function available() {
-    return process.env.PLATETIMER_VOICE_TEST_ENABLED === 'true' &&
-      Boolean(process.env.REPL_ID) && process.env.NODE_ENV !== 'production';
-  }
+  function available() { return isPreviewVoiceEnabled(); }
 
-  app.get('/api/voice-test/status', (_req, res) => {
+  // Status is scoped to the authenticated, active department instead of leaking
+  // an environment-wide feature flag to every tenant.
+  app.get('/api/voice-test/status', async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
-    return res.json({ enabled: available() });
+    if (!available()) return res.json({ enabled: false });
+    const session = requireAuth(req, res);
+    if (!session) return;
+    try {
+      const device = await getAuthoritativeServiceDeviceContext(session);
+      return res.json({ enabled: canUsePreviewVoice(device) });
+    } catch (error) {
+      console.error('[VOICE TEST] Status department lookup failed:', error.message);
+      return res.status(503).json({ enabled: false, error: 'Department lookup unavailable.' });
+    }
   });
 
   app.post('/api/voice-test/token', async (req, res) => {
@@ -28,6 +37,7 @@ function mountVoiceRtcTest(app, { requireAuth, getAuthoritativeServiceDeviceCont
       return res.status(503).json({ error: 'Department lookup unavailable.' });
     }
     if (!device) return res.status(403).json({ error: 'An active Service department login is required.' });
+    if (!canUsePreviewVoice(device)) return res.status(403).json({ error: 'Voice calls are not enabled for this restaurant.' });
     const appId = process.env.AGORA_APP_ID;
     const appCertificate = process.env.AGORA_APP_CERTIFICATE;
     if (!appId || !appCertificate) return res.status(503).json({ error: 'Agora is not configured.' });
