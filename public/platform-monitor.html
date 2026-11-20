@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Cache-Control" content="no-store">
+<title>PlateTimer | Monitor piattaforma</title>
+<style>
+:root{color-scheme:light;font-family:system-ui,-apple-system,sans-serif;color:#182741;background:#f3f5fa}*{box-sizing:border-box}body{margin:0}header{background:#fff;border-bottom:1px solid #dde3ed;padding:20px clamp(18px,4vw,48px);display:flex;gap:16px;justify-content:space-between;align-items:center}main{margin:30px auto;max-width:1080px;padding:0 20px}h1{margin:0;font-size:25px}h2{font-size:19px}.muted,.small{color:#5c6980}.small{font-size:13px}.panel{background:#fff;border:1px solid #dde3ed;border-radius:14px;padding:22px;margin:20px 0}.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:12px}.metric{padding:18px;border:1px solid #e1e6ee;border-radius:10px}.metric strong{font-size:32px;display:block}.metric span{font-size:13px;color:#536277}.table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;min-width:660px}th,td{padding:14px;text-align:left;border-bottom:1px solid #e2e7ef}th{font-size:13px;color:#536277}td:nth-child(n+3),th:nth-child(n+3){text-align:right}.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px;background:#96a0b2}.dot.online{background:#178a57}button{cursor:pointer;border:0;background:#4841c9;color:#fff;border-radius:8px;padding:10px 14px}a{color:#3930a8}#error{color:#a02f2f}#status{font-size:13px}#dashboard[hidden]{display:none}
+</style>
+</head>
+<body>
+<header><strong>PlateTimer · Platform Monitor</strong><a href="/platform-admin.html">Amministrazione centrale</a></header>
+<main>
+  <h1>Monitoraggio ristoranti</h1>
+  <p class="muted">Presenza dei reparti e countdown attivi, dal server PlateTimer. Solo lettura.</p>
+  <div id="status" role="status">Verifica accesso in corso…</div>
+  <p id="error" role="alert"></p>
+  <section id="dashboard" hidden>
+    <div class="panel">
+      <div class="stats">
+        <div class="metric"><strong id="registered">–</strong><span>Ristoranti registrati</span></div>
+        <div class="metric"><strong id="online">–</strong><span>Ristoranti online</span></div>
+        <div class="metric"><strong id="connections">–</strong><span>Sessioni WebSocket</span></div>
+        <div class="metric"><strong id="departments">–</strong><span>Reparti connessi</span></div>
+        <div class="metric"><strong id="countdowns">–</strong><span>Countdown attivi</span></div>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Attività per ristorante</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Ristorante</th><th>Stato</th><th>Reparti connessi</th><th>Sessioni</th><th>Countdown</th></tr></thead>
+          <tbody id="restaurants"></tbody>
+        </table>
+      </div>
+      <p class="small">Online significa almeno una connessione WebSocket autenticata e recente: non dimostra che un collaboratore stia interagendo attivamente. Un reparto può avere più sessioni aperte. Le chiamate Agora non sono ancora misurate.</p>
+      <button type="button" id="refresh">Aggiorna</button>
+      <span class="small" id="updated"></span>
+    </div>
+  </section>
+</main>
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+const app = initializeApp({
+ apiKey:'AIzaSyDZ0FdjenO-ngblcuXKdwWwvRV5liiR18I',
+ authDomain:'app-dati-tavoli.firebaseapp.com',
+ projectId:'app-dati-tavoli',
+ storageBucket:'app-dati-tavoli.appspot.com',
+ messagingSenderId:'267339065819',
+ appId:'1:267339065819:web:1e74647f740bdf1d725ffe'
+});
+const auth = getAuth(app);
+const $ = id => document.getElementById(id);
+let timer = null, loading = false, authorized = false;
+async function refresh() {
+  if (loading || !authorized || !auth.currentUser) return;
+  loading = true;
+  try {
+    const token = await auth.currentUser.getIdToken();
+    const r = await fetch('/api/platform/monitor/live', {
+      headers: { Authorization: 'Bearer ' + token }, cache:'no-store'
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.error || 'Monitor non disponibile');
+    $('error').textContent = '';
+    $('dashboard').hidden = false;
+    for (const [id, value] of Object.entries({
+      registered:data.totals.registered, online:data.totals.online,
+      connections:data.totals.connections, departments:data.totals.connectedDepartments,
+      countdowns:data.totals.activeCountdowns
+    })) $(id).textContent = String(value);
+    $('restaurants').replaceChildren();
+    for (const item of data.restaurants) {
+      const tr = document.createElement('tr');
+      const name = document.createElement('td'); name.textContent = item.companyId;
+      const state = document.createElement('td');
+      const dot = document.createElement('span');
+      dot.className = 'dot' + (item.online ? ' online' : '');
+      state.append(dot, document.createTextNode(item.online ? 'Online' : 'Offline'));
+      tr.append(name, state);
+      for (const n of [item.connectedDepartments,item.connections,item.activeCountdowns]) {
+        const td = document.createElement('td');td.textContent=String(n);tr.append(td);
+      }
+      $('restaurants').append(tr);
+    }
+    $('status').textContent = 'Monitor collegato · aggiornamento ogni 5 secondi';
+    $('updated').textContent = 'Aggiornato: ' + new Date(data.updatedAt).toLocaleTimeString('it-CH');
+  } catch (err) {
+    $('error').textContent = 'Impossibile aggiornare i dati: ' + err.message;
+    $('status').textContent = 'Monitor non collegato';
+  } finally { loading = false; }
+}
+onAuthStateChanged(auth, async user => {
+  if (timer) { clearInterval(timer); timer=null; }
+  authorized=false;
+  if (!user) { location.replace('/index.html');return; }
+  try {
+    const r = await fetch('/api/auth/session', {
+      method:'POST', cache:'no-store',
+      headers:{Authorization:'Bearer '+await user.getIdToken()}
+    });
+    const data = await r.json();
+    if (!r.ok || data.isPlatformAdmin !== true) {
+      $('status').textContent='Accesso amministratore non autorizzato';return;
+    }
+    authorized=true;
+    await refresh();
+    timer=setInterval(() => { if(!document.hidden) void refresh(); },5000);
+  } catch (_) { $('status').textContent='Verifica accesso non disponibile'; }
+});
+$('refresh').addEventListener('click',refresh);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)void refresh();});
+</script>
+</body>
+</html>
