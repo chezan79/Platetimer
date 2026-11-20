@@ -119,6 +119,10 @@
   });
   async function answerInvite(answer) {
     if (!currentInvite) return;
+    if (prodMode && answer === 'accept' && (connected || busy)) {
+      say('Concludi la chiamata attuale prima di accettarne un’altra.');
+      return;
+    }
     const id = currentInvite.id;
     accept.disabled = true; decline.disabled = true;
     try {
