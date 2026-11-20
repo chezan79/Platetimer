@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const {mountProductionVoiceCalls,safeKey,rtcUid} = require('../service/voice-calls-production');
+const {mountProductionVoiceCalls,safeKey,rtcUid,channelFor} = require('../service/voice-calls-production');
 
 function makeDb() {
   const data = new Map();
@@ -69,7 +69,7 @@ function fixture({clock=Date.now(),allowed=true,open=true}={}) {
     };
     const handler=routes[method+' /api/voice-call'+path];
     assert.ok(handler,'route exists '+path);
-    await handler({headers:{authorization:auth},body:body||{}},response);
+    await handler({headers:{authorization:auth},body:body||{},query:body||{}},response);
     return {status:response.statusCode,...response.jsonBody};
   }
   return {db,request,setCompany:v=>company=v,setDept:v=>departmentId=v,
@@ -106,12 +106,18 @@ test('invites are stored in Firestore and scoped to the target department and co
   const received=await f.request('GET','/invites');
   assert.equal(received.invites.length,1);
   assert.equal(received.invites[0].id,sent.id);
+  assert.equal((await f.request('GET','/session',{id:sent.id})).active,false);
   f.setCompany('bern');
   assert.deepEqual((await f.request('GET','/invites')).invites,[]);
   assert.equal((await f.request('POST','/respond',{id:sent.id,answer:'accept'})).status,404);
   f.setCompany('molard');
   assert.equal((await f.request('POST','/respond',{id:sent.id,answer:'accept'})).accepted,true);
+  assert.equal((await f.request('GET','/session',{id:sent.id})).active,true);
   assert.equal((await f.request('POST','/respond',{id:sent.id,answer:'accept'})).status,404);
+  f.setDept('pizzeria');
+  assert.equal((await f.request('GET','/session',{id:sent.id})).active,true);
+  assert.equal((await f.request('POST','/hangup',{callId:sent.id})).ended,true);
+  assert.equal((await f.request('GET','/session',{id:sent.id})).active,false);
 });
 test('expired invitations cannot be accepted; new invitation may replace expired',async()=>{
   const f=fixture({clock:200000});
@@ -132,6 +138,17 @@ test('cross-company invitations, disabled targets and off-hours calls are reject
   assert.equal((await f.request('GET','/status')).scheduleEnabled,false);
   assert.equal((await f.request('POST','/invite',{toDepartmentId:'cucina'})).status,403);
   assert.equal((await f.request('POST','/token')).status,403);
+});
+test('production RTC uses one private channel per invited call, never one shared restaurant room',()=>{
+  assert.notEqual(channelFor('molard','a'),channelFor('molard','b'));
+  assert.notEqual(channelFor('molard','a'),channelFor('bern','a'));
+});
+test('caller cannot retain unanswered call beyond 30 seconds',async()=>{
+  const f=fixture({clock:250000});
+  const invite=await f.request('POST','/invite',{toDepartmentId:'cucina'});
+  assert.equal((await f.request('GET','/session',{id:invite.id})).active,true);
+  f.advance(30001);
+  assert.equal((await f.request('GET','/session',{id:invite.id})).active,false);
 });
 test('company and department derive deterministic separate Agora identities',()=>{
   assert.notEqual(safeKey('molard','cucina'),safeKey('bern','cucina'));
