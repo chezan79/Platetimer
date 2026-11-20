@@ -105,12 +105,15 @@ function mountProductionVoiceCalls(app, {
     const target=(Array.isArray(all)?all:[]).find(d=>d?.active===true&&d.id===to);
     if(!target)return res.status(404).json({error:'Reparto destinatario non disponibile.'});
     const t=now(),id=crypto.randomUUID(),endsAt=t+slot.secondsRemaining*1000;
+    // Firestore TTL can remove minimal signaling metadata after the call window.
+    // TTL must be enabled on 'purgeAt' for both collections in Firebase.
+    const purgeAt=new Date(endsAt+24*60*60*1000);
     const invitation={id,companyId:device.companyId,to,from:device.departmentId,
       fromName:device.department.name,toName:target.name,createdAt:t,
-      expiresAt:Math.min(t+RING_MS,endsAt)};
+      expiresAt:Math.min(t+RING_MS,endsAt),purgeAt};
     const call={id,companyId:device.companyId,to,from:device.departmentId,
       fromName:device.department.name,toName:target.name,createdAt:t,
-      ringExpiresAt:invitation.expiresAt,endsAt,state:'ringing'};
+      ringExpiresAt:invitation.expiresAt,endsAt,state:'ringing',purgeAt};
     const ref=inviteRef(device.companyId,to);
     const result=await db.runTransaction(async tx=>{
       const old=await tx.get(ref);
