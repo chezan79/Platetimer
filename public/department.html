@@ -1007,11 +1007,16 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
         🎤 Avvia comando vocale
       </button>
       <label for="vc-language" class="vc-hint" style="display:block;text-align:left;margin:8px 0 4px">Lingua del comando vocale</label>
-      <select id="vc-language" onchange="saveVoiceLanguage()" style="width:100%;padding:10px;border-radius:9px;margin-bottom:8px">
+      <select id="vc-language" onchange="saveVoiceLanguage()" style="display:none" tabindex="-1" aria-hidden="true">
         <option value="it-IT">🇮🇹 Italiano</option>
         <option value="fr-CH">🇫🇷 Français (Suisse)</option>
         <option value="de-CH">🇩🇪 Deutsch (Schweiz)</option>
       </select>
+      <div id="vc-language-buttons" role="group" aria-label="Lingua del comando vocale" style="display:flex;gap:5px;margin:5px 0 9px">
+        <button type="button" data-vc-lang="it-IT" onclick="chooseVoiceLanguage('it-IT')" aria-label="Italiano" title="Italiano" style="flex:0 0 36px;width:36px;height:34px;padding:2px;border-radius:7px;font-size:18px;line-height:1">🇮🇹</button>
+        <button type="button" data-vc-lang="fr-CH" onclick="chooseVoiceLanguage('fr-CH')" aria-label="Français" title="Français" style="flex:0 0 36px;width:36px;height:34px;padding:2px;border-radius:7px;font-size:18px;line-height:1">🇫🇷</button>
+        <button type="button" data-vc-lang="de-CH" onclick="chooseVoiceLanguage('de-CH')" aria-label="Deutsch" title="Deutsch" style="flex:0 0 36px;width:36px;height:34px;padding:2px;border-radius:7px;font-size:18px;line-height:1">🇩🇪</button>
+      </div>
       <div id="vc-hint" class="vc-hint" style="display:block">"Tavolo 12, otto minuti, Pizzeria"</div>
       <div id="vc-status" class="vc-status"></div>
       <div style="margin-top:10px;padding:10px;border:1px solid var(--border);border-radius:10px">
@@ -2065,6 +2070,7 @@ function renderVoiceWindow(state,remaining){
   // Prevent changing the interpretation language during a live session.
   const languageSelect=document.getElementById('vc-language');
   if(languageSelect)languageSelect.disabled=active||!!vcDraft||!!vcPendingTable;
+  syncVoiceLanguageButtons();
   if(!active&&vcWindowTick){clearInterval(vcWindowTick);vcWindowTick=null;}
   const seconds=Math.ceil((remaining||0)/1000);
   timer.textContent=active?String(Math.floor(seconds/60)).padStart(2,'0')+':'+String(seconds%60).padStart(2,'0'):'';
@@ -2132,6 +2138,24 @@ function getVoiceLanguage(){
   const value=select&&select.value;
   return PlateVoiceCommand.LANGUAGES[value]?value:'it-IT';
 }
+function syncVoiceLanguageButtons(){
+  const select=document.getElementById('vc-language');
+  if(!select)return;
+  document.querySelectorAll('#vc-language-buttons [data-vc-lang]').forEach(button=>{
+    const active=button.dataset.vcLang===select.value;
+    button.setAttribute('aria-pressed',String(active));
+    button.disabled=select.disabled||!!vcRecording||!!vcPendingTable||!!vcDraft;
+    button.style.border=active?'2px solid #16a34a':'1px solid var(--border)';
+    button.style.opacity=button.disabled?'0.5':'1';
+  });
+}
+function chooseVoiceLanguage(code){
+  const select=document.getElementById('vc-language');
+  if(!select||select.disabled||vcRecording||vcPendingTable||vcDraft||vcWindow?.active())return;
+  if(!PlateVoiceCommand.LANGUAGES[code])return;
+  select.value=code;
+  saveVoiceLanguage();
+}
 function saveVoiceLanguage(){
   if(vcRecording||vcPendingTable||vcWindow?.active()) return;
   const code=getVoiceLanguage();
@@ -2148,6 +2172,7 @@ function saveVoiceLanguage(){
   document.querySelector('#vc-confirm button:first-child').textContent=t.cancel;
   document.getElementById('vc-confirm-send').textContent=t.send;
   cancelVoiceDraft();
+  syncVoiceLanguageButtons();
 }
 function initVoiceLanguage(){
   let saved='it-IT';
