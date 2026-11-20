@@ -193,7 +193,7 @@
     if (mic) { mic.stop(); mic.close(); mic = null; }
     if (rtc) rtc.leave().catch(() => {});
   });
-  fetch('/api/voice-test/status', {cache:'no-store'}).then(r => r.ok ? r.json() : null)
+  fetch('/api/voice-test/status', {cache:'no-store', headers: authHeaders()}).then(r => r.ok ? r.json() : null)
     .then(data => {
       if (data && data.enabled && WsAuth.isServiceSession()) {
         button.hidden = false;
