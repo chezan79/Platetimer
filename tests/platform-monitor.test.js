@@ -55,7 +55,7 @@ test('only verified platform admin UID can access monitor', async () => {
     const application=app();
     const args=dependencies();
     mountPlatformMonitor(application,{
-      ...args,lookupFirebaseAccount: async token => ({
+      ...args, now: () => args.now, lookupFirebaseAccount: async token => ({
         localId:token,emailVerified:token!=='unverified',disabled:false
       })
     });
