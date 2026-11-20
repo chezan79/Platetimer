@@ -1307,5 +1307,13 @@
   "ops.notes.createTask": "Créer une tâche",
   "ops.notes.dismiss": "Archiver",
   "ops.notes.taskPrefill": "Le texte de la note a été copié dans le brouillon. Modifiez les champs avant de créer la tâche.",
-  "ops.notes.handoffUnavailable": "Cette note n'est pas disponible pour créer une tâche."
+  "ops.notes.handoffUnavailable": "Cette note n'est pas disponible pour créer une tâche.",
+  "entry.welcomeTitle": "Bienvenue sur PlateTimer",
+  "entry.welcomeDesc": "La coordination des postes de votre restaurant, en temps réel.",
+  "entry.accessAction": "Accéder à PlateTimer",
+  "entry.registerAction": "Inscrire votre restaurant",
+  "entry.backHome": "← Retour à l’accueil",
+  "entry.accessTitle": "Se connecter à PlateTimer",
+  "entry.emailHeading": "Accès par e-mail",
+  "entry.deptDescription": "Accédez au poste Cuisine, Pizzeria ou à un autre service."
 }

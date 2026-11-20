@@ -513,13 +513,29 @@ async function getAuthoritativeServiceDeviceContext(session) {
 // [S1.4.1] Centralized structured error response for department access checks.
 // Returns { status, body } — caller does res.status(e.status).json(e.body).
 // All codes are stable strings for UI-layer branching (never parse the message).
+// Platform-wide feature management: never bind platform administrator to a restaurant.
+const { createVoiceAccess, mountPlatformVoiceAdmin } = require('./service/platform-voice-admin');
+const platformVoiceAccess = createVoiceAccess({ db });
+mountPlatformVoiceAdmin(app, {
+    db, lookupFirebaseAccount,
+    getCompanies: () => Object.entries(departmentsStore)
+        .map(([companyId, depts]) => ({
+            companyId,
+            departments: Array.isArray(depts) ? depts.length : 0
+        }))
+        .sort((a, b) => a.companyId.localeCompare(b.companyId)),
+    voiceAccess: platformVoiceAccess
+});
+
 // Preview-only RTC experiment. Does not alter existing Service routes or UI.
 require('./service/voice-rtc-test').mountVoiceRtcTest(app, {
-    requireAuth, getAuthoritativeServiceDeviceContext
+    requireAuth, getAuthoritativeServiceDeviceContext,
+    isVoiceAllowed: companyId => platformVoiceAccess.enabled(companyId)
 });
 require('./service/voice-invites-preview').mountVoiceInvites(app, {
     enabled: () => process.env.PLATETIMER_VOICE_TEST_ENABLED === 'true' && Boolean(process.env.REPL_ID) && process.env.NODE_ENV !== 'production',
-    requireAuth, getAuthoritativeServiceDeviceContext, getCompanyDepts
+    requireAuth, getAuthoritativeServiceDeviceContext, getCompanyDepts,
+    isVoiceAllowed: companyId => platformVoiceAccess.enabled(companyId)
 });
 
 function departmentAccessError(boundAcct) {
@@ -596,6 +612,17 @@ app.post('/api/auth/session', async (req, res) => {
         if (!uid) {
             console.log('⛔ [SECURITY] /api/auth/session rejected: invalid Firebase token');
             return res.status(401).json({ error: 'Invalid or expired Firebase token' });
+        }
+
+        // Platform administrator is independent of any restaurant/company profile.
+        // The server verifies the Firebase identity and its configured UID;
+        // never infer platform authority from a browser-supplied company or email.
+        const platformAdminUid = String(process.env.PLATETIMER_PLATFORM_ADMIN_UID || '').trim();
+        if (platformAdminUid && uid === platformAdminUid) {
+            if (fbUser.emailVerified !== true || fbUser.disabled === true) {
+                return res.status(403).json({ error: 'Platform administrator account is not verified or is disabled.' });
+            }
+            return res.json({ success: true, isPlatformAdmin: true });
         }
 
         // [SECURITY] Step 2a: If this uid has a server-side Operations membership,
@@ -2632,70 +2659,68 @@ app.get('/api/subscription', (req, res) => {
     res.json({ success: true, plan, limit, activeCount });
 });
 
-// Endpoint per il riconoscimento vocale
+// Google Cloud Speech: strict audio/language allowlist. Never forward untrusted
+// client config to the provider or allow arbitrary enhanced models/quota use.
+const STT_LANGUAGES = new Set(['it-IT', 'fr-CH', 'de-CH']);
+const STT_ENCODINGS = new Set(['WEBM_OPUS', 'OGG_OPUS', 'LINEAR16']);
+const STT_MAX_AUDIO_BYTES = 1024 * 1024; // five-second voice commands
+const sttUsage = new Map(); // authenticated operator → short quota window
+const STT_MAX_REQUESTS_PER_MINUTE = 30;
 app.post('/api/speech-to-text', async (req, res) => {
     try {
-        // [SECURITY] Require a valid server session token — prevents unauthenticated callers
-        // from consuming Google Cloud Speech API quota at the restaurant's expense.
-        const authHeader = req.headers['authorization'];
-        if (!authHeader || !authHeader.startsWith('Bearer ')) {
-            console.log(`⛔ [SECURITY] POST /api/speech-to-text rejected — no token (IP: ${req.ip})`);
-            return res.status(401).json({ error: 'Authentication required. Please log in again.' });
-        }
-        const sttToken = authHeader.substring(7).trim();
-        const sttSession = verifySessionToken(sttToken);
-        if (!sttSession) {
-            console.log(`⛔ [SECURITY] POST /api/speech-to-text rejected — invalid or expired token (IP: ${req.ip})`);
-            return res.status(401).json({ error: 'Session token invalid or expired. Please log in again.' });
-        }
-
+        const session = requireAuth(req, res);
+        if (!session) return;
         if (!speechClient) {
-            return res.status(500).json({ 
-                error: 'Google Cloud Speech non configurato',
-                details: 'Controlla le credenziali nei Secrets'
-            });
+            return res.status(503).json({ error: 'SPEECH_NOT_CONFIGURED' });
         }
-
-        const { audioData, config = {} } = req.body;
-
-        if (!audioData) {
-            return res.status(400).json({ error: 'Audio data richiesto' });
-        }
-
-        // Configurazione per il riconoscimento
-        const request = {
-            audio: {
-                content: audioData
-            },
-            config: {
-                encoding: config.encoding || 'WEBM_OPUS',
-                sampleRateHertz: config.sampleRateHertz || 48000,
-                languageCode: config.languageCode || 'it-IT',
-                model: 'command_and_search',
-                useEnhanced: true,
-                ...config
+        // Limit provider billing abuse, scoped by verified account and restaurant.
+        const quotaKey = session.companyName + ':' + session.uid;
+        const now = Date.now();
+        if (sttUsage.size > 5000) {
+            for (const [key, bucket] of sttUsage) {
+                if (now - bucket.start > 60000) sttUsage.delete(key);
             }
+        }
+        let bucket = sttUsage.get(quotaKey);
+        if (!bucket || now - bucket.start >= 60000) bucket = { start: now, count: 0 };
+        if (bucket.count >= STT_MAX_REQUESTS_PER_MINUTE) {
+            return res.status(429).json({ error: 'VOICE_RATE_LIMITED' });
+        }
+        bucket.count++;
+        sttUsage.set(quotaKey, bucket);
+        const { audioData, config } = req.body || {};
+        if (!config || typeof config !== 'object' || Array.isArray(config) ||
+            !STT_LANGUAGES.has(config.languageCode) ||
+            !STT_ENCODINGS.has(config.encoding) ||
+            typeof audioData !== 'string' || audioData.length > 1400000 ||
+            !/^[A-Za-z0-9+/]+={0,2}$/.test(audioData) || audioData.length % 4 !== 0) {
+            return res.status(400).json({ error: 'INVALID_SPEECH_REQUEST' });
+        }
+        const audioBuffer = Buffer.from(audioData, 'base64');
+        if (!audioBuffer.length || audioBuffer.length > STT_MAX_AUDIO_BYTES) {
+            return res.status(413).json({ error: 'AUDIO_SIZE_INVALID' });
+        }
+        const sampleRateHertz = config.encoding === 'LINEAR16' ? 16000 : undefined;
+        if (config.sampleRateHertz != null && config.sampleRateHertz !== sampleRateHertz) {
+            return res.status(400).json({ error: 'INVALID_AUDIO_RATE' });
+        }
+        const recognitionConfig = {
+            encoding: config.encoding,
+            languageCode: config.languageCode,
+            ...(sampleRateHertz ? { sampleRateHertz } : {}),
+            enableAutomaticPunctuation: false
         };
-
-        // Effettua il riconoscimento
-        const [response] = await speechClient.recognize(request);
-        const transcription = response.results
-            .map(result => result.alternatives[0].transcript)
-            .join('\n');
-
-        console.log(`🎤 Trascrizione completata (${transcription.length} caratteri)`);
-
-        res.json({
-            transcription: transcription,
-            confidence: response.results[0]?.alternatives[0]?.confidence || 0
+        const [result] = await speechClient.recognize({
+            audio: { content: audioBuffer },
+            config: recognitionConfig
         });
-
+        const alternatives = (result.results || []).map(item => item.alternatives?.[0]).filter(Boolean);
+        const transcription = alternatives.map(a => a.transcript).join(' ').trim();
+        const confidence = alternatives.length ? Math.min(...alternatives.map(a => Number.isFinite(a.confidence) ? a.confidence : 0)) : 0;
+        return res.json({ transcription, confidence, languageCode: config.languageCode });
     } catch (error) {
-        console.error('❌ Errore Speech-to-Text:', error);
-        res.status(500).json({ 
-            error: 'Errore nel riconoscimento vocale',
-            details: error.message
-        });
+        console.error('[VOICE-STT] recognition failed:', error.code || error.message);
+        return res.status(502).json({ error: 'SPEECH_RECOGNITION_FAILED' });
     }
 });
 
@@ -7550,6 +7575,18 @@ function broadcastOps(companyId, payload) {
 // Store per i countdown attivi per ogni azienda
 const activeCountdowns = new Map();
 
+// Platform-wide monitor: strictly read-only access to existing WebSocket
+// and countdown state. Does not register socket listeners or mutate restaurant data.
+require('./admin-monitor/monitor-api').mountPlatformMonitor(app, {
+    wss,
+    lookupFirebaseAccount,
+    getCompanies: () => Object.entries(departmentsStore).map(([companyId, depts]) => ({
+        companyId,
+        departments: Array.isArray(depts) ? depts.length : 0
+    })),
+    getCountdowns: companyId => activeCountdowns.get(companyId)?.size || 0
+});
+
 // ── Post-expiry grace period ────────────────────────────────────────────────
 // After a countdown reaches 00:00 it stays visible (blinking, expired) for this
 // long on all screens, then the server removes it and broadcasts completion.
@@ -9141,13 +9178,18 @@ initializeDataStores().then(() => {
     // [MEX] Init Mex store — local dev: eager load from file; Firestore: lazy per company.
     mexStoreModule.initMexStore().catch(e => console.error('[MEX] initMexStore error:', e.message));
 
-    // Kick off the first scheduler run shortly after startup, then every 5 minutes.
-    setTimeout(() => {
-        opsSchedulerInstance.run().catch(e => console.error('[SCHEDULER] Initial run error:', e.message));
-    }, 2000);
-    setInterval(() => {
-        opsSchedulerInstance.run().catch(e => console.error('[SCHEDULER] Periodic run error:', e.message));
-    }, 5 * 60 * 1000);
+    // Disable automatic Operations jobs in explicitly configured test environments.
+    if (process.env.PLATETIMER_DISABLE_OPS_SCHEDULER === 'true') {
+        console.warn('[SCHEDULER] Operations scheduler disabled by environment');
+    } else {
+        // Start shortly after boot and repeat every five minutes.
+        setTimeout(() => {
+            opsSchedulerInstance.run().catch(e => console.error('[SCHEDULER] Initial run error:', e.message));
+        }, 2000);
+        setInterval(() => {
+            opsSchedulerInstance.run().catch(e => console.error('[SCHEDULER] Periodic run error:', e.message));
+        }, 5 * 60 * 1000);
+    }
 
     server
         .listen(PORT, '0.0.0.0', () => {

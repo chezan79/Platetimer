@@ -1006,9 +1006,34 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
       <button id="vc-btn" class="vc-btn" onclick="toggleVoiceCmd()" data-i18n="dept.startVoiceCmd">
         🎤 Avvia comando vocale
       </button>
-      <div id="vc-hint" class="vc-hint">"Tavolo 12 otto minuti Pasta"</div>
+      <label for="vc-language" class="vc-hint" style="display:block;text-align:left;margin:8px 0 4px">Lingua del comando vocale</label>
+      <select id="vc-language" onchange="saveVoiceLanguage()" style="display:none" tabindex="-1" aria-hidden="true">
+        <option value="it-IT">🇮🇹 Italiano</option>
+        <option value="fr-CH">🇫🇷 Français (Suisse)</option>
+        <option value="de-CH">🇩🇪 Deutsch (Schweiz)</option>
+      </select>
+      <div id="vc-language-buttons" role="group" aria-label="Lingua del comando vocale" style="display:flex;gap:5px;margin:5px 0 9px">
+        <button type="button" data-vc-lang="it-IT" onclick="chooseVoiceLanguage('it-IT')" aria-label="Italiano" title="Italiano" style="flex:0 0 36px;width:36px;height:34px;padding:2px;border-radius:7px;font-size:18px;line-height:1">🇮🇹</button>
+        <button type="button" data-vc-lang="fr-CH" onclick="chooseVoiceLanguage('fr-CH')" aria-label="Français" title="Français" style="flex:0 0 36px;width:36px;height:34px;padding:2px;border-radius:7px;font-size:18px;line-height:1">🇫🇷</button>
+        <button type="button" data-vc-lang="de-CH" onclick="chooseVoiceLanguage('de-CH')" aria-label="Deutsch" title="Deutsch" style="flex:0 0 36px;width:36px;height:34px;padding:2px;border-radius:7px;font-size:18px;line-height:1">🇩🇪</button>
+      </div>
+      <div id="vc-hint" class="vc-hint" style="display:block">"Tavolo 12, otto minuti, Pizzeria"</div>
       <div id="vc-status" class="vc-status"></div>
-      <div id="vc-result" style="display:none;"></div>
+      <div style="margin-top:10px;padding:10px;border:1px solid var(--border);border-radius:10px">
+        <button type="button" id="vc-window-toggle" onclick="toggleVoiceWindow()" style="width:100%;padding:12px;border-radius:8px">🎧 Attiva ascolto 10 minuti (solo sul dispositivo)</button>
+        <div id="vc-window-status" style="font-size:12px;margin-top:7px" role="status" aria-live="polite">Ascolto continuo disattivato</div>
+        <div id="vc-window-time" style="font-variant-numeric:tabular-nums;font-size:14px;font-weight:700"></div>
+        <p id="vc-window-disclosure" style="font-size:11px;margin-top:6px;color:var(--muted)">La modalità 10 minuti richiede riconoscimento vocale locale verificato dal browser. Se non disponibile, resta la registrazione singola. Nessuna registrazione continua viene inviata a Google Speech da PlateTimer.</p>
+      </div>
+      <div id="vc-result" style="display:none;" role="status" aria-live="polite"></div>
+      <div id="vc-confirm" style="display:none;margin-top:10px;padding:12px;border:1px solid var(--border);border-radius:10px">
+        <div style="font-weight:700;margin-bottom:8px">Verifica prima di inviare</div>
+        <div id="vc-preview" style="white-space:pre-line;margin-bottom:10px"></div>
+        <div style="display:flex;gap:8px">
+          <button type="button" onclick="cancelVoiceDraft()" style="flex:1;padding:10px">Annulla</button>
+          <button type="button" id="vc-confirm-send" onclick="confirmVoiceDraft()" style="flex:1;padding:10px">Conferma countdown</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -1151,6 +1176,8 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 <script src="js/mex-qr.js"></script>
 <script src="js/i18n.js"></script>
 <script src="js/service-worker-identity.js"></script>
+<script src="js/voice-command-parser.js"></script>
+<script src="js/voice-command-window.js"></script>
 <script>const i18nReady = I18n.init({ selector: '#i18n-dept-sel' });</script>
 <script>
 'use strict';
@@ -1467,7 +1494,7 @@ async function loadDepts(){
     const stored = localStorage.getItem('userCompany');
     if(stored) document.getElementById('hdr-brand').textContent = stored.charAt(0).toUpperCase()+stored.slice(1);
 
-    buildDestList();
+    await buildDestList();
     buildVoiceDestList();
   } catch(e){
     console.error('loadDepts:', e);
@@ -1494,6 +1521,8 @@ async function buildDestList(){
     // Fallback: legacy behaviour from the departments map (unbound sessions).
     others = Object.values(departmentMap).filter(d => d.active && d.id !== myDeptId);
   }
+  // Populate the same authoritative tenant-scoped directory used by the voice parser.
+  others.forEach(d => { departmentMap[d.id] = { ...departmentMap[d.id], ...d, active: true }; });
   const el = document.getElementById('dest-list');
   if(!others.length){
     el.innerHTML = '<div class="no-dests">Nessun altro reparto attivo.</div>';
@@ -1995,244 +2024,352 @@ function sendCountdown(){
   goToStep(1);
 }
 
-// ── Voice command: countdown by voice ─────────────────────────────────────────
+// ── Voice command: confirmed multilingual countdown ─────────────────────────
 const VC_MAX_SECS = 5;
+const VC_PREFERENCE_PREFIX = 'pt_voice_language_';
+let vcWindow = null;
+let vcWindowTick = null;
+let vcWindowState = 'stopped';
+const VC_STRINGS = {
+  'it-IT': {language:'Lingua del comando vocale',verify:'Verifica prima di inviare',cancel:'Annulla',send:'Conferma countdown',table:'Tavolo',duration:'Durata',dest:'Destinazioni',transcript:'Trascrizione',minutes:'minuti',idle:'🎤 Avvia comando vocale',rec:'⏹ Ferma registrazione',busy:'⏳ Trascrizione...',confirm:'✓ Verifica e conferma qui sotto',pending:'⏳ Attesa conferma server'},
+  'fr-CH': {language:'Langue de la commande vocale',verify:'Vérifiez avant l’envoi',cancel:'Annuler',send:'Confirmer le compte à rebours',table:'Table',duration:'Durée',dest:'Destinations',transcript:'Transcription',minutes:'minutes',idle:'🎤 Démarrer la commande vocale',rec:'⏹ Arrêter l’enregistrement',busy:'⏳ Transcription...',confirm:'✓ Vérifiez et confirmez ci-dessous',pending:'⏳ En attente du serveur'},
+  'de-CH': {language:'Sprache des Sprachbefehls',verify:'Vor dem Senden prüfen',cancel:'Abbrechen',send:'Countdown bestätigen',table:'Tisch',duration:'Dauer',dest:'Abteilungen',transcript:'Transkription',minutes:'Minuten',idle:'🎤 Sprachbefehl starten',rec:'⏹ Aufnahme stoppen',busy:'⏳ Spracherkennung...',confirm:'✓ Unten prüfen und bestätigen',pending:'⏳ Warte auf Serverbestätigung'}
+};
+function voiceStrings(){return VC_STRINGS[getVoiceLanguage()]||VC_STRINGS['it-IT'];}
 
-function parseVoiceCommand(text){
-  // Normalize Italian number words → digits
-  const numWords = {
-    'zero':0,'uno':1,'due':2,'tre':3,'quattro':4,'cinque':5,'sei':6,
-    'sette':7,'otto':8,'nove':9,'dieci':10,'undici':11,'dodici':12,
-    'tredici':13,'quattordici':14,'quindici':15,'sedici':16,
-    'diciassette':17,'diciotto':18,'diciannove':19,'venti':20,
-    'ventuno':21,'ventidue':22,'ventitre':23,'ventiquattro':24,
-    'venticinque':25,'ventisei':26,'ventisette':27,'ventotto':28,
-    'ventinove':29,'trenta':30
-  };
-  let norm = text.toLowerCase().trim();
-  for(const [word, num] of Object.entries(numWords)){
-    norm = norm.replace(new RegExp(`\\b${word}\\b`, 'g'), String(num));
-  }
-
-  // Extract table number
-  let tableNumber = null;
-  const tblMatch = norm.match(/(?:tavolo|table)\s+(\d+)/);
-  if(tblMatch){
-    tableNumber = tblMatch[1];
-  } else {
-    const firstNum = norm.match(/\b\d+\b/);
-    if(firstNum) tableNumber = firstNum[0];
-  }
-
-  // Extract duration in minutes
-  let durationMinutes = null;
-  const durMatch = norm.match(/(\d+)\s*minuti?/);
-  if(durMatch){
-    durationMinutes = parseInt(durMatch[1]);
-  } else {
-    // Fallback: second standalone number (first is assumed table)
-    const allNums = norm.match(/\b\d+\b/g) || [];
-    const tblIdx  = tableNumber ? allNums.indexOf(tableNumber) : -1;
-    const durNum  = allNums.find((n, i) => i !== tblIdx);
-    if(durNum) durationMinutes = parseInt(durNum);
-  }
-
-  // Match destination departments dynamically against this company's active depts
-  const activeDepts = Object.values(departmentMap).filter(d => d.active && d.id !== myDeptId);
-  const txWords     = norm.split(/\s+/).filter(w => w.length >= 2);
-  const matchedDepts = [];
-  for(const dept of activeDepts){
-    const deptWords = dept.name.toLowerCase().split(/\s+/).filter(w => w.length >= 2);
-    const hit = deptWords.some(dw =>
-      txWords.some(tw =>
-        tw === dw ||                            // exact word match
-        (dw.startsWith(tw) && tw.length >= 3)   // speech truncation: "pas" → "pasta"
-      )
-    );
-    if(hit && !matchedDepts.find(d => d.id === dept.id)) matchedDepts.push(dept);
-  }
-
-  console.log('[vc] norm:', norm, '| table:', tableNumber,
-              '| dur:', durationMinutes, 'min | depts:', matchedDepts.map(d=>d.name));
-  return { tableNumber, durationMinutes, matchedDepts };
+let vcDraft = null;
+let vcPendingTable = null;
+let vcPendingTimeout = null;
+const VC_WINDOW_STATES={
+ 'it-IT':{
+ stopped:'Ascolto continuo disattivato',checking:'Controllo del riconoscimento locale...',listening:'In ascolto sul dispositivo: pronuncia tavolo, numero e minuti',
+ paused:'In pausa: conferma o annulla la comanda',expired:'Sessione di 10 minuti terminata',unavailable:'Riconoscimento locale non disponibile su questo browser',error:'Ascolto interrotto per errore',
+ start:'🎧 Attiva ascolto 10 minuti (solo locale)',stop:'⏹ Termina ascolto continuo',unsupported:'La modalità 10 minuti richiede un browser con riconoscimento locale installato. Usa il pulsante della comanda singola.',
+ disclosure:'Questa modalità richiede riconoscimento vocale locale verificato dal browser. Se non disponibile, usa la comanda singola. PlateTimer non invia audio continuo a Google Speech.'},
+ 'fr-CH':{
+ stopped:'Écoute continue désactivée',checking:'Vérification de la reconnaissance locale...',listening:'Écoute sur cet appareil : dites table, numéro et minutes',
+ paused:'En pause : confirmez ou annulez la commande',expired:'Session de 10 minutes terminée',unavailable:'Reconnaissance locale indisponible sur ce navigateur',error:'Écoute interrompue',
+ start:'🎧 Activer l’écoute 10 minutes (locale)',stop:'⏹ Arrêter l’écoute continue',unsupported:'La reconnaissance locale est indisponible sur ce navigateur. Utilisez la commande vocale ponctuelle.',
+ disclosure:'Ce mode nécessite la reconnaissance vocale locale vérifiée par le navigateur. Sinon, utilisez la commande ponctuelle. PlateTimer n’envoie pas de flux audio continu à Google Speech.'},
+ 'de-CH':{
+ stopped:'Dauerhaftes Zuhören deaktiviert',checking:'Lokale Spracherkennung wird geprüft...',listening:'Lokales Zuhören: Tisch, Nummer und Minuten sagen',
+ paused:'Pausiert: Befehl bestätigen oder abbrechen',expired:'10-Minuten-Sitzung beendet',unavailable:'Lokale Spracherkennung in diesem Browser nicht verfügbar',error:'Zuhören wegen eines Fehlers beendet',
+ start:'🎧 10 Minuten lokal zuhören',stop:'⏹ Dauerhaftes Zuhören beenden',unsupported:'Lokale Spracherkennung ist in diesem Browser nicht verfügbar. Bitte den einzelnen Sprachbefehl verwenden.',
+ disclosure:'Dieser Modus erfordert nachweislich lokale Spracherkennung im Browser. Andernfalls die Einzelaufnahme verwenden. PlateTimer sendet keinen dauerhaften Audiostream an Google Speech.'}
+};
+function windowVoiceText(){return VC_WINDOW_STATES[getVoiceLanguage()]||VC_WINDOW_STATES['it-IT'];}
+function renderVoiceWindow(state,remaining){
+  vcWindowState=state;
+  const status=document.getElementById('vc-window-status');
+  const toggle=document.getElementById('vc-window-toggle');
+  const timer=document.getElementById('vc-window-time');
+  if(!status||!toggle||!timer)return;
+  status.textContent=windowVoiceText()[state]||state;
+  const active=vcWindow?.active()||state==='checking'||state==='listening'||state==='paused';
+  toggle.textContent=active?windowVoiceText().stop:windowVoiceText().start;
+  // Prevent changing the interpretation language during a live session.
+  const languageSelect=document.getElementById('vc-language');
+  if(languageSelect)languageSelect.disabled=active||!!vcDraft||!!vcPendingTable;
+  syncVoiceLanguageButtons();
+  if(!active&&vcWindowTick){clearInterval(vcWindowTick);vcWindowTick=null;}
+  const seconds=Math.ceil((remaining||0)/1000);
+  timer.textContent=active?String(Math.floor(seconds/60)).padStart(2,'0')+':'+String(seconds%60).padStart(2,'0'):'';
 }
-
-function toggleVoiceCmd(){
-  if(vcRecording){ stopVoiceCmd(); } else { startVoiceCmd(); }
+function stopVoiceWindow(reason='stopped'){
+  if(vcWindow)vcWindow.stop(reason);
+  if(vcWindowTick){clearInterval(vcWindowTick);vcWindowTick=null;}
+  renderVoiceWindow(reason,0);
+  if(!vcRecording&&!vcPendingTable&&!vcDraft){
+    const select=document.getElementById('vc-language');
+    if(select)select.disabled=false;
+  }
 }
-
-async function startVoiceCmd(){
-  const sts = document.getElementById('vc-status');
-  const res = document.getElementById('vc-result');
-  if(res) res.style.display = 'none';
-
-  if(!navigator.mediaDevices || !window.MediaRecorder){
-    showVcError('Microfono non supportato in questo browser.');
+async function toggleVoiceWindow(){
+  if(vcWindowState==='checking'||vcWindow?.active()){stopVoiceWindow();return;}
+  // A previously stopped/failed availability check must never outlive this session.
+  if(vcWindow)vcWindow.stop('stopped');
+  if(vcRecording||vcPendingTable||vcDraft){
+    showVcError('Concludi o annulla prima la comanda corrente.');
     return;
   }
-  try {
-    const stream   = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const mimeType = getSupportedMimeType();
-    vcChunks = [];
-    vcMediaRec = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
-    vcMediaRec.ondataavailable = e => { if(e.data.size > 0) vcChunks.push(e.data); };
-    vcMediaRec.onstop = processVoiceCmd;
+  const language=getVoiceLanguage();
+  if(!PlateVoiceWindow.WAKE[language])return;
+  vcWindow=PlateVoiceWindow.create({
+    getLanguage:()=>language,
+    onCommand:transcription=>{
+      // Ignore ambient conversation even if it begins with the wake word.
+      // Only a fully valid command can pause the listening session.
+      const parsed=PlateVoiceCommand.parse(transcription,language,Object.values(departmentMap),myDeptId,Array.from(selectedDests));
+      if(!parsed.ok||!wsConnected)return false;
+      showVoiceDraft(parsed);
+      return true;
+    },
+    onState:(state,remaining)=>renderVoiceWindow(state,remaining),
+    onError:code=>showVcMessage('Ascolto locale interrotto: '+code,true)
+  });
+  const session=vcWindow;
+  const result=await session.start();
+  if(vcWindow!==session||result.code==='CANCELLED')return;
+  if(!result.ok){
+    renderVoiceWindow('unavailable',0);
+    showVcMessage(windowVoiceText().unsupported+' ('+(result.availability||result.code)+')',true);
+    return;
+  }
+  // The countdown is a visual aid, not the lifetime authority: the module
+  // uses a fixed deadline and a separate one-shot expiry timer.
+  vcWindowTick=setInterval(()=>renderVoiceWindow(vcWindowState,vcWindow.getRemainingMs()),1000);
+}
+document.addEventListener('visibilitychange',()=>{
+  // Avoid a hidden listening microphone when the station is in another app.
+  if(document.hidden)stopVoiceWindow('stopped');
+});
+window.addEventListener('pagehide',()=>stopVoiceWindow('stopped'));
+function voiceOperatorKey(){
+  // Non-authoritative JWT payload, used ONLY to scope a local UI preference.
+  try{
+    const part=(WsAuth.getStoredToken()||'').split('.')[0];
+    if(!part) return 'device';
+    const p=JSON.parse(atob(part.replace(/-/g,'+').replace(/_/g,'/')));
+    return String(p.uid||'device').replace(/[^a-zA-Z0-9_-]/g,'_').slice(0,100);
+  }catch(e){return 'device';}
+}
+function getVoiceLanguage(){
+  const select=document.getElementById('vc-language');
+  const value=select&&select.value;
+  return PlateVoiceCommand.LANGUAGES[value]?value:'it-IT';
+}
+function syncVoiceLanguageButtons(){
+  const select=document.getElementById('vc-language');
+  if(!select)return;
+  document.querySelectorAll('#vc-language-buttons [data-vc-lang]').forEach(button=>{
+    const active=button.dataset.vcLang===select.value;
+    button.setAttribute('aria-pressed',String(active));
+    button.disabled=select.disabled||!!vcRecording||!!vcPendingTable||!!vcDraft;
+    button.style.border=active?'2px solid #16a34a':'1px solid var(--border)';
+    button.style.opacity=button.disabled?'0.5':'1';
+  });
+}
+function chooseVoiceLanguage(code){
+  const select=document.getElementById('vc-language');
+  if(!select||select.disabled||vcRecording||vcPendingTable||vcDraft||vcWindow?.active())return;
+  if(!PlateVoiceCommand.LANGUAGES[code])return;
+  select.value=code;
+  saveVoiceLanguage();
+}
+function saveVoiceLanguage(){
+  if(vcRecording||vcPendingTable||vcWindow?.active()) return;
+  const code=getVoiceLanguage();
+  try{localStorage.setItem(VC_PREFERENCE_PREFIX+voiceOperatorKey(),code);}catch(e){}
+  const hints={'it-IT':'"Tavolo 12, otto minuti, Pizzeria"','fr-CH':'"Table douze, huit minutes, Pizzeria"','de-CH':'"Tisch zwölf, acht Minuten, Pizzeria"'};
+  document.getElementById('vc-hint').textContent=hints[code];
+  const continuous=VC_WINDOW_STATES[code];
+  const notice=document.getElementById('vc-window-disclosure');
+  if(notice)notice.textContent=continuous.disclosure;
+  renderVoiceWindow(vcWindowState,vcWindow?.getRemainingMs()||0);
+  const t=VC_STRINGS[code];
+  document.querySelector('label[for="vc-language"]').textContent=t.language;
+  document.querySelector('#vc-confirm > div:first-child').textContent=t.verify;
+  document.querySelector('#vc-confirm button:first-child').textContent=t.cancel;
+  document.getElementById('vc-confirm-send').textContent=t.send;
+  cancelVoiceDraft();
+  syncVoiceLanguageButtons();
+}
+function initVoiceLanguage(){
+  let saved='it-IT';
+  try{saved=localStorage.getItem(VC_PREFERENCE_PREFIX+voiceOperatorKey())||saved;}catch(e){}
+  document.getElementById('vc-language').value=PlateVoiceCommand.LANGUAGES[saved]?saved:'it-IT';
+  saveVoiceLanguage();
+}
+function toggleVoiceCmd(){
+  if(vcRecording)stopVoiceCmd();
+  else if(!vcPendingTable)startVoiceCmd();
+}
+async function startVoiceCmd(){
+  if(vcPendingTable)return;
+  // Only one microphone pipeline can be active on a station.
+  stopVoiceWindow('stopped');
+  cancelVoiceDraft();
+  if(!navigator.mediaDevices?.getUserMedia||!window.MediaRecorder){
+    showVcError('Microfono non supportato. Utilizza HTTPS e un browser aggiornato.');
+    return;
+  }
+  try{
+    const stream=await navigator.mediaDevices.getUserMedia({audio:true});
+    const mimeType=getSupportedMimeType();
+    vcChunks=[];
+    try{vcMediaRec=mimeType?new MediaRecorder(stream,{mimeType}):new MediaRecorder(stream);}
+    catch(e){stream.getTracks().forEach(t=>t.stop());throw e;}
+    vcMediaRec.ondataavailable=e=>{if(e.data.size>0)vcChunks.push(e.data);};
+    vcMediaRec.onstop=()=>{stream.getTracks().forEach(t=>t.stop());processVoiceCmd();};
+    vcMediaRec.onerror=()=>{
+      clearInterval(vcCountInt);clearTimeout(vcTimer);vcRecording=false;
+      vcMediaRec.onstop=()=>stream.getTracks().forEach(t=>t.stop());
+      if(vcMediaRec.state!=='inactive')vcMediaRec.stop();
+      else stream.getTracks().forEach(t=>t.stop());
+      showVcError('Registrazione audio non riuscita.');
+    };
     vcMediaRec.start();
-    vcRecording = true;
+    vcRecording=true;
     setVcState('rec');
-
-    // Countdown display + auto-stop
-    let secsLeft = VC_MAX_SECS;
-    if(sts) sts.textContent = `Registrazione... ${secsLeft}`;
-    vcCountInt = setInterval(() => {
-      secsLeft--;
-      if(sts) sts.textContent = secsLeft > 0 ? `Registrazione... ${secsLeft}` : 'Elaborazione...';
-    }, 1000);
-    vcTimer = setTimeout(() => stopVoiceCmd(), VC_MAX_SECS * 1000);
-
-  } catch(e){
-    console.error('[vc] mic error:', e);
-    const msg = (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError')
-      ? 'Accesso al microfono negato.' : 'Errore microfono.';
-    showVcError(msg);
+    let left=VC_MAX_SECS;
+    document.getElementById('vc-status').textContent='Registrazione... '+left;
+    vcCountInt=setInterval(()=>{left--;document.getElementById('vc-status').textContent=left>0?'Registrazione... '+left:'Elaborazione...';},1000);
+    vcTimer=setTimeout(stopVoiceCmd,VC_MAX_SECS*1000);
+  }catch(e){
+    showVcError(e.name==='NotAllowedError'?'Accesso al microfono negato.':'Impossibile avviare il microfono.');
   }
 }
-
 function stopVoiceCmd(){
-  clearInterval(vcCountInt); clearTimeout(vcTimer);
-  vcCountInt = null; vcTimer = null;
-  if(vcMediaRec && vcRecording){
-    vcMediaRec.stop();
-    vcMediaRec.stream.getTracks().forEach(t => t.stop());
-    vcRecording = false;
+  clearInterval(vcCountInt);clearTimeout(vcTimer);
+  vcCountInt=null;vcTimer=null;
+  if(vcMediaRec&&vcRecording){
+    vcRecording=false;
     setVcState('busy');
+    if(vcMediaRec.state!=='inactive')vcMediaRec.stop();
   }
 }
-
+// Safari typically records AAC/MP4. Convert it to genuine 16 kHz LINEAR16 WAV;
+// never label AAC data as MP3 (Google STT rejects mismatched encoding).
+async function voiceAudioPayload(blob,mimeType){
+  if(mimeType.includes('webm'))return {audioData:await blobToBase64(blob),encoding:'WEBM_OPUS'};
+  if(mimeType.includes('ogg'))return {audioData:await blobToBase64(blob),encoding:'OGG_OPUS'};
+  const AudioContextImpl=window.AudioContext||window.webkitAudioContext;
+  if(!AudioContextImpl)throw Error('Audio decoding not supported');
+  const context=new AudioContextImpl();
+  try{
+    const decoded=await context.decodeAudioData(await blob.arrayBuffer());
+    if(!decoded.length)throw Error('Empty audio');
+    const sr=16000,length=Math.ceil(decoded.duration*sr),samples=new Float32Array(length);
+    for(let i=0;i<length;i++){
+      const pos=Math.min(decoded.length-1,Math.floor(i*decoded.sampleRate/sr));
+      let sum=0;
+      for(let c=0;c<decoded.numberOfChannels;c++)sum+=decoded.getChannelData(c)[pos];
+      samples[i]=sum/decoded.numberOfChannels;
+    }
+    const wav=new ArrayBuffer(44+length*2),dv=new DataView(wav);
+    const four=(at,t)=>{for(let i=0;i<4;i++)dv.setUint8(at+i,t.charCodeAt(i));};
+    four(0,'RIFF');dv.setUint32(4,36+length*2,true);four(8,'WAVE');four(12,'fmt ');
+    dv.setUint32(16,16,true);dv.setUint16(20,1,true);dv.setUint16(22,1,true);
+    dv.setUint32(24,sr,true);dv.setUint32(28,sr*2,true);dv.setUint16(32,2,true);
+    dv.setUint16(34,16,true);four(36,'data');dv.setUint32(40,length*2,true);
+    for(let i=0;i<length;i++){const v=Math.max(-1,Math.min(1,samples[i]));dv.setInt16(44+i*2,v<0?v*32768:v*32767,true);}
+    return {audioData:await blobToBase64(new Blob([wav],{type:'audio/wav'})),encoding:'LINEAR16',sampleRateHertz:sr};
+  }finally{await context.close();}
+}
 async function processVoiceCmd(){
-  try {
-    const mimeType = (vcMediaRec && vcMediaRec.mimeType) ? vcMediaRec.mimeType : 'audio/webm';
-    const blob     = new Blob(vcChunks, { type: mimeType });
-    const b64      = await blobToBase64(blob);
-    const encoding = mimeType.includes('ogg') ? 'OGG_OPUS'
-                   : mimeType.includes('mp4') ? 'MP3'
-                   : 'WEBM_OPUS';
-
-    const resp = await fetch('/api/speech-to-text', {
-      method: 'POST',
-      headers: { 'Content-Type':'application/json', 'Authorization':`Bearer ${token}` },
-      body: JSON.stringify({
-        audioData: b64,
-        config: { encoding, sampleRateHertz: 48000, languageCode: 'it-IT' }
-      })
+  try{
+    const mimeType=vcMediaRec?.mimeType||'';
+    const blob=new Blob(vcChunks,{type:mimeType});
+    if(!blob.size)throw Error('Empty audio');
+    const payload=await voiceAudioPayload(blob,mimeType);
+    const languageCode=getVoiceLanguage();
+    const response=await fetch('/api/speech-to-text',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+(WsAuth.getStoredToken()||'')},
+      body:JSON.stringify({audioData:payload.audioData,config:{encoding:payload.encoding,languageCode,...(payload.sampleRateHertz?{sampleRateHertz:payload.sampleRateHertz}:{})}})
     });
-    if(!resp.ok){ showVcError('Errore trascrizione. Riprova.'); return; }
-
-    let sttResult;
-    try { sttResult = await resp.json(); } catch { sttResult = null; }
-    if(!sttResult || !sttResult.transcription){
-      showVcError('Comando non riconosciuto.\nNessun audio rilevato.\nRipeti il comando.');
-      return;
-    }
-
-    console.log('[vc] transcription:', sttResult.transcription);
-    const parsed = parseVoiceCommand(sttResult.transcription);
-
-    // Require all three fields — no partial countdowns
-    const missing = [];
-    // Destination departments are optional: the current department is always
-    // implicitly eligible (same rule as sendCountdown).
-    if(!parsed.tableNumber)              missing.push('numero tavolo');
-    if(!parsed.durationMinutes)          missing.push('durata');
-    if(missing.length > 0){
-      showVcError(`Comando non riconosciuto.\nMancano: ${missing.join(', ')}.\nRipeti il comando.`);
-      return;
-    }
-    if(parsed.durationMinutes < 1 || parsed.durationMinutes > 99){
-      showVcError('Durata non valida (1–99 minuti).');
-      return;
-    }
-
-    // ► Auto-dispatch — mirrors sendCountdown() exactly
-    const tableNum  = parsed.tableNumber.toString();
-    const durationS = parsed.durationMinutes * 60;           // seconds
-    const deptIds   = parsed.matchedDepts.map(d => d.id);
-    if(!deptIds.includes(myDeptId)) deptIds.push(myDeptId);
-
-    // Register as pending so the server echo is tagged as 'sent' on this page.
-    // No optimistic insertion — display deferred until authoritative server echo.
-    pendingSends.add(tableNum);
-
-    // Send ONE message with the full destinations array (same protocol as sendCountdown)
-    if(ws.readyState === WebSocket.OPEN){
-      ws.send(JSON.stringify({
-        action:        'startCountdown',
-        originDepartmentId: myDeptId,
-        tableNumber:   tableNum,
-        timeRemaining: durationS,
-        destinations:  deptIds
-      }));
-    }
-
-    showVcSuccess(parsed);
-
-  } catch(e){
-    console.error('[vc] process error:', e);
-    showVcError('Errore di rete. Riprova.');
+    if(!response.ok){showVcError(response.status===401?'Sessione scaduta. Effettua nuovamente il login.':'Riconoscimento vocale non disponibile.');return;}
+    const result=await response.json();
+    if(!result.transcription){showVcError('Nessuna frase riconosciuta. Riprova.');return;}
+    const departments=Object.values(departmentMap);
+    const parsed=PlateVoiceCommand.parse(result.transcription,languageCode,departments,myDeptId,Array.from(selectedDests));
+    if(!parsed.ok){showVcError('Comanda non valida ('+parsed.code+'). Pronuncia tavolo e durata in minuti.');return;}
+    showVoiceDraft(parsed);
+  }catch(e){
+    console.error('[vc] capture/recognition:',e);
+    showVcError('Registrazione o conversione audio non riuscita. Riprova.');
+  }finally{vcChunks=[];}
+}
+function showVoiceDraft(parsed){
+  // Parsing is complete and validated. Dispatch immediately, without another click.
+  // confirmVoiceDraft retains the WebSocket, department, duplicate-table and ACK guards.
+  vcDraft=parsed;
+  const names=parsed.departmentIds.map(id=>departmentMap[id]?.name||'Reparto sconosciuto');
+  const t=voiceStrings();
+  document.getElementById('vc-preview').textContent=t.transcript+': '+parsed.transcription+'\n'+t.table+': '+parsed.tableNumber+'\n'+t.duration+': '+parsed.durationMinutes+' '+t.minutes+'\n'+t.dest+': '+names.join(', ');
+  document.getElementById('vc-confirm').style.display='none';
+  document.getElementById('vc-language').disabled=true;
+  confirmVoiceDraft();
+}
+function cancelVoiceDraft(){
+  vcDraft=null;
+  const confirm=document.getElementById('vc-confirm');
+  if(confirm)confirm.style.display='none';
+  const select=document.getElementById('vc-language');
+  if(select)select.disabled=false;
+  if(!vcRecording&&!vcPendingTable)setVcState('idle');
+  if(vcWindow?.active())vcWindow.resume();
+}
+function confirmVoiceDraft(){
+  const parsed=vcDraft;
+  if(!parsed||vcPendingTable)return;
+  if(!wsConnected||!ws||ws.readyState!==WebSocket.OPEN){showVcError('Connessione non disponibile. Riprova.');return;}
+  const current=Object.values(departmentMap).filter(d=>d.active);
+  if(!current.some(d=>d.id===myDeptId)||parsed.departmentIds.some(id=>!current.some(d=>d.id===id))){
+    showVcError('Destinazione non più disponibile. Registra nuovamente.');return;
   }
+  const existing=countdowns.get(parsed.tableNumber);
+  if(existing&&existing.expiredAt===null&&existing.timeRemaining>0){
+    showVcError('Questo tavolo ha già un countdown attivo.');return;
+  }
+  try{
+    ws.send(JSON.stringify({action:'startCountdown',originDepartmentId:myDeptId,tableNumber:parsed.tableNumber,timeRemaining:parsed.durationMinutes*60,destinations:parsed.departmentIds}));
+    pendingSends.add(parsed.tableNumber);
+    vcPendingTable=parsed.tableNumber;
+    clearTimeout(vcPendingTimeout);
+    vcPendingTimeout=setTimeout(()=>{
+      if(vcPendingTable===parsed.tableNumber){
+        vcPendingTable=null;
+        document.getElementById('vc-language').disabled=false;
+        showVcError('Nessuna conferma ricevuta. Controlla il tavolo prima di riprovare.');
+        // Do not resume automatically if delivery is uncertain.
+        stopVoiceWindow('stopped');
+      }
+    },12000);
+    vcDraft=null;
+    document.getElementById('vc-confirm').style.display='none';
+    setVcState('pending');
+  }catch(e){showVcError('Invio fallito. Controlla la connessione.');}
 }
-
-function showVcSuccess(parsed){
+function voiceServerStartAck(data){
+  if(!vcPendingTable||String(data.tableNumber)!==vcPendingTable)return;
+  vcPendingTable=null;
+  clearTimeout(vcPendingTimeout);vcPendingTimeout=null;
+  document.getElementById('vc-language').disabled=false;
   setVcState('idle');
-  const myName   = departmentMap[myDeptId] ? departmentMap[myDeptId].name : 'Questo reparto';
-  const deptList = [myName].concat(parsed.matchedDepts.map(d => d.name)).join('<br>');
-  const res = document.getElementById('vc-result');
-  if(!res) return;
-  res.className   = 'vc-result ok';
-  res.style.display = 'block';
-  res.innerHTML   = `<div class="vc-result-title">✅ Countdown inviato</div>
-<div class="vc-result-body">Tavolo ${parsed.tableNumber}<br>${parsed.durationMinutes} minuti<br><br>Destinazioni:<br>${deptList}</div>`;
-  setTimeout(() => { res.style.display = 'none'; }, 3000);
+  if(vcWindow?.active())vcWindow.resume();
+  showVcMessage('✅ Countdown confermato dal server: tavolo '+data.tableNumber,false);
 }
-
+function voiceServerSendError(data){
+  if(!vcPendingTable||String(data.tableNumber)!==vcPendingTable)return;
+  vcPendingTable=null;
+  clearTimeout(vcPendingTimeout);vcPendingTimeout=null;
+  document.getElementById('vc-language').disabled=false;
+  showVcError('Countdown rifiutato: '+(data.message||data.code||'controlla i dati'));
+  if(vcWindow?.active())vcWindow.resume();
+}
+function showVcMessage(message,isError){
+  const el=document.getElementById('vc-result');
+  if(!el)return;
+  el.className='vc-result '+(isError?'err':'ok');
+  el.style.display='block';
+  el.textContent=message;
+}
 function showVcError(msg){
-  setVcState('idle');
-  const res = document.getElementById('vc-result');
-  if(!res) return;
-  res.className   = 'vc-result err';
-  res.style.display = 'block';
-  res.innerHTML   = `<div class="vc-result-title">✕ Comando non riconosciuto</div>
-<div class="vc-result-body">${msg.replace(/\n/g,'<br>')}</div>`;
-  setTimeout(() => { res.style.display = 'none'; }, 4000);
+  vcDraft=null;
+  const c=document.getElementById('vc-confirm');if(c)c.style.display='none';
+  const l=document.getElementById('vc-language');if(l)l.disabled=false;
+  setVcState('idle');showVcMessage('✕ '+msg,true);
 }
-
 function setVcState(state){
-  const btn  = document.getElementById('vc-btn');
-  const sts  = document.getElementById('vc-status');
-  const hint = document.getElementById('vc-hint');
-  if(!btn) return;
-  vcRecording = (state === 'rec');
-  switch(state){
-    case 'idle':
-      btn.textContent = '🎤 Avvia comando vocale';
-      btn.className   = 'vc-btn';
-      btn.disabled    = false;
-      if(sts)  sts.textContent  = '';
-      if(hint) hint.style.display = '';
-      break;
-    case 'rec':
-      btn.textContent = '⏹ Ferma registrazione';
-      btn.className   = 'vc-btn vc-rec';
-      btn.disabled    = false;
-      if(hint) hint.style.display = 'none';
-      break;
-    case 'busy':
-      btn.textContent = '⏳ Trascrizione...';
-      btn.className   = 'vc-btn vc-busy';
-      btn.disabled    = true;
-      if(sts) sts.textContent = 'Invio a Google Speech...';
-      break;
-  }
+  const btn=document.getElementById('vc-btn'),sts=document.getElementById('vc-status');
+  if(!btn)return;
+  const labels=voiceStrings();
+  btn.textContent=labels[state]||labels.idle;
+  btn.disabled=!['idle','rec'].includes(state);
+  btn.className='vc-btn'+(state==='rec'?' vc-rec':state==='busy'?' vc-busy':'');
+  if(sts)sts.textContent=state==='rec'?'Registrazione in corso':state==='busy'?'Riconoscimento vocale in corso':state==='pending'?'Invio in corso':'';
+  syncVoiceLanguageButtons();
 }
 
 // ── Cancel countdown ───────────────────────────────────────────────────────────
@@ -2263,6 +2400,11 @@ function connectWS(){
   };
 
   ws.onclose = () => {
+    if(vcPendingTable){
+      vcPendingTable=null;clearTimeout(vcPendingTimeout);vcPendingTimeout=null;
+      showVcError('Connessione persa: controlla se la comanda è arrivata prima di ripetere.');
+      stopVoiceWindow('stopped');
+    }
     wsConnected = false;
     setConnBadge(false);
     if(mexSendPending){
@@ -2297,8 +2439,10 @@ function connectWS(){
 
     if(data.action === 'startCountdown'){
       handleIncomingCountdown(data);
+      voiceServerStartAck(data);
     } else if(data.action === 'countdownError'){
       handleCountdownError(data);
+      voiceServerSendError(data);
     } else if(data.action === 'deleteCountdown'){
       countdowns.delete(String(data.tableNumber));
       renderCards();
@@ -3679,6 +3823,7 @@ window.addEventListener('beforeunload', () => {
   if(ws) ws.close();
   voiceMessages.forEach(vm => { if(vm.blobUrl) URL.revokeObjectURL(vm.blobUrl); });
 });
+initVoiceLanguage();
 </script>
 <script src="js/voice-preview-panel.js"></script>
 </body>

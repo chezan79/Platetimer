@@ -385,6 +385,12 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
                     headers: { 'Authorization': `Bearer ${idToken}` }
                 });
                 const parsed = await sessResp.json().catch(() => ({}));
+                if (sessResp.ok && parsed.success && parsed.isPlatformAdmin === true) {
+                    localStorage.removeItem('userCompany');
+                    sessionStorage.removeItem('ws_session_token');
+                    window.location.replace('/platform-admin.html');
+                    return;
+                }
                 if (sessResp.ok && parsed.success && parsed.token) {
                     sessData = parsed;
                     sessionStorage.setItem('ws_session_token', sessData.token);
