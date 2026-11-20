@@ -28,3 +28,21 @@ test('existing server-verified platform administrator routing is unchanged', () 
   assert.match(html, /window\.location\.href = redirectTarget/);
   assert.match(html, /sessionStorage\.setItem\('ws_session_token', sessionData\.token\)/);
 });
+
+test('both login methods and recovery actions remain present once', () => {
+  for (const id of ['forgot-password','change-password','go-to-register','login-email','login-password']) {
+    const re = new RegExp('id="' + id + '"','g');
+    assert.equal((html.match(re)||[]).length,1,id);
+  }
+  assert.match(html, /class="pt-login-help"/);
+  assert.match(html, /class="pt-login-footer"/);
+  assert.match(html, /id="pt-dept-heading" data-i18n="login.deptAccessTitle"/);
+});
+test('all new entry labels are translated in IT, FR and EN', () => {
+  const keySet = ['welcomeTitle','welcomeDesc','accessAction','registerAction','backHome',
+    'accessTitle','emailHeading','deptDescription'].map(k=>'entry.'+k);
+  for (const lang of ['it','fr','en']) {
+    const d = JSON.parse(fs.readFileSync(path.join(__dirname,'../public/i18n',lang+'.json'),'utf8'));
+    for (const key of keySet) assert.ok(typeof d[key]==='string' && d[key].length>0,lang+':'+key);
+  }
+});
