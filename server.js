@@ -513,13 +513,29 @@ async function getAuthoritativeServiceDeviceContext(session) {
 // [S1.4.1] Centralized structured error response for department access checks.
 // Returns { status, body } — caller does res.status(e.status).json(e.body).
 // All codes are stable strings for UI-layer branching (never parse the message).
+// Platform-wide feature management: never bind platform administrator to a restaurant.
+const { createVoiceAccess, mountPlatformVoiceAdmin } = require('./service/platform-voice-admin');
+const platformVoiceAccess = createVoiceAccess({ db });
+mountPlatformVoiceAdmin(app, {
+    db, lookupFirebaseAccount,
+    getCompanies: () => Object.entries(departmentsStore)
+        .map(([companyId, depts]) => ({
+            companyId,
+            departments: Array.isArray(depts) ? depts.length : 0
+        }))
+        .sort((a, b) => a.companyId.localeCompare(b.companyId)),
+    voiceAccess: platformVoiceAccess
+});
+
 // Preview-only RTC experiment. Does not alter existing Service routes or UI.
 require('./service/voice-rtc-test').mountVoiceRtcTest(app, {
-    requireAuth, getAuthoritativeServiceDeviceContext
+    requireAuth, getAuthoritativeServiceDeviceContext,
+    isVoiceAllowed: companyId => platformVoiceAccess.enabled(companyId)
 });
 require('./service/voice-invites-preview').mountVoiceInvites(app, {
     enabled: () => process.env.PLATETIMER_VOICE_TEST_ENABLED === 'true' && Boolean(process.env.REPL_ID) && process.env.NODE_ENV !== 'production',
-    requireAuth, getAuthoritativeServiceDeviceContext, getCompanyDepts
+    requireAuth, getAuthoritativeServiceDeviceContext, getCompanyDepts,
+    isVoiceAllowed: companyId => platformVoiceAccess.enabled(companyId)
 });
 
 function departmentAccessError(boundAcct) {
