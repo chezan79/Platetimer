@@ -10,6 +10,7 @@ const PREFIX = '/api/voice-call';
 const INVITES = 'platetimer_voice_invites';
 const CALLS = 'platetimer_voice_sessions';
 const RING_MS = 30000;
+const TOKEN_TTL_SECONDS = 90;
 const WINDOW_ERROR = 'Chiamate disponibili dalle 12:00 alle 14:30 e dalle 18:30 alle 22:00 (ora svizzera).';
 const safeKey = (companyId, departmentId) =>
   crypto.createHash('sha256').update(JSON.stringify([companyId,departmentId])).digest('hex');
@@ -163,7 +164,7 @@ function mountProductionVoiceCalls(app, {
     if(!call)return res.status(403).json({error:'Chiamata non autorizzata o conclusa.'});
     const appId=process.env.AGORA_APP_ID,secret=process.env.AGORA_APP_CERTIFICATE;
     if(!appId||!secret)return res.status(503).json({error:'Agora non configurato.'});
-    const seconds=Math.min(3600,slot.secondsRemaining,Math.floor((call.endsAt-now())/1000));
+    const seconds=Math.min(TOKEN_TTL_SECONDS,slot.secondsRemaining,Math.floor((call.endsAt-now())/1000));
     if(seconds<2)return res.status(403).json({error:'Fascia oraria conclusa.'});
     const {RtcTokenBuilder,RtcRole}=require('agora-token');
     const uid=rtcUid(device.companyId,device.departmentId);
