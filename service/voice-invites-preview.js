@@ -3,6 +3,7 @@
 // Preview-only, in-memory signaling. This is deliberately NOT production calling:
 // restart clears pending invites; deployment remains disabled.
 const crypto = require('crypto');
+const { canUsePreviewVoice } = require('./voice-access-policy');
 const RING_MS = 30000;
 const pending = new Map();
 
@@ -34,6 +35,9 @@ function mountVoiceInvites(app, { enabled, requireAuth, getAuthoritativeServiceD
       if (!enabled()) return res.status(404).json({ error: 'Test Voice non abilitato.' });
       const device = await deviceFor(req, res);
       if (!device) return;
+      if (!canUsePreviewVoice(device)) {
+        return res.status(403).json({ error: 'Voice calls are not enabled for this restaurant.' });
+      }
       sweep();
       return handler(req, res, device);
     });
