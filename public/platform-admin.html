@@ -11,7 +11,7 @@
     main{max-width:740px;margin:56px auto;padding:0 24px}
     article{background:white;border:1px solid #dfe5ee;border-radius:14px;padding:28px;box-shadow:0 4px 20px #1723480b}
     h1{margin:0 0 12px;font-size:26px}p{line-height:1.6}button{background:#5148da;color:white;border:0;border-radius:8px;padding:12px 18px;cursor:pointer;font-weight:650}
-    button:disabled{opacity:.55}#status{margin-bottom:18px;color:#54647e}#admin-content[hidden]{display:none}
+    button:disabled{opacity:.55}.restaurant{border-top:1px solid #e2e6ef;padding:16px 0;display:flex;align-items:center;justify-content:space-between;gap:12px}.restaurant small{display:block;color:#5d6980;margin-top:3px}.restaurant label{display:flex;align-items:center;gap:8px;font-weight:650;white-space:nowrap}#save-status{min-height:24px;color:#485d87}#reload{margin-right:10px}#status{margin-bottom:18px;color:#54647e}#admin-content[hidden]{display:none}
   </style>
 </head>
 <body>
@@ -21,8 +21,12 @@
     <div id="status" role="status">Verifica identità amministratore in corso…</div>
     <section id="admin-content" hidden>
       <h1>Amministrazione piattaforma</h1>
-      <p>Accesso verificato. Questo profilo è indipendente dagli account e dai reparti dei ristoranti.</p>
-      <p>La gestione delle funzionalità sperimentali, inclusa l'autorizzazione Agora per ristorante, sarà collegata qui dopo i controlli di sicurezza.</p>
+      <p>Gestisci le funzionalità dei ristoranti. Il tuo account amministratore non appartiene a nessun ristorante.</p>
+      <h2>Autorizzazioni Agora</h2>
+      <p>Le chiamate sono disabilitate per ogni ristorante finché non vengono abilitate qui. La funzione rimane inoltre soggetta alla modalità Preview del server.</p>
+      <div id="restaurants" aria-live="polite">Caricamento ristoranti…</div>
+      <p id="save-status" role="status"></p>
+      <button id="reload" type="button">Aggiorna elenco</button>
       <button id="logout" type="button">Esci</button>
     </section>
   </article>
@@ -56,8 +60,67 @@
       sessionStorage.removeItem('ws_session_token');
       status.textContent = 'Identità amministratore verificata';
       document.getElementById('admin-content').hidden = false;
+      await loadRestaurants();
     } catch (_) { status.textContent = 'Verifica amministratore non disponibile. Riprova.'; }
   });
+  async function adminApi(method, body) {
+    const user = auth.currentUser;
+    if (!user) throw new Error('Sessione scaduta');
+    const response = await fetch('/api/platform/voice-access', {
+      method, cache: 'no-store',
+      headers: { Authorization: 'Bearer ' + await user.getIdToken(),
+        ...(body ? { 'Content-Type': 'application/json' } : {}) },
+      ...(body ? { body: JSON.stringify(body) } : {})
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || 'Richiesta non riuscita');
+    return data;
+  }
+  async function loadRestaurants() {
+    const node = document.getElementById('restaurants');
+    const feedback = document.getElementById('save-status');
+    node.textContent = 'Caricamento…';
+    feedback.textContent = '';
+    try {
+      const { restaurants } = await adminApi('GET');
+      node.replaceChildren();
+      if (!restaurants.length) { node.textContent = 'Nessun ristorante registrato.'; return; }
+      for (const item of restaurants) {
+        const row = document.createElement('div');
+        row.className = 'restaurant';
+        const info = document.createElement('div');
+        const name = document.createElement('strong');
+        name.textContent = item.companyId;
+        const count = document.createElement('small');
+        count.textContent = item.departments + ' reparti';
+        info.append(name, count);
+        const label = document.createElement('label');
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = item.enabled === true;
+        checkbox.setAttribute('aria-label', 'Autorizzazione Agora per ' + item.companyId);
+        label.append(checkbox, document.createTextNode('Agora'));
+        checkbox.addEventListener('change', async () => {
+          const desired = checkbox.checked;
+          checkbox.disabled = true;
+          feedback.textContent = 'Salvataggio in corso…';
+          try {
+            await adminApi('PUT', {companyId: item.companyId, enabled: desired});
+            feedback.textContent = item.companyId + ': ' + (desired ? 'Agora autorizzato' : 'Agora disabilitato');
+          } catch (err) {
+            checkbox.checked = !desired;
+            feedback.textContent = 'Errore: ' + err.message;
+          } finally { checkbox.disabled = false; }
+        });
+        row.append(info, label);
+        node.append(row);
+      }
+    } catch (err) {
+      node.textContent = 'Impossibile caricare le autorizzazioni.';
+      feedback.textContent = err.message;
+    }
+  }
+  document.getElementById('reload').addEventListener('click', loadRestaurants);
   document.getElementById('logout').addEventListener('click', async () => {
     localStorage.removeItem('userCompany');
     sessionStorage.removeItem('ws_session_token');
