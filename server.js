@@ -598,6 +598,17 @@ app.post('/api/auth/session', async (req, res) => {
             return res.status(401).json({ error: 'Invalid or expired Firebase token' });
         }
 
+        // Platform administrator is independent of any restaurant/company profile.
+        // The server verifies the Firebase identity and its configured UID;
+        // never infer platform authority from a browser-supplied company or email.
+        const platformAdminUid = String(process.env.PLATETIMER_PLATFORM_ADMIN_UID || '').trim();
+        if (platformAdminUid && uid === platformAdminUid) {
+            if (fbUser.emailVerified !== true || fbUser.disabled === true) {
+                return res.status(403).json({ error: 'Platform administrator account is not verified or is disabled.' });
+            }
+            return res.json({ success: true, isPlatformAdmin: true });
+        }
+
         // [SECURITY] Step 2a: If this uid has a server-side Operations membership,
         // that record's company is AUTHORITATIVE for session issuance — it was set
         // by the inviting Director (or bootstrap) and can never be chosen by the
