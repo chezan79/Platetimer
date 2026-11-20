@@ -154,3 +154,32 @@ test('company and department derive deterministic separate Agora identities',()=
   assert.notEqual(safeKey('molard','cucina'),safeKey('bern','cucina'));
   assert.notEqual(rtcUid('molard','cucina'),rtcUid('molard','pizzeria'));
 });
+
+test('a call token is denied to nonparticipants and before the recipient accepts',async()=>{
+  const f=fixture({clock:300000});
+  const invite=await f.request('POST','/invite',{toDepartmentId:'cucina'});
+  f.setDept('cucina');
+  assert.equal((await f.request('POST','/token',{callId:invite.id})).status,403);
+  f.setDept('unknown');
+  assert.equal((await f.request('POST','/token',{callId:invite.id})).status,403);
+  f.setCompany('bern');
+  f.setDept('cucina');
+  assert.equal((await f.request('POST','/token',{callId:invite.id})).status,403);
+  f.setCompany('molard');
+  assert.equal((await f.request('POST','/respond',{id:invite.id,answer:'accept'})).accepted,true);
+  // Auth succeeded; absent Agora env produces 503 without exposing a token.
+  const token=await f.request('POST','/token',{callId:invite.id});
+  assert.ok([200,503].includes(token.status));
+  f.setDept('pizzeria');
+  await f.request('POST','/hangup',{callId:invite.id});
+  assert.equal((await f.request('POST','/token',{callId:invite.id})).status,403);
+});
+test('hanging up before answer removes waiting invitation immediately',async()=>{
+  const f=fixture({clock:400000});
+  const a=await f.request('POST','/invite',{toDepartmentId:'cucina'});
+  assert.equal((await f.request('POST','/hangup',{callId:a.id})).ended,true);
+  f.setDept('cucina');
+  assert.deepEqual((await f.request('GET','/invites')).invites,[]);
+  f.setDept('pizzeria');
+  assert.equal((await f.request('POST','/invite',{toDepartmentId:'cucina'})).status,200);
+});
