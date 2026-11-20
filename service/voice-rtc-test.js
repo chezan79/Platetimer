@@ -1,6 +1,7 @@
 'use strict';
 
 const crypto = require('crypto');
+const { voiceWindow } = require('./voice-schedule');
 
 // Preview-only audio connectivity test. Not the production calling feature.
 // Uses the existing authenticated Service device as the sole room principal.
@@ -18,7 +19,9 @@ function mountVoiceRtcTest(app, { requireAuth, getAuthoritativeServiceDeviceCont
     try {
       const device = await getAuthoritativeServiceDeviceContext(session);
       const allowed = !!device && await isVoiceAllowed(device.companyId);
-      return res.json({ enabled: allowed });
+      const window = voiceWindow();
+      return res.json({ enabled: allowed && window.allowed, scheduleEnabled: window.allowed,
+        timeZone: window.timeZone });
     } catch (error) {
       return res.status(503).json({ error: 'Voice authorization unavailable.' });
     }
@@ -43,6 +46,9 @@ function mountVoiceRtcTest(app, { requireAuth, getAuthoritativeServiceDeviceCont
     } catch (error) {
       return res.status(503).json({ error: 'Voice authorization unavailable.' });
     }
+    const window = voiceWindow();
+    if (!window.allowed || window.secondsRemaining < 2)
+      return res.status(403).json({ error: 'Chiamate disponibili dalle 12:00 alle 14:30 e dalle 18:30 alle 22:00 (ora svizzera).' });
     const appId = process.env.AGORA_APP_ID;
     const appCertificate = process.env.AGORA_APP_CERTIFICATE;
     if (!appId || !appCertificate) return res.status(503).json({ error: 'Agora is not configured.' });
@@ -56,7 +62,7 @@ function mountVoiceRtcTest(app, { requireAuth, getAuthoritativeServiceDeviceCont
     let token;
     try {
       const { RtcTokenBuilder, RtcRole } = require('agora-token');
-      const ttlSeconds = 3600;
+      const ttlSeconds = Math.min(3600, window.secondsRemaining);
       token = RtcTokenBuilder.buildTokenWithUid(appId, appCertificate, channel, uid,
         RtcRole.PUBLISHER, ttlSeconds, ttlSeconds);
     } catch (error) {
@@ -64,7 +70,7 @@ function mountVoiceRtcTest(app, { requireAuth, getAuthoritativeServiceDeviceCont
       return res.status(503).json({ error: 'Token generation unavailable.' });
     }
     return res.json({ appId, channel, uid, token, departmentName: device.department.name,
-      expiresInSeconds: 3600 });
+      expiresInSeconds: Math.min(3600, window.secondsRemaining), windowEndsInSeconds: window.secondsRemaining });
   });
 }
 
