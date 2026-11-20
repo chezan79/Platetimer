@@ -1151,6 +1151,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 <script src="js/mex-qr.js"></script>
 <script src="js/i18n.js"></script>
 <script src="js/service-worker-identity.js"></script>
+<script src="js/voice-session-10min.js"></script>
 <script>const i18nReady = I18n.init({ selector: '#i18n-dept-sel' });</script>
 <script>
 'use strict';
@@ -2057,62 +2058,51 @@ function parseVoiceCommand(text){
   return { tableNumber, durationMinutes, matchedDepts };
 }
 
+// Ten-minute capture is independent of parsing and countdown dispatch.
+let vcSession = null;
+function ensureVoiceSession(){
+  if(vcSession) return vcSession;
+  vcSession = PlateTimerVoiceSession.createVoiceSession({
+    mediaDevices: navigator.mediaDevices,
+    Recorder: window.MediaRecorder,
+    getMimeType: getSupportedMimeType,
+    onClip: (blob, guard) => processVoiceCmd(blob, guard.isCurrent),
+    onState: ({status, remainingMs, error}) => {
+      if(status === 'listening' || status === 'requesting-microphone'){
+        setVcState('listening');
+        const sts = document.getElementById('vc-status');
+        const seconds = Math.ceil(remainingMs / 1000);
+        if(sts) sts.textContent = 'Ascolto attivo · ' +
+          Math.floor(seconds/60) + ':' + String(seconds%60).padStart(2,'0');
+      } else if(status === 'clip-error'){
+        console.warn('[vc] Segment processing error', error);
+      } else {
+        setVcState('idle');
+        if(status === 'expired'){
+          const sts = document.getElementById('vc-status');
+          if(sts) sts.textContent = 'Sessione di 10 minuti terminata.';
+        } else if(status === 'microphone-error' || status === 'microphone-ended' || status === 'recorder-error'){
+          showVcError(status === 'microphone-error' && error?.name === 'NotAllowedError'
+            ? 'Accesso al microfono negato.' : 'Microfono non disponibile.');
+        }
+      }
+    }
+  });
+  return vcSession;
+}
 function toggleVoiceCmd(){
-  if(vcRecording){ stopVoiceCmd(); } else { startVoiceCmd(); }
+  const session = ensureVoiceSession();
+  if(session.active || session.starting) session.stop();
+  else void session.start();
 }
+function startVoiceCmd(){ return ensureVoiceSession().start(); }
+function stopVoiceCmd(){ if(vcSession) vcSession.stop(); }
+window.addEventListener('pagehide', stopVoiceCmd);
 
-async function startVoiceCmd(){
-  const sts = document.getElementById('vc-status');
-  const res = document.getElementById('vc-result');
-  if(res) res.style.display = 'none';
-
-  if(!navigator.mediaDevices || !window.MediaRecorder){
-    showVcError('Microfono non supportato in questo browser.');
-    return;
-  }
+async function processVoiceCmd(blob, isCurrent){
+  if(!isCurrent()) return;
   try {
-    const stream   = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const mimeType = getSupportedMimeType();
-    vcChunks = [];
-    vcMediaRec = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
-    vcMediaRec.ondataavailable = e => { if(e.data.size > 0) vcChunks.push(e.data); };
-    vcMediaRec.onstop = processVoiceCmd;
-    vcMediaRec.start();
-    vcRecording = true;
-    setVcState('rec');
-
-    // Countdown display + auto-stop
-    let secsLeft = VC_MAX_SECS;
-    if(sts) sts.textContent = `Registrazione... ${secsLeft}`;
-    vcCountInt = setInterval(() => {
-      secsLeft--;
-      if(sts) sts.textContent = secsLeft > 0 ? `Registrazione... ${secsLeft}` : 'Elaborazione...';
-    }, 1000);
-    vcTimer = setTimeout(() => stopVoiceCmd(), VC_MAX_SECS * 1000);
-
-  } catch(e){
-    console.error('[vc] mic error:', e);
-    const msg = (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError')
-      ? 'Accesso al microfono negato.' : 'Errore microfono.';
-    showVcError(msg);
-  }
-}
-
-function stopVoiceCmd(){
-  clearInterval(vcCountInt); clearTimeout(vcTimer);
-  vcCountInt = null; vcTimer = null;
-  if(vcMediaRec && vcRecording){
-    vcMediaRec.stop();
-    vcMediaRec.stream.getTracks().forEach(t => t.stop());
-    vcRecording = false;
-    setVcState('busy');
-  }
-}
-
-async function processVoiceCmd(){
-  try {
-    const mimeType = (vcMediaRec && vcMediaRec.mimeType) ? vcMediaRec.mimeType : 'audio/webm';
-    const blob     = new Blob(vcChunks, { type: mimeType });
+    const mimeType = blob.type || 'audio/webm';
     const b64      = await blobToBase64(blob);
     const encoding = mimeType.includes('ogg') ? 'OGG_OPUS'
                    : mimeType.includes('mp4') ? 'MP3'
@@ -2126,16 +2116,16 @@ async function processVoiceCmd(){
         config: { encoding, sampleRateHertz: 48000, languageCode: 'it-IT' }
       })
     });
+    if(!isCurrent()) return;
     if(!resp.ok){ showVcError('Errore trascrizione. Riprova.'); return; }
 
     let sttResult;
     try { sttResult = await resp.json(); } catch { sttResult = null; }
-    if(!sttResult || !sttResult.transcription){
-      showVcError('Comando non riconosciuto.\nNessun audio rilevato.\nRipeti il comando.');
-      return;
-    }
+    // Silent clips are expected while the ten-minute microphone is active.
+    if(!sttResult || !sttResult.transcription) return;
 
     console.log('[vc] transcription:', sttResult.transcription);
+    if(!isCurrent()) return;
     const parsed = parseVoiceCommand(sttResult.transcription);
 
     // Require all three fields — no partial countdowns
@@ -2159,6 +2149,11 @@ async function processVoiceCmd(){
     const deptIds   = parsed.matchedDepts.map(d => d.id);
     if(!deptIds.includes(myDeptId)) deptIds.push(myDeptId);
 
+    if(!isCurrent()) return;
+    if(!ws || ws.readyState !== WebSocket.OPEN){
+      showVcError('Connessione WebSocket non disponibile: comando non inviato.');
+      return;
+    }
     // Register as pending so the server echo is tagged as 'sent' on this page.
     // No optimistic insertion — display deferred until authoritative server echo.
     pendingSends.add(tableNum);
@@ -2178,12 +2173,11 @@ async function processVoiceCmd(){
 
   } catch(e){
     console.error('[vc] process error:', e);
-    showVcError('Errore di rete. Riprova.');
+    if(isCurrent()) showVcError('Errore di rete. Riprova.');
   }
 }
 
 function showVcSuccess(parsed){
-  setVcState('idle');
   const myName   = departmentMap[myDeptId] ? departmentMap[myDeptId].name : 'Questo reparto';
   const deptList = [myName].concat(parsed.matchedDepts.map(d => d.name)).join('<br>');
   const res = document.getElementById('vc-result');
@@ -2196,7 +2190,6 @@ function showVcSuccess(parsed){
 }
 
 function showVcError(msg){
-  setVcState('idle');
   const res = document.getElementById('vc-result');
   if(!res) return;
   res.className   = 'vc-result err';
@@ -2207,31 +2200,22 @@ function showVcError(msg){
 }
 
 function setVcState(state){
-  const btn  = document.getElementById('vc-btn');
-  const sts  = document.getElementById('vc-status');
+  const btn = document.getElementById('vc-btn');
+  const sts = document.getElementById('vc-status');
   const hint = document.getElementById('vc-hint');
   if(!btn) return;
-  vcRecording = (state === 'rec');
-  switch(state){
-    case 'idle':
-      btn.textContent = '🎤 Avvia comando vocale';
-      btn.className   = 'vc-btn';
-      btn.disabled    = false;
-      if(sts)  sts.textContent  = '';
-      if(hint) hint.style.display = '';
-      break;
-    case 'rec':
-      btn.textContent = '⏹ Ferma registrazione';
-      btn.className   = 'vc-btn vc-rec';
-      btn.disabled    = false;
-      if(hint) hint.style.display = 'none';
-      break;
-    case 'busy':
-      btn.textContent = '⏳ Trascrizione...';
-      btn.className   = 'vc-btn vc-busy';
-      btn.disabled    = true;
-      if(sts) sts.textContent = 'Invio a Google Speech...';
-      break;
+  vcRecording = state === 'listening';
+  if(state === 'listening'){
+    btn.textContent = '⏹ Disattiva comando vocale';
+    btn.className = 'vc-btn vc-rec';
+    btn.disabled = false;
+    if(hint) hint.style.display = 'none';
+  } else {
+    btn.textContent = '🎤 Attiva comando vocale (10 min)';
+    btn.className = 'vc-btn';
+    btn.disabled = false;
+    if(sts) sts.textContent = '';
+    if(hint) hint.style.display = '';
   }
 }
 
