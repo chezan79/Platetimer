@@ -513,13 +513,29 @@ async function getAuthoritativeServiceDeviceContext(session) {
 // [S1.4.1] Centralized structured error response for department access checks.
 // Returns { status, body } — caller does res.status(e.status).json(e.body).
 // All codes are stable strings for UI-layer branching (never parse the message).
+// Platform-wide feature management: never bind platform administrator to a restaurant.
+const { createVoiceAccess, mountPlatformVoiceAdmin } = require('./service/platform-voice-admin');
+const platformVoiceAccess = createVoiceAccess({ db });
+mountPlatformVoiceAdmin(app, {
+    db, lookupFirebaseAccount,
+    getCompanies: () => Object.entries(departmentsStore)
+        .map(([companyId, depts]) => ({
+            companyId,
+            departments: Array.isArray(depts) ? depts.length : 0
+        }))
+        .sort((a, b) => a.companyId.localeCompare(b.companyId)),
+    voiceAccess: platformVoiceAccess
+});
+
 // Preview-only RTC experiment. Does not alter existing Service routes or UI.
 require('./service/voice-rtc-test').mountVoiceRtcTest(app, {
-    requireAuth, getAuthoritativeServiceDeviceContext
+    requireAuth, getAuthoritativeServiceDeviceContext,
+    isVoiceAllowed: companyId => platformVoiceAccess.enabled(companyId)
 });
 require('./service/voice-invites-preview').mountVoiceInvites(app, {
     enabled: () => process.env.PLATETIMER_VOICE_TEST_ENABLED === 'true' && Boolean(process.env.REPL_ID) && process.env.NODE_ENV !== 'production',
-    requireAuth, getAuthoritativeServiceDeviceContext, getCompanyDepts
+    requireAuth, getAuthoritativeServiceDeviceContext, getCompanyDepts,
+    isVoiceAllowed: companyId => platformVoiceAccess.enabled(companyId)
 });
 
 function departmentAccessError(boundAcct) {
@@ -596,6 +612,17 @@ app.post('/api/auth/session', async (req, res) => {
         if (!uid) {
             console.log('⛔ [SECURITY] /api/auth/session rejected: invalid Firebase token');
             return res.status(401).json({ error: 'Invalid or expired Firebase token' });
+        }
+
+        // Platform administrator is independent of any restaurant/company profile.
+        // The server verifies the Firebase identity and its configured UID;
+        // never infer platform authority from a browser-supplied company or email.
+        const platformAdminUid = String(process.env.PLATETIMER_PLATFORM_ADMIN_UID || '').trim();
+        if (platformAdminUid && uid === platformAdminUid) {
+            if (fbUser.emailVerified !== true || fbUser.disabled === true) {
+                return res.status(403).json({ error: 'Platform administrator account is not verified or is disabled.' });
+            }
+            return res.json({ success: true, isPlatformAdmin: true });
         }
 
         // [SECURITY] Step 2a: If this uid has a server-side Operations membership,
@@ -7547,6 +7574,18 @@ function broadcastOps(companyId, payload) {
 
 // Store per i countdown attivi per ogni azienda
 const activeCountdowns = new Map();
+
+// Platform-wide monitor: strictly read-only access to existing WebSocket
+// and countdown state. Does not register socket listeners or mutate restaurant data.
+require('./admin-monitor/monitor-api').mountPlatformMonitor(app, {
+    wss,
+    lookupFirebaseAccount,
+    getCompanies: () => Object.entries(departmentsStore).map(([companyId, depts]) => ({
+        companyId,
+        departments: Array.isArray(depts) ? depts.length : 0
+    })),
+    getCountdowns: companyId => activeCountdowns.get(companyId)?.size || 0
+});
 
 // ── Post-expiry grace period ────────────────────────────────────────────────
 // After a countdown reaches 00:00 it stays visible (blinking, expired) for this

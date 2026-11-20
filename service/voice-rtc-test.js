@@ -1,18 +1,30 @@
 'use strict';
 
 const crypto = require('crypto');
+const { voiceWindow } = require('./voice-schedule');
 
 // Preview-only audio connectivity test. Not the production calling feature.
 // Uses the existing authenticated Service device as the sole room principal.
-function mountVoiceRtcTest(app, { requireAuth, getAuthoritativeServiceDeviceContext }) {
+function mountVoiceRtcTest(app, { requireAuth, getAuthoritativeServiceDeviceContext, isVoiceAllowed }) {
   function available() {
     return process.env.PLATETIMER_VOICE_TEST_ENABLED === 'true' &&
       Boolean(process.env.REPL_ID) && process.env.NODE_ENV !== 'production';
   }
 
-  app.get('/api/voice-test/status', (_req, res) => {
+  app.get('/api/voice-test/status', async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
-    return res.json({ enabled: available() });
+    if (!available()) return res.json({ enabled: false });
+    const session = requireAuth(req, res);
+    if (!session) return;
+    try {
+      const device = await getAuthoritativeServiceDeviceContext(session);
+      const allowed = !!device && await isVoiceAllowed(device.companyId);
+      const window = voiceWindow();
+      return res.json({ enabled: allowed && window.allowed, scheduleEnabled: window.allowed,
+        timeZone: window.timeZone });
+    } catch (error) {
+      return res.status(503).json({ error: 'Voice authorization unavailable.' });
+    }
   });
 
   app.post('/api/voice-test/token', async (req, res) => {
@@ -28,6 +40,15 @@ function mountVoiceRtcTest(app, { requireAuth, getAuthoritativeServiceDeviceCont
       return res.status(503).json({ error: 'Department lookup unavailable.' });
     }
     if (!device) return res.status(403).json({ error: 'An active Service department login is required.' });
+    try {
+      if (!await isVoiceAllowed(device.companyId))
+        return res.status(403).json({ error: 'Voice disabled for this restaurant.' });
+    } catch (error) {
+      return res.status(503).json({ error: 'Voice authorization unavailable.' });
+    }
+    const window = voiceWindow();
+    if (!window.allowed || window.secondsRemaining < 2)
+      return res.status(403).json({ error: 'Chiamate disponibili dalle 12:00 alle 14:30 e dalle 18:30 alle 22:00 (ora svizzera).' });
     const appId = process.env.AGORA_APP_ID;
     const appCertificate = process.env.AGORA_APP_CERTIFICATE;
     if (!appId || !appCertificate) return res.status(503).json({ error: 'Agora is not configured.' });
@@ -41,7 +62,7 @@ function mountVoiceRtcTest(app, { requireAuth, getAuthoritativeServiceDeviceCont
     let token;
     try {
       const { RtcTokenBuilder, RtcRole } = require('agora-token');
-      const ttlSeconds = 3600;
+      const ttlSeconds = Math.min(3600, window.secondsRemaining);
       token = RtcTokenBuilder.buildTokenWithUid(appId, appCertificate, channel, uid,
         RtcRole.PUBLISHER, ttlSeconds, ttlSeconds);
     } catch (error) {
@@ -49,7 +70,7 @@ function mountVoiceRtcTest(app, { requireAuth, getAuthoritativeServiceDeviceCont
       return res.status(503).json({ error: 'Token generation unavailable.' });
     }
     return res.json({ appId, channel, uid, token, departmentName: device.department.name,
-      expiresInSeconds: 3600 });
+      expiresInSeconds: Math.min(3600, window.secondsRemaining), windowEndsInSeconds: window.secondsRemaining });
   });
 }
 

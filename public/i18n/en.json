@@ -1307,5 +1307,13 @@
   "ops.notes.createTask": "Create task",
   "ops.notes.dismiss": "Dismiss",
   "ops.notes.taskPrefill": "The note text has been copied into the draft. Edit the fields before creating the task.",
-  "ops.notes.handoffUnavailable": "This note is not available to create a task."
+  "ops.notes.handoffUnavailable": "This note is not available to create a task.",
+  "entry.welcomeTitle": "Welcome to PlateTimer",
+  "entry.welcomeDesc": "Real-time coordination across your restaurant's departments.",
+  "entry.accessAction": "Sign in to PlateTimer",
+  "entry.registerAction": "Register your restaurant",
+  "entry.backHome": "← Back to welcome",
+  "entry.accessTitle": "Sign in to PlateTimer",
+  "entry.emailHeading": "Email sign-in",
+  "entry.deptDescription": "Access the Kitchen, Pizzeria or another department station."
 }
