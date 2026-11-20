@@ -1307,5 +1307,13 @@
   "ops.notes.createTask": "Crea compito",
   "ops.notes.dismiss": "Archivia",
   "ops.notes.taskPrefill": "Testo della nota copiato nella bozza. Modifica i campi prima di creare il compito.",
-  "ops.notes.handoffUnavailable": "Questa nota non è disponibile per creare un compito."
+  "ops.notes.handoffUnavailable": "Questa nota non è disponibile per creare un compito.",
+  "entry.welcomeTitle": "Benvenuto in PlateTimer",
+  "entry.welcomeDesc": "Il coordinamento dei reparti del tuo ristorante, in tempo reale.",
+  "entry.accessAction": "Accedi a PlateTimer",
+  "entry.registerAction": "Registra il tuo ristorante",
+  "entry.backHome": "← Torna alla pagina iniziale",
+  "entry.accessTitle": "Accedi a PlateTimer",
+  "entry.emailHeading": "Accesso con email",
+  "entry.deptDescription": "Entra nella postazione Cucina, Pizzeria o in un altro reparto."
 }
