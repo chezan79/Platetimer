@@ -518,6 +518,23 @@
                     const userCredential = await signInWithEmailAndPassword(auth, email, password);
                     const user = userCredential.user;
 
+                    // Platform admin is verified by the backend and has no restaurant profile.
+                    // Route before reading users/{uid} or reusing a cached userCompany.
+                    const platformIdToken = await user.getIdToken();
+                    const platformResponse = await fetch('/api/auth/session', {
+                        method: 'POST',
+                        headers: { Authorization: `Bearer ${platformIdToken}` }
+                    });
+                    if (platformResponse.ok) {
+                        const platformIdentity = await platformResponse.json();
+                        if (platformIdentity.isPlatformAdmin === true) {
+                            localStorage.removeItem('userCompany');
+                            sessionStorage.removeItem('ws_session_token');
+                            window.location.replace('/platform-admin.html');
+                            return;
+                        }
+                    }
+
                     // Recupera i dati dell'utente da Firestore
                     const userDoc = await getDoc(doc(db, "users", user.uid));
                     if (userDoc.exists()) {
