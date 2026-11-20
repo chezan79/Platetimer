@@ -592,14 +592,23 @@
                         method: 'POST',
                         headers: { Authorization: `Bearer ${platformIdToken}` }
                     });
-                    if (platformResponse.ok) {
-                        const platformIdentity = await platformResponse.json();
-                        if (platformIdentity.isPlatformAdmin === true) {
-                            localStorage.removeItem('userCompany');
-                            sessionStorage.removeItem('ws_session_token');
-                            window.location.replace('/platform-admin.html');
-                            return;
-                        }
+                    // A server-denied account must NEVER fall through to the
+                    // restaurant UI (nor resurrect a cached userCompany).
+                    const platformIdentity = await platformResponse.json().catch(() => ({}));
+                    if (platformResponse.ok && platformIdentity.success === true &&
+                        platformIdentity.isPlatformAdmin === true) {
+                        localStorage.removeItem('userCompany');
+                        sessionStorage.removeItem('ws_session_token');
+                        window.location.replace('/platform-admin.html');
+                        return;
+                    }
+                    if (!platformResponse.ok || platformIdentity.success !== true ||
+                        !platformIdentity.token || !platformIdentity.companyName) {
+                        localStorage.removeItem('userCompany');
+                        sessionStorage.removeItem('ws_session_token');
+                        throw new Error(platformResponse.status === 403
+                            ? 'Accesso non autorizzato dal server. Se usi l’account amministratore centrale, verifica PLATETIMER_PLATFORM_ADMIN_UID nelle variabili Railway.'
+                            : 'Impossibile verificare il tuo accesso con il server. Nessun ristorante sarà selezionato automaticamente.');
                     }
 
                     // Recupera i dati dell'utente da Firestore
@@ -706,6 +715,10 @@
                             break;
                     }
 
+                    if (error.message && (error.message.includes('PLATETIMER_PLATFORM_ADMIN_UID') ||
+                        error.message.includes('Impossibile verificare il tuo accesso'))) {
+                        errorMessage = error.message;
+                    }
                     showMessage('login-message', errorMessage, true);
                 }
             });
