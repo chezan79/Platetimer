@@ -112,6 +112,31 @@
             }
         }
 
+        /* Refined unified access: two clearly separated paths, same auth flows. */
+        html[data-pt-entry="access"] .pt-reg-forms {padding-top:1.45rem;padding-bottom:1.55rem;}
+        html[data-pt-entry="access"] .pt-entry-back {margin-bottom:10px;}
+        html[data-pt-entry="access"] #login-form h2 {font-size:23px;margin-bottom:18px;padding-bottom:10px;}
+        html[data-pt-entry="access"] #form-login {gap:14px;}
+        html[data-pt-entry="access"] #form-login input {padding:13px 16px;}
+        html[data-pt-entry="access"] #form-login button[type="submit"] {margin-top:1px;padding:14px;}
+        .pt-email-heading {font-size:15px;color:#253651;margin:0 0 12px;font-weight:700;text-align:left;}
+        .pt-login-help {display:flex;justify-content:flex-end;margin:-3px 0 0;font-size:13px;}
+        .pt-login-help a {color:#4a57b7;text-decoration:none;font-weight:600;}
+        .pt-login-footer {display:flex;flex-wrap:wrap;gap:8px 18px;justify-content:center;
+          align-items:center;margin-top:16px;font-size:13px;color:#69778a;}
+        .pt-login-footer a {color:#4654b8;text-decoration:none;font-weight:600;}
+        .pt-login-footer-secondary {opacity:.8;}
+        html[data-pt-entry="access"] .pt-entry-options {margin-top:21px;padding:19px 17px;
+          border:1px solid #e1e6f0;border-radius:12px;background:#f8faff;}
+        html[data-pt-entry="access"] .pt-entry-options h3 {text-align:left;margin:0 0 4px;font-size:15px;}
+        html[data-pt-entry="access"] .pt-entry-options p {text-align:left;margin:0 0 13px;font-size:13px;}
+        html[data-pt-entry="access"] .pt-entry-dept {background:white;padding:13px;}
+        html[data-pt-entry="access"] .pt-entry-dept:hover {background:#f0f1ff;}
+        @media(max-width:699px) {
+          html[data-pt-entry="access"] .pt-reg-forms {padding:1.2rem 1.3rem 1.5rem;}
+          html[data-pt-entry="access"] .pt-entry-options {padding:16px 13px;margin-top:16px;}
+        }
+
         /* First-name / last-name on the same row (desktop only) */
         @media (min-width: 700px) {
             .pt-name-row {
@@ -130,10 +155,10 @@
     <main class="pt-welcome" id="pt-welcome">
       <section class="pt-welcome-card" aria-labelledby="pt-welcome-title">
         <img class="pt-welcome-logo" src="platetimer-logo.png" alt="PlateTimer">
-        <h1 id="pt-welcome-title">Benvenuto in PlateTimer</h1>
-        <p>Il coordinamento dei reparti del tuo ristorante, in tempo reale.</p>
-        <a class="pt-entry-action pt-entry-primary" href="/index.html?view=access">Accedi a PlateTimer</a>
-        <a class="pt-entry-action pt-entry-secondary" href="/index.html?view=register">Registra il tuo ristorante</a>
+        <h1 id="pt-welcome-title" data-i18n="entry.welcomeTitle">Benvenuto in PlateTimer</h1>
+        <p data-i18n="entry.welcomeDesc">Il coordinamento dei reparti del tuo ristorante, in tempo reale.</p>
+        <a class="pt-entry-action pt-entry-primary" href="/index.html?view=access" data-i18n="entry.accessAction">Accedi a PlateTimer</a>
+        <a class="pt-entry-action pt-entry-secondary" href="/index.html?view=register" data-i18n="entry.registerAction">Registra il tuo ristorante</a>
       </section>
     </main>
     <div class="container">
@@ -146,7 +171,7 @@
 
             <!-- ── Form column (all panels) ── -->
             <div class="pt-reg-forms">
-            <a href="/index.html" class="pt-entry-back">← Torna alla pagina iniziale</a>
+            <a href="/index.html" class="pt-entry-back" data-i18n="entry.backHome">← Torna alla pagina iniziale</a>
             <!-- Modulo di registrazione -->
             <div id="register-form">
                 <h2 data-i18n="login.registerTitle">Registrati</h2>
@@ -169,27 +194,28 @@
 
             <!-- Modulo di login -->
             <div id="login-form" style="display: none;">
-                <h2 data-i18n="login.loginTitle">Accedi</h2>
+                <h2 data-i18n="entry.accessTitle">Accedi a PlateTimer</h2>
+                <h3 class="pt-email-heading" data-i18n="entry.emailHeading">Accesso con email</h3>
                 <div id="login-message" class="message"></div>
                 <form id="form-login">
                     <input type="email" id="login-email" placeholder="Email" data-i18n-placeholder="login.email" required>
                     <input type="password" id="login-password" placeholder="Password" data-i18n-placeholder="login.password" required>
+                    <div class="pt-login-help">
+                        <a href="#" id="forgot-password" data-i18n="login.forgotLink">Password dimenticata?</a>
+                    </div>
                     <button type="submit" data-i18n="login.loginBtn">Accedi</button>
                 </form>
-                <div class="toggle-link">
+                <div class="pt-login-footer">
                     <span><span data-i18n="login.noAccount">Non hai un account?</span> <a href="#" id="go-to-register" data-i18n="login.registerLink">Registrati</a></span>
-                    <br>
-                    <span><a href="#" id="forgot-password" data-i18n="login.forgotLink">Password dimenticata?</a></span>
-                    <br>
-                    <span><a href="#" id="change-password" data-i18n="login.changeLink">Cambia Password</a></span>
+                    <a class="pt-login-footer-secondary" href="#" id="change-password" data-i18n="login.changeLink">Cambia Password</a>
                 </div>
             </div>
 
             <!-- Accesso reparto: separate credentials, same centralized access page. -->
             <section id="dept-access" class="pt-entry-options" aria-labelledby="pt-dept-heading" hidden>
-              <h3 id="pt-dept-heading">Accesso reparto</h3>
-              <p>Entra nella postazione Cucina, Pizzeria o in un altro reparto.</p>
-              <a class="pt-entry-dept" href="/service-login.html">Entra nel reparto</a>
+              <h3 id="pt-dept-heading" data-i18n="login.deptAccessTitle">Accesso reparto</h3>
+              <p data-i18n="entry.deptDescription">Entra nella postazione Cucina, Pizzeria o in un altro reparto.</p>
+              <a class="pt-entry-dept" href="/service-login.html" data-i18n="login.deptAccessBtn">Entra nel reparto</a>
             </section>
 
             <!-- Modulo per password dimenticata -->
