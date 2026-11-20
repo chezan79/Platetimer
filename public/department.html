@@ -2281,13 +2281,15 @@ async function processVoiceCmd(){
   }finally{vcChunks=[];}
 }
 function showVoiceDraft(parsed){
+  // Parsing is complete and validated. Dispatch immediately, without another click.
+  // confirmVoiceDraft retains the WebSocket, department, duplicate-table and ACK guards.
   vcDraft=parsed;
   const names=parsed.departmentIds.map(id=>departmentMap[id]?.name||'Reparto sconosciuto');
   const t=voiceStrings();
   document.getElementById('vc-preview').textContent=t.transcript+': '+parsed.transcription+'\n'+t.table+': '+parsed.tableNumber+'\n'+t.duration+': '+parsed.durationMinutes+' '+t.minutes+'\n'+t.dest+': '+names.join(', ');
-  document.getElementById('vc-confirm').style.display='block';
+  document.getElementById('vc-confirm').style.display='none';
   document.getElementById('vc-language').disabled=true;
-  setVcState('confirm');
+  confirmVoiceDraft();
 }
 function cancelVoiceDraft(){
   vcDraft=null;
@@ -2367,6 +2369,7 @@ function setVcState(state){
   btn.disabled=!['idle','rec'].includes(state);
   btn.className='vc-btn'+(state==='rec'?' vc-rec':state==='busy'?' vc-busy':'');
   if(sts)sts.textContent=state==='rec'?'Registrazione in corso':state==='busy'?'Riconoscimento vocale in corso':state==='pending'?'Invio in corso':'';
+  syncVoiceLanguageButtons();
 }
 
 // ── Cancel countdown ───────────────────────────────────────────────────────────
