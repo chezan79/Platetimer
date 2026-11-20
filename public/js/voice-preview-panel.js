@@ -12,7 +12,17 @@
   const message = panel.querySelector('[data-voice="message"]');
   const peers = panel.querySelector('[data-voice="peers"]');
   let rtc = null, mic = null, connected = false, busy = false, muted = false, sdkLoad = null;
-  let endOfWindowAt = 0, windowTimer = null;
+  let endOfWindowAt = 0, windowTimer = null, checkingWindow = false;
+  let nextServerCheckAt = 0;
+  const swissClock = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/Zurich', hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+  });
+  function isSwissServiceOpen() {
+    const parts = Object.fromEntries(swissClock.formatToParts(new Date())
+      .filter(part => part.type !== 'literal').map(part => [part.type, Number(part.value)]));
+    const minutes = parts.hour * 60 + parts.minute;
+    return (minutes >= 720 && minutes < 870) || (minutes >= 1110 && minutes < 1320);
+  }
   const destination = panel.querySelector('[data-voice="destination"]');
   const callButton = panel.querySelector('[data-voice="call"]');
   const incoming = panel.querySelector('[data-voice="incoming"]');
@@ -133,17 +143,46 @@
     }).catch(error => { sdkLoad = null; throw error; });
     return sdkLoad;
   };
-  async function disconnect() {
+  async function disconnect(reason = 'Chiamata terminata.') {
     if (windowTimer) { clearInterval(windowTimer); windowTimer = null; }
     endOfWindowAt = 0;
+    checkingWindow = false;
     busy = true; controls();
+    const oldMic = mic, oldRtc = rtc;
+    mic = null;
+    rtc = null;
+    connected = false;
+    muted = false;
+    // Stop local audio before awaiting network operations, even if Agora leave fails.
+    try { if (oldMic) { oldMic.stop(); oldMic.close(); } }
+    catch (error) { console.warn('[VOICE] Microphone cleanup:', error); }
     try {
-      if (mic) { mic.stop(); mic.close(); mic = null; }
-      if (rtc) { await rtc.leave(); rtc.removeAllListeners(); rtc = null; }
-      connected = false; muted = false;
-      say('Chiamata terminata.');
-    } catch (error) { say('Errore in uscita: ' + error.message); }
-    finally { busy = false; controls(); countPeers(); }
+      if (oldRtc) {
+        await oldRtc.leave();
+        oldRtc.removeAllListeners();
+      }
+    } catch (error) { console.warn('[VOICE] Agora leave:', error); }
+    finally { busy = false; controls(); countPeers(); say(reason); }
+  }
+  async function enforceVoiceWindow() {
+    if (!connected || checkingWindow) return;
+    if (!isSwissServiceOpen() || Date.now() >= endOfWindowAt) {
+      await disconnect('Fascia oraria conclusa. Chiamata terminata.');
+      button.hidden = true;
+      panel.hidden = true;
+      return;
+    }
+    if (Date.now() < nextServerCheckAt) return;
+    checkingWindow = true;
+    nextServerCheckAt = Date.now() + 5000;
+    try {
+      const status = await api('status');
+      if (connected && status.enabled !== true)
+        await disconnect('Chiamata terminata: fuori orario o autorizzazione revocata.');
+    } catch (error) {
+      // Authorization cannot be verified: fail closed rather than keeping audio open.
+      if (connected) await disconnect('Chiamata terminata: verifica autorizzazione non disponibile.');
+    } finally { checkingWindow = false; }
   }
   async function connect() {
     busy = true; controls(); say('Connessione Agora...');
@@ -170,16 +209,12 @@
       mic = await AgoraRTC.createMicrophoneAudioTrack({ encoderConfig: 'speech_standard', AEC: true, ANS: true, AGC: true });
       await rtc.publish([mic]);
       connected = true; muted = false;
-      endOfWindowAt = Date.now() + (data.windowEndsInSeconds || data.expiresInSeconds) * 1000;
+      // Enforce after every join, and re-check after mobile background/foreground.
+      endOfWindowAt = Date.now() + data.windowEndsInSeconds * 1000;
+      nextServerCheckAt = 0;
       if (windowTimer) clearInterval(windowTimer);
-      windowTimer = setInterval(async () => {
-        if (connected && Date.now() >= endOfWindowAt && !busy) {
-          await disconnect();
-          say('Fascia oraria conclusa. Chiamata terminata.');
-          button.hidden = true;
-          panel.hidden = true;
-        }
-      }, 1000);
+      windowTimer = setInterval(enforceVoiceWindow, 1000);
+      void enforceVoiceWindow();
       say('Collegato: ' + data.departmentName + '. Microfono attivo.');
       countPeers();
     } catch (error) {
@@ -192,7 +227,7 @@
     } finally { busy = false; controls(); }
   }
   join.addEventListener('click', connect);
-  leave.addEventListener('click', disconnect);
+  leave.addEventListener('click', () => disconnect());
   mute.addEventListener('click', async () => {
     if (!mic || busy) return;
     busy = true; controls();
@@ -202,6 +237,10 @@
   });
   button.addEventListener('click', () => { panel.hidden = !panel.hidden; });
   close.addEventListener('click', () => { panel.hidden = true; });
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) void enforceVoiceWindow();
+  });
+  window.addEventListener('focus', () => { void enforceVoiceWindow(); });
   window.addEventListener('pagehide', () => {
     clearInterval(pollTimer); clearInterval(inviteTimer);
     if (windowTimer) clearInterval(windowTimer);
