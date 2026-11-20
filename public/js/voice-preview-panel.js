@@ -57,7 +57,8 @@
     } catch(error) { say('Reparti non disponibili: ' + error.message); }
   }
   function stopTone() {
-    if (inviteTimer) { clearInterval(inviteTimer); inviteTimer = null; }
+    // The repeating timer must remain installed for subsequent invitations.
+    // A sound is emitted only when currentInvite is present and unexpired.
   }
   function renderIncoming() {
     if (!currentInvite || currentInvite.expiresAt <= Date.now()) {
@@ -275,7 +276,14 @@
     catch (error) { say('Errore microfono: ' + error.message); }
     finally { busy = false; controls(); }
   });
-  button.addEventListener('click', () => { panel.hidden = !panel.hidden; });
+  button.addEventListener('click', () => {
+    panel.hidden = !panel.hidden;
+    // Browsers require a direct user gesture to unlock audible call alerts.
+    try {
+      if (!toneContext) toneContext = new (window.AudioContext || window.webkitAudioContext)();
+      if (toneContext.state === 'suspended') void toneContext.resume().catch(()=>{});
+    } catch (_) {}
+  });
   close.addEventListener('click', () => { panel.hidden = true; });
   document.addEventListener('visibilitychange', () => {
     // In production, do not leave the microphone publishing in the background.
