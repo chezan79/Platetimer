@@ -10,11 +10,11 @@ ristorante e non permette di leggere messaggi o ascoltare audio.
 - `public/platform-monitor.html`: pagina monitor con aggiornamento ogni 5 secondi.
 - `tests/platform-monitor.test.js`: test sicurezza e filtro presenza.
 
-## Integrazione futura (NON applicata)
-L'API non è attiva finché il server HTTP non la monta. Quando è autorizzato
-l'aggancio, aggiungere in `server.js`, dopo l'inizializzazione di
-`wss`, `departmentsStore`, `activeCountdowns` e la funzione
-`lookupFirebaseAccount`, ma prima dell'avvio delle richieste:
+## Integrazione sul branch feature/platform-live-monitor
+L'API è montata da `server.js` appena dopo l'inizializzazione di
+`activeCountdowns`, usando WebSocket e stato countdown già esistenti.
+La pagina `platform-admin.html` ora contiene il link al monitor.
+Questo aggiornamento non è pubblicato su `main` o Railway. Il collegamento è:
 
 ```js
 require('./admin-monitor/monitor-api').mountPlatformMonitor(app, {
@@ -38,5 +38,7 @@ L'endpoint non include identità dei dipendenti, IP, audio, comunicazioni o mess
 `node --test tests/platform-monitor.test.js`
 
 ## Vincoli
-Nessun file esistente modificato, nessun deploy, nessun monitor in produzione
-finché non vengono verificati integrazione, permessi Firebase e test nel server.
+Solo due file esistenti sono stati modificati in modo additivo: `server.js` (montaggio rotta)
+e `public/platform-admin.html` (link). Nessuna modifica ai meccanismi
+WebSocket, countdown o Agora. Nessun deploy: occorrono ancora test in Replit
+Preview, verifica permessi Firebase e revisione prima di produzione.
