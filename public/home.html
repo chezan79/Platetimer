@@ -391,6 +391,18 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
                     window.location.replace('/platform-admin.html');
                     return;
                 }
+                // Authentication failure is not permission to use legacy Firestore
+                // or the last cached restaurant. Never display another tenant.
+                if (!sessResp.ok || parsed.success !== true ||
+                    !parsed.token || !parsed.companyName) {
+                    localStorage.removeItem('userCompany');
+                    sessionStorage.removeItem('ws_session_token');
+                    if (loadingIndicator && loadingIndicator.parentNode) loadingIndicator.remove();
+                    const grid = document.getElementById('dept-grid');
+                    if (grid) grid.textContent = 'Accesso non verificato dal server. Torna alla pagina di accesso. Se sei amministratore centrale, controlla la configurazione Railway.';
+                    console.error('[AUTH] Server refused a verified restaurant session:', sessResp.status);
+                    return;
+                }
                 if (sessResp.ok && parsed.success && parsed.token) {
                     sessData = parsed;
                     sessionStorage.setItem('ws_session_token', sessData.token);
@@ -410,7 +422,13 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
                     }
                 }
             } catch (e) {
-                console.warn('⚠️ Scambio sessione server non riuscito (continuo con il flusso legacy):', e.message);
+                console.warn('⚠️ Scambio sessione server non riuscito:', e.message);
+                localStorage.removeItem('userCompany');
+                sessionStorage.removeItem('ws_session_token');
+                if (loadingIndicator && loadingIndicator.parentNode) loadingIndicator.remove();
+                const grid = document.getElementById('dept-grid');
+                if (grid) grid.textContent = 'Impossibile verificare la sessione con il server. Riprova dalla pagina di accesso.';
+                return;
             }
 
             const userDocRef = doc(db, "users", user.uid);
