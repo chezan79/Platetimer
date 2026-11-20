@@ -3,6 +3,7 @@
 // Preview-only, in-memory signaling. This is deliberately NOT production calling:
 // restart clears pending invites; deployment remains disabled.
 const crypto = require('crypto');
+const { voiceWindow } = require('./voice-schedule');
 const RING_MS = 30000;
 const pending = new Map();
 
@@ -40,6 +41,10 @@ function mountVoiceInvites(app, { enabled, requireAuth, getAuthoritativeServiceD
       } catch (_) {
         return res.status(503).json({ error: 'Voice authorization unavailable.' });
       }
+      const window = voiceWindow();
+      if (!window.allowed) return res.status(403).json({
+        error: 'Chiamate disponibili dalle 12:00 alle 14:30 e dalle 18:30 alle 22:00 (ora svizzera).'
+      });
       sweep();
       return handler(req, res, device);
     });
@@ -64,7 +69,7 @@ function mountVoiceInvites(app, { enabled, requireAuth, getAuthoritativeServiceD
     const invite = {
       id: crypto.randomUUID(), companyId: device.companyId,
       from: device.departmentId, fromName: device.department.name,
-      to: target.id, toName: target.name, createdAt: now, expiresAt: now + RING_MS
+      to: target.id, toName: target.name, createdAt: now, expiresAt: Math.min(now + RING_MS, now + voiceWindow().secondsRemaining * 1000)
     };
     pending.set(invite.id, invite);
     return res.json({ id: invite.id, expiresAt: invite.expiresAt, toName: invite.toName });
