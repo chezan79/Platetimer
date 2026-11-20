@@ -167,9 +167,26 @@ test('a call token is denied to nonparticipants and before the recipient accepts
   assert.equal((await f.request('POST','/token',{callId:invite.id})).status,403);
   f.setCompany('molard');
   assert.equal((await f.request('POST','/respond',{id:invite.id,answer:'accept'})).accepted,true);
-  // Auth succeeded; absent Agora env produces 503 without exposing a token.
-  const token=await f.request('POST','/token',{callId:invite.id});
-  assert.ok([200,503].includes(token.status));
+  // A fully authorized, accepted call must produce a real signed Agora token.
+  // These are synthetic test credentials, never Railway/production secrets.
+  const previousAppId=process.env.AGORA_APP_ID;
+  const previousCertificate=process.env.AGORA_APP_CERTIFICATE;
+  process.env.AGORA_APP_ID='a'.repeat(32);
+  process.env.AGORA_APP_CERTIFICATE='b'.repeat(32);
+  try {
+    const token=await f.request('POST','/token',{callId:invite.id});
+    assert.equal(token.status,200,JSON.stringify(token));
+    assert.equal(typeof token.token,'string');
+    assert.ok(token.token.length>50,'signed Agora RTC token required');
+    assert.match(token.channel,/^pt-call-[a-f0-9]{32}$/);
+    assert.equal(token.expiresInSeconds,90);
+    assert.ok(token.uid>0);
+  } finally {
+    if(previousAppId===undefined)delete process.env.AGORA_APP_ID;
+    else process.env.AGORA_APP_ID=previousAppId;
+    if(previousCertificate===undefined)delete process.env.AGORA_APP_CERTIFICATE;
+    else process.env.AGORA_APP_CERTIFICATE=previousCertificate;
+  }
   f.setDept('pizzeria');
   await f.request('POST','/hangup',{callId:invite.id});
   assert.equal((await f.request('POST','/token',{callId:invite.id})).status,403);
