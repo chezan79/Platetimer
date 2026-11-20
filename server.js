@@ -7577,6 +7577,18 @@ function broadcastOps(companyId, payload) {
 // Store per i countdown attivi per ogni azienda
 const activeCountdowns = new Map();
 
+// Platform-wide monitor: strictly read-only access to existing WebSocket
+// and countdown state. Does not register socket listeners or mutate restaurant data.
+require('./admin-monitor/monitor-api').mountPlatformMonitor(app, {
+    wss,
+    lookupFirebaseAccount,
+    getCompanies: () => Object.entries(departmentsStore).map(([companyId, depts]) => ({
+        companyId,
+        departments: Array.isArray(depts) ? depts.length : 0
+    })),
+    getCountdowns: companyId => activeCountdowns.get(companyId)?.size || 0
+});
+
 // ── Post-expiry grace period ────────────────────────────────────────────────
 // After a countdown reaches 00:00 it stays visible (blinking, expired) for this
 // long on all screens, then the server removes it and broadcasts completion.
