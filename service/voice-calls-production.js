@@ -75,7 +75,9 @@ function mountProductionVoiceCalls(app, {
     const device = await identity(req,res);
     if (!device) return;
     const slot=windowNow();
-    return res.json({enabled:slot.allowed,timeZone:slot.timeZone,
+    // Keep the entry point visible for an authorized restaurant even when
+    // outside service hours; token/invitation routes remain time-gated.
+    return res.json({enabled:true,timeZone:slot.timeZone,
       scheduleEnabled:slot.allowed});
   });
 
