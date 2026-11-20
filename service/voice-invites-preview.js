@@ -6,7 +6,7 @@ const crypto = require('crypto');
 const RING_MS = 30000;
 const pending = new Map();
 
-function mountVoiceInvites(app, { enabled, requireAuth, getAuthoritativeServiceDeviceContext, getCompanyDepts }) {
+function mountVoiceInvites(app, { enabled, requireAuth, getAuthoritativeServiceDeviceContext, getCompanyDepts, isVoiceAllowed }) {
   async function deviceFor(req, res) {
     const session = requireAuth(req, res);
     if (!session) return null;
@@ -34,6 +34,12 @@ function mountVoiceInvites(app, { enabled, requireAuth, getAuthoritativeServiceD
       if (!enabled()) return res.status(404).json({ error: 'Test Voice non abilitato.' });
       const device = await deviceFor(req, res);
       if (!device) return;
+      try {
+        if (!await isVoiceAllowed(device.companyId))
+          return res.status(403).json({ error: 'Voice disabled for this restaurant.' });
+      } catch (_) {
+        return res.status(503).json({ error: 'Voice authorization unavailable.' });
+      }
       sweep();
       return handler(req, res, device);
     });
