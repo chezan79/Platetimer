@@ -33,6 +33,7 @@
   let currentInvite = null, inviteTimer = null, pollTimer = null, toneContext = null;
   let apiPrefix = '/api/voice-test';
   let prodMode = false;
+  let currentCallId = null;
   function authHeaders() {
     return { Authorization: 'Bearer ' + (WsAuth.getStoredToken() || '') };
   }
@@ -94,13 +95,24 @@
     if (!destination.value) return say('Scegli il reparto da chiamare.');
     callButton.disabled = true;
     try {
-      // Start caller audio first: the recipient must never accept an empty room.
-      if (!connected) await connect();
-      if (!connected) return;
-      const data = await api('invite', {
-        method: 'POST', body: {toDepartmentId: destination.value}
-      });
-      say('Collegato. Invito inviato a ' + data.toName + '. Scade tra 30 secondi.');
+      if (prodMode) {
+        if (connected) throw new Error('Concludi la chiamata corrente prima di chiamare un altro reparto.');
+        const data = await api('invite', {method:'POST',body:{toDepartmentId:destination.value}});
+        currentCallId = data.id;
+        await connect(data.id);
+        if (!connected) {
+          await api('hangup', {method:'POST',body:{callId:data.id}}).catch(()=>{});
+          currentCallId = null;
+          return;
+        }
+        say('Chiamata a ' + data.toName + '. Invito valido fino a 30 secondi.');
+      } else {
+        // Preview-only legacy conference behavior.
+        if (!connected) await connect();
+        if (!connected) return;
+        const data = await api('invite', {method:'POST',body:{toDepartmentId:destination.value}});
+        say('Collegato. Invito inviato a ' + data.toName + '. Scade tra 30 secondi.');
+      }
     } catch (error) { say('Chiamata non inviata: ' + error.message); }
     finally { callButton.disabled = false; }
   });
@@ -111,7 +123,7 @@
     try {
       const result = await api('respond', {method:'POST', body:{id, answer}});
       currentInvite = null; renderIncoming();
-      if (result.accepted) await connect();
+      if (result.accepted) await connect(prodMode ? id : undefined);
       else say('Chiamata rifiutata.');
     } catch(error) { say('Risposta non riuscita: ' + error.message); }
     finally { accept.disabled = false; decline.disabled = false; }
@@ -131,6 +143,7 @@
     leave.disabled = busy || !connected;
     mute.disabled = busy || !connected;
     mute.textContent = muted ? 'Attiva microfono' : 'Disattiva microfono';
+    if (prodMode) {callButton.disabled = busy || connected; destination.disabled = busy || connected;}
   };
   const countPeers = () => { peers.textContent = rtc ? 'Altri reparti collegati: ' + rtc.remoteUsers.length : ''; };
   const loadSdk = () => {
@@ -151,11 +164,16 @@
     checkingWindow = false;
     busy = true; controls();
     const oldMic = mic, oldRtc = rtc;
+    const endingCallId = currentCallId;
+    currentCallId = null;
     mic = null;
     rtc = null;
     connected = false;
     muted = false;
     // Stop local audio before awaiting network operations, even if Agora leave fails.
+    if (prodMode && endingCallId) {
+      void api('hangup',{method:'POST',body:{callId:endingCallId}}).catch(()=>{});
+    }
     try { if (oldMic) { oldMic.stop(); oldMic.close(); } }
     catch (error) { console.warn('[VOICE] Microphone cleanup:', error); }
     try {
@@ -179,25 +197,40 @@
     nextServerCheckAt = Date.now() + 5000;
     try {
       const status = await api('status');
-      if (connected && status.enabled !== true)
+      if (connected && (status.enabled !== true || status.scheduleEnabled === false)) {
         await disconnect('Chiamata terminata: fuori orario o autorizzazione revocata.');
+      } else if (connected && prodMode && currentCallId) {
+        const session = await api('session?id=' + encodeURIComponent(currentCallId));
+        if (!session.active) await disconnect('Chiamata terminata dall’altro reparto.');
+      }
     } catch (error) {
       // Authorization cannot be verified: fail closed rather than keeping audio open.
       if (connected) await disconnect('Chiamata terminata: verifica autorizzazione non disponibile.');
     } finally { checkingWindow = false; }
   }
-  async function connect() {
+  async function connect(callId) {
+    if (prodMode && !callId) {say('Seleziona un reparto e premi Chiama.');return;}
+    if (prodMode) currentCallId = callId;
     busy = true; controls(); say('Connessione Agora...');
     try {
       const session = WsAuth.getStoredToken();
       if (!session || !WsAuth.isServiceSession()) throw new Error('Accesso reparto Service richiesto.');
       const response = await fetch(apiPrefix + '/token', {
-        method: 'POST', headers: { Authorization: 'Bearer ' + session }
+        method: 'POST', headers: { Authorization: 'Bearer ' + session,
+          'Content-Type':'application/json' },
+        ...(prodMode ? {body:JSON.stringify({callId})} : {})
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Accesso alla chiamata negato.');
       await loadSdk();
       rtc = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
+      if (prodMode) rtc.on('token-privilege-will-expire', async () => {
+        try {
+          if (!currentCallId || !rtc) return;
+          const renewed = await api('token',{method:'POST',body:{callId:currentCallId}});
+          if (rtc) await rtc.renewToken(renewed.token);
+        } catch (_) { await disconnect('Chiamata terminata: autorizzazione scaduta.'); }
+      });
       rtc.on('user-published', async (user, mediaType) => {
         try {
           await rtc.subscribe(user, mediaType);
@@ -226,6 +259,11 @@
       if (mic) { mic.stop(); mic.close(); mic = null; }
       if (rtc) { try { await rtc.leave(); } catch (_) {} rtc.removeAllListeners(); rtc = null; }
       connected = false;
+      if (prodMode && currentCallId) {
+        const failedCallId = currentCallId;
+        currentCallId = null;
+        void api('hangup',{method:'POST',body:{callId:failedCallId}}).catch(()=>{});
+      }
     } finally { busy = false; controls(); }
   }
   join.addEventListener('click', connect);
@@ -251,6 +289,14 @@
     if (toneContext) toneContext.close().catch(() => {});
     if (mic) { mic.stop(); mic.close(); mic = null; }
     if (rtc) rtc.leave().catch(() => {});
+    if (prodMode && currentCallId) {
+      const id = currentCallId;
+      currentCallId = null;
+      // keepalive is best-effort; expiry and participant checks also protect calls.
+      fetch(apiPrefix+'/hangup',{method:'POST',keepalive:true,
+        headers:{...authHeaders(),'Content-Type':'application/json'},
+        body:JSON.stringify({callId:id})}).catch(()=>{});
+    }
   });
   async function bootVoice() {
     if (!WsAuth.getStoredToken() || !WsAuth.isServiceSession()) return;
@@ -269,6 +315,8 @@
         const note = panel.querySelector('p');
         if (note) note.textContent = 'Chiamate autorizzate tra reparti. Orari: 12:00–14:30 e 18:30–22:00 (Svizzera).';
         button.textContent = '📞 Chiamate';
+        join.hidden = true;
+        controls();
       } else if (production && production.enabled === false) {
         // Only a disabled production feature may use preview, and preview
         // itself is restricted server-side to a Replit test environment.
