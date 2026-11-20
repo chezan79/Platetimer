@@ -4,10 +4,40 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema Gestione Ordini - Login/Registrazione</title>
+    <title>PlateTimer — Benvenuto e accesso</title>
 
+    <script>
+      (function () {
+        const view = new URLSearchParams(location.search).get('view');
+        document.documentElement.dataset.ptEntry =
+          view === 'access' || view === 'register' ? view : 'welcome';
+      })();
+    </script>
     <link rel="stylesheet" href="style.css">
     <style>
+        /* Entry navigation: pure presentation, original auth logic remains unchanged. */
+        .pt-welcome {min-height:100vh;display:none;align-items:center;justify-content:center;padding:30px 18px;}
+        .pt-welcome-card {width:min(100%,480px);background:#fff;border:1px solid #dce4f0;
+            border-radius:18px;box-shadow:0 18px 60px #16366c18;padding:35px 32px;text-align:center;}
+        .pt-welcome-logo {display:block;width:min(100%,260px);height:auto;margin:0 auto 14px;}
+        .pt-welcome-card h1 {font-size:25px;color:#152b48;margin:14px 0;}
+        .pt-welcome-card p {color:#5c6d83;line-height:1.55;margin:0 0 25px;}
+        .pt-entry-action {display:block;text-decoration:none!important;border-radius:10px;
+            padding:15px 18px;margin:13px 0;font-weight:700;}
+        .pt-entry-primary {background:#5148da;color:#fff!important;}
+        .pt-entry-secondary {background:#fff;color:#3834ad!important;border:2px solid #5148da;}
+        .pt-entry-back {display:inline-block;margin:0 0 15px;color:#5044ae;text-decoration:none;font-size:14px;font-weight:650;}
+        .pt-entry-options {margin-top:24px;padding-top:20px;border-top:1px solid #e4e9f1;}
+        .pt-entry-options h3 {color:#172c48;font-size:16px;margin:0 0 8px;}
+        .pt-entry-options p {color:#56667d;font-size:13px;margin:0 0 15px;}
+        .pt-entry-dept {display:block;text-align:center;border:2px solid #5148da;
+            border-radius:9px;padding:12px 16px;color:#4840c3;text-decoration:none;font-weight:700;}
+        html[data-pt-entry="welcome"] .pt-welcome {display:flex;}
+        html[data-pt-entry="welcome"] .container {display:none!important;}
+        html[data-pt-entry="access"] #register-form {display:none;}
+        html[data-pt-entry="register"] #login-form {display:none;}
+        @media(max-width:699px){.pt-welcome-card{padding:28px 23px;}
+          .pt-entry-options{margin-top:16px;padding-top:15px;}}
         body {
             background: 
                 linear-gradient(rgba(248, 249, 250, 0.9), rgba(238, 242, 247, 0.9)),
@@ -97,6 +127,15 @@
 </head>
 
 <body>
+    <main class="pt-welcome" id="pt-welcome">
+      <section class="pt-welcome-card" aria-labelledby="pt-welcome-title">
+        <img class="pt-welcome-logo" src="platetimer-logo.png" alt="PlateTimer">
+        <h1 id="pt-welcome-title">Benvenuto in PlateTimer</h1>
+        <p>Il coordinamento dei reparti del tuo ristorante, in tempo reale.</p>
+        <a class="pt-entry-action pt-entry-primary" href="/index.html?view=access">Accedi a PlateTimer</a>
+        <a class="pt-entry-action pt-entry-secondary" href="/index.html?view=register">Registra il tuo ristorante</a>
+      </section>
+    </main>
     <div class="container">
         <div class="form-container">
 
@@ -107,7 +146,7 @@
 
             <!-- ── Form column (all panels) ── -->
             <div class="pt-reg-forms">
-
+            <a href="/index.html" class="pt-entry-back">← Torna alla pagina iniziale</a>
             <!-- Modulo di registrazione -->
             <div id="register-form">
                 <h2 data-i18n="login.registerTitle">Registrati</h2>
@@ -146,6 +185,13 @@
                 </div>
             </div>
 
+            <!-- Accesso reparto: separate credentials, same centralized access page. -->
+            <section id="dept-access" class="pt-entry-options" aria-labelledby="pt-dept-heading" hidden>
+              <h3 id="pt-dept-heading">Accesso reparto</h3>
+              <p>Entra nella postazione Cucina, Pizzeria o in un altro reparto.</p>
+              <a class="pt-entry-dept" href="/service-login.html">Entra nel reparto</a>
+            </section>
+
             <!-- Modulo per password dimenticata -->
             <div id="forgot-password-form" style="display: none;">
                 <h2 data-i18n="login.forgotTitle">Password Dimenticata</h2>
@@ -175,50 +221,7 @@
                 </div>
             </div>
 
-            <!-- ── Accesso Reparto (S2.x Department Account entry point) ── -->
-            <!-- Navigates to service-login.html — no auth logic here.       -->
-            <div id="dept-access" style="
-                margin-top: 2rem;
-                padding-top: 1.5rem;
-                border-top: 1px solid #e8ecf1;
-                text-align: center;
-            ">
-                <p style="
-                    font-size: 0.78rem;
-                    font-weight: 700;
-                    letter-spacing: 0.08em;
-                    color: var(--text-light);
-                    text-transform: uppercase;
-                    margin-bottom: 0.6rem;
-                " data-i18n="login.deptAccessTitle">Accesso Reparto</p>
-                <p style="
-                    font-size: 0.9rem;
-                    color: var(--text-light);
-                    margin-bottom: 1.1rem;
-                    line-height: 1.4;
-                " data-i18n="login.deptAccessDesc">Accedi alla postazione del tuo reparto</p>
-                <button
-                    type="button"
-                    onclick="window.location.href='service-login.html'"
-                    style="
-                        display: inline-block;
-                        padding: 0.65rem 1.6rem;
-                        background: transparent;
-                        color: var(--primary);
-                        border: 2px solid var(--primary);
-                        border-radius: 8px;
-                        font-size: 0.88rem;
-                        font-weight: 700;
-                        letter-spacing: 0.06em;
-                        cursor: pointer;
-                        transition: background 0.18s, color 0.18s;
-                    "
-                    onmouseover="this.style.background='var(--primary)';this.style.color='#fff'"
-                    onmouseout="this.style.background='transparent';this.style.color='var(--primary)'"
-                    data-i18n="login.deptAccessBtn"
-                >ENTRA NEL REPARTO</button>
-            </div>
-            <!-- ── end Accesso Reparto ── -->
+
 
             </div><!-- /.pt-reg-forms -->
         </div>
@@ -228,6 +231,44 @@
     <script src="js/i18n.js"></script>
     <script>I18n.init();</script>
 
+    <script>
+      // Changes only which existing form is initially visible. Authentication
+      // and server-authoritative role routing below remain exactly as before.
+      (function () {
+        const view = document.documentElement.dataset.ptEntry;
+        const register = document.getElementById('register-form');
+        const login = document.getElementById('login-form');
+        const department = document.getElementById('dept-access');
+        if (view === 'access') {
+          register.style.display = 'none';
+          login.style.display = 'block';
+          department.hidden = false;
+        } else if (view === 'register') {
+          register.style.display = 'block';
+          login.style.display = 'none';
+          department.hidden = true;
+        }
+        document.getElementById('go-to-login').addEventListener('click', () => {
+          department.hidden = false;
+          history.replaceState(null, '', '/index.html?view=access');
+          document.documentElement.dataset.ptEntry = 'access';
+        });
+        document.getElementById('go-to-register').addEventListener('click', () => {
+          department.hidden = true;
+          history.replaceState(null, '', '/index.html?view=register');
+          document.documentElement.dataset.ptEntry = 'register';
+        });
+        const hideDept = () => { department.hidden = true; };
+        document.getElementById('forgot-password').addEventListener('click', hideDept);
+        document.getElementById('change-password').addEventListener('click', hideDept);
+        document.getElementById('back-to-login-from-forgot').addEventListener('click', () => {
+          department.hidden = false;
+        });
+        document.getElementById('back-to-login-from-change').addEventListener('click', () => {
+          department.hidden = false;
+        });
+      })();
+    </script>
     <!-- Importa Firebase SDK -->
     <script type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
