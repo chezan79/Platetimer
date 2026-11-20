@@ -1,5 +1,5 @@
-/* Preview-only PlateTimer Voice panel, loaded only on department.html.
-   Never connects or requests microphone until the operator clicks Entra. */
+/* PlateTimer voice panel. Production calls and Replit Preview have separate
+   authenticated API endpoints. Microphone only starts after user action. */
 (() => {
   'use strict';
   const button = document.getElementById('pt-voice-test-open');
@@ -31,11 +31,14 @@
   const accept = panel.querySelector('[data-voice="accept"]');
   const decline = panel.querySelector('[data-voice="decline"]');
   let currentInvite = null, inviteTimer = null, pollTimer = null, toneContext = null;
+  let apiPrefix = '/api/voice-test';
+  let prodMode = false;
+  let currentCallId = null;
   function authHeaders() {
     return { Authorization: 'Bearer ' + (WsAuth.getStoredToken() || '') };
   }
   async function api(path, { method = 'GET', body } = {}) {
-    const r = await fetch('/api/voice-test/' + path, {
+    const r = await fetch(apiPrefix + '/' + path, {
       method, cache:'no-store',
       headers: { ...authHeaders(), ...(body ? { 'Content-Type':'application/json' } : {}) },
       ...(body ? { body: JSON.stringify(body) } : {})
@@ -54,7 +57,8 @@
     } catch(error) { say('Reparti non disponibili: ' + error.message); }
   }
   function stopTone() {
-    if (inviteTimer) { clearInterval(inviteTimer); inviteTimer = null; }
+    // The repeating timer must remain installed for subsequent invitations.
+    // A sound is emitted only when currentInvite is present and unexpired.
   }
   function renderIncoming() {
     if (!currentInvite || currentInvite.expiresAt <= Date.now()) {
@@ -92,24 +96,39 @@
     if (!destination.value) return say('Scegli il reparto da chiamare.');
     callButton.disabled = true;
     try {
-      // Start caller audio first: the recipient must never accept an empty room.
-      if (!connected) await connect();
-      if (!connected) return;
-      const data = await api('invite', {
-        method: 'POST', body: {toDepartmentId: destination.value}
-      });
-      say('Collegato. Invito inviato a ' + data.toName + '. Scade tra 30 secondi.');
+      if (prodMode) {
+        if (connected) throw new Error('Concludi la chiamata corrente prima di chiamare un altro reparto.');
+        const data = await api('invite', {method:'POST',body:{toDepartmentId:destination.value}});
+        currentCallId = data.id;
+        await connect(data.id);
+        if (!connected) {
+          await api('hangup', {method:'POST',body:{callId:data.id}}).catch(()=>{});
+          currentCallId = null;
+          return;
+        }
+        say('Chiamata a ' + data.toName + '. Invito valido fino a 30 secondi.');
+      } else {
+        // Preview-only legacy conference behavior.
+        if (!connected) await connect();
+        if (!connected) return;
+        const data = await api('invite', {method:'POST',body:{toDepartmentId:destination.value}});
+        say('Collegato. Invito inviato a ' + data.toName + '. Scade tra 30 secondi.');
+      }
     } catch (error) { say('Chiamata non inviata: ' + error.message); }
     finally { callButton.disabled = false; }
   });
   async function answerInvite(answer) {
     if (!currentInvite) return;
+    if (prodMode && answer === 'accept' && (connected || busy)) {
+      say('Concludi la chiamata attuale prima di accettarne un’altra.');
+      return;
+    }
     const id = currentInvite.id;
     accept.disabled = true; decline.disabled = true;
     try {
       const result = await api('respond', {method:'POST', body:{id, answer}});
       currentInvite = null; renderIncoming();
-      if (result.accepted) await connect();
+      if (result.accepted) await connect(prodMode ? id : undefined);
       else say('Chiamata rifiutata.');
     } catch(error) { say('Risposta non riuscita: ' + error.message); }
     finally { accept.disabled = false; decline.disabled = false; }
@@ -121,7 +140,7 @@
     renderIncoming();
     if (currentInvite) soundRing();
   }, 1000);
-  pollTimer = setInterval(checkInvites, 2000);
+  // Invitation polling starts only after backend feature authorization.
 
   const say = text => { message.textContent = text; };
   const controls = () => {
@@ -129,6 +148,7 @@
     leave.disabled = busy || !connected;
     mute.disabled = busy || !connected;
     mute.textContent = muted ? 'Attiva microfono' : 'Disattiva microfono';
+    if (prodMode) {callButton.disabled = busy || connected; destination.disabled = busy || connected;}
   };
   const countPeers = () => { peers.textContent = rtc ? 'Altri reparti collegati: ' + rtc.remoteUsers.length : ''; };
   const loadSdk = () => {
@@ -149,11 +169,16 @@
     checkingWindow = false;
     busy = true; controls();
     const oldMic = mic, oldRtc = rtc;
+    const endingCallId = currentCallId;
+    currentCallId = null;
     mic = null;
     rtc = null;
     connected = false;
     muted = false;
     // Stop local audio before awaiting network operations, even if Agora leave fails.
+    if (prodMode && endingCallId) {
+      void api('hangup',{method:'POST',body:{callId:endingCallId}}).catch(()=>{});
+    }
     try { if (oldMic) { oldMic.stop(); oldMic.close(); } }
     catch (error) { console.warn('[VOICE] Microphone cleanup:', error); }
     try {
@@ -177,25 +202,40 @@
     nextServerCheckAt = Date.now() + 5000;
     try {
       const status = await api('status');
-      if (connected && status.enabled !== true)
+      if (connected && (status.enabled !== true || status.scheduleEnabled === false)) {
         await disconnect('Chiamata terminata: fuori orario o autorizzazione revocata.');
+      } else if (connected && prodMode && currentCallId) {
+        const session = await api('session?id=' + encodeURIComponent(currentCallId));
+        if (!session.active) await disconnect('Chiamata terminata dall’altro reparto.');
+      }
     } catch (error) {
       // Authorization cannot be verified: fail closed rather than keeping audio open.
       if (connected) await disconnect('Chiamata terminata: verifica autorizzazione non disponibile.');
     } finally { checkingWindow = false; }
   }
-  async function connect() {
+  async function connect(callId) {
+    if (prodMode && !callId) {say('Seleziona un reparto e premi Chiama.');return;}
+    if (prodMode) currentCallId = callId;
     busy = true; controls(); say('Connessione Agora...');
     try {
       const session = WsAuth.getStoredToken();
       if (!session || !WsAuth.isServiceSession()) throw new Error('Accesso reparto Service richiesto.');
-      const response = await fetch('/api/voice-test/token', {
-        method: 'POST', headers: { Authorization: 'Bearer ' + session }
+      const response = await fetch(apiPrefix + '/token', {
+        method: 'POST', headers: { Authorization: 'Bearer ' + session,
+          'Content-Type':'application/json' },
+        ...(prodMode ? {body:JSON.stringify({callId})} : {})
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Accesso alla chiamata negato.');
       await loadSdk();
       rtc = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
+      if (prodMode) rtc.on('token-privilege-will-expire', async () => {
+        try {
+          if (!currentCallId || !rtc) return;
+          const renewed = await api('token',{method:'POST',body:{callId:currentCallId}});
+          if (rtc) await rtc.renewToken(renewed.token);
+        } catch (_) { await disconnect('Chiamata terminata: autorizzazione scaduta.'); }
+      });
       rtc.on('user-published', async (user, mediaType) => {
         try {
           await rtc.subscribe(user, mediaType);
@@ -224,6 +264,11 @@
       if (mic) { mic.stop(); mic.close(); mic = null; }
       if (rtc) { try { await rtc.leave(); } catch (_) {} rtc.removeAllListeners(); rtc = null; }
       connected = false;
+      if (prodMode && currentCallId) {
+        const failedCallId = currentCallId;
+        currentCallId = null;
+        void api('hangup',{method:'POST',body:{callId:failedCallId}}).catch(()=>{});
+      }
     } finally { busy = false; controls(); }
   }
   join.addEventListener('click', connect);
@@ -235,10 +280,19 @@
     catch (error) { say('Errore microfono: ' + error.message); }
     finally { busy = false; controls(); }
   });
-  button.addEventListener('click', () => { panel.hidden = !panel.hidden; });
+  button.addEventListener('click', () => {
+    panel.hidden = !panel.hidden;
+    // Browsers require a direct user gesture to unlock audible call alerts.
+    try {
+      if (!toneContext) toneContext = new (window.AudioContext || window.webkitAudioContext)();
+      if (toneContext.state === 'suspended') void toneContext.resume().catch(()=>{});
+    } catch (_) {}
+  });
   close.addEventListener('click', () => { panel.hidden = true; });
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) void enforceVoiceWindow();
+    // In production, do not leave the microphone publishing in the background.
+    if (document.hidden && prodMode && connected) void disconnect('Chiamata terminata: pagina in background.');
+    else if (!document.hidden) void enforceVoiceWindow();
   });
   window.addEventListener('focus', () => { void enforceVoiceWindow(); });
   window.addEventListener('pagehide', () => {
@@ -247,17 +301,53 @@
     if (toneContext) toneContext.close().catch(() => {});
     if (mic) { mic.stop(); mic.close(); mic = null; }
     if (rtc) rtc.leave().catch(() => {});
+    if (prodMode && currentCallId) {
+      const id = currentCallId;
+      currentCallId = null;
+      // keepalive is best-effort; expiry and participant checks also protect calls.
+      fetch(apiPrefix+'/hangup',{method:'POST',keepalive:true,
+        headers:{...authHeaders(),'Content-Type':'application/json'},
+        body:JSON.stringify({callId:id})}).catch(()=>{});
+    }
   });
-  fetch('/api/voice-test/status', {cache:'no-store', headers: authHeaders()}).then(r => r.ok ? r.json() : null)
-    .then(data => {
-      if (data && data.enabled && WsAuth.isServiceSession()) {
-        button.hidden = false;
-        refreshDepartments();
-        checkInvites();
+  async function bootVoice() {
+    if (!WsAuth.getStoredToken() || !WsAuth.isServiceSession()) return;
+    try {
+      // Production has priority: never fall back to the preview endpoints
+      // when a production authorization/connection attempt fails.
+      const response = await fetch('/api/voice-call/status', {
+        cache:'no-store', headers:authHeaders()
+      });
+      const production = response.ok ? await response.json() : null;
+      if (production && production.enabled) {
+        prodMode = true;
+        apiPrefix = '/api/voice-call';
+        const title = panel.querySelector('strong');
+        if (title) title.textContent = '🎧 PlateTimer · Chiamate';
+        const note = panel.querySelector('p');
+        if (note) note.textContent = 'Chiamate autorizzate tra reparti. Orari: 12:00–14:30 e 18:30–22:00 (Svizzera).';
+        button.textContent = '📞 Chiamate';
+        join.hidden = true;
+        controls();
+      } else if (production && production.enabled === false) {
+        // Only a disabled production feature may use preview, and preview
+        // itself is restricted server-side to a Replit test environment.
+        const preview = await fetch('/api/voice-test/status', {
+          cache:'no-store', headers:authHeaders()
+        });
+        const test = preview.ok ? await preview.json() : null;
+        if (!test?.enabled) return;
       } else {
-        clearInterval(pollTimer); clearInterval(inviteTimer);
+        return; // Auth and authorization errors fail closed.
       }
-    })
-    .catch(() => {});
+      button.hidden = false;
+      await refreshDepartments();
+      await checkInvites();
+      pollTimer = setInterval(checkInvites, 2000);
+    } catch (error) {
+      console.warn('[VOICE] initialization failed:', error.message);
+    }
+  }
+  void bootVoice();
   controls();
 })();
