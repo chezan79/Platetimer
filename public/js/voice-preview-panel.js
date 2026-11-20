@@ -12,6 +12,7 @@
   const message = panel.querySelector('[data-voice="message"]');
   const peers = panel.querySelector('[data-voice="peers"]');
   let rtc = null, mic = null, connected = false, busy = false, muted = false, sdkLoad = null;
+  let endOfWindowAt = 0, windowTimer = null;
   const destination = panel.querySelector('[data-voice="destination"]');
   const callButton = panel.querySelector('[data-voice="call"]');
   const incoming = panel.querySelector('[data-voice="incoming"]');
@@ -133,6 +134,8 @@
     return sdkLoad;
   };
   async function disconnect() {
+    if (windowTimer) { clearInterval(windowTimer); windowTimer = null; }
+    endOfWindowAt = 0;
     busy = true; controls();
     try {
       if (mic) { mic.stop(); mic.close(); mic = null; }
@@ -167,9 +170,21 @@
       mic = await AgoraRTC.createMicrophoneAudioTrack({ encoderConfig: 'speech_standard', AEC: true, ANS: true, AGC: true });
       await rtc.publish([mic]);
       connected = true; muted = false;
+      endOfWindowAt = Date.now() + (data.windowEndsInSeconds || data.expiresInSeconds) * 1000;
+      if (windowTimer) clearInterval(windowTimer);
+      windowTimer = setInterval(async () => {
+        if (connected && Date.now() >= endOfWindowAt && !busy) {
+          await disconnect();
+          say('Fascia oraria conclusa. Chiamata terminata.');
+          button.hidden = true;
+          panel.hidden = true;
+        }
+      }, 1000);
       say('Collegato: ' + data.departmentName + '. Microfono attivo.');
       countPeers();
     } catch (error) {
+      if (windowTimer) { clearInterval(windowTimer); windowTimer = null; }
+      endOfWindowAt = 0;
       say('Connessione non riuscita: ' + error.message);
       if (mic) { mic.stop(); mic.close(); mic = null; }
       if (rtc) { try { await rtc.leave(); } catch (_) {} rtc.removeAllListeners(); rtc = null; }
@@ -189,6 +204,7 @@
   close.addEventListener('click', () => { panel.hidden = true; });
   window.addEventListener('pagehide', () => {
     clearInterval(pollTimer); clearInterval(inviteTimer);
+    if (windowTimer) clearInterval(windowTimer);
     if (toneContext) toneContext.close().catch(() => {});
     if (mic) { mic.stop(); mic.close(); mic = null; }
     if (rtc) rtc.leave().catch(() => {});
