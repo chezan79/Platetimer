@@ -187,8 +187,10 @@ function mountProductionVoiceCalls(app, {
       const call=snapshot.exists?snapshot.data():null;
       if(!call||call.companyId!==device.companyId||
         (call.from!==device.departmentId&&call.to!==device.departmentId))return false;
-      if(call.state==='ended')return true;
-      tx.set(ref,{...call,state:'ended',updatedAt:t});
+      const waitingRef=inviteRef(device.companyId,call.to);
+      const waiting=await tx.get(waitingRef);
+      if(waiting.exists&&waiting.data()?.id===id)tx.delete(waitingRef);
+      if(call.state!=='ended')tx.set(ref,{...call,state:'ended',updatedAt:t});
       return true;
     });
     if(!ok)return res.status(404).json({error:'Chiamata non trovata.'});
